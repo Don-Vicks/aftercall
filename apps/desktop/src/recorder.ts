@@ -21,6 +21,8 @@ export interface SavedRecording {
   dir: string;
   /** Contents of notes.json once the recording has been processed. */
   notes?: string;
+  /** The calendar event's title, looked up in the app (not saved). */
+  eventTitle?: string;
 }
 
 export interface Levels {

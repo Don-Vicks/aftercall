@@ -21,6 +21,7 @@ import { payees as samplePayees } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
 import { Onboarding, needsOnboarding } from "./Onboarding";
+import { eventTitles } from "./calendar";
 
 type View =
   | { name: "home" }
@@ -166,6 +167,10 @@ export default function App() {
     setSaved((all) => ({ ...all, ...notes }));
   };
 
+  /** Names recordings that have no notes yet after their calendar event, when there is one. */
+  const nameFromCalendar = (list: SavedRecording[]) =>
+    eventTitles(list).then((titles) => setRecordings((all) => all.map((r) => (titles[r.id] && !r.notes ? { ...r, eventTitle: titles[r.id] } : r))));
+
   // Saved recordings from earlier sessions.
   useEffect(() => {
     if (!isDesktop) return;
@@ -174,6 +179,7 @@ export default function App() {
       .then((list) => {
         setRecordings(list);
         addProcessed(list);
+        nameFromCalendar(list);
       })
       .catch(() => setRecordings([]));
   }, []);
@@ -459,6 +465,7 @@ export default function App() {
             if (saved) {
               // A real recording: show it as its own meeting, with its true status.
               setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
+              nameFromCalendar([saved]);
               setView({ name: "recording", id: saved.id });
             } else {
               // Browser preview: walk through the simulated pipeline on sample data.

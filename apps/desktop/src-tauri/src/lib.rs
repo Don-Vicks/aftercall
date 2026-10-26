@@ -1,3 +1,4 @@
+mod calendar;
 mod capture;
 mod near;
 mod nearai;
@@ -419,7 +420,10 @@ pub fn run() {
             delete_recording,
             read_chunk_transcript,
             write_chunk_transcript,
-            move_recordings_project
+            move_recordings_project,
+            calendar::calendar_status,
+            calendar::calendar_request_access,
+            calendar::calendar_events_between
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

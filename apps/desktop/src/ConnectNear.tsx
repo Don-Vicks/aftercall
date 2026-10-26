@@ -3,6 +3,7 @@ import { Check, Copy } from "lucide-react";
 import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
 import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
 import { AutopilotSettings } from "./AutopilotSettings";
+import { CalendarSettings } from "./CalendarSettings";
 import { NearAiSettings } from "./NearAiSettings";
 import { isDesktop } from "./recorder";
 
@@ -146,6 +147,8 @@ export function ConnectNear() {
             </Button>
           </div>
         </div>
+
+        <CalendarSettings />
 
         <AutopilotSettings />
       </div>

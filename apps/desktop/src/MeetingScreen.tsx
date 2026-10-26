@@ -142,7 +142,7 @@ function Notes({
         ))}
       </section>
 
-      <FollowUps followUps={meeting.followUps} leftToday={leftToday} {...handlers} />
+      <FollowUps followUps={meeting.followUps} leftToday={leftToday} invited={meeting.invited} {...handlers} />
     </>
   );
 }
