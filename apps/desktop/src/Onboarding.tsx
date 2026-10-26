@@ -5,6 +5,8 @@ import { deleteRecording } from "./projects";
 import { nearAiKey } from "./nearai";
 import { Button, Spinner, cx } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
+import { ImportBackup, RestorePhrase } from "./RecoveryPhrase";
+import { restoredSummary } from "./recovery";
 
 const KEY = "aftercall.onboarded";
 
@@ -33,8 +35,12 @@ const STEPS = 4;
  */
 export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => void }) {
   const [step, setStep] = useState(0);
+  const [restoring, setRestoring] = useState(false);
+  /** A backup was imported: the app reloads at the end to show it. */
+  const [imported, setImported] = useState(false);
   const finish = (record: boolean) => {
     markOnboarded();
+    if (imported) return window.location.reload();
     onDone(record);
   };
 
@@ -53,7 +59,17 @@ export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => vo
               ))}
             </div>
           </div>
-          {step === 0 && <Welcome onNext={() => setStep(1)} onSkip={() => finish(false)} />}
+          {step === 0 && !restoring && <Welcome onNext={() => setStep(1)} onSkip={() => finish(false)} onRestore={() => setRestoring(true)} />}
+          {step === 0 && restoring && (
+            <Restore
+              onBack={() => setRestoring(false)}
+              onImported={() => setImported(true)}
+              onNext={() => {
+                setRestoring(false);
+                setStep(1);
+              }}
+            />
+          )}
           {step === 1 && <AudioCheck onNext={() => setStep(2)} />}
           {step === 2 && <NearAiStep onNext={() => setStep(3)} />}
           {step === 3 && <Ready onRecord={() => finish(true)} onLater={() => finish(false)} />}
@@ -72,7 +88,7 @@ function Title({ children, intro }: { children: string; intro: string }) {
   );
 }
 
-function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void }) {
+function Welcome({ onNext, onSkip, onRestore }: { onNext: () => void; onSkip: () => void; onRestore: () => void }) {
   return (
     <>
       <div className="flex flex-col gap-3">
@@ -95,7 +111,60 @@ function Welcome({ onNext, onSkip }: { onNext: () => void; onSkip: () => void })
         <button onClick={onSkip} className="font-semibold text-muted hover:text-ink">
           Skip setup
         </button>
-        <Button variant="primary" size="lg" onClick={onNext}>Get started</Button>
+        <span className="flex gap-2">
+          <Button size="lg" onClick={onRestore}>Restore from a recovery phrase</Button>
+          <Button variant="primary" size="lg" onClick={onNext}>Get started</Button>
+        </span>
+      </div>
+    </>
+  );
+}
+
+/**
+ * A new Mac: the phrase brings back the NEAR key the contract already knows, then an
+ * optional backup file brings back notes, projects and settings. Audio check and the
+ * NEAR AI key follow as usual, since neither is in a backup.
+ */
+function Restore({ onBack, onImported, onNext }: { onBack: () => void; onImported: () => void; onNext: () => void }) {
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+
+  if (!publicKey) {
+    return (
+      <>
+        <Title intro="Your recovery phrase brings back this Mac's NEAR key. If you authorised it on your old Mac, your agent wallet already knows it, so payments and proofs work again without signing anything.">
+          Restore from a recovery phrase
+        </Title>
+        <RestorePhrase onDone={setPublicKey} onCancel={onBack} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Title intro="If you exported a backup on your old Mac, import it now: notes, projects, NEAR settings and autopilot rules. Audio isn't in backups.">
+        Key restored
+      </Title>
+      <div className="flex flex-col gap-1">
+        <span className="text-muted">This Mac's key</span>
+        <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey}</span>
+      </div>
+      {summary && (
+        <p className="m-0 flex items-center gap-2 text-verdigris">
+          <Check size={14} strokeWidth={2} aria-hidden="true" /> {summary}
+        </p>
+      )}
+      <div className="flex items-start justify-between">
+        {summary ? <span /> : (
+          <ImportBackup
+            label="Import a backup file"
+            onRestored={(r) => {
+              setSummary(restoredSummary(r));
+              onImported();
+            }}
+          />
+        )}
+        <Button variant="primary" size="lg" onClick={onNext}>{summary ? "Continue" : "Continue without a backup"}</Button>
       </div>
     </>
   );

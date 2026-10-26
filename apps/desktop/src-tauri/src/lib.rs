@@ -2,6 +2,7 @@ mod capture;
 mod near;
 mod nearai;
 mod recorder;
+mod recovery;
 
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
@@ -298,6 +299,38 @@ fn near_sign_in_message(app: AppHandle, message: String, nonce: String, recipien
     near::sign_in_message(&near_config(&app)?, &message, &nonce, &recipient)
 }
 
+#[tauri::command]
+fn recovery_status() -> Result<recovery::RecoveryStatus, String> {
+    recovery::status()
+}
+
+/// A new phrase to show once. Nothing is stored until `recovery_use_phrase`.
+#[tauri::command]
+fn recovery_new_phrase() -> Result<String, String> {
+    recovery::new_phrase()
+}
+
+/// Derives this Mac's NEAR key and backup key from the phrase and keeps them in the Keychain.
+#[tauri::command]
+fn recovery_use_phrase(phrase: String) -> Result<String, String> {
+    recovery::use_phrase(&phrase)
+}
+
+/// Writes an encrypted backup to Downloads; returns its path.
+#[tauri::command]
+fn backup_export(app: AppHandle, local: std::collections::BTreeMap<String, String>) -> Result<String, String> {
+    let folder = app.path().download_dir().map_err(|e| e.to_string())?;
+    recovery::export(&data_dir(&app)?, &folder, local)
+}
+
+/// Restores a backup file (base64 of its bytes, as the file picker read it).
+#[tauri::command]
+fn backup_import(app: AppHandle, file: String) -> Result<recovery::Restored, String> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(file).map_err(|e| e.to_string())?;
+    recovery::import(&data_dir(&app)?, &bytes)
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Project {
     id: String,
@@ -419,7 +452,12 @@ pub fn run() {
             delete_recording,
             read_chunk_transcript,
             write_chunk_transcript,
-            move_recordings_project
+            move_recordings_project,
+            recovery_status,
+            recovery_new_phrase,
+            recovery_use_phrase,
+            backup_export,
+            backup_import
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.
