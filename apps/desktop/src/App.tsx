@@ -21,6 +21,8 @@ import { payees as samplePayees } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
 import { Onboarding, needsOnboarding } from "./Onboarding";
+import { AgentsScreen } from "./AgentsScreen";
+import { agentsApi } from "./agents";
 
 type View =
   | { name: "home" }
@@ -29,6 +31,7 @@ type View =
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
   | { name: "settings" }
+  | { name: "agents" }
   | { name: "wallet" }
   | { name: "placeholder"; title: string; milestone: string };
 
@@ -166,16 +169,44 @@ export default function App() {
     setSaved((all) => ({ ...all, ...notes }));
   };
 
+  /** notes.json as last read from disk, by id, to spot changes made outside the app (agents, via the MCP server). */
+  const diskNotes = useRef<Record<string, string>>({});
+
+  /** Takes notes.json from disk as the truth for one meeting. */
+  const applyDiskNotes = (id: string, notes: string) => {
+    diskNotes.current[id] = notes;
+    setRecordings((all) => all.map((r) => (r.id === id ? { ...r, notes } : r)));
+    addProcessed([{ id, notes } as SavedRecording]);
+  };
+
   // Saved recordings from earlier sessions.
   useEffect(() => {
     if (!isDesktop) return;
     recorder
       .list()
       .then((list) => {
+        for (const r of list) if (r.notes) diskNotes.current[r.id] = r.notes;
         setRecordings(list);
         addProcessed(list);
       })
       .catch(() => setRecordings([]));
+  }, []);
+
+  // Agents claim and complete action items by writing notes.json; pick that up
+  // when the window gets focus, and every few seconds while it's on screen.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const refresh = async () => {
+      if (document.visibilityState !== "visible") return;
+      const list = await recorder.list().catch(() => []);
+      for (const r of list) if (r.notes && r.notes !== diskNotes.current[r.id]) applyDiskNotes(r.id, r.notes);
+    };
+    window.addEventListener("focus", refresh);
+    const t = setInterval(refresh, 5000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      clearInterval(t);
+    };
   }, []);
 
   useEffect(() => {
@@ -200,8 +231,19 @@ export default function App() {
 
   const update = (id: string, fn: (m: Meeting) => Meeting) => setMeetings((all) => ({ ...all, [id]: fn(all[id]) }));
 
-  const toggleItem = (meetingId: string, itemId: string) =>
-    update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? { ...a, done: !a.done } : a)) }));
+  /** Ticks an action item; for real meetings the tick is saved in notes.json, where agents see it too. */
+  const toggleItem = (meetingId: string, itemId: string) => {
+    const item = meetings[meetingId]?.actionItems.find((a) => a.id === itemId);
+    if (!item) return;
+    const done = !item.done;
+    update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? { ...a, done, completed: done ? a.completed : undefined } : a)) }));
+    if (isDesktop && saved[meetingId]) {
+      agentsApi
+        .setItemDone(meetingId, itemId, done)
+        .then((notes) => applyDiskNotes(meetingId, notes))
+        .catch(() => recorder.list().then((list) => list.forEach((r) => r.id === meetingId && r.notes && applyDiskNotes(r.id, r.notes))));
+    }
+  };
 
   /** Changes one follow-up and, for real meetings, saves it to the meeting's notes.json. */
   const patchFollowUp = (meetingId: string, fuId: string, patch: Patch) => {
@@ -343,6 +385,8 @@ export default function App() {
         homeSelected={view.name === "home"}
         walletSelected={view.name === "wallet"}
         settingsSelected={view.name === "settings"}
+        agentsSelected={view.name === "agents"}
+        onOpenAgents={() => setView({ name: "agents" })}
         onOpenHome={() => setView({ name: "home" })}
         searchSelected={view.name === "search"}
         onOpenSearch={() => setView({ name: "search" })}
@@ -408,6 +452,9 @@ export default function App() {
         />
       )}
       {view.name === "settings" && <ConnectNear />}
+      {view.name === "agents" && (
+        <AgentsScreen meetings={Object.values(meetings).filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
+      )}
       {view.name === "search" && (
         <SearchScreen
           meetings={Object.values(meetings)}

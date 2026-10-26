@@ -26,6 +26,7 @@ export function Sidebar({
   searchSelected,
   walletSelected,
   settingsSelected,
+  agentsSelected,
   onOpenHome,
   onOpenSearch,
   onSelectMeeting,
@@ -35,6 +36,7 @@ export function Sidebar({
   onDeleteProject,
   onOpenWallet,
   onOpenSettings,
+  onOpenAgents,
 }: {
   projects: Project[];
   /** Real recordings, under the project they were recorded for. */
@@ -50,6 +52,7 @@ export function Sidebar({
   searchSelected: boolean;
   walletSelected: boolean;
   settingsSelected: boolean;
+  agentsSelected: boolean;
   onOpenHome: () => void;
   onOpenSearch: () => void;
   onSelectMeeting: (id: string) => void;
@@ -59,6 +62,7 @@ export function Sidebar({
   onDeleteProject: (id: string) => void;
   onOpenWallet: () => void;
   onOpenSettings: () => void;
+  onOpenAgents: () => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -207,6 +211,7 @@ export function Sidebar({
 
       <div className="mt-auto flex flex-col gap-0.5">
         {navRow("Agent wallet", walletSelected, onOpenWallet, <span className="font-mono text-xs text-ink">{balance === null ? "—" : formatUsdc(balance)}</span>)}
+        {navRow("Connected agents", agentsSelected, onOpenAgents)}
         {navRow("Settings", settingsSelected, onOpenSettings)}
       </div>
     </nav>
