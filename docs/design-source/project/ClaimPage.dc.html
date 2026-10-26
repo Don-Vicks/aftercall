@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · payee claim page (phone)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 24px 20px; background: #141311; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 15px; line-height: 23px; display: flex; flex-direction: column; gap: 24px;">
+  <div style="display: flex; align-items: center; gap: 8px;">
+    <svg width="24" height="24" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="115" fill="#24221e"/><rect x="128" y="92" width="256" height="328" rx="28" fill="#ede9e1"/><g fill="#24221e"><rect x="167" y="200" width="28" height="80" rx="14"/><rect x="214" y="160" width="28" height="160" rx="14"/><rect x="261" y="185" width="28" height="110" rx="14"/><rect x="308" y="205" width="28" height="70" rx="14"/></g><circle cx="378" cy="398" r="56" fill="#24221e"/><circle cx="378" cy="398" r="44" fill="#8dbfa8"/></svg>
+    <span style="font-family: Newsreader, Georgia, serif; font-size: 18px; font-weight: 500;">Aftercall</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">A PAYMENT FOR YOU</span>
+    <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.015em;">Victor wants to pay you <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 26px; font-weight: 400; letter-spacing: -0.02em;">50.00 USDC</span></h1>
+    <p style="margin: 0; color: #a39e94;">For: deck refresh deposit, agreed on today's call. Tell Victor where to send it.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <label for="acct" style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">YOUR NEAR ACCOUNT</label>
+    <input id="acct" placeholder="yourname.near" style="height: 48px; padding: 0 14px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 15px;">
+    <span style="font-size: 13px; line-height: 19px; color: #a39e94;">No account yet? <a href="#" style="font-weight: 600; text-decoration: none;">Create one in a NEAR wallet</a>, then come back to this link.</span>
+  </div>
+
+  <button type="button" style="height: 48px; border: 0; border-radius: 6px; background: #8dbfa8; color: #10201a; font-size: 15px; font-weight: 600; cursor: pointer;">Share account with Victor</button>
+
+  <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 10px; background: #1b1a17; box-shadow: inset 0 0 0 1px #2b2925;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">WHAT HAPPENS NEXT</span>
+    <ol style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 20px; color: #a39e94; display: flex; flex-direction: column; gap: 4px;">
+      <li>Victor confirms in their own wallet that this account is you.</li>
+      <li>The payment is sent in USDC on NEAR, usually within seconds.</li>
+      <li>You get an email with the transaction link.</li>
+    </ol>
+  </div>
+
+  <p style="margin: 0; margin-top: auto; font-size: 13px; line-height: 19px; color: #a39e94;">This link only shares where to send money; it can't take anything from you. It works once and expires in 7 days.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

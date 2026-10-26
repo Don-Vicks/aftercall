@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · settings, autopilot</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 1120px; display: flex; flex-wrap: wrap; background: #141311; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px;">
+  <nav aria-label="Settings sections" style="flex: 1 1 200px; max-width: 232px; box-sizing: border-box; padding: 24px 16px; display: flex; flex-direction: column; gap: 2px;">
+    <a href="Main.dc.html" style="padding: 0 8px 20px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; text-decoration: none;">MEETINGS</a>
+    <a href="Settings.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Privacy</a>
+    <a href="Settings.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Recording</a>
+    <a href="Settings.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Follow-ups</a>
+    <a href="#" style="padding: 7px 8px; border-radius: 6px; background: #1a2a23; color: #ede9e1; text-decoration: none; font-weight: 600;">Autopilot</a>
+    <a href="Agents.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Connected agents</a>
+    <a href="Settings.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">AI usage</a>
+    <a href="Wallet.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Agent wallet</a>
+    <a href="Settings.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Account and data</a>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 48px; background: #1b1a17; border-left: 1px solid #2b2925;">
+    <div style="max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px;">
+      <header style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+          <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 34px; line-height: 40px; font-weight: 500; letter-spacing: -0.015em;">Autopilot</h1>
+          <label style="display: flex; align-items: center; gap: 10px; font-weight: 600;">
+            <input type="checkbox" checked style="width: 15px; height: 15px; accent-color: #8dbfa8;">
+            On
+          </label>
+        </div>
+        <p style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 18px; line-height: 29px; color: #a39e94;">Aftercall acts without asking, but only inside these rules. Anything outside them still waits for your tap.</p>
+      </header>
+
+      <section aria-labelledby="h-email" style="display: flex; flex-direction: column;">
+        <h2 id="h-email" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">RECAP EMAILS</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <label for="r1" style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Send recaps to my team automatically</span><span style="color: #a39e94;">Only addresses at <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #ede9e1;">@your-company.com</span>; held 60 seconds so you can undo</span></label>
+          <input type="checkbox" id="r1" checked style="width: 15px; height: 15px; accent-color: #8dbfa8;">
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Recaps to anyone else</span><span style="color: #a39e94;">Always ask. People outside your company never get an email you didn't approve.</span></div>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">ALWAYS ASK</span>
+        </div>
+      </section>
+
+      <section aria-labelledby="h-pay" style="display: flex; flex-direction: column;">
+        <h2 id="h-pay" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">PAYMENTS</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <label for="r3" style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Pay listed payees automatically</span><span style="color: #a39e94;">Only people already on your payee list</span></label>
+          <input type="checkbox" id="r3" checked style="width: 15px; height: 15px; accent-color: #8dbfa8;">
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Largest automatic payment</span><span style="color: #a39e94;">Anything bigger waits for your wallet</span></div>
+          <span style="display: flex; align-items: center; gap: 12px;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 14px;">50.00 USDC</span><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: #1a2a23; color: #8dbfa8; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;">ON NEAR</span></span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Daily total</span><span style="color: #a39e94;">Your agent wallet's daily cap</span></div>
+          <span style="display: flex; align-items: center; gap: 12px;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 14px;">200.00 USDC</span><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: #1a2a23; color: #8dbfa8; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;">ON NEAR</span></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">The amount heard must match the written summary</span><span style="color: #a39e94;">Protects against misheard numbers. Always on.</span></div>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">ALWAYS ON</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px;">
+          <span style="color: #a39e94;">Limits marked "On NEAR" are enforced by your wallet contract. Aftercall can't change them; only your wallet can.</span>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Change limits in wallet</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="h-log" style="display: flex; flex-direction: column;">
+        <h2 id="h-log" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">DONE BY AUTOPILOT</h2>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 16px; padding: 12px 0; border-top: 1px solid #2b2925;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">Today 14:06</span><span>Recap sent to tola@your-company.com</span><span style="color: #a39e94;">Standup</span></div>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 16px; padding: 12px 0; border-top: 1px solid #2b2925;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">Today 14:07</span><span>Paid Kemi <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px;">50.00 USDC</span></span><a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-decoration: none;">8Hn2…wq4D</a></div>
+        <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 16px; padding: 12px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">Today 14:07</span><span style="color: #dcac5c;">Left for you: 5,000.00 USDC to Kemi, over your limits</span><a href="ApproveWallet.dc.html" style="font-weight: 600; text-decoration: none;">Review</a></div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
