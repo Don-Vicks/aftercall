@@ -41,6 +41,7 @@ interface FollowUpBase {
 
 export interface EmailFollowUp extends FollowUpBase {
   kind: "email";
+  /** Empty until the person adds an address. */
   to: string;
   toName: string;
   subject: string;
@@ -49,9 +50,10 @@ export interface EmailFollowUp extends FollowUpBase {
 export interface PaymentFollowUp extends FollowUpBase {
   kind: "payment";
   payeeName: string;
+  /** Empty when the payee isn't on the user's list. */
   payeeAccount: string;
-  /** USDC base units (6 decimals). */
-  amount: bigint;
+  /** USDC base units (6 decimals); null when the words couldn't be read as an amount. */
+  amount: bigint | null;
   /** The words the amount was parsed from, shown next to the parsed figure. */
   heard: string;
   payeeListed: boolean;

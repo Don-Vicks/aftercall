@@ -10,10 +10,15 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/*.test.ts"
+    "test": "node --test --experimental-strip-types src/*.test.ts src/notes/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
     "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
+    "zod": "^3.25.76"
   }
 }
