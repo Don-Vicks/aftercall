@@ -1,4 +1,5 @@
 import { formatUsdc } from "../money.ts";
+import { NETWORK_CONFIG, isNetwork, type Network } from "../network.ts";
 
 /**
  * Everything only the owner's own NEAR wallet may do with the agent wallet. The app
@@ -7,12 +8,12 @@ import { formatUsdc } from "../money.ts";
  * the transactions to the user's wallet.
  */
 
-export type Network = "testnet" | "mainnet";
+export type { Network };
 
 /** Circle USDC (NEP-141, 6 decimals). */
 export const USDC_CONTRACT: Record<Network, string> = {
-  mainnet: "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
-  testnet: "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+  mainnet: NETWORK_CONFIG.mainnet.usdc,
+  testnet: NETWORK_CONFIG.testnet.usdc,
 };
 
 const ONE_YOCTO = "1";
@@ -231,7 +232,7 @@ export function encodeSignRequest(r: SignRequest): string {
 /** Parses and validates a request from a link. Anything unexpected is refused. */
 export function decodeSignRequest(fragment: string): SignRequest {
   const r = JSON.parse(fromBase64Url(fragment.replace(/^#/, ""))) as SignRequest;
-  if (r.network !== "testnet" && r.network !== "mainnet") throw new Error("BAD_NETWORK");
+  if (!isNetwork(r.network)) throw new Error("BAD_NETWORK");
   if (!ACCOUNT.test(r.contract) || !ACCOUNT.test(r.owner)) throw new Error("BAD_ACCOUNT");
   const a = r.action as OwnerAction;
   const amounts = ["dailyCap", "perPaymentCap", "amount"] as const;

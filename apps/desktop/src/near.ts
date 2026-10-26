@@ -1,9 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { encodeSignRequest, type OnChainProof, type OwnerAction } from "@aftercall/core";
+import { encodeSignRequest, explorerTxUrl, type Network, type OnChainProof, type OwnerAction } from "@aftercall/core";
 
 export interface NearConfig {
-  network: "testnet" | "mainnet";
+  network: Network;
   account: string;
   contract: string;
 }
@@ -87,7 +87,7 @@ export const VERIFY_URL = `${WEB_URL}/verify`;
 export const SIGN_URL = `${WEB_URL}/sign`;
 
 export function explorerTx(network: NearConfig["network"], txHash: string): string {
-  return network === "mainnet" ? `https://nearblocks.io/txns/${txHash}` : `https://testnet.nearblocks.io/txns/${txHash}`;
+  return explorerTxUrl(network, txHash);
 }
 
 /** The one-time near-cli commands that connect the account to the app. */

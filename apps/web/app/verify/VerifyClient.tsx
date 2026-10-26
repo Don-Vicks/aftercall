@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  NETWORK_CONFIG,
   NOT_PROVEN,
   decodePublicProof,
+  explorerAccountUrl,
+  isNetwork,
   proofHash,
   verifyProof,
   type Check,
@@ -11,13 +14,11 @@ import {
   type PublicProof,
 } from "@aftercall/core";
 
-const RPC = { testnet: "https://rpc.testnet.near.org", mainnet: "https://rpc.mainnet.near.org" } as const;
-const EXPLORER = { testnet: "https://testnet.nearblocks.io", mainnet: "https://nearblocks.io" } as const;
 
 /** Reads the proof straight from the agent-wallet contract, at final finality. */
 async function readProof(p: PublicProof): Promise<OnChainProof | null> {
   const args = btoa(JSON.stringify({ owner: p.owner, meeting_id: p.bundle.meetingId }));
-  const res = await fetch(RPC[p.network], {
+  const res = await fetch(NETWORK_CONFIG[p.network].rpcUrl, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -52,7 +53,7 @@ export function VerifyClient() {
     let proof: PublicProof;
     try {
       proof = decodePublicProof(fragment);
-      if (!proof.bundle || !(proof.network in RPC)) throw new Error("bad");
+      if (!proof.bundle || !isNetwork(proof.network)) throw new Error("bad");
     } catch {
       return setState({ kind: "bad-link" });
     }
@@ -166,7 +167,7 @@ function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; o
         <dd className="mono" style={{ margin: 0, wordBreak: "break-all" }}>{proofHash(proof.bundle)}</dd>
         <dt className="label" style={{ lineHeight: "22px" }}>Contract</dt>
         <dd style={{ margin: 0 }}>
-          <a className="mono" href={`${EXPLORER[proof.network]}/address/${proof.contract}`} target="_blank" rel="noreferrer">
+          <a className="mono" href={explorerAccountUrl(proof.network, proof.contract)} target="_blank" rel="noreferrer">
             {proof.contract}
           </a>{" "}
           <span className="muted">· {proof.network}</span>

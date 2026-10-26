@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { formatUsdc, type Meeting, type OwnerAction, type PaymentFollowUp } from "@aftercall/core";
+import { exampleAccount, formatUsdc, type Meeting, type Network, type OwnerAction, type PaymentFollowUp } from "@aftercall/core";
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Button, SectionLabel, Spinner, cx } from "./ui";
 import { Sheet } from "./Sheet";
@@ -36,6 +36,7 @@ export function WalletScreen({
   const [view, setView] = useState<WalletView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [network, setNetwork] = useState<Network>("testnet");
   const [waiting, setWaiting] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"deposit" | "withdraw" | "payee" | null>(null);
   const [capText, setCapText] = useState("");
@@ -48,6 +49,7 @@ export function WalletScreen({
       const config = await near.getConfig();
       if (!config) return setConnected(false);
       setConnected(true);
+      setNetwork(config.network);
       const v = await near.wallet();
       setView(v);
       if (v.wallet) {
@@ -316,6 +318,7 @@ export function WalletScreen({
       )}
       {sheet === "payee" && (
         <PayeeSheet
+          network={network}
           onClose={() => setSheet(null)}
           onConfirm={(account, label, registerWithUsdc) => {
             setSheet(null);
@@ -399,7 +402,7 @@ function AmountSheet({
   );
 }
 
-function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (account: string, label: string, registerWithUsdc: boolean) => void }) {
+function PayeeSheet({ network, onClose, onConfirm }: { network: Network; onClose: () => void; onConfirm: (account: string, label: string, registerWithUsdc: boolean) => void }) {
   const [account, setAccount] = useState("");
   const [label, setLabel] = useState("");
   const [check, setCheck] = useState<{ exists: boolean; usdcReady: boolean } | null>(null);
@@ -425,7 +428,7 @@ function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (a
           autoFocus
           value={account}
           onChange={(e) => setAccount(e.target.value.trim().toLowerCase())}
-          placeholder="name.testnet"
+          placeholder={exampleAccount(network, "name")}
           className={cx("selectable h-9 rounded-sm border bg-well px-3 font-mono text-[13px] text-ink outline-none", check?.exists ? "border-verdigris" : "border-border")}
         />
         {checking ? (

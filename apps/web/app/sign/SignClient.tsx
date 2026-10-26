@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { decodeSignRequest, describe, toTransactions, type SignRequest } from "@aftercall/core";
+import { NETWORK_CONFIG, decodeSignRequest, describe, explorerTxUrl, toTransactions, type SignRequest } from "@aftercall/core";
 import { Badge, Facts, Page, button } from "../ui";
-
-const EXPLORER = { testnet: "https://testnet.nearblocks.io/txns/", mainnet: "https://nearblocks.io/txns/" } as const;
 
 type Connector = import("@hot-labs/near-connect").NearConnector;
 type Wallet = Awaited<ReturnType<Connector["connect"]>>;
@@ -53,7 +51,10 @@ export function SignClient() {
     try {
       if (!connector.current) {
         const { NearConnector } = await import("@hot-labs/near-connect");
-        connector.current = new NearConnector({ network: request.network });
+        connector.current = new NearConnector({
+          network: request.network,
+          providers: { mainnet: [NETWORK_CONFIG.mainnet.rpcUrl], testnet: [NETWORK_CONFIG.testnet.rpcUrl] },
+        });
       }
       const wallet: Wallet = await connector.current.connect();
       const accounts = await wallet.getAccounts({ network: request.network });
@@ -81,7 +82,7 @@ export function SignClient() {
   };
 
   return (
-    <Page tag={request.network === "mainnet" ? "mainnet" : "testnet"}>
+    <Page tag={request.network}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {approving && <Badge tone="caution">Over your limits</Badge>}
         <h1 className="serif" style={{ margin: 0, fontSize: 34, lineHeight: "40px", fontWeight: 500, letterSpacing: "-0.015em" }}>{d.title}</h1>
@@ -94,7 +95,7 @@ export function SignClient() {
         <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "18px 20px", borderRadius: 10, background: "var(--verdigris-tint)" }}>
           <span style={{ fontWeight: 600, color: "var(--verdigris)" }}>Signed. Aftercall updates on its own.</span>
           {step.txHashes.map((h) => (
-            <a key={h} className="mono" href={`${EXPLORER[request.network]}${h}`} target="_blank" rel="noreferrer">
+            <a key={h} className="mono" href={explorerTxUrl(request.network, h)} target="_blank" rel="noreferrer">
               {h.slice(0, 8)}…{h.slice(-6)} on NEAR Explorer
             </a>
           ))}

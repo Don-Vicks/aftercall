@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use near_tx::{Client, FunctionCall, KeyPair};
+use near_tx::{Client, FunctionCall, KeyPair, Network};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -43,19 +43,26 @@ pub fn load_config(data_dir: &Path) -> Option<NearConfig> {
 }
 
 pub fn save_config(data_dir: &Path, config: &NearConfig) -> Result<(), String> {
-    if !matches!(config.network.as_str(), "testnet" | "mainnet") {
-        return Err("Network must be testnet or mainnet".into());
-    }
+    let network = Network::parse(&config.network).map_err(|_| "Network must be testnet or mainnet".to_string())?;
     let valid = |id: &str| id.len() >= 2 && id.len() <= 64 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-_.".contains(c));
     if !valid(&config.account) || !valid(&config.contract) {
-        return Err("Use NEAR account ids like yourname.testnet".into());
+        return Err("Use NEAR account ids like yourname.near or yourname.testnet".into());
+    }
+    for id in [&config.account, &config.contract] {
+        if !network.fits(id) {
+            return Err(format!("{id} isn't a {} account", config.network));
+        }
     }
     std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
     std::fs::write(config_path(data_dir), serde_json::to_string_pretty(config).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+fn network(config: &NearConfig) -> Network {
+    Network::parse(&config.network).unwrap_or(Network::Testnet)
+}
+
 fn client(config: &NearConfig) -> Client {
-    if config.network == "mainnet" { Client::mainnet() } else { Client::testnet() }
+    Client::for_network(network(config))
 }
 
 fn entry() -> Result<keyring::Entry, String> {
@@ -178,11 +185,7 @@ pub async fn payment_state(config: &NearConfig, followup_id: &str) -> Result<Val
 
 /// Circle USDC on NEAR.
 fn usdc_contract(config: &NearConfig) -> &'static str {
-    if config.network == "mainnet" {
-        "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
-    } else {
-        "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af"
-    }
+    network(config).usdc()
 }
 
 /// Before adding a payee: does the account exist, and can it already hold USDC?
@@ -248,7 +251,13 @@ mod tests {
         assert!(save_config(&dir, &ok).is_ok());
         assert_eq!(load_config(&dir).unwrap().account, "victor.testnet");
         assert!(save_config(&dir, &NearConfig { network: "devnet".into(), ..ok.clone() }).is_err());
-        assert!(save_config(&dir, &NearConfig { account: "Victor Testnet".into(), ..ok }).is_err());
+        assert!(save_config(&dir, &NearConfig { account: "Victor Testnet".into(), ..ok.clone() }).is_err());
+        // A testnet account can't be saved in a mainnet setup, and the other way round.
+        assert!(save_config(&dir, &NearConfig { network: "mainnet".into(), ..ok.clone() }).is_err());
+        let main = NearConfig { network: "mainnet".into(), account: "victor.near".into(), contract: "wallet.victor.near".into() };
+        assert!(save_config(&dir, &main).is_ok());
+        assert_eq!(usdc_contract(&main), "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1");
+        assert!(save_config(&dir, &NearConfig { network: "devnet".into(), ..main }).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
