@@ -77,3 +77,10 @@ test("public links round-trip and carry no meeting content", () => {
   assert.equal(proofHash(decodePublicProof(`#${link}`).bundle), proofHash(bundle));
   assert.ok(!Buffer.from(link, "base64url").toString().includes("Sync with Ada"));
 });
+
+test("a public proof link names testnet or mainnet, nothing else", () => {
+  const link = encodePublicProof({ network: "mainnet", contract: "wallet.victor.near", owner: "victor.near", bundle: {} as never });
+  assert.equal(decodePublicProof(link).network, "mainnet");
+  const bad = encodePublicProof({ network: "devnet" as never, contract: "w.near", owner: "v.near", bundle: {} as never });
+  assert.throws(() => decodePublicProof(bad), /BAD_NETWORK/);
+});

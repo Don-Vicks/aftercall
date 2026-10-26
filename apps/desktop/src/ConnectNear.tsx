@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { accountFitsNetwork, exampleAccount } from "@aftercall/core";
 import { Check, Copy } from "lucide-react";
 import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
 import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
@@ -44,7 +45,9 @@ export function ConnectNear() {
     if (r?.hasKey && (await near.getConfig().catch(() => null))) near.status().then(setStatus).catch(() => {});
   };
 
-  const ready = config.account.length > 1 && config.contract.length > 1;
+  // A testnet account in a mainnet setup (or the other way round) can't work; say so before anything is signed.
+  const wrongNetwork = [config.account, config.contract].find((a) => a.length > 1 && !accountFitsNetwork(a, config.network));
+  const ready = config.account.length > 1 && config.contract.length > 1 && !wrongNetwork;
   const commands = ready && publicKey ? setupCommands(config, publicKey) : null;
 
   const check = async () => {
@@ -108,8 +111,8 @@ export function ConnectNear() {
 
         <section className="flex flex-col gap-3">
           <SectionLabel>Your NEAR account</SectionLabel>
-          <Field label="NEAR account" value={config.account} placeholder="yourname.testnet" onChange={(account) => setConfig({ ...config, account: account.trim().toLowerCase() })} />
-          <Field label="Agent-wallet contract" value={config.contract} placeholder="aftercall-wallet.testnet" onChange={(contract) => setConfig({ ...config, contract: contract.trim().toLowerCase() })} />
+          <Field label="NEAR account" value={config.account} placeholder={exampleAccount(config.network)} onChange={(account) => setConfig({ ...config, account: account.trim().toLowerCase() })} />
+          <Field label="Agent-wallet contract" value={config.contract} placeholder={exampleAccount(config.network, "aftercall-wallet")} onChange={(contract) => setConfig({ ...config, contract: contract.trim().toLowerCase() })} />
           <div className="flex items-center justify-between">
             <span className="text-muted">Network</span>
             <select
@@ -121,6 +124,12 @@ export function ConnectNear() {
               <option value="mainnet">Mainnet</option>
             </select>
           </div>
+          {wrongNetwork && (
+            <p className="m-0 text-caution">
+              <span className="t-mono">{wrongNetwork}</span> isn't a {config.network} account. Pick the network it lives on.
+            </p>
+          )}
+          {config.network === "mainnet" && <p className="m-0 text-muted">Mainnet moves real USDC. Keep the caps small.</p>}
         </section>
 
         <RecoverySettings status={recoveryStatus} onKeyChanged={keyChanged} />

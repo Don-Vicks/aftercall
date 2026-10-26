@@ -39,4 +39,4 @@ near contract call-function as-transaction "${USDC}" storage_deposit \
 echo
 echo "Done. Agent-wallet contract: ${CONTRACT}"
 echo "In Aftercall → Settings, enter ${OWNER} and ${CONTRACT}, then run the two commands it shows."
-echo "Before mainnet, delete the contract account's full-access key so nobody can redeploy it (M5)."
+echo "For mainnet, use ./scripts/deploy-mainnet.sh: tiny caps, then it locks the contract (deletes its full-access keys)."

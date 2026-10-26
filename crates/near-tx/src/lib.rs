@@ -162,17 +162,69 @@ pub struct Outcome {
     pub value: Option<Value>,
 }
 
+/// The NEAR network the app talks to. Mirrors `packages/core/src/network.ts`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Network {
+    Testnet,
+    Mainnet,
+}
+
+impl Network {
+    /// "testnet" or "mainnet"; anything else is refused.
+    pub fn parse(name: &str) -> Result<Self, Error> {
+        match name {
+            "testnet" => Ok(Self::Testnet),
+            "mainnet" => Ok(Self::Mainnet),
+            other => Err(format!("Unknown NEAR network: {other}")),
+        }
+    }
+
+    /// FastNEAR's free RPC: the near.org endpoints are deprecated and rate-limited
+    /// (https://docs.near.org/api/rpc/providers).
+    pub fn rpc_url(self) -> &'static str {
+        match self {
+            Self::Testnet => "https://test.rpc.fastnear.com",
+            Self::Mainnet => "https://free.rpc.fastnear.com",
+        }
+    }
+
+    /// Circle USDC (NEP-141, 6 decimals).
+    pub fn usdc(self) -> &'static str {
+        match self {
+            Self::Testnet => "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+            Self::Mainnet => "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+        }
+    }
+
+    /// Could `account` exist on this network? Named accounts carry the network's
+    /// suffix; implicit accounts (64 hex, or 0x + 40 hex) exist on both.
+    pub fn fits(self, account: &str) -> bool {
+        let hex = |s: &str| s.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c));
+        if (account.len() == 64 && hex(account)) || (account.len() == 42 && account.starts_with("0x") && hex(&account[2..])) {
+            return true;
+        }
+        match self {
+            Self::Testnet => account.ends_with(".testnet"),
+            Self::Mainnet => !account.ends_with(".testnet"),
+        }
+    }
+}
+
 impl Client {
     pub fn new(url: impl Into<String>) -> Self {
         Self { url: url.into(), http: reqwest::Client::new() }
     }
 
+    pub fn for_network(network: Network) -> Self {
+        Self::new(network.rpc_url())
+    }
+
     pub fn testnet() -> Self {
-        Self::new("https://rpc.testnet.near.org")
+        Self::for_network(Network::Testnet)
     }
 
     pub fn mainnet() -> Self {
-        Self::new("https://rpc.mainnet.near.org")
+        Self::for_network(Network::Mainnet)
     }
 
     async fn rpc(&self, method: &str, params: Value) -> Result<Value, Error> {
@@ -272,6 +324,29 @@ fn failure_message(f: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn networks_have_their_own_rpc_and_usdc() {
+        assert_eq!(Network::parse("mainnet").unwrap(), Network::Mainnet);
+        assert_eq!(Network::parse("testnet").unwrap(), Network::Testnet);
+        assert!(Network::parse("devnet").is_err());
+        assert!(!Network::Mainnet.rpc_url().contains("test"));
+        assert!(Network::Testnet.rpc_url().contains("test"));
+        assert_eq!(Network::Mainnet.usdc(), "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1");
+        assert_eq!(Network::Testnet.usdc(), "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af");
+    }
+
+    #[test]
+    fn accounts_must_fit_the_network() {
+        assert!(Network::Mainnet.fits("victor.near"));
+        assert!(Network::Mainnet.fits("aurora"));
+        assert!(!Network::Mainnet.fits("victor.testnet"));
+        assert!(Network::Testnet.fits("victor.testnet"));
+        assert!(!Network::Testnet.fits("victor.near"));
+        let implicit = Network::Mainnet.usdc();
+        assert!(Network::Testnet.fits(implicit) && Network::Mainnet.fits(implicit));
+        assert!(Network::Mainnet.fits("0xabababababababababababababababababababab"));
+    }
 
     #[test]
     fn keys_round_trip_in_near_formats() {

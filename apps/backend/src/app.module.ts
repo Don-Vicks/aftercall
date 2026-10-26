@@ -8,9 +8,15 @@ import { EmailService, resendMailer } from "./email/email.service";
 import { ClaimsController } from "./claims/claims.controller";
 import { ClaimsService } from "./claims/claims.service";
 import { MemoryClaimsStore, PgClaimsStore } from "./claims/claims.store";
+import { StatsController } from "./stats/stats.controller";
+import { StatsService, rpcChainStats } from "./stats/stats.service";
+import { MemoryCounters, PgCounters, type Counters } from "./stats/counters";
+import { nearEnv } from "./network";
 import { Pool } from "pg";
 
-const DEFAULT_RPC = "https://rpc.testnet.near.org";
+const PG_POOL = "PG_POOL";
+const NEAR_ENV = "NEAR_ENV";
+const COUNTERS = "COUNTERS";
 
 function jwtSecret(): string {
   const secret = process.env.AUTH_JWT_SECRET;
@@ -22,29 +28,64 @@ function jwtSecret(): string {
 }
 
 @Module({
-  controllers: [HealthController, AuthController, EmailController, ClaimsController],
+  controllers: [HealthController, AuthController, EmailController, ClaimsController, StatsController],
   providers: [
+    { provide: NEAR_ENV, useFactory: () => nearEnv() },
+    {
+      provide: PG_POOL,
+      useFactory: () => {
+        if (process.env.DATABASE_URL) return new Pool({ connectionString: process.env.DATABASE_URL });
+        if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
+        console.warn("DATABASE_URL not set; claim links and counters are kept in memory for this run");
+        return null;
+      },
+    },
     {
       provide: AuthService,
-      useFactory: () => new AuthService(rpcKeyChecker(process.env.NEAR_RPC_URL ?? DEFAULT_RPC, process.env.AFTERCALL_CONTRACT), jwtSecret()),
+      inject: [NEAR_ENV],
+      useFactory: (near: ReturnType<typeof nearEnv>) => new AuthService(rpcKeyChecker(near.rpcUrl, near.contract), jwtSecret()),
+    },
+    {
+      provide: COUNTERS,
+      inject: [PG_POOL],
+      useFactory: async (pool: Pool | null): Promise<Counters> => {
+        if (!pool) return new MemoryCounters();
+        const counters = new PgCounters(pool);
+        await counters.migrate();
+        return counters;
+      },
     },
     {
       provide: EmailService,
-      useFactory: () =>
-        new EmailService(process.env.RESEND_API_KEY ? resendMailer(process.env.RESEND_API_KEY) : null, process.env.EMAIL_FROM ?? "notes@aftercall.app"),
+      inject: [COUNTERS],
+      useFactory: (counters: Counters) =>
+        new EmailService(
+          process.env.RESEND_API_KEY ? resendMailer(process.env.RESEND_API_KEY) : null,
+          process.env.EMAIL_FROM ?? "notes@aftercall.app",
+          Date.now,
+          counters,
+        ),
     },
     {
       provide: ClaimsService,
-      useFactory: async () => {
-        if (!process.env.DATABASE_URL) {
-          if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
-          console.warn("DATABASE_URL not set; claim links are kept in memory for this run");
-          return new ClaimsService(new MemoryClaimsStore());
-        }
-        const store = new PgClaimsStore(new Pool({ connectionString: process.env.DATABASE_URL }));
+      inject: [PG_POOL],
+      useFactory: async (pool: Pool | null) => {
+        if (!pool) return new ClaimsService(new MemoryClaimsStore());
+        const store = new PgClaimsStore(pool);
         await store.migrate();
         return new ClaimsService(store);
       },
+    },
+    {
+      provide: StatsService,
+      inject: [NEAR_ENV, ClaimsService, COUNTERS],
+      useFactory: (near: ReturnType<typeof nearEnv>, claims: ClaimsService, counters: Counters) =>
+        new StatsService({
+          network: near.network,
+          chain: near.contract ? rpcChainStats(near.rpcUrl, near.contract) : undefined,
+          claims: () => claims.totals(),
+          emailsSent: () => counters.get("emails_sent"),
+        }),
     },
   ],
 })

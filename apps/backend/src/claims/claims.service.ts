@@ -38,6 +38,11 @@ export class ClaimsService {
     private readonly now: () => number = Date.now,
   ) {}
 
+  /** How many claim links exist and how many were answered, across everyone. */
+  totals(): Promise<{ created: number; claimed: number }> {
+    return this.store.totals();
+  }
+
   async create(owner: string, c: NewClaim): Promise<{ claim: Claim; token: string }> {
     if (!c.payeeName?.trim() || c.payeeName.length > 80 || !/^\d{1,30}$/.test(c.amount) || !c.meeting || c.meeting.length > 120 || (c.memo?.length ?? 0) > 200) {
       throw new HttpException("BAD_CLAIM", HttpStatus.BAD_REQUEST);

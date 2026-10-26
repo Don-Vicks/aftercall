@@ -24,6 +24,10 @@ const MIN_GAS_FOR_PAY: Gas = Gas::from_tgas(50);
 const MIN_REGISTRATION: NearToken = NearToken::from_millinear(50);
 const MAX_PENDING: u32 = 20;
 const MAX_PAYEES: usize = 50;
+/// Raw storage key for the public counters. Kept outside `AgentWallet` so adding
+/// them doesn't change the contract's state layout; it can't clash with the
+/// one-byte collection prefixes or near-sdk's `STATE` key.
+const STATS_KEY: &[u8] = b"stats";
 
 #[derive(BorshStorageKey)]
 #[near]
@@ -72,6 +76,20 @@ pub struct Proof {
 pub struct Payee {
     pub account: AccountId,
     pub label: String,
+}
+
+/// Public counts across every user. No accounts, amounts or meeting ids.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Default, Debug, PartialEq)]
+pub struct Stats {
+    /// Wallets registered.
+    pub wallets: u64,
+    /// Meeting proofs recorded.
+    pub proofs: u64,
+    /// Payments to payees sent and not refunded (withdrawals don't count).
+    pub payments: u64,
+    /// Payments parked over a cap for the owner's approval.
+    pub parked: u64,
 }
 
 #[near(serializers = [json])]
@@ -127,6 +145,7 @@ impl AgentWallet {
         let deposit = env::attached_deposit();
         require!(deposit >= MIN_REGISTRATION, "REGISTRATION_NEEDS_0.05_NEAR");
         require!(self.wallets.get(&owner).is_none(), "ALREADY_REGISTERED");
+        bump(|s| s.wallets += 1);
         self.wallets.insert(
             owner,
             Wallet {
@@ -240,6 +259,7 @@ impl AgentWallet {
         // Approved over-cap payments still count towards today's spending.
         w.spent_today = U128(w.spent_today.0 + payment.amount.0);
         self.paid.insert((owner.clone(), followup_id.clone()));
+        bump(|s| s.payments += 1);
         self.transfer(owner, payment.payee, payment.amount, payment.memo, followup_id, true);
     }
 
@@ -281,6 +301,7 @@ impl AgentWallet {
                 this.pending.insert(key, Payment { payee, amount, memo });
                 this.pending.flush();
             });
+            bump(|s| s.parked += 1);
             return PayResult { status: "blocked".into(), reason: Some(reason.into()), left_today: left };
         }
 
@@ -288,6 +309,7 @@ impl AgentWallet {
         w.spent_today = U128(w.spent_today.0 + amount.0);
         let left = U128(w.daily_cap.0 - w.spent_today.0);
         self.paid.insert((owner.clone(), followup_id.clone()));
+        bump(|s| s.payments += 1);
         self.transfer(owner, payee, amount, memo, followup_id, true);
         PayResult { status: "sending".into(), reason: None, left_today: left }
     }
@@ -303,6 +325,7 @@ impl AgentWallet {
             this.proofs.insert(key, proof);
             this.proofs.flush();
         });
+        bump(|s| s.proofs += 1);
     }
 
     // ---------- callback ----------
@@ -327,6 +350,10 @@ impl AgentWallet {
             }
         }
         self.paid.remove(&(owner.clone(), followup_id.clone()));
+        if counts_to_cap {
+            // A refunded payment was never made.
+            bump(|s| s.payments = s.payments.saturating_sub(1));
+        }
         env::log_str(&format!("PAYMENT_FAILED owner={owner} followup_id={followup_id} refunded={}", amount.0));
         false
     }
@@ -359,6 +386,11 @@ impl AgentWallet {
 
     pub fn get_usdc(&self) -> AccountId {
         self.usdc.clone()
+    }
+
+    /// Counts only, for Aftercall's public stats page.
+    pub fn get_stats(&self) -> Stats {
+        read_stats()
     }
 }
 
@@ -426,6 +458,19 @@ impl AgentWallet {
                     .on_pay_complete(owner, followup_id, amount, counts_to_cap),
             );
     }
+}
+
+fn read_stats() -> Stats {
+    env::storage_read(STATS_KEY)
+        .map(|bytes| near_sdk::borsh::from_slice(&bytes).unwrap_or_else(|_| env::panic_str("BAD_STATS")))
+        .unwrap_or_default()
+}
+
+/// Updates the public counters. Their few bytes are paid by the contract, not a user.
+fn bump(change: impl FnOnce(&mut Stats)) {
+    let mut stats = read_stats();
+    change(&mut stats);
+    env::storage_write(STATS_KEY, &near_sdk::borsh::to_vec(&stats).unwrap_or_else(|_| env::panic_str("BAD_STATS")));
 }
 
 fn today() -> u64 {
@@ -528,6 +573,31 @@ mod tests {
         c.remove_payee(payee.clone());
         assert_eq!(c.get_payees(owner.clone()).len(), 1);
         assert_eq!(c.get_payee_label(owner, payee), None);
+    }
+
+    #[test]
+    fn stats_count_wallets_proofs_payments_and_parked() {
+        let (mut c, owner, payee) = funded(10);
+        assert_eq!(c.get_stats(), Stats { wallets: 1, ..Stats::default() });
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(50 * USDC), None, "a".into());
+        c.pay(payee.clone(), U128(500 * USDC), None, "big".into());
+        c.record_proof("m-1".into(), "ab".repeat(32), "Qwen/Qwen3.8-27B".into());
+        assert_eq!(c.get_stats(), Stats { wallets: 1, proofs: 1, payments: 1, parked: 1 });
+
+        // Approving the parked payment makes it a payment; a withdrawal is not one.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.approve_pending("big".into());
+        c.withdraw(U128(10 * USDC));
+        assert_eq!(c.get_stats().payments, 2);
+
+        // A refunded payment is taken back off the count.
+        let mut cb = ctx(owner.clone(), NearToken::from_yoctonear(0), 10);
+        cb.predecessor_account_id = cb.current_account_id.clone();
+        testing_env!(cb);
+        assert!(!c.on_pay_complete(owner.clone(), "a".into(), U128(50 * USDC), true, Err(PromiseError::Failed)));
+        assert!(c.on_pay_complete(owner, "big".into(), U128(500 * USDC), true, Ok(())));
+        assert_eq!(c.get_stats().payments, 1);
     }
 
     #[test]

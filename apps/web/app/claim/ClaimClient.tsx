@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatUsdc } from "@aftercall/core";
+import { exampleAccount, formatUsdc } from "@aftercall/core";
 import { Page, button } from "../ui";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
@@ -69,6 +69,8 @@ export function ClaimClient() {
   const c = state.claim;
   const amount = formatUsdc(BigInt(c.amount));
   const valid = ACCOUNT.test(account);
+  // Claims don't carry a network; the payer's own account shows which one they use.
+  const network = c.owner.endsWith(".testnet") ? "testnet" : "mainnet";
 
   return (
     <Page width={480}>
@@ -95,7 +97,7 @@ export function ClaimClient() {
               id="acct"
               value={account}
               onChange={(e) => setAccount(e.target.value.trim().toLowerCase())}
-              placeholder="yourname.near"
+              placeholder={exampleAccount(network)}
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}

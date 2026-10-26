@@ -1,5 +1,6 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
 import type { ProofBundle } from "./pipeline.ts";
+import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex } from "./verify.ts";
 
 /**
@@ -116,7 +117,7 @@ export const NOT_PROVEN = [
 
 /** Public link payload: everything the Verify page needs, base64url in the URL fragment. */
 export interface PublicProof {
-  network: "testnet" | "mainnet";
+  network: Network;
   contract: string;
   owner: string;
   bundle: ProofBundle;
@@ -138,5 +139,7 @@ export function encodePublicProof(p: PublicProof): string {
 }
 
 export function decodePublicProof(fragment: string): PublicProof {
-  return JSON.parse(new TextDecoder().decode(fromBase64Url(fragment.replace(/^#/, "")))) as PublicProof;
+  const p = JSON.parse(new TextDecoder().decode(fromBase64Url(fragment.replace(/^#/, "")))) as PublicProof;
+  if (!isNetwork(p.network)) throw new Error("BAD_NETWORK");
+  return p;
 }

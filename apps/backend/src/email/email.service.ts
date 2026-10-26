@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
+import type { Counters } from "../stats/counters";
 
 export interface SendRequest {
   to: string;
@@ -38,6 +39,8 @@ export class EmailService {
     private readonly mailer: Mailer | null,
     private readonly fromAddress: string,
     private readonly now: () => number = Date.now,
+    /** Running total of emails sent, for the public stats. */
+    private readonly counters?: Counters,
   ) {}
 
   get configured(): boolean {
@@ -58,6 +61,8 @@ export class EmailService {
     const name = (req.senderName ?? accountId).replace(/[<>"\r\n]/g, "").slice(0, 60);
     const result = await this.mailer({ from: `${name} via Aftercall <${this.fromAddress}>`, to: req.to, subject: req.subject, text: req.text, replyTo: req.replyTo });
     this.sent.set(accountId, [day, today + 1]);
+    // The email went out; a counter that can't be written must not turn that into an error.
+    await this.counters?.increment("emails_sent").catch(() => {});
     return result;
   }
 }
