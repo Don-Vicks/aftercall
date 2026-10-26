@@ -15,6 +15,8 @@ export interface ClaimsStore {
   /** Marks the claim claimed only if it is still open; false if someone got there first. */
   markClaimed(id: string, account: string, at: number): Promise<boolean>;
   cancel(owner: string, id: string): Promise<boolean>;
+  /** Counts across everyone, for the public stats. */
+  totals(): Promise<{ created: number; claimed: number }>;
 }
 
 export const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -46,6 +48,10 @@ export class MemoryClaimsStore implements ClaimsStore {
     if (!c) return false;
     c.status = "cancelled";
     return true;
+  }
+  async totals() {
+    const all = [...this.rows.values()];
+    return { created: all.length, claimed: all.filter((c) => c.status === "claimed").length };
   }
 }
 
@@ -130,5 +136,11 @@ export class PgClaimsStore implements ClaimsStore {
   async cancel(owner: string, id: string) {
     const r = await this.pool.query("UPDATE claims SET status = 'cancelled' WHERE id = $1 AND owner = $2", [id, owner]);
     return r.rowCount === 1;
+  }
+  async totals() {
+    const r = await this.pool.query<{ created: string; claimed: string }>(
+      "SELECT count(*) AS created, count(*) FILTER (WHERE status = 'claimed') AS claimed FROM claims",
+    );
+    return { created: Number(r.rows[0].created), claimed: Number(r.rows[0].claimed) };
   }
 }
