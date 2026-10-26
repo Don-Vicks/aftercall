@@ -333,6 +333,37 @@ fn save_projects(app: AppHandle, projects: Vec<Project>) -> Result<(), String> {
     std::fs::write(projects_path(&app)?, serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+/// Moves every recording filed under project `from` to project `to` (rename or delete
+/// of a project), in both meeting.json and the saved notes.
+#[tauri::command]
+fn move_recordings_project(app: AppHandle, from: String, to: String) -> Result<usize, String> {
+    let to = to.trim();
+    if to.is_empty() || to.chars().count() > 60 {
+        return Err("Project names are 1 to 60 characters".into());
+    }
+    let Ok(entries) = std::fs::read_dir(recordings_dir(&app)?) else { return Ok(0) };
+    let mut moved = 0;
+    for entry in entries.flatten() {
+        let meta_path = entry.path().join("meeting.json");
+        let Ok(json) = std::fs::read_to_string(&meta_path) else { continue };
+        let Ok(mut meta) = serde_json::from_str::<serde_json::Value>(&json) else { continue };
+        if meta["project"] != from.as_str() {
+            continue;
+        }
+        meta["project"] = to.into();
+        std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let notes_path = entry.path().join("notes.json");
+        if let Ok(notes) = std::fs::read_to_string(&notes_path) {
+            if let Ok(mut notes) = serde_json::from_str::<serde_json::Value>(&notes) {
+                notes["meeting"]["project"] = to.into();
+                std::fs::write(&notes_path, serde_json::to_string_pretty(&notes).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            }
+        }
+        moved += 1;
+    }
+    Ok(moved)
+}
+
 /// Deletes a recording: its audio, notes and metadata. The proof on NEAR stays, as on-chain data does.
 #[tauri::command]
 fn delete_recording(app: AppHandle, id: String) -> Result<(), String> {
@@ -387,7 +418,8 @@ pub fn run() {
             save_projects,
             delete_recording,
             read_chunk_transcript,
-            write_chunk_transcript
+            write_chunk_transcript,
+            move_recordings_project
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

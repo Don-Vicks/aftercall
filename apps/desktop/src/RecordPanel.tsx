@@ -11,16 +11,26 @@ const METER_BARS = 28;
 /** The recording panel: pick a project, confirm consent, record, stop. */
 export function RecordPanel({
   projects,
+  selectProject,
   onNewProject,
   onClose,
   onStop,
 }: {
   projects: Project[];
+  /** A project just created from this panel; it becomes the selection. */
+  selectProject?: string;
   onNewProject: () => void;
   onClose: () => void;
   onStop: (project: string, seconds: number, saved?: SavedRecording) => void;
 }) {
-  const [project, setProject] = useState(projects[0]?.name ?? "General");
+  const [project, setProject] = useState(selectProject ?? projects[0]?.name ?? "General");
+  useEffect(() => {
+    if (selectProject) setProject(selectProject);
+  }, [selectProject]);
+  // Projects load after the panel can open; keep the selection valid.
+  useEffect(() => {
+    if (projects.length && !projects.some((p) => p.name === project)) setProject(projects[0].name);
+  }, [projects, project]);
   // Consent is asked every time; it never defaults to ticked.
   const [consent, setConsent] = useState(false);
   const [copied, setCopied] = useState(false);

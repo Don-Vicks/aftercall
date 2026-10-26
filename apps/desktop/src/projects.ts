@@ -15,6 +15,9 @@ export const projectsApi = {
 
 export const deleteRecording = (id: string) => invoke<void>("delete_recording", { id });
 
+/** Re-files every recording of one project under another (rename or delete). */
+export const moveRecordings = (from: string, to: string) => (isDesktop ? invoke<number>("move_recordings_project", { from, to }) : Promise.resolve(0));
+
 /** A short id from a name: "Fundraise 2026" -> "fundraise-2026-k3x". */
 export function projectId(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "project";

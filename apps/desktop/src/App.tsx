@@ -18,7 +18,7 @@ import { near } from "./near";
 import { recordingFiles } from "./nearai";
 import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
 import { payees as samplePayees } from "./sample";
-import { deleteRecording, projectId, projectsApi, type Project } from "./projects";
+import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
 import { Onboarding, needsOnboarding } from "./Onboarding";
 
@@ -62,6 +62,37 @@ export default function App() {
   const [limits, setLimits] = useState<WalletLimits | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [createdProject, setCreatedProject] = useState<string | undefined>(undefined);
+  const [renaming, setRenaming] = useState<Project | null>(null);
+
+  /** Moves recordings (on disk and in memory) from one project name to another. */
+  const refile = async (from: string, to: string) => {
+    await moveRecordings(from, to);
+    setRecordings((all) => all.map((r) => (r.project === from ? { ...r, project: to } : r)));
+    setMeetings((all) => Object.fromEntries(Object.entries(all).map(([id, m]) => [id, m.project === from && id !== syncWithAda.id ? { ...m, project: to } : m])));
+  };
+
+  const renameProject = async (p: Project, name: string) => {
+    const next = projects.map((x) => (x.id === p.id ? { ...x, name } : x));
+    await projectsApi.save(next);
+    await refile(p.name, name);
+    setProjects(next);
+    setRenaming(null);
+  };
+
+  const deleteProject = async (id: string) => {
+    const p = projects.find((x) => x.id === id);
+    if (!p) return;
+    if (projects.length === 1) return window.alert("Keep at least one project. Rename this one instead.");
+    const target = projects.find((x) => x.id !== id && x.name === "General") ?? projects.find((x) => x.id !== id)!;
+    const count = recordings.filter((r) => r.project === p.name).length;
+    const msg = count ? `Delete “${p.name}”? Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.` : `Delete “${p.name}”?`;
+    if (!window.confirm(msg)) return;
+    const next = projects.filter((x) => x.id !== id);
+    await projectsApi.save(next);
+    if (count) await refile(p.name, target.name);
+    setProjects(next);
+  };
   const [onboarding, setOnboarding] = useState(needsOnboarding);
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
@@ -74,6 +105,7 @@ export default function App() {
     const next = [...projects, { id: projectId(name), name }];
     await projectsApi.save(next);
     setProjects(next);
+    setCreatedProject(name);
     setNewProjectOpen(false);
   };
 
@@ -301,6 +333,8 @@ export default function App() {
         searchSelected={view.name === "search"}
         onOpenSearch={() => setView({ name: "search" })}
         onNewProject={() => setNewProjectOpen(true)}
+        onRenameProject={(id) => setRenaming(projects.find((p) => p.id === id) ?? null)}
+        onDeleteProject={deleteProject}
         onSelectMeeting={(id) =>
           meetings[id]
             ? setView({ name: "meeting", id })
@@ -407,10 +441,10 @@ export default function App() {
           }}
         />
       )}
-      {newProjectOpen && <NewProjectSheet existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
       {recordOpen && (
         <RecordPanel
           projects={projects}
+          selectProject={createdProject}
           onNewProject={() => setNewProjectOpen(true)}
           onClose={() => setRecordOpen(false)}
           onStop={(project, seconds, saved) => {
@@ -425,6 +459,10 @@ export default function App() {
             }
           }}
         />
+      )}
+      {newProjectOpen && <NewProjectSheet existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
+      {renaming && (
+        <NewProjectSheet existing={projects.map((p) => p.name)} initial={renaming.name} onClose={() => setRenaming(null)} onCreate={(name) => renameProject(renaming, name)} />
       )}
     </div>
   );

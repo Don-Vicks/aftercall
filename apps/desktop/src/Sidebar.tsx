@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, House, Plus, Search } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, House, MoreHorizontal, Plus, Search } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle, recordingWhen } from "./RecordingScreen";
@@ -31,6 +31,8 @@ export function Sidebar({
   onSelectMeeting,
   onNewRecording,
   onNewProject,
+  onRenameProject,
+  onDeleteProject,
   onOpenWallet,
   onOpenSettings,
 }: {
@@ -53,10 +55,28 @@ export function Sidebar({
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
   onNewProject: () => void;
+  onRenameProject: (id: string) => void;
+  onDeleteProject: (id: string) => void;
   onOpenWallet: () => void;
   onOpenSettings: () => void;
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // A click anywhere else, or Escape, closes the project menu.
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+      if (e.target instanceof Element && e.target.closest("[data-project-menu]")) return;
+      setMenuFor(null);
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [menuFor]);
 
   // Recordings whose project was renamed or deleted still show, under "Other".
   const known = new Set(projects.map((p) => p.name));
@@ -136,16 +156,38 @@ export function Sidebar({
           const isOpen = open[g.id] ?? (meetings.some((m) => m.id === selectedMeetingId) || gi === 0);
           const Chevron = isOpen ? ChevronDown : ChevronRight;
           return (
-            <div key={g.id} className="flex flex-col gap-0.5">
-              <button
-                aria-expanded={isOpen}
-                onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
-                className={cx("flex items-center gap-2 rounded-sm px-2 py-[7px] text-left hover:bg-elevated/60", isOpen ? "font-semibold text-ink" : "text-muted")}
-              >
-                <Chevron size={12} strokeWidth={2} className="text-faint" aria-hidden="true" />
-                <span className="flex-1 truncate">{g.name}</span>
-                <span className="font-mono text-[11px] font-normal text-muted">{meetings.length}</span>
-              </button>
+            <div key={g.id} className="relative flex flex-col gap-0.5">
+              <div className="group flex items-center rounded-sm hover:bg-elevated/60">
+                <button
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
+                  className={cx("flex min-w-0 flex-1 items-center gap-2 px-2 py-[7px] text-left", isOpen ? "font-semibold text-ink" : "text-muted")}
+                >
+                  <Chevron size={12} strokeWidth={2} className="shrink-0 text-faint" aria-hidden="true" />
+                  <span className="flex-1 truncate">{g.name}</span>
+                  <span className="font-mono text-[11px] font-normal text-muted group-hover:hidden">{meetings.length}</span>
+                </button>
+                {g.id !== "other" && (
+                  <button
+                    data-project-menu
+                    aria-label={`${g.name} options`}
+                    onClick={() => setMenuFor(menuFor === g.id ? null : g.id)}
+                    className="hidden px-2 text-muted hover:text-ink group-hover:block"
+                  >
+                    <MoreHorizontal size={14} />
+                  </button>
+                )}
+              </div>
+              {menuFor === g.id && (
+                <div role="menu" data-project-menu className="absolute top-8 right-0 z-20 flex w-36 flex-col rounded-md bg-elevated p-1 shadow-float">
+                  <button role="menuitem" onClick={() => { setMenuFor(null); onRenameProject(g.id); }} className="rounded-sm px-2.5 py-1.5 text-left hover:bg-hairline">
+                    Rename
+                  </button>
+                  <button role="menuitem" onClick={() => { setMenuFor(null); onDeleteProject(g.id); }} className="rounded-sm px-2.5 py-1.5 text-left text-record hover:bg-hairline">
+                    Delete
+                  </button>
+                </div>
+              )}
               {isOpen && (
                 <div className="ml-3.5 flex flex-col gap-0.5 border-l border-hairline pl-2.5">
                   {meetings.length ? meetings.map(meetingRow) : <span className="px-2 py-[7px] text-muted">No meetings yet</span>}
