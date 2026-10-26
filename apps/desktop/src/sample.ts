@@ -29,6 +29,9 @@ export const projects: ProjectSummary[] = [
 ];
 
 export const account = "victor.near";
+
+/** Payee list until payees come from the agent-wallet contract (M4). */
+export const payees = [{ name: "Designer", account: "designer.near" }];
 export const walletBalance = 180_000_000n; // 180.00 USDC
 export const dailyCap = 200_000_000n; // 200.00 USDC
 export const spentToday = 50_000_000n;

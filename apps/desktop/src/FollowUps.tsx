@@ -79,7 +79,7 @@ function EmailRow({
         <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
           <span className="t-title">Recap to {f.toName}</span>
           <span className="text-muted">
-            {f.to} · “{f.subject}”
+            {f.to || <span className="text-caution">No address yet</span>} · “{f.subject}”
           </span>
         </div>
         {f.status === "sent" && <Pill tone="verdigris">Sent {f.doneAt}</Pill>}
@@ -91,7 +91,9 @@ function EmailRow({
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => onDismiss(f.id)}>Dismiss</Button>
             <Button>Draft in Mail</Button>
-            <Button variant="primary" onClick={() => onApprove(f.id)}>Approve and send</Button>
+            <Button variant="primary" onClick={() => onApprove(f.id)} disabled={!f.to}>
+              Approve and send
+            </Button>
           </div>
         </>
       )}
@@ -123,7 +125,7 @@ function PaymentRow({
         <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
           <span className="t-title">{payVerb[f.status] ?? "Pay"} {f.payeeName}</span>
           <span className="t-mono text-muted">
-            {f.payeeAccount}
+            {f.payeeAccount || "No NEAR account on file"}
             {proposed && ` · ${formatUsdc(leftToday)} left today`}
           </span>
         </div>
@@ -131,7 +133,7 @@ function PaymentRow({
         {f.status === "paid" && <Pill tone="verdigris" icon={<Check size={11} strokeWidth={2.5} />}>Paid {f.doneAt}</Pill>}
         {proposed && (
           <span className="font-mono text-xl leading-6 tracking-[-0.01em]">
-            {formatUsdc(f.amount)} <span className="text-xs text-muted">USDC</span>
+            {f.amount === null ? <span className="text-caution">?</span> : formatUsdc(f.amount)} <span className="text-xs text-muted">USDC</span>
           </span>
         )}
       </div>
@@ -142,7 +144,11 @@ function PaymentRow({
             <span className="t-label leading-[19px] text-muted">Check before you approve</span>
             <span>
               Heard <span className="font-serif italic">“{f.heard}”</span> →{" "}
-              <span className="t-mono">{formatUsdc(f.amount)} USDC</span>
+              {f.amount === null ? (
+                <span className="text-caution">amount unclear, edit before approving</span>
+              ) : (
+                <span className="t-mono">{formatUsdc(f.amount)} USDC</span>
+              )}
             </span>
             <span>
               Payee <span className="font-semibold">{f.payeeName}</span>{" "}
@@ -152,7 +158,7 @@ function PaymentRow({
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => onDismiss(f.id)}>Dismiss</Button>
             <Button>Edit</Button>
-            <Button variant="primary" onClick={() => onApprove(f.id)} disabled={!f.payeeListed}>
+            <Button variant="primary" onClick={() => onApprove(f.id)} disabled={!f.payeeListed || f.amount === null}>
               Approve payment
             </Button>
           </div>
@@ -169,7 +175,7 @@ function BlockedRow({ f, last, onReview }: { f: PaymentFollowUp; last: boolean; 
         <AlertTriangle size={16} strokeWidth={1.5} className="text-caution" aria-hidden="true" />
         <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
           <span className="t-title">
-            Pay {f.payeeName} <span className="font-mono text-[13px] font-normal">{formatUsdc(f.amount)} USDC</span>
+            Pay {f.payeeName} <span className="font-mono text-[13px] font-normal">{f.amount === null ? "?" : formatUsdc(f.amount)} USDC</span>
           </span>
           <span className="text-caution">Over today's cap. Your agent wallet refused it; only you can approve it, in your wallet.</span>
         </div>

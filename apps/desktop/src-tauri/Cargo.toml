@@ -26,6 +26,11 @@ anyhow = "1"
 ringbuf = "0.4"
 hound = "3.5.1"
 cpal = "0.17"
+reqwest = { version = "0.12", default-features = false, features = ["multipart", "rustls-tls"] }
+keyring = { version = "3", features = ["apple-native"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cidre = { version = "0.15", default-features = false, features = ["async", "av", "blocks", "cm", "core_audio", "dispatch", "macos_15_0"] }

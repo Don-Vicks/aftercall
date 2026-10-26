@@ -7,6 +7,7 @@ import { RecordPanel } from "./RecordPanel";
 import { syncWithAda } from "./sample";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
+import { parseNotes } from "./nearai";
 
 type View =
   | { name: "meeting"; id: string }
@@ -37,9 +38,30 @@ export default function App() {
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
 
+  // Recordings that have notes open as meetings.
+  const addProcessed = (list: SavedRecording[]) => {
+    const processed: Record<string, Meeting> = {};
+    for (const r of list) {
+      if (!r.notes) continue;
+      try {
+        processed[r.id] = parseNotes(r.notes).meeting;
+      } catch {
+        // A damaged notes.json leaves the recording on its status page.
+      }
+    }
+    setMeetings((all) => ({ ...all, ...processed }));
+  };
+
   // Saved recordings from earlier sessions.
   useEffect(() => {
-    if (isDesktop) recorder.list().then(setRecordings).catch(() => setRecordings([]));
+    if (!isDesktop) return;
+    recorder
+      .list()
+      .then((list) => {
+        setRecordings(list);
+        addProcessed(list);
+      })
+      .catch(() => setRecordings([]));
   }, []);
 
   useEffect(() => {
@@ -70,6 +92,15 @@ export default function App() {
   const approve = (meetingId: string, fuId: string) => {
     const fu = meetings[meetingId].followUps.find((f) => f.id === fuId);
     if (!fu) return;
+    // On real notes nothing is faked: sending and paying arrive with M4.
+    if (meetingId !== syncWithAda.id) {
+      setView({
+        name: "placeholder",
+        title: fu.kind === "email" ? "Sending the recap" : "Paying from your agent wallet",
+        milestone: `Nothing was sent. ${fu.kind === "email" ? "Email follow-ups" : "Payments under your contract's caps"} arrive in M4.`,
+      });
+      return;
+    }
     setFollowUpStatus(meetingId, fuId, "sending");
     setTimeout(() => setFollowUpStatus(meetingId, fuId, fu.kind === "email" ? "sent" : "paid", nowHHMM()), 1600);
   };
@@ -82,6 +113,7 @@ export default function App() {
 
   const selectedMeetingId = view.name === "meeting" || view.name === "recording" ? view.id : null;
   const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;
+  const meetingTitles = Object.fromEntries(Object.values(meetings).map((m) => [m.id, m.title]));
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
 
   return (
@@ -90,6 +122,7 @@ export default function App() {
         selectedMeetingId={selectedMeetingId}
         pendingByMeeting={pendingByMeeting}
         recordings={recordings}
+        meetingTitles={meetingTitles}
         onSelectMeeting={(id) =>
           meetings[id]
             ? setView({ name: "meeting", id })
@@ -113,7 +146,18 @@ export default function App() {
           onReviewBlocked={() => setView({ name: "placeholder", title: "Approve in your wallet", milestone: "Over-cap approvals in your own wallet arrive in M4." })}
         />
       )}
-      {openRecording && <RecordingScreen key={openRecording.id} recording={openRecording} />}
+      {openRecording && (
+        <RecordingScreen
+          key={openRecording.id}
+          recording={openRecording}
+          onProcessed={(notes) => {
+            const updated = { ...openRecording, notes };
+            setRecordings((all) => all.map((r) => (r.id === updated.id ? updated : r)));
+            addProcessed([updated]);
+            setView({ name: "meeting", id: updated.id });
+          }}
+        />
+      )}
       {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
       {view.name === "placeholder" && (
         <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">

@@ -19,6 +19,8 @@ export interface SavedRecording {
   seconds: number;
   chunks: number;
   dir: string;
+  /** Contents of notes.json once the recording has been processed. */
+  notes?: string;
 }
 
 export interface Levels {

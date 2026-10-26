@@ -10,6 +10,7 @@ export function Sidebar({
   selectedMeetingId,
   pendingByMeeting,
   recordings,
+  meetingTitles,
   onSelectMeeting,
   onNewRecording,
   onOpenWallet,
@@ -20,6 +21,8 @@ export function Sidebar({
   pendingByMeeting: Record<string, number>;
   /** Real recordings, shown above the sample meetings of their project. */
   recordings: SavedRecording[];
+  /** Titles of meetings that have notes, by id. */
+  meetingTitles: Record<string, string>;
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
   onOpenWallet: () => void;
@@ -51,7 +54,7 @@ export function Sidebar({
         {projects.map((project) => {
           const ownRecordings = recordings.filter((r) => r.project === project.name);
           const meetings = [
-            ...ownRecordings.map((r) => ({ id: r.id, title: recordingTitle(r), when: recordingWhen(r), toApprove: 0 })),
+            ...ownRecordings.map((r) => ({ id: r.id, title: meetingTitles[r.id] ?? recordingTitle(r), when: recordingWhen(r), toApprove: 0 })),
             ...project.meetings,
           ];
           // A project opens by itself when it holds the selected meeting.
