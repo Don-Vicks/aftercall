@@ -1,5 +1,6 @@
 import { GoneException, HttpException, HttpStatus, Injectable, NotFoundException } from "@nestjs/common";
 import { randomBytes } from "node:crypto";
+import { hashToken, MemoryClaimsStore, type ClaimsStore } from "./claims.store";
 
 /**
  * Claim links: a payee who isn't on the owner's list gets a single-use link to
@@ -32,17 +33,16 @@ const MAX_OPEN_PER_OWNER = 50;
 
 @Injectable()
 export class ClaimsService {
-  /** token (the secret in the payee's link) -> claim */
-  private readonly byToken = new Map<string, Claim>();
+  constructor(
+    private readonly store: ClaimsStore = new MemoryClaimsStore(),
+    private readonly now: () => number = Date.now,
+  ) {}
 
-  constructor(private readonly now: () => number = Date.now) {}
-
-  create(owner: string, c: NewClaim): { claim: Claim; token: string } {
+  async create(owner: string, c: NewClaim): Promise<{ claim: Claim; token: string }> {
     if (!c.payeeName?.trim() || c.payeeName.length > 80 || !/^\d{1,30}$/.test(c.amount) || !c.meeting || c.meeting.length > 120 || (c.memo?.length ?? 0) > 200) {
       throw new HttpException("BAD_CLAIM", HttpStatus.BAD_REQUEST);
     }
-    const open = [...this.byToken.values()].filter((x) => x.owner === owner && x.status === "open" && x.expiresAt > this.now()).length;
-    if (open >= MAX_OPEN_PER_OWNER) throw new HttpException("TOO_MANY_OPEN_CLAIMS", HttpStatus.TOO_MANY_REQUESTS);
+    if ((await this.store.countOpen(owner, this.now())) >= MAX_OPEN_PER_OWNER) throw new HttpException("TOO_MANY_OPEN_CLAIMS", HttpStatus.TOO_MANY_REQUESTS);
     const token = randomBytes(24).toString("base64url");
     const claim: Claim = {
       id: randomBytes(8).toString("hex"),
@@ -55,41 +55,37 @@ export class ClaimsService {
       expiresAt: this.now() + TTL_MS,
       status: "open",
     };
-    this.byToken.set(token, claim);
+    await this.store.insert(hashToken(token), claim);
     return { claim, token };
   }
 
-  private live(token: string): Claim {
-    const claim = this.byToken.get(token);
+  private async live(token: string): Promise<Claim> {
+    const claim = await this.store.byTokenHash(hashToken(token ?? ""));
     if (!claim || claim.status === "cancelled") throw new NotFoundException("NO_SUCH_CLAIM");
     if (claim.expiresAt < this.now()) throw new GoneException("CLAIM_EXPIRED");
     return claim;
   }
 
   /** What the payee sees: who wants to pay them, how much, and for what. */
-  view(token: string) {
-    const c = this.live(token);
+  async view(token: string) {
+    const c = await this.live(token);
     return { owner: c.owner, payeeName: c.payeeName, amount: c.amount, memo: c.memo, meeting: c.meeting, status: c.status, expiresAt: c.expiresAt };
   }
 
   /** The payee shares their account. Works once. */
-  claim(token: string, account: string): void {
-    const c = this.live(token);
+  async claim(token: string, account: string): Promise<void> {
+    const c = await this.live(token);
     if (c.status !== "open") throw new GoneException("ALREADY_CLAIMED");
     const a = account?.trim().toLowerCase();
     if (!ACCOUNT.test(a ?? "")) throw new HttpException("BAD_ACCOUNT", HttpStatus.BAD_REQUEST);
-    c.status = "claimed";
-    c.claimedAccount = a;
-    c.claimedAt = this.now();
+    if (!(await this.store.markClaimed(c.id, a, this.now()))) throw new GoneException("ALREADY_CLAIMED");
   }
 
-  mine(owner: string): Claim[] {
-    return [...this.byToken.values()].filter((c) => c.owner === owner).sort((a, b) => b.createdAt - a.createdAt);
+  mine(owner: string): Promise<Claim[]> {
+    return this.store.byOwner(owner);
   }
 
-  cancel(owner: string, id: string): void {
-    const c = [...this.byToken.values()].find((x) => x.id === id && x.owner === owner);
-    if (!c) throw new NotFoundException("NO_SUCH_CLAIM");
-    c.status = "cancelled";
+  async cancel(owner: string, id: string): Promise<void> {
+    if (!(await this.store.cancel(owner, id))) throw new NotFoundException("NO_SUCH_CLAIM");
   }
 }

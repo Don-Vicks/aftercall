@@ -18,12 +18,14 @@
     "@noble/hashes": "^1.8.0",
     "@scure/base": "^1.2.6",
     "jose": "^5.10.0",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2",
     "rxjs": "^7"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.2.8",
     "@types/node": "^24",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.3",
     "supertest": "^7.3.1",
     "tsx": "^4",

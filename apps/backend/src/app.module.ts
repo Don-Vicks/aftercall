@@ -7,6 +7,8 @@ import { EmailController } from "./email/email.controller";
 import { EmailService, resendMailer } from "./email/email.service";
 import { ClaimsController } from "./claims/claims.controller";
 import { ClaimsService } from "./claims/claims.service";
+import { MemoryClaimsStore, PgClaimsStore } from "./claims/claims.store";
+import { Pool } from "pg";
 
 const DEFAULT_RPC = "https://rpc.testnet.near.org";
 
@@ -31,7 +33,19 @@ function jwtSecret(): string {
       useFactory: () =>
         new EmailService(process.env.RESEND_API_KEY ? resendMailer(process.env.RESEND_API_KEY) : null, process.env.EMAIL_FROM ?? "notes@aftercall.app"),
     },
-    { provide: ClaimsService, useFactory: () => new ClaimsService() },
+    {
+      provide: ClaimsService,
+      useFactory: async () => {
+        if (!process.env.DATABASE_URL) {
+          if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
+          console.warn("DATABASE_URL not set; claim links are kept in memory for this run");
+          return new ClaimsService(new MemoryClaimsStore());
+        }
+        const store = new PgClaimsStore(new Pool({ connectionString: process.env.DATABASE_URL }));
+        await store.migrate();
+        return new ClaimsService(store);
+      },
+    },
   ],
 })
 export class AppModule {}

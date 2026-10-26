@@ -14,7 +14,7 @@ export class ClaimsController {
   @Post()
   async create(@Headers("authorization") authorization: string | undefined, @Body() body: NewClaim) {
     const owner = await sessionAccount(this.auth, authorization);
-    const { claim, token } = this.claims.create(owner, body);
+    const { claim, token } = await this.claims.create(owner, body);
     return { id: claim.id, token, expiresAt: claim.expiresAt };
   }
 
@@ -26,21 +26,21 @@ export class ClaimsController {
 
   @Delete(":id")
   async cancel(@Headers("authorization") authorization: string | undefined, @Param("id") id: string) {
-    this.claims.cancel(await sessionAccount(this.auth, authorization), id);
+    await this.claims.cancel(await sessionAccount(this.auth, authorization), id);
     return { ok: true };
   }
 
   /** Public: what the payee sees on the claim page. */
   @Get("link/:token")
-  view(@Param("token") token: string) {
+  async view(@Param("token") token: string) {
     return this.claims.view(token);
   }
 
   /** Public: the payee shares where to be paid. */
   @Post("link/:token")
   @HttpCode(200)
-  claim(@Param("token") token: string, @Body() body: { account: string }) {
-    this.claims.claim(token, body?.account);
+  async claim(@Param("token") token: string, @Body() body: { account: string }) {
+    await this.claims.claim(token, body?.account);
     return { ok: true };
   }
 }
