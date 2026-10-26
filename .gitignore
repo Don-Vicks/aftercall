@@ -1,10 +1,9 @@
 node_modules/
+dist/
+.next/
 target/
 .env
 .env.*
 !.env.example
-dist/
-.next/
-*.log
 .DS_Store
-recordings/
+*.log

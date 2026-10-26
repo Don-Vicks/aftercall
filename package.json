@@ -1,0 +1,19 @@
+{
+  "name": "aftercall",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "dev:desktop": "pnpm --filter @aftercall/desktop tauri dev",
+    "dev:ui": "pnpm --filter @aftercall/desktop dev",
+    "dev:web": "pnpm --filter @aftercall/web dev",
+    "dev:backend": "pnpm --filter @aftercall/backend dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
