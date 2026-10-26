@@ -5,6 +5,7 @@ import { MeetingScreen } from "./MeetingScreen";
 import { ProcessingScreen } from "./ProcessingScreen";
 import { RecordPanel } from "./RecordPanel";
 import { syncWithAda } from "./sample";
+import { isDesktop, recorder } from "./recorder";
 
 type View =
   | { name: "meeting"; id: string }
@@ -41,7 +42,12 @@ export default function App() {
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // "New recording…" in the menu bar item opens the panel.
+    const offMenu = isDesktop ? recorder.onMenuNewRecording(() => setRecordOpen(true)) : null;
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      offMenu?.then((f) => f());
+    };
   }, []);
 
   const update = (id: string, fn: (m: Meeting) => Meeting) => setMeetings((all) => ({ ...all, [id]: fn(all[id]) }));

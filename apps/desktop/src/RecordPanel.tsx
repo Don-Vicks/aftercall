@@ -1,25 +1,61 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Square } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle, Square } from "lucide-react";
 import { formatClock } from "@aftercall/core";
+import { isDesktop, recorder, type RecordingInfo, type RecordingResult } from "./recorder";
 import { projects } from "./sample";
 import { Button } from "./ui";
 
 const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted after transcription.";
+const METER_BARS = 28;
 
-/** The menu bar panel: pick a project, confirm consent, record, stop. */
-export function RecordPanel({ onClose, onStop }: { onClose: () => void; onStop: (project: string, seconds: number) => void }) {
+/** The recording panel: pick a project, confirm consent, record, stop. */
+export function RecordPanel({
+  onClose,
+  onStop,
+}: {
+  onClose: () => void;
+  onStop: (project: string, seconds: number, result?: RecordingResult) => void;
+}) {
   const [project, setProject] = useState(projects[0].name);
   // Consent is asked every time; it never defaults to ticked.
   const [consent, setConsent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<RecordingInfo | null>(null);
   const [paused, setPaused] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  const [levels, setLevels] = useState<number[]>(() => Array(METER_BARS).fill(0));
+  const [silentSystem, setSilentSystem] = useState(false);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
+  const pushLevel = (value: number) => setLevels((l) => [...l.slice(1), value]);
+
+  // In the app, the recorder drives the timer, meter and silence warning.
   useEffect(() => {
-    if (!recording || paused) return;
-    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(t);
+    if (!recording || !isDesktop) return;
+    const offLevels = recorder.onLevels((l) => {
+      setSeconds(l.seconds);
+      if (!pausedRef.current) pushLevel(Math.max(l.mic, l.system));
+    });
+    const offSilence = recorder.onSilence((s) => s.stem === "system" && setSilentSystem(s.silent));
+    return () => {
+      offLevels.then((f) => f());
+      offSilence.then((f) => f());
+    };
+  }, [recording]);
+
+  // In a plain browser (pnpm dev:ui) there is no recorder: simulate it.
+  useEffect(() => {
+    if (!recording || isDesktop || paused) return;
+    const clock = setInterval(() => setSeconds((s) => s + 1), 1000);
+    const meter = setInterval(() => pushLevel(0.05 + Math.random() * 0.25), 120);
+    return () => {
+      clearInterval(clock);
+      clearInterval(meter);
+    };
   }, [recording, paused]);
 
   useEffect(() => {
@@ -32,6 +68,39 @@ export function RecordPanel({ onClose, onStop }: { onClose: () => void; onStop: 
     await navigator.clipboard.writeText(NOTICE);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
+  };
+
+  const start = async () => {
+    setError(null);
+    if (!isDesktop) {
+      setRecording(true);
+      return;
+    }
+    setStarting(true);
+    try {
+      setInfo(await recorder.start());
+      setRecording(true);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const togglePause = async () => {
+    const next = !paused;
+    if (isDesktop) await recorder.pause(next);
+    setPaused(next);
+  };
+
+  const stop = async () => {
+    if (!isDesktop) return onStop(project, seconds);
+    try {
+      const result = await recorder.stop();
+      onStop(project, result.seconds, result);
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   return (
@@ -64,17 +133,30 @@ export function RecordPanel({ onClose, onStop }: { onClose: () => void; onStop: 
               <span className="font-mono text-[44px] leading-[48px] tracking-[-0.03em] tabular-nums">{formatClock(seconds)}</span>
               <span className="text-muted">{project} · New meeting</span>
             </div>
-            <Meter active={!paused} />
+            <Meter levels={levels} />
+            {silentSystem && (
+              <div role="status" className="flex gap-2.5 rounded-sm bg-caution-tint p-3 text-caution">
+                <AlertTriangle size={16} strokeWidth={1.5} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  No sound from the call for 30 seconds. If others are talking, allow Aftercall in System Settings → Privacy &amp; Security →
+                  Screen &amp; System Audio Recording.
+                </span>
+              </div>
+            )}
             <dl className="m-0 flex flex-col gap-2">
-              <Stat label="System audio" value="Live" />
-              <Stat label="Microphone" value="Live" />
+              <Stat
+                label="System audio"
+                value={info && !info.systemAudio ? <span className="text-caution">Unavailable</span> : silentSystem ? <span className="text-caution">Silent</span> : "Live"}
+              />
+              <Stat label="Microphone" value={paused ? "Paused" : "Live"} />
               <Stat label="Saved so far" value={<span className="t-mono">{Math.floor(seconds / 300) + 1} chunk</span>} />
             </dl>
+            {error && <p className="m-0 text-record">{error}</p>}
             <div className="mt-2 flex gap-2">
-              <Button size="lg" className="flex-1" onClick={() => setPaused((p) => !p)}>
+              <Button size="lg" className="flex-1" onClick={togglePause}>
                 {paused ? "Resume" : "Pause"}
               </Button>
-              <Button size="lg" variant="danger" className="flex-[2]" onClick={() => onStop(project, seconds)}>
+              <Button size="lg" variant="danger" className="flex-[2]" onClick={stop}>
                 <Square size={12} fill="currentColor" aria-hidden="true" />
                 Stop and process
               </Button>
@@ -108,16 +190,18 @@ export function RecordPanel({ onClose, onStop }: { onClose: () => void; onStop: 
               </button>
             </div>
 
-            <Button size="lg" variant="primary" disabled={!consent} onClick={() => setRecording(true)}>
+            <Button size="lg" variant="primary" disabled={!consent || starting} onClick={start}>
               <span aria-hidden="true" className="size-2 rounded-full bg-on-verdigris" />
-              Start recording
+              {starting ? "Starting…" : "Start recording"}
             </Button>
             {!consent && <p className="-mt-2 m-0 text-caution">Tick the box once everyone knows you're recording.</p>}
+            {error && <p className="-mt-2 m-0 text-record">{error}</p>}
 
-            <dl className="m-0 flex flex-col gap-2">
-              <Stat label="System audio" value={<span className="text-verdigris">Allowed</span>} />
-              <Stat label="Microphone" value="MacBook Pro Microphone" />
-            </dl>
+            <p className="m-0 text-muted">
+              {isDesktop
+                ? "Records the call's audio and your microphone on this Mac. macOS asks for permission the first time."
+                : "Preview in a browser: recording is simulated. Run the desktop app to record."}
+            </p>
           </>
         )}
       </div>
@@ -134,20 +218,14 @@ function Stat({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-/** Placeholder level meter until the recorder streams real levels (M1 capture task). */
-function Meter({ active }: { active: boolean }) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setTick((n) => n + 1), 140);
-    return () => clearInterval(t);
-  }, [active]);
+/** Recent input level, newest on the right. Speech RMS sits around 0.02–0.3. */
+function Meter({ levels }: { levels: number[] }) {
   return (
     <div aria-hidden="true" className="flex h-10 items-center gap-[3px]">
-      {Array.from({ length: 28 }, (_, i) => {
-        const h = active ? 6 + Math.abs(Math.sin((i + tick) * 0.7) * Math.cos((i * 3 + tick) * 0.31)) * 32 : 4;
+      {levels.map((level, i) => {
+        const h = 4 + Math.min(1, Math.sqrt(level / 0.3)) * 34;
         const tone = h > 26 ? "bg-ink" : h > 14 ? "bg-muted" : "bg-faint";
-        return <span key={i} className={`w-[3px] rounded-full transition-[height] duration-150 ${tone}`} style={{ height: h }} />;
+        return <span key={i} className={`w-[3px] rounded-full transition-[height] duration-100 ${tone}`} style={{ height: h }} />;
       })}
     </div>
   );
