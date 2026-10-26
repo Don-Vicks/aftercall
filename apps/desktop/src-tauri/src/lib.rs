@@ -266,6 +266,51 @@ fn near_sign_in_message(app: AppHandle, message: String, nonce: String, recipien
     near::sign_in_message(&near_config(&app)?, &message, &nonce, &recipient)
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct Project {
+    id: String,
+    name: String,
+}
+
+fn projects_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(data_dir(app)?.join("projects.json"))
+}
+
+/// The user's projects. A first run starts with one, "General".
+#[tauri::command]
+fn list_projects(app: AppHandle) -> Result<Vec<Project>, String> {
+    match std::fs::read_to_string(projects_path(&app)?) {
+        Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
+        Err(_) => Ok(vec![Project { id: "general".into(), name: "General".into() }]),
+    }
+}
+
+#[tauri::command]
+fn save_projects(app: AppHandle, projects: Vec<Project>) -> Result<(), String> {
+    if projects.is_empty() || projects.len() > 200 {
+        return Err("Keep between 1 and 200 projects".into());
+    }
+    for p in &projects {
+        let name = p.name.trim();
+        if name.is_empty() || name.chars().count() > 60 || p.id.is_empty() || p.id.len() > 64 {
+            return Err("Project names are 1 to 60 characters".into());
+        }
+    }
+    let dir = data_dir(&app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(projects_path(&app)?, serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+/// Deletes a recording: its audio, notes and metadata. The proof on NEAR stays, as on-chain data does.
+#[tauri::command]
+fn delete_recording(app: AppHandle, id: String) -> Result<(), String> {
+    let dir = recording_dir(&app, &id)?;
+    if dir.exists() {
+        std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -303,7 +348,10 @@ pub fn run() {
             near_payment_state,
             near_check_payee,
             near_owner_usdc,
-            near_sign_in_message
+            near_sign_in_message,
+            list_projects,
+            save_projects,
+            delete_recording
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

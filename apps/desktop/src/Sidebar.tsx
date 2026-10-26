@@ -1,47 +1,109 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight, House } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, House, Plus } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
-import { account, projects, walletBalance } from "./sample";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle, recordingWhen } from "./RecordingScreen";
+import type { Project } from "./projects";
 import { cx } from "./ui";
 
+export interface SidebarMeeting {
+  id: string;
+  title: string;
+  when: string;
+  toApprove: number;
+}
+
 export function Sidebar({
+  projects,
+  recordings,
+  sample,
+  account,
+  balance,
   selectedMeetingId,
   pendingByMeeting,
-  recordings,
   meetingTitles,
   homeSelected,
+  walletSelected,
+  settingsSelected,
   onOpenHome,
   onSelectMeeting,
   onNewRecording,
+  onNewProject,
   onOpenWallet,
   onOpenSettings,
 }: {
-  selectedMeetingId: string | null;
-  /** Follow-ups waiting for approval, by meeting id. */
-  pendingByMeeting: Record<string, number>;
-  /** Real recordings, shown above the sample meetings of their project. */
+  projects: Project[];
+  /** Real recordings, under the project they were recorded for. */
   recordings: SavedRecording[];
-  /** Titles of meetings that have notes, by id. */
+  /** The built-in sample meeting, shown apart and labelled. */
+  sample: SidebarMeeting | null;
+  account: string | null;
+  balance: bigint | null;
+  selectedMeetingId: string | null;
+  pendingByMeeting: Record<string, number>;
   meetingTitles: Record<string, string>;
   homeSelected: boolean;
+  walletSelected: boolean;
+  settingsSelected: boolean;
   onOpenHome: () => void;
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
+  onNewProject: () => void;
   onOpenWallet: () => void;
   onOpenSettings: () => void;
 }) {
-  const [open, setOpen] = useState<Record<string, boolean>>({ fundraise: true });
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  // Recordings whose project was renamed or deleted still show, under "Other".
+  const known = new Set(projects.map((p) => p.name));
+  const orphans = recordings.filter((r) => !known.has(r.project));
+  const groups = [
+    ...projects.map((p) => ({ id: p.id, name: p.name, recordings: recordings.filter((r) => r.project === p.name) })),
+    ...(orphans.length ? [{ id: "other", name: "Other", recordings: orphans }] : []),
+  ];
+
+  const meetingRow = (m: SidebarMeeting) => {
+    const selected = m.id === selectedMeetingId;
+    const toApprove = pendingByMeeting[m.id] ?? m.toApprove;
+    return (
+      <button
+        key={m.id}
+        onClick={() => onSelectMeeting(m.id)}
+        aria-current={selected ? "page" : undefined}
+        className={cx("flex items-center gap-2 rounded-sm px-2 py-[7px] text-left", selected ? "bg-elevated text-ink" : "text-muted hover:text-ink")}
+      >
+        <span className={cx("flex-1 truncate", selected && "font-semibold")}>{m.title}</span>
+        {toApprove > 0 ? (
+          <span role="img" aria-label={`${toApprove} to approve`} className="size-[7px] shrink-0 rounded-full bg-caution" />
+        ) : (
+          <span className="shrink-0 font-mono text-[11px]">{m.when}</span>
+        )}
+      </button>
+    );
+  };
+
+  const navRow = (label: string, selected: boolean, onClick: () => void, right?: ReactNode, icon?: ReactNode) => (
+    <button
+      onClick={onClick}
+      aria-current={selected ? "page" : undefined}
+      className={cx("flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-left", selected ? "bg-elevated font-semibold text-ink" : "text-muted hover:text-ink")}
+    >
+      {icon}
+      <span className="flex-1">{label}</span>
+      {right}
+    </button>
+  );
 
   return (
-    <nav aria-label="Projects" className="flex w-[248px] shrink-0 flex-col gap-7 bg-ground px-4 pb-6">
+    <nav aria-label="Projects" className="flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto bg-ground px-4 pb-6">
       {/* Space for the macOS traffic lights; the strip drags the window. */}
       <div data-tauri-drag-region className="h-9 shrink-0" />
 
-      <div className="flex items-baseline justify-between px-2">
+      <div className="flex items-baseline justify-between gap-2 px-2">
         <span className="font-serif text-xl leading-6 font-medium tracking-[-0.01em]">Aftercall</span>
-        <span className="font-mono text-[11px] text-muted">{account}</span>
+        <span className="truncate font-mono text-[11px] text-muted" title={account ?? undefined}>
+          {account ?? "not connected"}
+        </span>
       </div>
 
       <button
@@ -53,82 +115,50 @@ export function Sidebar({
         <span className="ml-auto font-mono text-[11px] font-normal text-muted">⌘⇧R</span>
       </button>
 
-      <button
-        onClick={onOpenHome}
-        aria-current={homeSelected ? "page" : undefined}
-        className={cx("-mt-3 flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-left", homeSelected ? "bg-elevated font-semibold text-ink" : "text-muted hover:text-ink")}
-      >
-        <House size={14} strokeWidth={1.75} aria-hidden="true" />
-        Home
-      </button>
+      <div className="-mt-3">{navRow("Home", homeSelected, onOpenHome, undefined, <House size={14} strokeWidth={1.75} aria-hidden="true" />)}</div>
 
       <div className="flex flex-col gap-0.5">
-        <span className="t-label px-2 pb-2 text-muted">Projects</span>
-        {projects.map((project) => {
-          const ownRecordings = recordings.filter((r) => r.project === project.name);
-          const meetings = [
-            ...ownRecordings.map((r) => ({ id: r.id, title: meetingTitles[r.id] ?? recordingTitle(r), when: recordingWhen(r), toApprove: 0 })),
-            ...project.meetings,
-          ];
-          // A project opens by itself when it holds the selected meeting.
-          const isOpen = open[project.id] ?? meetings.some((m) => m.id === selectedMeetingId);
+        <div className="flex items-center justify-between px-2 pb-2">
+          <span className="t-label text-muted">Projects</span>
+          <button onClick={onNewProject} aria-label="New project" className="text-muted hover:text-ink">
+            <Plus size={14} strokeWidth={2} />
+          </button>
+        </div>
+        {groups.map((g, gi) => {
+          const meetings = g.recordings.map((r) => ({ id: r.id, title: meetingTitles[r.id] ?? recordingTitle(r), when: recordingWhen(r), toApprove: 0 }));
+          const isOpen = open[g.id] ?? (meetings.some((m) => m.id === selectedMeetingId) || gi === 0);
           const Chevron = isOpen ? ChevronDown : ChevronRight;
           return (
-            <div key={project.id} className="flex flex-col gap-0.5">
+            <div key={g.id} className="flex flex-col gap-0.5">
               <button
                 aria-expanded={isOpen}
-                onClick={() => setOpen((o) => ({ ...o, [project.id]: !isOpen }))}
-                className={cx(
-                  "flex items-center gap-2 rounded-sm px-2 py-[7px] text-left hover:bg-elevated/60",
-                  isOpen ? "font-semibold text-ink" : "text-muted",
-                )}
+                onClick={() => setOpen((o) => ({ ...o, [g.id]: !isOpen }))}
+                className={cx("flex items-center gap-2 rounded-sm px-2 py-[7px] text-left hover:bg-elevated/60", isOpen ? "font-semibold text-ink" : "text-muted")}
               >
                 <Chevron size={12} strokeWidth={2} className="text-faint" aria-hidden="true" />
-                <span className="flex-1">{project.name}</span>
-                <span className="font-mono text-[11px] font-normal text-muted">{project.meetingCount + ownRecordings.length}</span>
+                <span className="flex-1 truncate">{g.name}</span>
+                <span className="font-mono text-[11px] font-normal text-muted">{meetings.length}</span>
               </button>
-              {isOpen && meetings.length > 0 && (
+              {isOpen && (
                 <div className="ml-3.5 flex flex-col gap-0.5 border-l border-hairline pl-2.5">
-                  {meetings.map((m) => {
-                    const selected = m.id === selectedMeetingId;
-                    const toApprove = pendingByMeeting[m.id] ?? m.toApprove ?? 0;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => onSelectMeeting(m.id)}
-                        aria-current={selected ? "page" : undefined}
-                        className={cx(
-                          "flex items-center gap-2 rounded-sm px-2 py-[7px] text-left",
-                          selected ? "bg-elevated text-ink" : "text-muted hover:text-ink",
-                        )}
-                      >
-                        <span className={cx("flex-1", selected && "font-semibold")}>{m.title}</span>
-                        {toApprove > 0 ? (
-                          <span role="img" aria-label={`${toApprove} to approve`} className="size-[7px] rounded-full bg-caution" />
-                        ) : (
-                          <span className="font-mono text-[11px]">{m.when}</span>
-                        )}
-                      </button>
-                    );
-                  })}
+                  {meetings.length ? meetings.map(meetingRow) : <span className="px-2 py-[7px] text-muted">No meetings yet</span>}
                 </div>
               )}
             </div>
           );
         })}
+
+        {sample && (
+          <div className="mt-3 flex flex-col gap-0.5">
+            <span className="t-label px-2 pb-1 text-muted">Sample</span>
+            {meetingRow(sample)}
+          </div>
+        )}
       </div>
 
       <div className="mt-auto flex flex-col gap-0.5">
-        <button
-          onClick={onOpenWallet}
-          className="flex items-baseline justify-between rounded-sm px-2 py-[7px] text-muted hover:text-ink"
-        >
-          <span>Agent wallet</span>
-          <span className="font-mono text-xs text-ink">{formatUsdc(walletBalance)}</span>
-        </button>
-        <button onClick={onOpenSettings} className="rounded-sm px-2 py-[7px] text-left text-muted hover:text-ink">
-          Settings
-        </button>
+        {navRow("Agent wallet", walletSelected, onOpenWallet, <span className="font-mono text-xs text-ink">{balance === null ? "—" : formatUsdc(balance)}</span>)}
+        {navRow("Settings", settingsSelected, onOpenSettings)}
       </div>
     </nav>
   );

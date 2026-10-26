@@ -12,6 +12,7 @@ export function MeetingScreen({
   onToggleItem,
   onOpenVerify,
   handlers,
+  onDelete,
 }: {
   meeting: Meeting;
   /** What the agent wallet can still pay today, when connected. */
@@ -19,6 +20,8 @@ export function MeetingScreen({
   onToggleItem: (id: string) => void;
   onOpenVerify: () => void;
   handlers: Omit<FollowUpHandlers, "onJumpTo">;
+  /** Real meetings can be deleted from this Mac. */
+  onDelete?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("notes");
   const [target, setTarget] = useState<{ at: number; quote: string } | null>(null);
@@ -55,6 +58,13 @@ export function MeetingScreen({
           <Notes meeting={meeting} leftToday={leftToday} onToggleItem={onToggleItem} handlers={{ ...handlers, onJumpTo: jumpTo }} />
         ) : (
           <Transcript meeting={meeting} target={target} />
+        )}
+        {onDelete && (
+          <div className="border-t border-hairline pt-4">
+            <button onClick={onDelete} className="font-semibold text-muted hover:text-record">
+              Delete meeting from this Mac
+            </button>
+          </div>
         )}
       </article>
     </main>

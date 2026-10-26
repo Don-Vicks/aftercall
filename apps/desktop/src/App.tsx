@@ -17,6 +17,8 @@ import { near } from "./near";
 import { recordingFiles } from "./nearai";
 import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
 import { payees as samplePayees } from "./sample";
+import { deleteRecording, projectId, projectsApi, type Project } from "./projects";
+import { NewProjectSheet } from "./NewProjectSheet";
 
 type View =
   | { name: "home" }
@@ -55,12 +57,46 @@ export default function App() {
   /** From the agent-wallet contract once NEAR is connected; sample payees until then. */
   const [payees, setPayees] = useState<Payee[]>(samplePayees);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [account, setAccount] = useState<string | null>(null);
+  const [balance, setBalance] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    projectsApi.list().then(setProjects).catch(() => setProjects([{ id: "general", name: "General" }]));
+  }, []);
+
+  const createProject = async (name: string) => {
+    const next = [...projects, { id: projectId(name), name }];
+    await projectsApi.save(next);
+    setProjects(next);
+    setNewProjectOpen(false);
+  };
+
+  /** Removes a recording and its notes from this Mac. */
+  const removeRecording = async (id: string) => {
+    if (!window.confirm("Delete this meeting from this Mac? Its notes and any audio are removed. A proof already on NEAR stays there.")) return;
+    await deleteRecording(id);
+    setRecordings((all) => all.filter((r) => r.id !== id));
+    setMeetings((all) => {
+      const { [id]: _gone, ...rest } = all;
+      return rest;
+    });
+    setSaved((all) => {
+      const { [id]: _gone, ...rest } = all;
+      return rest;
+    });
+    setView({ name: "home" });
+  };
   const leftToday = limits?.leftToday ?? null;
 
   const refreshWallet = useCallback(async () => {
-    if (!isDesktop || !(await near.getConfig().catch(() => null))) return;
+    const config = isDesktop ? await near.getConfig().catch(() => null) : null;
+    setAccount(config?.account ?? null);
+    if (!config) return;
     try {
       const v = await near.wallet();
+      setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
       setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
       if (v.wallet) {
         const today = Math.floor(Date.now() / 86_400_000);
@@ -160,6 +196,7 @@ export default function App() {
       },
       onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
+      onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, error: undefined }),
       onReviewBlocked: () => setView({ name: "wallet" }),
       onDraft: (id: string) => {
         const f = find(id);
@@ -241,12 +278,19 @@ export default function App() {
   return (
     <div className="flex h-full">
       <Sidebar
+        projects={projects}
+        sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
+        account={account}
+        balance={balance}
         selectedMeetingId={selectedMeetingId}
         pendingByMeeting={pendingByMeeting}
         recordings={recordings}
         meetingTitles={meetingTitles}
         homeSelected={view.name === "home"}
+        walletSelected={view.name === "wallet"}
+        settingsSelected={view.name === "settings"}
         onOpenHome={() => setView({ name: "home" })}
+        onNewProject={() => setNewProjectOpen(true)}
         onSelectMeeting={(id) =>
           meetings[id]
             ? setView({ name: "meeting", id })
@@ -266,6 +310,7 @@ export default function App() {
           leftToday={meeting.id === syncWithAda.id ? null : leftToday}
           onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
           handlers={handlersFor(meeting)}
+          onDelete={saved[meeting.id] ? () => removeRecording(meeting.id) : undefined}
           onOpenVerify={() =>
             saved[meeting.id]
               ? setVerifyId(meeting.id)
@@ -278,6 +323,7 @@ export default function App() {
           key={openRecording.id}
           recording={openRecording}
           payees={payees}
+          onDelete={() => removeRecording(openRecording.id)}
           onProcessed={(notes) => {
             const updated = { ...openRecording, notes };
             setRecordings((all) => all.map((r) => (r.id === updated.id ? updated : r)));
@@ -292,6 +338,7 @@ export default function App() {
         <HomeScreen
           meetings={Object.values(meetings)}
           recordings={recordings}
+          sampleId={syncWithAda.id}
           onNewRecording={() => setRecordOpen(true)}
           onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
           onOpenSettings={() => setView({ name: "settings" })}
@@ -335,8 +382,11 @@ export default function App() {
         </main>
       )}
 
+      {newProjectOpen && <NewProjectSheet existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
       {recordOpen && (
         <RecordPanel
+          projects={projects}
+          onNewProject={() => setNewProjectOpen(true)}
           onClose={() => setRecordOpen(false)}
           onStop={(project, seconds, saved) => {
             setRecordOpen(false);

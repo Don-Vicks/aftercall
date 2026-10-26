@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { formatUsdc, type Meeting, type OwnerAction, type PaymentFollowUp } from "@aftercall/core";
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Button, SectionLabel, Spinner, cx } from "./ui";
+import { Sheet } from "./Sheet";
 
 /** "12.5" -> 12500000n base units; null if it isn't a plain positive amount. */
 export function parseUsdcInput(text: string): bigint | null {
@@ -355,25 +356,6 @@ function CapField({ label, value, onChange, onSave }: { label: string; value: st
           className="selectable h-8 min-w-0 flex-1 rounded-sm border border-border bg-well px-2.5 font-mono text-xs text-ink outline-none"
         />
         <Button onClick={onSave} disabled={parseUsdcInput(value) === null}>Save</Button>
-      </div>
-    </div>
-  );
-}
-
-function Sheet({ title, intro, children, onClose }: { title: string; intro: string; children: ReactNode; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()} className="flex w-[560px] flex-col gap-5 rounded-lg bg-elevated p-8 shadow-float">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="m-0 font-serif text-[28px] leading-[34px] font-medium tracking-[-0.015em]">{title}</h2>
-          <p className="m-0 text-muted">{intro}</p>
-        </div>
-        {children}
       </div>
     </div>
   );

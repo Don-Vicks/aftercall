@@ -3,6 +3,7 @@ import { Check, Copy } from "lucide-react";
 import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
 import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
 import { AutopilotSettings } from "./AutopilotSettings";
+import { NearAiSettings } from "./NearAiSettings";
 import { isDesktop } from "./recorder";
 
 /**
@@ -75,17 +76,19 @@ export function ConnectNear() {
       <div className="mx-auto flex max-w-[680px] flex-col gap-8 px-12 pb-16">
         <header className="flex flex-col gap-3.5">
           <div className="flex items-center justify-between">
-            <span className="t-label text-muted">Settings · NEAR</span>
-            {connected && <Pill tone="verdigris">Connected</Pill>}
+            <span className="t-label text-muted">Settings</span>
+            {connected && <Pill tone="verdigris">NEAR connected</Pill>}
           </div>
-          <h1 className="t-display m-0">Connect NEAR</h1>
+          <h1 className="t-display m-0">Settings</h1>
           <p className="t-reading m-0 text-muted">
-            Aftercall records each meeting's proof on NEAR, and later pays from your agent wallet, with a key that can do nothing else.
+            Private notes through NEAR AI, proofs and payments on NEAR, and what autopilot may do. Keys stay in your Keychain.
           </p>
         </header>
 
+        <NearAiSettings />
+
         <section className="flex flex-col gap-3">
-          <SectionLabel>Your account</SectionLabel>
+          <SectionLabel>Your NEAR account</SectionLabel>
           <Field label="NEAR account" value={config.account} placeholder="yourname.testnet" onChange={(account) => setConfig({ ...config, account: account.trim().toLowerCase() })} />
           <Field label="Agent-wallet contract" value={config.contract} placeholder="aftercall-wallet.testnet" onChange={(contract) => setConfig({ ...config, contract: contract.trim().toLowerCase() })} />
           <div className="flex items-center justify-between">

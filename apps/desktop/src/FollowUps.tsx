@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Copy, Link2, Mail, Wallet } from "lucide-react";
 import { formatClock, formatUsdc, type EmailFollowUp, type FollowUp, type PaymentFollowUp } from "@aftercall/core";
 import { Button, Pill, SectionLabel, Spinner } from "./ui";
+import { parseUsdcInput } from "./WalletScreen";
 
 /** Everything a follow-up row can ask the app to do. */
 export interface FollowUpHandlers {
@@ -14,6 +15,8 @@ export interface FollowUpHandlers {
   onClaimLink: (id: string) => void;
   onConfirmClaim: (id: string) => void;
   onUndoAutopilot: (id: string) => void;
+  /** The person corrects the amount; heard words stay as evidence. */
+  onSetAmount: (id: string, amount: bigint) => void;
 }
 
 export function FollowUps({ followUps, leftToday, ...h }: { followUps: FollowUp[]; leftToday: bigint | null } & FollowUpHandlers) {
@@ -129,6 +132,9 @@ const payVerb: Partial<Record<PaymentFollowUp["status"], string>> = { sending: "
 function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boolean; h: FollowUpHandlers; leftToday: bigint | null }) {
   const proposed = f.status === "proposed" || f.status === "failed";
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [amountText, setAmountText] = useState(f.amount === null ? "" : formatUsdc(f.amount).replace(/,/g, ""));
+  const parsed = parseUsdcInput(amountText);
   return (
     <Row last={last} active={proposed}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -169,6 +175,28 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
               {f.payeeListed ? <span className="text-verdigris">· on your list</span> : <span className="text-caution">· not on your list</span>}
             </span>
           </div>
+          {editing && (
+            <div className="ml-8 flex items-center gap-2">
+              <label htmlFor={`amount-${f.id}`} className="text-muted">Amount</label>
+              <input
+                id={`amount-${f.id}`}
+                autoFocus
+                value={amountText}
+                onChange={(e) => setAmountText(e.target.value)}
+                className="selectable h-8 w-32 rounded-sm border border-border bg-well px-2.5 font-mono text-xs text-ink outline-none"
+              />
+              <span className="text-muted">USDC</span>
+              <Button
+                disabled={!parsed}
+                onClick={() => {
+                  if (parsed) h.onSetAmount(f.id, parsed);
+                  setEditing(false);
+                }}
+              >
+                Use amount
+              </Button>
+            </div>
+          )}
           {f.autopilotAt && <AutopilotBar at={f.autopilotAt} verb="Paying" onUndo={() => h.onUndoAutopilot(f.id)} />}
           {f.error && <p className="m-0 pl-8 text-record">{f.error}</p>}
 
@@ -202,6 +230,7 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
 
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => h.onDismiss(f.id)}>Dismiss</Button>
+            <Button onClick={() => setEditing((e) => !e)}>Edit amount</Button>
             {f.payeeListed ? (
               <Button variant="primary" onClick={() => h.onApprove(f.id)} disabled={f.amount === null}>
                 {f.status === "failed" ? "Try again" : "Approve payment"}

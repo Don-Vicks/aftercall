@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Square } from "lucide-react";
 import { formatClock } from "@aftercall/core";
 import { isDesktop, recorder, type RecordingInfo, type SavedRecording } from "./recorder";
-import { projects } from "./sample";
+import type { Project } from "./projects";
 import { Button } from "./ui";
 
 const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted after transcription.";
@@ -10,13 +10,17 @@ const METER_BARS = 28;
 
 /** The recording panel: pick a project, confirm consent, record, stop. */
 export function RecordPanel({
+  projects,
+  onNewProject,
   onClose,
   onStop,
 }: {
+  projects: Project[];
+  onNewProject: () => void;
   onClose: () => void;
   onStop: (project: string, seconds: number, saved?: SavedRecording) => void;
 }) {
-  const [project, setProject] = useState(projects[0].name);
+  const [project, setProject] = useState(projects[0]?.name ?? "General");
   // Consent is asked every time; it never defaults to ticked.
   const [consent, setConsent] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -165,9 +169,14 @@ export function RecordPanel({
         ) : (
           <>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="proj" className="t-label text-muted">
-                Project
-              </label>
+              <div className="flex items-baseline justify-between">
+                <label htmlFor="proj" className="t-label text-muted">
+                  Project
+                </label>
+                <button onClick={onNewProject} className="text-xs font-semibold text-verdigris hover:text-verdigris-hover">
+                  New project
+                </button>
+              </div>
               <select
                 id="proj"
                 value={project}

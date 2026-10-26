@@ -22,15 +22,16 @@ function greeting(): string {
 }
 
 /** Everything across meetings that waits on a person, most urgent first. */
-function needsYou(meetings: Meeting[], recordings: SavedRecording[]): NeedsYou[] {
+function needsYou(meetings: Meeting[], recordings: SavedRecording[], sampleId?: string): NeedsYou[] {
   const items: NeedsYou[] = [];
   for (const m of meetings) {
+    const where = m.id === sampleId ? `${m.title} · sample` : m.title;
     for (const f of m.followUps) {
       if (f.status === "blocked" && f.kind === "payment") {
-        items.push({ id: `${m.id}-${f.id}`, meetingId: m.id, kind: "blocked", title: `Pay ${f.payeeName} ${f.amount === null ? "" : `${formatUsdc(f.amount)} USDC`}`, detail: `Blocked by your agent wallet · ${m.title}` });
+        items.push({ id: `${m.id}-${f.id}`, meetingId: m.id, kind: "blocked", title: `Pay ${f.payeeName} ${f.amount === null ? "" : `${formatUsdc(f.amount)} USDC`}`, detail: `Blocked by your agent wallet · ${where}` });
       } else if (f.status === "proposed") {
         const title = f.kind === "email" ? `Recap to ${f.toName || "someone"}` : `Pay ${f.payeeName}${f.amount === null ? "" : ` ${formatUsdc(f.amount)} USDC`}`;
-        items.push({ id: `${m.id}-${f.id}`, meetingId: m.id, kind: "approve", title, detail: `To approve · ${m.title}` });
+        items.push({ id: `${m.id}-${f.id}`, meetingId: m.id, kind: "approve", title, detail: `To approve · ${where}` });
       }
     }
   }
@@ -44,6 +45,7 @@ function needsYou(meetings: Meeting[], recordings: SavedRecording[]): NeedsYou[]
 export function HomeScreen({
   meetings,
   recordings,
+  sampleId,
   onNewRecording,
   onOpenMeeting,
   onOpenSettings,
@@ -51,6 +53,8 @@ export function HomeScreen({
 }: {
   meetings: Meeting[];
   recordings: SavedRecording[];
+  /** The built-in sample meeting, labelled wherever it shows. */
+  sampleId?: string;
   onNewRecording: () => void;
   onOpenMeeting: (id: string) => void;
   onOpenSettings: () => void;
@@ -70,7 +74,7 @@ export function HomeScreen({
     })();
   }, []);
 
-  const todo = needsYou(meetings, recordings);
+  const todo = needsYou(meetings, recordings, sampleId);
   const recent = [
     ...recordings.map((r) => ({
       id: r.id,

@@ -39,7 +39,7 @@ type Run = { state: "idle" } | { state: "running"; stage: number; detail?: strin
  * A real recording that has no notes yet. With a NEAR AI key it runs the notes
  * pipeline; the proof on NEAR follows in M3.
  */
-export function RecordingScreen({ recording, payees, onProcessed }: { recording: SavedRecording; payees: Payee[]; onProcessed: (notes: string) => void }) {
+export function RecordingScreen({ recording, payees, onProcessed, onDelete }: { recording: SavedRecording; payees: Payee[]; onProcessed: (notes: string) => void; onDelete: () => void }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [run, setRun] = useState<Run>({ state: "idle" });
 
@@ -147,10 +147,17 @@ export function RecordingScreen({ recording, payees, onProcessed }: { recording:
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button onClick={() => revealItemInDir(`${recording.dir}/meeting.json`)}>
-            <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
-            Show in Finder
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button onClick={() => revealItemInDir(`${recording.dir}/meeting.json`)}>
+              <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
+              Show in Finder
+            </Button>
+            {run.state !== "running" && (
+              <button onClick={onDelete} className="font-semibold text-muted hover:text-record">
+                Delete
+              </button>
+            )}
+          </div>
           {hasKey && run.state !== "running" && (
             <Button variant="primary" onClick={makeNotes}>
               {run.state === "failed" ? "Try again" : "Make notes"}
