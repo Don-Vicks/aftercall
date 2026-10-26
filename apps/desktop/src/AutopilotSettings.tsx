@@ -32,8 +32,11 @@ export function AutopilotSettings() {
           <span className="text-muted">Recaps to these email domains go out by themselves. Leave empty to always ask.</span>
           <input
             value={domains}
-            onChange={(e) => setDomains(e.target.value)}
-            onBlur={() => update({ ...rules, recapDomains: domains.split(/[,\s]+/).map((d) => d.trim().replace(/^@/, "")).filter(Boolean) })}
+            onChange={(e) => {
+              // Saved as you type, so leaving Settings straight away doesn't lose it.
+              setDomains(e.target.value);
+              update({ ...rules, recapDomains: e.target.value.split(/[,\s]+/).map((d) => d.trim().replace(/^@/, "")).filter(Boolean) });
+            }}
             placeholder="your-company.com"
             className="selectable h-8 rounded-sm border border-border bg-well px-2.5 font-mono text-xs text-ink outline-none placeholder:text-muted"
           />

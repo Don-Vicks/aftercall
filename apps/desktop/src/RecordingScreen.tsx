@@ -37,54 +37,97 @@ const STAGES: { id: Stage | "proof" | "deleted"; title: string; detail: string }
 type Run = { state: "idle" } | { state: "running"; stage: number; detail?: string } | { state: "failed"; error: string };
 
 /**
- * A real recording that has no notes yet. With a NEAR AI key it runs the notes
- * pipeline; the proof on NEAR follows in M3.
+ * Runs live outside the screen, so leaving the page doesn't stop processing or
+ * lose its progress, and coming back can't start a second, paid run.
  */
-export function RecordingScreen({ recording, payees, onProcessed, onDelete }: { recording: SavedRecording; payees: Payee[]; onProcessed: (notes: string) => void; onDelete: () => void }) {
+const runs = new Map<string, Run>();
+const listeners = new Map<string, Set<(r: Run) => void>>();
+
+function report(id: string, r: Run) {
+  if (r.state === "idle") runs.delete(id);
+  else runs.set(id, r);
+  listeners.get(id)?.forEach((l) => l(r));
+}
+
+function useRun(id: string): Run {
+  const [run, setRun] = useState<Run>(runs.get(id) ?? { state: "idle" });
+  useEffect(() => {
+    const set = listeners.get(id) ?? new Set();
+    listeners.set(id, set);
+    set.add(setRun);
+    setRun(runs.get(id) ?? { state: "idle" });
+    return () => void set.delete(setRun);
+  }, [id]);
+  return run;
+}
+
+async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: (id: string, notes: string) => void) {
+  if (runs.get(recording.id)?.state === "running") return;
+  const order = STAGES.map((s) => s.id);
+  report(recording.id, { state: "running", stage: 0 });
+  try {
+    const chunks = await recordingFiles.chunks(recording.id);
+    if (chunks.length === 0) throw new Error("This recording has no audio left to transcribe.");
+    const result = await processRecording(
+      nearAiTransport,
+      {
+        id: recording.id,
+        project: recording.project,
+        startedAt: recordingStartedAt(recording),
+        durationSec: recording.seconds,
+        chunkSeconds: 300,
+        chunks,
+        payees,
+        vocabulary: [recording.project, ...payees.map((p) => p.name)],
+        transcriptCache: transcriptCache(recording.id),
+      },
+      (stage, detail) => report(recording.id, { state: "running", stage: order.indexOf(stage), detail }),
+    );
+    let saved: SavedNotes = { ...result, processedAt: new Date().toISOString() };
+    await recordingFiles.saveNotes(recording.id, serializeNotes(saved));
+
+    report(recording.id, { state: "running", stage: order.indexOf("proof") });
+    if (await nearReady()) {
+      // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
+      saved = await recordProof(recording.id, saved).catch(() => saved);
+    }
+
+    report(recording.id, { state: "running", stage: order.indexOf("deleted") });
+    await recordingFiles.deleteAudio(recording.id);
+    report(recording.id, { state: "idle" });
+    onProcessed(recording.id, serializeNotes(saved));
+  } catch (e) {
+    report(recording.id, { state: "failed", error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/** True while a recording's notes are being made, wherever the user is in the app. */
+export function isProcessing(id: string): boolean {
+  return runs.get(id)?.state === "running";
+}
+
+/**
+ * A real recording that has no notes yet. With a NEAR AI key it runs the notes
+ * pipeline, records the proof on NEAR and deletes the audio.
+ */
+export function RecordingScreen({
+  recording,
+  payees,
+  onProcessed,
+  onDelete,
+}: {
+  recording: SavedRecording;
+  payees: Payee[];
+  /** Called once the notes are saved, even if the user has left this screen. */
+  onProcessed: (id: string, notes: string) => void;
+  onDelete: () => void;
+}) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [run, setRun] = useState<Run>({ state: "idle" });
+  const run = useRun(recording.id);
 
   useEffect(() => {
     nearAiKey.has().then(setHasKey).catch(() => setHasKey(false));
   }, []);
-
-  const makeNotes = async () => {
-    const order = STAGES.map((s) => s.id);
-    setRun({ state: "running", stage: 0 });
-    try {
-      const chunks = await recordingFiles.chunks(recording.id);
-      if (chunks.length === 0) throw new Error("This recording has no audio left to transcribe.");
-      const result = await processRecording(
-        nearAiTransport,
-        {
-          id: recording.id,
-          project: recording.project,
-          startedAt: recordingStartedAt(recording),
-          durationSec: recording.seconds,
-          chunkSeconds: 300,
-          chunks,
-          payees,
-          vocabulary: [recording.project, ...payees.map((p) => p.name)],
-          transcriptCache: transcriptCache(recording.id),
-        },
-        (stage, detail) => setRun({ state: "running", stage: order.indexOf(stage), detail }),
-      );
-      let saved: SavedNotes = { ...result, processedAt: new Date().toISOString() };
-      await recordingFiles.saveNotes(recording.id, serializeNotes(saved));
-
-      setRun({ state: "running", stage: order.indexOf("proof") });
-      if (await nearReady()) {
-        // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
-        saved = await recordProof(recording.id, saved).catch(() => saved);
-      }
-
-      setRun({ state: "running", stage: order.indexOf("deleted") });
-      await recordingFiles.deleteAudio(recording.id);
-      onProcessed(serializeNotes(saved));
-    } catch (e) {
-      setRun({ state: "failed", error: e instanceof Error ? e.message : String(e) });
-    }
-  };
 
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
@@ -161,7 +204,7 @@ export function RecordingScreen({ recording, payees, onProcessed, onDelete }: { 
             )}
           </div>
           {hasKey && run.state !== "running" && (
-            <Button variant="primary" onClick={makeNotes}>
+            <Button variant="primary" onClick={() => makeNotes(recording, payees, onProcessed)}>
               {run.state === "failed" ? "Try again" : "Make notes"}
             </Button>
           )}

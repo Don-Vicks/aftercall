@@ -4,6 +4,7 @@ import { formatUsdc, type Meeting, type OwnerAction, type PaymentFollowUp } from
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Button, SectionLabel, Spinner, cx } from "./ui";
 import { Sheet } from "./Sheet";
+import { isDesktop } from "./recorder";
 
 /** "12.5" -> 12500000n base units; null if it isn't a plain positive amount. */
 export function parseUsdcInput(text: string): bigint | null {
@@ -42,6 +43,7 @@ export function WalletScreen({
 
   const load = useCallback(async () => {
     setError(null);
+    if (!isDesktop) return setError("The agent wallet works in the Aftercall desktop app, not in a browser preview.");
     try {
       const config = await near.getConfig();
       if (!config) return setConnected(false);

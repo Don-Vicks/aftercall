@@ -427,22 +427,44 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open Aftercall", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Aftercall", true, Some("CmdOrCtrl+Q"))?;
             let menu = Menu::with_items(app, &[&record, &open, &PredefinedMenuItem::separator(app)?, &quit])?;
-            let mut tray = TrayIconBuilder::with_id("main").menu(&menu).tooltip("Aftercall");
-            if let Some(icon) = app.default_window_icon() {
-                tray = tray.icon(icon.clone()).icon_as_template(true);
-            }
-            tray.on_menu_event(|app, event| match event.id.as_ref() {
-                "record" => {
-                    show_main(app);
-                    let _ = app.emit("menu:new-recording", ());
-                }
-                "open" => show_main(app),
-                "quit" => app.exit(0),
-                _ => {}
-            })
-            .build(app)?;
+            // A black template glyph: macOS tints it for light and dark menu bars.
+            let glyph = tauri::image::Image::from_bytes(include_bytes!("../icons/source/tray@2x.png"))?;
+            TrayIconBuilder::with_id("main")
+                .menu(&menu)
+                .tooltip("Aftercall")
+                .icon(glyph)
+                .icon_as_template(true)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "record" => {
+                        show_main(app);
+                        let _ = app.emit("menu:new-recording", ());
+                    }
+                    "open" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // Closing the window hides it: Aftercall keeps running in the menu bar so
+        // ⌘⇧R and a recording in progress survive. Quit from the menu bar or ⌘Q.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Clicking the Dock icon brings the hidden window back.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                show_main(app);
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
 }

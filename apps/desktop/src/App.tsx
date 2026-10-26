@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
@@ -311,6 +311,20 @@ export default function App() {
   );
 
   const selectedMeetingId = view.name === "meeting" || view.name === "recording" ? view.id : null;
+  // Processing can finish after the user has left the recording, so this reads
+  // the latest state instead of the closure the run started with.
+  const onProcessedRef = useRef((_id: string, _notes: string) => {});
+  onProcessedRef.current = (id, notes) => {
+    const recording = recordings.find((r) => r.id === id);
+    if (!recording) return;
+    const updated = { ...recording, notes };
+    setRecordings((all) => all.map((r) => (r.id === id ? updated : r)));
+    addProcessed([updated]);
+    setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v));
+    const processed = parseNotes(notes).meeting;
+    setTimeout(() => scheduleAutopilot(processed), 0);
+  };
+
   const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;
   const meetingTitles = Object.fromEntries(Object.values(meetings).map((m) => [m.id, m.title]));
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
@@ -369,14 +383,7 @@ export default function App() {
           recording={openRecording}
           payees={payees}
           onDelete={() => removeRecording(openRecording.id)}
-          onProcessed={(notes) => {
-            const updated = { ...openRecording, notes };
-            setRecordings((all) => all.map((r) => (r.id === updated.id ? updated : r)));
-            addProcessed([updated]);
-            setView({ name: "meeting", id: updated.id });
-            const processed = parseNotes(notes).meeting;
-            setTimeout(() => scheduleAutopilot(processed), 0);
-          }}
+          onProcessed={(id, notes) => onProcessedRef.current(id, notes)}
         />
       )}
       {view.name === "home" && (

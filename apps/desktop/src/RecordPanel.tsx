@@ -163,7 +163,7 @@ export function RecordPanel({
                 value={info && !info.systemAudio ? <span className="text-caution">Unavailable</span> : silentSystem ? <span className="text-caution">Silent</span> : "Live"}
               />
               <Stat label="Microphone" value={paused ? "Paused" : "Live"} />
-              <Stat label="Saved so far" value={<span className="t-mono">{Math.floor(seconds / 300) + 1} chunk</span>} />
+              <Stat label="Saved so far" value={<span className="t-mono">{Math.floor(seconds / 300) + 1} {Math.floor(seconds / 300) ? "chunks" : "chunk"}</span>} />
             </dl>
             {error && <p className="m-0 text-record">{error}</p>}
             <div className="mt-2 flex gap-2">

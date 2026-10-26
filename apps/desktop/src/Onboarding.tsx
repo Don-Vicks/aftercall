@@ -251,7 +251,7 @@ function Ready({ onRecord, onLater }: { onRecord: () => void; onLater: () => voi
       </Title>
       <ol className="m-0 flex list-none flex-col border-t border-hairline p-0">
         {[
-          ["01", "Press ⌘⇧R, or use Aftercall in the menu bar"],
+          ["01", "Press New recording (⌘⇧R in Aftercall), or use Aftercall in the menu bar"],
           ["02", "Stop when the call ends; notes appear in about a minute"],
           ["03", "Approve the recap and payments you want. Connect NEAR in Settings when you're ready to pay from your agent wallet"],
         ].map(([n, text]) => (
