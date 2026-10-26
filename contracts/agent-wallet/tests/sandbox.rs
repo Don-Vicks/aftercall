@@ -208,6 +208,8 @@ async fn failed_transfer_refunds_everything() -> anyhow::Result<()> {
     assert_eq!(wallet_field(&e, "spent_today").await?, 0);
     let paid: bool = e.wallet.view("is_paid").args_json(json!({ "owner": e.victor.id(), "followup_id": "f-fail" })).await?.json()?;
     assert!(!paid, "a failed payment must be retryable");
+    let stats: serde_json::Value = e.wallet.view("get_stats").await?.json()?;
+    assert_eq!(stats["payments"], 0, "a refunded payment isn't counted");
     Ok(())
 }
 
@@ -365,5 +367,63 @@ async fn app_signer_records_proofs_and_pays_over_rpc() -> anyhow::Result<()> {
     }).await;
     assert!(rules.is_err());
     assert_eq!(wallet_field(&e, "daily_cap").await?, 200 * USDC);
+    Ok(())
+}
+
+/// Mainnet lock: the contract account's full-access keys are deleted after deploy,
+/// so nobody (us included) can redeploy the code or empty the account. Everything
+/// users do still works, because none of it is signed by the contract account.
+#[tokio::test]
+async fn locked_contract_still_serves_owners_and_the_app_key() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let contract = e.wallet.as_account();
+    let keys = contract.view_access_keys().await?;
+    assert!(!keys.is_empty());
+    let mut batch = contract.batch(contract.id());
+    for k in &keys {
+        batch = batch.delete_key(k.public_key.clone());
+    }
+    batch.transact().await?.into_result()?;
+    assert!(contract.view_access_keys().await?.is_empty(), "no keys left on the contract account");
+
+    // Nothing can be signed as the contract any more: no redeploy, no deleting the account.
+    let redeploy = contract.deploy(&[0u8; 16]).await;
+    assert!(redeploy.is_err() || redeploy.unwrap().is_failure(), "a locked contract can't be redeployed");
+    let delete = contract.clone().delete_account(e.victor.id()).await;
+    assert!(delete.is_err() || delete.unwrap().is_failure(), "a locked contract account can't be deleted");
+
+    // The owner's wallet still changes rules with the 1-yocto rule.
+    e.victor.call(e.wallet.id(), "set_cap").args_json(json!({ "daily_cap": (5 * USDC).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    e.victor.call(e.wallet.id(), "set_payment_cap").args_json(json!({ "per_payment_cap": (2 * USDC).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    assert_eq!(wallet_field(&e, "daily_cap").await?, 5 * USDC);
+    let no_yocto = e.victor.call(e.wallet.id(), "set_cap").args_json(json!({ "daily_cap": "1" })).transact().await?;
+    assert!(no_yocto.is_failure(), "the 1-yocto rule still holds");
+
+    // The app's limited key still records proofs and pays; the token transfer and its callback still run.
+    let app = limited_key(&e).await?;
+    app.call(e.wallet.id(), "record_proof")
+        .args_json(json!({ "meeting_id": "m-locked", "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }))
+        .transact().await?.into_result()?;
+    let small = pay(&e, &app, 2 * USDC, "f-locked").await?;
+    assert_eq!(small.json::<serde_json::Value>()?["status"], "sending");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 2 * USDC);
+
+    // Over the tiny per-payment cap: parked, then approved in the owner's wallet.
+    let big = pay(&e, &app, 3 * USDC, "f-locked-big").await?;
+    assert_eq!(big.json::<serde_json::Value>()?["reason"], "OVER_PAYMENT_CAP");
+    e.victor.call(e.wallet.id(), "approve_pending").args_json(json!({ "followup_id": "f-locked-big" }))
+        .deposit(NearToken::from_yoctonear(1)).max_gas().transact().await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.designer).await?, 5 * USDC);
+
+    // The owner can always take their money out.
+    let before = ft_balance(&e, &e.victor).await?;
+    e.victor.call(e.wallet.id(), "withdraw").args_json(json!({ "amount": (10 * USDC).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).max_gas().transact().await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.victor).await?, before + 10 * USDC);
+
+    let stats: serde_json::Value = e.wallet.view("get_stats").await?.json()?;
+    assert_eq!(stats, json!({ "wallets": 1, "proofs": 1, "payments": 2, "parked": 1 }));
     Ok(())
 }
