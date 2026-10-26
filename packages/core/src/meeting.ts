@@ -27,6 +27,18 @@ export interface ActionItem {
   done: boolean;
   /** Set when the item was closed in a later meeting. */
   closedNote?: string;
+  /** Set when a connected agent (through the local MCP server) took the item on. */
+  claimed?: AgentMark;
+  /** Set when a connected agent marked the item done. */
+  completed?: AgentMark & { note?: string };
+}
+
+/** Who did something to an action item through the MCP server, and when. */
+export interface AgentMark {
+  /** The agent's name as it gave it, e.g. "Claude Code". */
+  agent: string;
+  /** ISO 8601 time. */
+  at: string;
 }
 
 export type FollowUpStatus = "proposed" | "sending" | "sent" | "paid" | "failed" | "blocked" | "dismissed";

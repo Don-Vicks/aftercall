@@ -20,8 +20,8 @@ step() {
 }
 
 step "Install" pnpm install --frozen-lockfile --silent
-step "Typecheck (core, backend, web, desktop)" pnpm -r typecheck
-step "Unit tests (core, backend)" pnpm -r test
+step "Typecheck (core, backend, web, desktop, mcp)" pnpm -r typecheck
+step "Unit tests (core, backend, MCP server incl. a stdio tools/list run)" pnpm -r test
 step "Web build (Verify, sign, claim pages)" pnpm --filter @aftercall/web build
 step "NEAR signer (crates/near-tx)" cargo test --quiet --manifest-path crates/near-tx/Cargo.toml
 step "Desktop recorder and NEAR AI transport" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && cargo test --quiet --manifest-path apps/desktop/src-tauri/Cargo.toml"
