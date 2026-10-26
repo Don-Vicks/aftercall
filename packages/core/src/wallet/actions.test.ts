@@ -62,3 +62,29 @@ test("links round-trip, and tampered or malformed requests are refused", () => {
   bad({ ...r, action: { kind: "delete-account" } });
   bad({ ...r, action: { kind: "authorise-key", publicKey: "secp256k1:abc" } });
 });
+
+test("a payee paid on Solana is added and opted in within one signing, each call 1 yoctoNEAR", () => {
+  const destination = { chain: "solana" as const, address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" };
+  const txs = toTransactions({ ...base, action: { kind: "add-payee", account: "designer.testnet", label: "Designer", registerWithUsdc: false, destination } });
+  assert.deepEqual(
+    txs.map((t) => t.actions[0].type === "FunctionCall" && [t.actions[0].params.methodName, t.actions[0].params.deposit]),
+    [["add_payee", "1"], ["set_payee_destination", "1"]],
+  );
+  const a = txs[1].actions[0];
+  assert.ok(a.type === "FunctionCall");
+  assert.deepEqual(a.params.args, { payee: "designer.testnet", destination });
+  const d = describe({ ...base, action: { kind: "add-payee", account: "designer.testnet", label: "Designer", registerWithUsdc: false, destination } });
+  assert.ok(d.rows.some((r) => r.label === "Paid on" && r.value.startsWith("Solana")));
+
+  const off = toTransactions({ ...base, action: { kind: "set-payee-destination", account: "designer.testnet", label: "Designer", destination: null } });
+  assert.ok(off[0].actions[0].type === "FunctionCall" && off[0].actions[0].params.args.destination === null);
+});
+
+test("a link with a malformed payout address is refused", () => {
+  const good: SignRequest = { ...base, action: { kind: "set-payee-destination", account: "designer.testnet", label: "Designer", destination: { chain: "base", address: "0x2527D02599Ba641c19FEa793cD0F167589a0f10D" } } };
+  assert.deepEqual(decodeSignRequest(encodeSignRequest(good)), good);
+  for (const destination of [{ chain: "base", address: "0x123" }, { chain: "eth", address: "0x2527D02599Ba641c19FEa793cD0F167589a0f10D" }]) {
+    const bad = { ...base, action: { kind: "set-payee-destination", account: "designer.testnet", label: "Designer", destination } } as unknown as SignRequest;
+    assert.throws(() => decodeSignRequest(encodeSignRequest(bad)), /BAD_DESTINATION/);
+  }
+});

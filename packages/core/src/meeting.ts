@@ -65,6 +65,23 @@ export interface PaymentFollowUp extends FollowUpBase {
   payeeListed: boolean;
   /** A claim link for a payee who isn't on the list yet. */
   claim?: { id: string; link: string; account?: string };
+  /** Set once the payment went out through NEAR Intents to the payee's address on another chain. */
+  crossChain?: CrossChainPayout;
+}
+
+/** A payment routed through NEAR Intents 1Click; amounts are USDC base-unit strings. */
+export interface CrossChainPayout {
+  chain: "solana" | "base";
+  address: string;
+  depositAddress: string;
+  /** 1Click's correlationId for the quote, also recorded on the contract. */
+  quoteId: string;
+  /** What the quote said the payee gets. */
+  amountOut: string;
+  /** Latest 1Click status: PENDING_DEPOSIT, KNOWN_DEPOSIT_TX, PROCESSING, SUCCESS, REFUNDED, FAILED… */
+  swapStatus: string;
+  /** The payout transaction on the destination chain, once 1Click reports it. */
+  payoutTxUrl?: string;
 }
 
 export type FollowUp = EmailFollowUp | PaymentFollowUp;
