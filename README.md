@@ -4,7 +4,7 @@ Private meeting notes that do the follow-ups. Built for NEAR HACKATHON (1–14 N
 
 Aftercall records a call on your Mac, transcribes and summarises it inside NEAR AI Cloud's secure hardware (TEEs), and records a proof of that on NEAR that anyone can check. It then does what the meeting decided: the recap email goes out and the agreed payment is made in USDC on NEAR, after one approval or under autopilot rules you set. A NEAR contract caps what the app can ever pay, so even a hijacked app or a tricked AI can't overspend.
 
-> Status: planning only. Product code starts 1 Nov 2026 00:00 UTC, as the hackathon rules require. Pre-event experiments live in a separate throwaway repo (`aftercall-spike`); nothing from it is copied in until the build starts.
+> Status: in development. Building started on 26 Oct 2026, before the 1–14 Nov window, after a NEAR HACKATHON moderator confirmed in the event Discord (22 Oct) that early development is allowed. The commit history shows the real timeline. Pre-event experiments live in a separate throwaway repo (`aftercall-spike`) and are re-implemented here, not copied.
 
 Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) · [Design system](https://claude.ai/artifact/96RdBedZXsLxdXixzAdk6x) · Spec: [Build doc](https://claude.ai/artifact/6GEqowfi9wDWXqV1iYo1Pp) (private links for the team).
 

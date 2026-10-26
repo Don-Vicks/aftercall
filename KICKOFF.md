@@ -1,4 +1,4 @@
-# Kickoff prompt (use on or after 2026-11-01 00:00 UTC)
+# Kickoff prompt
 
 Paste this into a fresh Claude Code session started in this folder:
 

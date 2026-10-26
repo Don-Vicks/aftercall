@@ -4,7 +4,7 @@
 
 - NEAR HACKATHON, https://nearhackathon.com/ (rules and submission steps: `docs/HACKATHON.md`).
 - Build window: 2026-11-01 00:00 UTC to **2026-11-14 23:59 UTC** (00:59 Lagos, 15 Nov). Results 16–18 Nov.
-- No product code before 1 Nov 00:00 UTC. Before then, only these docs change.
+- Early building is allowed (NEAR HACKATHON moderator, event Discord, 22 Oct 2026); work started 26 Oct. Keep the real commit history: never squash, rebase or backdate to hide the start date.
 - Judges include Claude Code and Codex. They read this repo, so every README claim must match the code, and the code must be clean, tested and runnable from a clean checkout.
 - Victor posts on X and submits the form. Never post, submit, push a public repo, or sign a mainnet transaction without Victor's explicit OK in chat.
 
@@ -37,5 +37,5 @@ Use the Aftercall design system (dark-first warm monochrome): Newsreader for not
 
 ## Useful paths
 
-- Pre-event spikes (reference only, not copied before 1 Nov): `~/Developer/projects/aftercall-spike` (capture recorder, NEAR AI test script, agent-wallet contract with 12 passing tests).
+- Pre-event spikes (reference only; re-implement, don't copy wholesale): `~/Developer/projects/aftercall-spike` (capture recorder, NEAR AI test script, agent-wallet contract with 12 passing tests).
 - Opportunity record: `~/Developer/projects/opportunity-engine/data/history.jsonl` (`watchlist:near-hackathon-2026`), notes in `data/notes/watchlist-near-hackathon-2026.md`.
