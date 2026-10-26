@@ -37,6 +37,12 @@ interface FollowUpBase {
   evidence: Evidence;
   /** Time the follow-up completed, as shown in its pill ("14:06"). */
   doneAt?: string;
+  /** NEAR transaction (payments) or email id (recaps) once done. */
+  ref?: string;
+  /** Why it failed, in plain words. */
+  error?: string;
+  /** Set when autopilot will run it at this time (ms since epoch), unless undone. */
+  autopilotAt?: number;
 }
 
 export interface EmailFollowUp extends FollowUpBase {
@@ -57,6 +63,8 @@ export interface PaymentFollowUp extends FollowUpBase {
   /** The words the amount was parsed from, shown next to the parsed figure. */
   heard: string;
   payeeListed: boolean;
+  /** A claim link for a payee who isn't on the list yet. */
+  claim?: { id: string; link: string; account?: string };
 }
 
 export type FollowUp = EmailFollowUp | PaymentFollowUp;

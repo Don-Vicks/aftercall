@@ -7,3 +7,6 @@ export * from "./notes/schema.ts";
 export * from "./notes/transcript.ts";
 export * from "./notes/verify.ts";
 export * from "./notes/proof.ts";
+export * from "./wallet/actions.ts";
+export * from "./followups/recap.ts";
+export * from "./followups/autopilot.ts";
