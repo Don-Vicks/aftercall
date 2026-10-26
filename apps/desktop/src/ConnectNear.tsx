@@ -6,6 +6,8 @@ import { AutopilotSettings } from "./AutopilotSettings";
 import { CalendarSettings } from "./CalendarSettings";
 import { NearAiSettings } from "./NearAiSettings";
 import { isDesktop } from "./recorder";
+import { recovery, type RecoveryStatus } from "./recovery";
+import { RecoverySettings } from "./RecoveryPhrase";
 
 /**
  * Connects the user's NEAR account. The app holds its own limited key; the user
@@ -19,12 +21,28 @@ export function ConnectNear() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus | null>(null);
+
+  /** This Mac's key, which a new install only has once a recovery phrase is made or restored. */
+  const loadKey = async () => {
+    const r = await recovery.status();
+    setRecoveryStatus(r);
+    setPublicKey(r.publicKey ?? "");
+    return r;
+  };
 
   useEffect(() => {
     near.getConfig().then((c) => c && setConfig(c));
+    loadKey().catch((e) => setError(String(e)));
     if (!isDesktop) return setError("Connecting NEAR works in the Mac app, not the browser preview.");
-    near.publicKey().then(setPublicKey).catch((e) => setError(String(e)));
   }, []);
+
+  /** After a new or restored key: check NEAR again, since the contract may already know it. */
+  const keyChanged = async () => {
+    setStatus(null);
+    const r = await loadKey().catch(() => null);
+    if (r?.hasKey && (await near.getConfig().catch(() => null))) near.status().then(setStatus).catch(() => {});
+  };
 
   const ready = config.account.length > 1 && config.contract.length > 1;
   const commands = ready && publicKey ? setupCommands(config, publicKey) : null;
@@ -34,7 +52,7 @@ export function ConnectNear() {
     setChecking(true);
     try {
       await near.saveConfig(config);
-      setStatus(await near.status());
+      if (publicKey) setStatus(await near.status());
     } catch (e) {
       setError(String(e));
     } finally {
@@ -105,6 +123,8 @@ export function ConnectNear() {
           </div>
         </section>
 
+        <RecoverySettings status={recoveryStatus} onKeyChanged={keyChanged} />
+
         <section className="flex flex-col gap-3">
           <SectionLabel>Authorise this Mac, once</SectionLabel>
           <p className="m-0 text-muted">
@@ -122,7 +142,7 @@ export function ConnectNear() {
           )}
           <div className="flex flex-col gap-1">
             <span className="text-muted">This Mac's key</span>
-            <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey || "…"}</span>
+            <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey || (recoveryStatus && !recoveryStatus.hasKey ? "None yet: create or restore a recovery phrase above" : "…")}</span>
           </div>
           {commands ? (
             <details className="flex flex-col gap-2">

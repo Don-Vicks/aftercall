@@ -62,17 +62,27 @@ fn entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).map_err(|e| e.to_string())
 }
 
-/// The app's key pair, created on first use. Only its public half ever leaves this module.
+/// The app's key pair. Only its public half ever leaves this module. New installs get
+/// it from a recovery phrase (see `recovery`); older installs keep their random key.
 pub fn app_key() -> Result<KeyPair, String> {
     match entry()?.get_password() {
         Ok(secret) => KeyPair::from_secret(&secret),
-        Err(keyring::Error::NoEntry) => {
-            let key = KeyPair::generate();
-            entry()?.set_password(&key.secret()).map_err(|e| e.to_string())?;
-            Ok(key)
-        }
+        Err(keyring::Error::NoEntry) => Err("This Mac has no NEAR key yet. Create a recovery phrase in Settings.".into()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+pub fn has_app_key() -> Result<bool, String> {
+    match entry()?.get_password() {
+        Ok(_) => Ok(true),
+        Err(keyring::Error::NoEntry) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Replaces the app's key (a key derived from a recovery phrase).
+pub fn set_app_key(key: &KeyPair) -> Result<(), String> {
+    entry()?.set_password(&key.secret()).map_err(|e| e.to_string())
 }
 
 /// Is this function-call permission exactly what the app needs, and no more?
