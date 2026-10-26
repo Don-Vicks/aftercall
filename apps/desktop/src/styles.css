@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* Aftercall design system v2 (dark-first warm monochrome). Source: docs/design-source/project/ds/aftercall/tokens.json */
+
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+:root {
+  color-scheme: dark;
+  --ground: #141311;
+  --raised: #1b1a17;
+  --elevated: #24221e;
+  --well: #0f0e0c;
+  --ink: #ede9e1;
+  --muted: #a39e94;
+  --faint: #77726a;
+  --hairline: #2b2925;
+  --border: #6f6a61;
+  --verdigris: #8dbfa8;
+  --verdigris-hover: #b3d6c5;
+  --on-verdigris: #10201a;
+  --verdigris-tint: #1a2a23;
+  --record: #e8775f;
+  --record-tint: #2e1a15;
+  --caution: #dcac5c;
+  --caution-tint: #2c2416;
+  --shadow-float: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 48px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --ground: #f4f1ea;
+  --raised: #fbf9f4;
+  --elevated: #ffffff;
+  --well: #ebe7de;
+  --ink: #1d1b17;
+  --muted: #65605a;
+  --faint: #8a847a;
+  --hairline: #e2ddd2;
+  --border: #8c867b;
+  --verdigris: #2d5e4f;
+  --verdigris-hover: #234a3e;
+  --on-verdigris: #ffffff;
+  --verdigris-tint: #e3ece6;
+  --record: #b3412d;
+  --record-tint: #f7e6e0;
+  --caution: #855610;
+  --caution-tint: #f4ead6;
+  --shadow-float: 0 0 0 1px rgba(29, 27, 23, 0.06), 0 20px 48px rgba(29, 27, 23, 0.1);
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-raised: var(--raised);
+  --color-elevated: var(--elevated);
+  --color-well: var(--well);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-hairline: var(--hairline);
+  --color-border: var(--border);
+  --color-verdigris: var(--verdigris);
+  --color-verdigris-hover: var(--verdigris-hover);
+  --color-on-verdigris: var(--on-verdigris);
+  --color-verdigris-tint: var(--verdigris-tint);
+  --color-record: var(--record);
+  --color-record-tint: var(--record-tint);
+  --color-caution: var(--caution);
+  --color-caution-tint: var(--caution-tint);
+  --shadow-float: var(--shadow-float);
+
+  --font-serif: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 19px;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Notes are for reading and copying; the interface is not. */
+  .selectable {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--verdigris);
+    outline-offset: 2px;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--verdigris);
+  }
+}
+
+@layer components {
+  /* Type styles from the design system */
+  .t-display {
+    font-family: var(--font-serif);
+    font-size: 34px;
+    line-height: 40px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .t-reading {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 29px;
+  }
+  .t-quote {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 23px;
+    font-style: italic;
+  }
+  .t-title {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  .t-label {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .t-mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .t-figure {
+    font-family: var(--font-mono);
+    font-size: 28px;
+    line-height: 32px;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The macOS title bar overlays the window; this strip can drag it. */
+  .drag {
+    -webkit-app-region: drag;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse-ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px var(--record-tint);
+  }
+  50% {
+    box-shadow: 0 0 0 7px var(--record-tint);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

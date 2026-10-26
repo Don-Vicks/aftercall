@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · verify sheet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 720px; height: 920px; box-sizing: border-box; padding: 40px 48px; background: #24221e; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 20px 48px rgba(0,0,0,0.45); display: flex; flex-direction: column; gap: 24px; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px;">
+  <header style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #8dbfa8;">5 OF 5 CHECKS PASSED · CHECKED ON THIS MAC</span>
+    <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 34px; line-height: 40px; font-weight: 500; letter-spacing: -0.015em;">Proof for Sync with Ada</h1>
+    <p style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 18px; line-height: 29px; color: #a39e94;">Each check below runs again every time you open this sheet. None of it is taken on our word.</p>
+  </header>
+
+  <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column;">
+    <li style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #2b2925;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">The secure hardware is genuine</span><span style="color: #a39e94;">Intel TDX quote valid and bound to a fresh nonce, for Whisper and Qwen3.8-27B.</span></div>
+    </li>
+    <li style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #2b2925;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">The summary was signed by that model</span><span style="color: #a39e94;">The response signature recovers to the attested signer.</span></div>
+    </li>
+    <li style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #2b2925;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">Nothing changed since</span><span style="color: #a39e94;">The saved request and response hash to exactly what was signed.</span></div>
+    </li>
+    <li style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #2b2925;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">The proof is on NEAR</span><span style="color: #a39e94;">Recorded 14:05 today; the hash on chain matches this meeting.</span></div>
+    </li>
+    <li style="display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">Only private models touched it</span><span style="color: #a39e94;">openai/whisper-large-v3 and Qwen/Qwen3.8-27B, both Confidential TEE.</span></div>
+    </li>
+  </ol>
+
+  <dl style="margin: 0; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px 16px; padding: 16px 20px; border-radius: 10px; background: #0f0e0c;">
+    <dt style="font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">PROOF HASH</dt>
+    <dd style="margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px;">9f3a…c21e</span><button type="button" style="border: 0; background: transparent; color: #8dbfa8; font-size: 12px; font-weight: 600; cursor: pointer;">Copy</button></dd>
+    <dt style="font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">RECORDED BY</dt>
+    <dd style="margin: 0; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px;">victor.near · record_proof</dd>
+    <dt style="font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">TRANSACTION</dt>
+    <dd style="margin: 0;"><a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; text-decoration: none;">4kQp…Zr7a on NEAR Explorer</a></dd>
+  </dl>
+
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <h2 style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">WHAT THIS DOES NOT PROVE</h2>
+    <p style="margin: 0; color: #a39e94;">Audio left this Mac, encrypted in transit, for NEAR AI secure hardware. Transcription is covered by Whisper's attestation, not by a per-response signature. It says nothing about what other participants recorded.</p>
+  </div>
+
+  <div style="margin-top: auto; display: flex; justify-content: flex-end; gap: 8px;">
+    <button type="button" style="height: 34px; padding: 0 14px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Share proof with attendees</button>
+    <a href="Main.dc.html" style="display: inline-flex; align-items: center; height: 34px; padding: 0 18px; border-radius: 6px; background: #8dbfa8; color: #10201a; text-decoration: none; font-weight: 600;">Done</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":920}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

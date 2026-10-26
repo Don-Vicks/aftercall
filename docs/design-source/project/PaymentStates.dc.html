@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · payment follow-up states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 760px; height: 700px; box-sizing: border-box; padding: 40px 40px; background: #1b1a17; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">1 · SENDING</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 18px 20px; border-radius: 10px; background: #24221e; box-shadow: inset 0 0 0 1px #2b2925;">
+      <span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid #2b2925; border-top-color: #8dbfa8;"></span>
+      <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Paying Designer</span>
+        <span style="color: #a39e94;">Sending through your agent wallet. Within your cap, so no wallet pop-up is needed.</span>
+      </div>
+      <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 20px; line-height: 24px; letter-spacing: -0.01em;">50.00 <span style="font-size: 12px; color: #a39e94;">USDC</span></span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">2 · PAID</span>
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 10px; box-shadow: inset 0 0 0 1px #2b2925;">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Paid Designer</span>
+          <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 16px; color: #a39e94;">designer.near · 14:07 · 150.00 left today</span>
+        </div>
+        <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: #1a2a23; color: #8dbfa8; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;">PAID 50.00</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding-left: 32px;">
+        <span style="font-family: Newsreader, Georgia, serif; font-style: italic; font-size: 15px; line-height: 23px; color: #a39e94;">“pay the designer the fifty dollar deposit today”</span>
+        <a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 23px; text-decoration: none;">tx 8Hn2…wq4D</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">3 · OVER THE CAP, AFTER YOU APPROVE IN YOUR WALLET</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 18px 20px; border-radius: 10px; box-shadow: inset 0 0 0 1px #2b2925;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8dbfa8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+      <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Paid Designer, approved by you</span>
+        <span style="color: #a39e94;">Signed in your NEAR wallet at 14:12 · above the cap once</span>
+      </div>
+      <span style="display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; background: #1a2a23; color: #8dbfa8; font-size: 11px; font-weight: 600; letter-spacing: 0.08em;">PAID 5,000.00</span>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">4 · FAILED</span>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 18px 20px; border-radius: 10px; background: #2e1a15;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8775f" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Payment didn't go through</span>
+        <span style="color: #e8775f;">designer.near isn't set up for USDC yet. Nothing was taken; your balance and cap are unchanged.</span>
+      </div>
+      <button type="button" style="height: 32px; padding: 0 14px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Register and retry</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

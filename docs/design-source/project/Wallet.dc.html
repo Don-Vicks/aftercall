@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · agent wallet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button,input{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 1000px; box-sizing: border-box; padding: 48px; background: #141311; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px;">
+  <div style="max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px;">
+
+    <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 10px; max-width: 520px;">
+        <a href="Main.dc.html" style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; text-decoration: none;">MEETINGS</a>
+        <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 34px; line-height: 40px; font-weight: 500; letter-spacing: -0.015em;">Agent wallet</h1>
+        <p style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 18px; line-height: 29px; color: #a39e94;">A spending-limit wallet you control. Aftercall can pay only the people below, up to your daily cap. Every change is signed in your NEAR wallet.</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" style="height: 34px; padding: 0 14px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Withdraw</button>
+        <button type="button" style="height: 34px; padding: 0 18px; border: 0; border-radius: 6px; background: #8dbfa8; color: #10201a; font-size: 13px; font-weight: 600; cursor: pointer;">Deposit USDC</button>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+      <div style="display: flex; flex-direction: column; gap: 6px; padding: 20px 24px 20px 0;">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">BALANCE</span>
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 28px; line-height: 32px; letter-spacing: -0.02em;">180.00 <span style="font-size: 13px; color: #a39e94;">USDC</span></span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 20px 24px; border-left: 1px solid #2b2925;">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">SPENT TODAY</span>
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 15px; line-height: 20px;">50.00 <span style="color: #a39e94;">of 200.00</span></span>
+        <div aria-hidden="true" style="height: 4px; border-radius: 999px; background: #2b2925;"><div style="width: 25%; height: 4px; border-radius: 999px; background: #8dbfa8;"></div></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 20px 0 20px 24px; border-left: 1px solid #2b2925;">
+        <label for="cap" style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">DAILY CAP</label>
+        <div style="display: flex; gap: 8px;">
+          <input id="cap" value="200.00" style="flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px;">
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <section aria-labelledby="pending" style="display: flex; flex-direction: column; gap: 12px;">
+      <h2 id="pending" style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">WAITING FOR YOU</h2>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 18px 20px; border-radius: 10px; background: #2c2416;">
+        <div style="flex: 1 1 360px; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 15px; line-height: 20px; font-weight: 600;"><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 14px; font-weight: 400;">5,000.00 USDC</span> to designer.near</span>
+          <span style="color: #dcac5c;">Blocked: over today's cap. Approving signs in your wallet and pays past the cap once.</span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: #a39e94; font-size: 13px; font-weight: 600; cursor: pointer;">Reject</button>
+          <button type="button" style="height: 32px; padding: 0 14px; border: 1px solid #dcac5c; border-radius: 6px; background: transparent; color: #dcac5c; font-size: 13px; font-weight: 600; cursor: pointer;">Approve in wallet</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="hist" style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between;">
+        <h2 id="hist" style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">ACTIVITY</h2>
+        <a href="#" style="font-size: 13px; font-weight: 600; text-decoration: none;">All on NEAR Explorer</a>
+      </div>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tbody>
+            <tr>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94; white-space: nowrap;">Today 14:07</td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925;"><span style="font-weight: 600;">Paid Designer</span> <span style="color: #a39e94;">· from Sync with Ada</span></td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-align: right; white-space: nowrap;">−50.00</td>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; text-align: right;"><a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-decoration: none;">8Hn2…wq4D</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94; white-space: nowrap;">Today 14:05</td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925;"><span style="font-weight: 600;">Proof recorded</span> <span style="color: #a39e94;">· Sync with Ada</span></td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-align: right; color: #a39e94;">—</td>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; text-align: right;"><a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-decoration: none;">4kQp…Zr7a</a></td>
+            </tr>
+            <tr>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94; white-space: nowrap;">2 Nov 10:30</td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;"><span style="font-weight: 600;">Deposit</span> <span style="color: #a39e94;">· from victor.near</span></td>
+              <td style="padding: 12px 16px; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-align: right; color: #8dbfa8; white-space: nowrap;">+230.00</td>
+              <td style="padding: 12px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; text-align: right;"><a href="#" style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; text-decoration: none;">Fp9c…3sLk</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 40px;">
+      <section aria-labelledby="payees" style="flex: 999 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <h2 id="payees" style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">PAYEES</h2>
+          <button type="button" style="border: 0; background: transparent; color: #8dbfa8; font-size: 13px; font-weight: 600; cursor: pointer;">Add payee</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+              <tr>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; font-weight: 600;">Designer</td>
+                <td style="padding: 12px 16px; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">designer.near</td>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; text-align: right; color: #a39e94;">Ready</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; font-weight: 600;">Contractor, Lagos</td>
+                <td style="padding: 12px 16px; border-top: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">tunde.near</td>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; text-align: right; color: #a39e94;">Ready</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; font-weight: 600;">Legal review</td>
+                <td style="padding: 12px 16px; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">counsel.near</td>
+                <td style="padding: 12px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; text-align: right;"><button type="button" style="border: 0; background: transparent; color: #dcac5c; font-size: 13px; font-weight: 600; cursor: pointer;">Register · 0.00125 NEAR</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="key" style="flex: 1 1 280px; display: flex; flex-direction: column; gap: 12px;">
+        <h2 id="key" style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">THIS MAC'S KEY</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid #2b2925;">
+          <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Limited key, in Keychain</span>
+          <span style="color: #a39e94;">Can call only <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #ede9e1;">pay</span> and <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #ede9e1;">record_proof</span>. It can't raise the cap, add payees or withdraw.</span>
+          <span style="color: #a39e94;">Gas left <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #ede9e1;">0.21 NEAR</span></span>
+          <button type="button" style="align-self: flex-start; margin-top: 4px; height: 32px; padding: 0 12px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Pause all payments</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

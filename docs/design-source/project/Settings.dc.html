@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+button,input,select{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 1320px; display: flex; flex-wrap: wrap; background: #141311; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px;">
+  <nav aria-label="Settings sections" style="flex: 1 1 200px; max-width: 232px; box-sizing: border-box; padding: 24px 16px; display: flex; flex-direction: column; gap: 2px;">
+    <a href="Main.dc.html" style="padding: 0 8px 20px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; text-decoration: none;">MEETINGS</a>
+    <a href="#privacy" style="padding: 7px 8px; border-radius: 6px; background: #1a2a23; color: #ede9e1; text-decoration: none; font-weight: 600;">Privacy</a>
+    <a href="#recording" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Recording</a>
+    <a href="#followups" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Follow-ups</a>
+    <a href="Autopilot.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Autopilot</a>
+    <a href="Agents.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Connected agents</a>
+    <a href="#usage" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">AI usage</a>
+    <a href="Wallet.dc.html" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Agent wallet</a>
+    <a href="#account" style="padding: 7px 8px; border-radius: 6px; color: #a39e94; text-decoration: none;">Account and data</a>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 48px; background: #1b1a17; border-left: 1px solid #2b2925;">
+    <div style="max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px;">
+      <h1 style="margin: 0; font-family: Newsreader, Georgia, serif; font-size: 34px; line-height: 40px; font-weight: 500; letter-spacing: -0.015em;">Settings</h1>
+
+      <section id="privacy" aria-labelledby="h-privacy" style="display: flex; flex-direction: column;">
+        <h2 id="h-privacy" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">PRIVACY</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Transcription model</span><span style="color: #a39e94;">Runs in NEAR AI Confidential TEE hardware</span></div>
+          <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 19px;">openai/whisper-large-v3</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><label for="model" style="font-weight: 600;">Summary model</label><span style="color: #a39e94;">Only Confidential TEE models are offered</span></div>
+          <select id="model" style="height: 32px; padding: 0 10px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px;"><option>Qwen/Qwen3.8-27B</option><option>Qwen/Qwen3.6-35B-A3B-FP8</option></select>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Delete audio after transcription</span><span style="color: #a39e94;">Always on. Aftercall never keeps recordings.</span></div>
+          <span style="font-size: 11px; line-height: 19px; font-weight: 600; letter-spacing: 0.08em; color: #8dbfa8;">ALWAYS ON</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><label for="keep" style="font-weight: 600;">Keep transcripts</label><span style="color: #a39e94;">Summaries and follow-ups stay; the full text is removed after this</span></div>
+          <select id="keep" style="height: 32px; padding: 0 10px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-size: 13px;"><option>90 days</option><option>30 days</option><option>Forever</option></select>
+        </div>
+      </section>
+
+      <section id="recording" aria-labelledby="h-recording" style="display: flex; flex-direction: column;">
+        <h2 id="h-recording" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">RECORDING</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><label for="notice" style="font-weight: 600;">Notice text</label><span style="color: #a39e94;">What Copy notice puts on your clipboard</span></div>
+          <input id="notice" value="I'm taking private notes with Aftercall." style="flex: 1 1 260px; height: 32px; padding: 0 10px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-size: 13px;">
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Shortcut</span><span style="color: #a39e94;">Start or stop recording from anywhere</span></div>
+          <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 19px;">⌘⇧R</span>
+        </div>
+      </section>
+
+      <section id="followups" aria-labelledby="h-fu" style="display: flex; flex-direction: column;">
+        <h2 id="h-fu" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">FOLLOW-UPS</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Recap emails come from</span><span style="color: #a39e94;">Replies go to your own address</span></div>
+          <span style="line-height: 19px;">Victor via Aftercall</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px;"><label for="reply" style="font-weight: 600;">Reply-to address</label></div>
+          <input id="reply" value="victor@example.com" style="flex: 1 1 260px; height: 32px; padding: 0 10px; border: 1px solid #6f6a61; border-radius: 6px; background: #0f0e0c; color: #ede9e1; font-size: 13px;">
+        </div>
+      </section>
+
+      <section id="usage" aria-labelledby="h-usage" style="display: flex; flex-direction: column; gap: 12px;">
+        <h2 id="h-usage" style="margin: 0; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">AI USAGE</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid #2b2925;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;"><span style="font-weight: 600;">This month</span><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px;">[used] of 5.00 USD</span></div>
+          <div aria-hidden="true" style="height: 4px; border-radius: 999px; background: #2b2925;"><div style="width: 30%; height: 4px; border-radius: 999px; background: #8dbfa8;"></div></div>
+          <span style="color: #a39e94;">Paid by NEAR staking rewards through Staking for Inference, not a subscription. During the beta, Aftercall's stake covers you.</span>
+        </div>
+      </section>
+
+      <section id="account" aria-labelledby="h-account" style="display: flex; flex-direction: column;">
+        <h2 id="h-account" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">ACCOUNT AND DATA</h2>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Signed in</span><span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; color: #a39e94;">victor.near</span></div>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Sign out</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Export notes</span><span style="color: #a39e94;">Markdown, decrypted, to a folder you choose</span></div>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #6f6a61; border-radius: 6px; background: transparent; color: #ede9e1; font-size: 13px; font-weight: 600; cursor: pointer;">Export</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-weight: 600;">Delete everything on this Mac</span><span style="color: #a39e94;">Notes, transcripts and keys. Proof hashes on NEAR stay; they contain no content.</span></div>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #dcac5c; border-radius: 6px; background: transparent; color: #dcac5c; font-size: 13px; font-weight: 600; cursor: pointer;">Delete…</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1320}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · search across meetings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400&amp;display=swap">
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#141311}
+a{color:#8dbfa8}a:hover{color:#b3d6c5}
+input{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height: 880px; background: #1b1a17; color: #ede9e1; font-family: 'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; line-height: 19px; box-sizing: border-box; padding: 40px 48px;">
+  <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <label style="display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border: 1px solid #8dbfa8; border-radius: 10px; background: #0f0e0c;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a39e94" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Search all meetings</span>
+        <input type="search" value="pricing" style="flex: 1; border: 0; background: transparent; color: #ede9e1; font-size: 17px; outline: none;">
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; color: #a39e94;">⌘K</span>
+      </label>
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #a39e94;">
+        <span>6 results in 4 meetings · all projects</span>
+        <span>Searched on this Mac; nothing left your device</span>
+      </div>
+    </div>
+
+    <section aria-labelledby="r-dec" style="display: flex; flex-direction: column;">
+      <h2 id="r-dec" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">DECISIONS · 2</h2>
+      <a href="#" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-family: Newsreader, Georgia, serif; font-size: 17px; line-height: 26px;">Keep launch <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> at 5 USD a seat until 100 teams.</span>
+        <span style="color: #a39e94; white-space: nowrap;">Fundraise · 2 Nov</span>
+      </a>
+      <a href="#" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-family: Newsreader, Georgia, serif; font-size: 17px; line-height: 26px;">Show <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> in the deck only as a range.</span>
+        <span style="color: #a39e94; white-space: nowrap;">Fundraise · Deck review, 3 Nov</span>
+      </a>
+    </section>
+
+    <section aria-labelledby="r-act" style="display: flex; flex-direction: column;">
+      <h2 id="r-act" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">ACTION ITEMS · 1</h2>
+      <a href="#" style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-size: 15px; line-height: 20px;">Draft the <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> page copy · Victor · open</span>
+        <span style="color: #a39e94; white-space: nowrap;">Platform API · 30 Oct</span>
+      </a>
+    </section>
+
+    <section aria-labelledby="r-tx" style="display: flex; flex-direction: column;">
+      <h2 id="r-tx" style="margin: 0 0 8px; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">IN TRANSCRIPTS · 3</h2>
+      <a href="Transcript.dc.html" style="display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 24px; color: #a39e94;">12:40</span>
+        <span style="font-family: Newsreader, Georgia, serif; font-size: 16px; line-height: 24px; color: #a39e94;"><span style="font-family: 'Instrument Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">OTHERS</span> … investors will ask about <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> power before anything else …</span>
+        <span style="color: #a39e94; white-space: nowrap;">Investor intro call</span>
+      </a>
+      <a href="Transcript.dc.html" style="display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 24px; color: #a39e94;">08:02</span>
+        <span style="font-family: Newsreader, Georgia, serif; font-size: 16px; line-height: 24px; color: #a39e94;"><span style="font-family: 'Instrument Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #8dbfa8;">YOU</span> … if we change <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> now we confuse the pilots …</span>
+        <span style="color: #a39e94; white-space: nowrap;">Deck review</span>
+      </a>
+      <a href="Transcript.dc.html" style="display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-top: 1px solid #2b2925; border-bottom: 1px solid #2b2925; color: #ede9e1; text-decoration: none;">
+        <span style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; line-height: 24px; color: #a39e94;">21:15</span>
+        <span style="font-family: Newsreader, Georgia, serif; font-size: 16px; line-height: 24px; color: #a39e94;"><span style="font-family: 'Instrument Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #a39e94;">OTHERS</span> … send me the <mark style="padding: 0 2px; border-radius: 3px; background: #1a2a23; color: #ede9e1;">pricing</mark> sheet after this …</span>
+        <span style="color: #a39e94; white-space: nowrap;">Investor intro call</span>
+      </a>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":880}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

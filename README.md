@@ -28,12 +28,26 @@ Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) �
 | Contract | Rust, near-sdk 5.29, cargo-near 0.22, near-sandbox tests; Circle USDC (NEP-141) |
 | Wallets | @hot-labs/near-connect |
 
-Repo layout (created in M1): `apps/desktop`, `apps/backend`, `apps/web`, `packages/core`, `contracts/agent-wallet`, `docs/`.
+Repo layout: `apps/desktop` (Tauri app), `apps/backend` (NestJS), `apps/web` (Next.js), `packages/core` (shared types and helpers), `contracts/agent-wallet` (coming in M1), `docs/` (rules, design source).
+
+## Run it
+
+Needs Node 24, pnpm 10 and Rust (stable).
+
+```bash
+pnpm install
+pnpm dev:desktop   # the Mac app (Tauri); first build compiles Rust for a few minutes
+pnpm dev:ui        # the same interface in a browser at http://localhost:1420
+pnpm test          # unit tests
+```
+
+The desktop interface currently runs on sample data (`apps/desktop/src/sample.ts`): approving a follow-up and processing a recording are simulated until capture, NEAR AI and the contract are wired in (M1–M4).
 
 ## Plan
 
 ### M1 · Day 1 (2026-11-01): Foundations
 - [ ] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
+- [x] Desktop interface from the design on sample data: meeting page, follow-ups with "check before you approve", transcript with evidence links, recording panel with the consent tick, processing stages, light and dark
 - [ ] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute WebM/Opus chunks
 - [ ] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI
 - [ ] NestJS backend with NEP-413 NEAR login and a JWT session
