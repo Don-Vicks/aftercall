@@ -1,5 +1,6 @@
 import { formatUsdc } from "../money.ts";
 import { NETWORK_CONFIG, isNetwork, type Network } from "../network.ts";
+import { CHAIN_NAME, isValidPayoutAddress, PAYOUT_CHAINS, type PayoutChain } from "../intents/oneclick.ts";
 
 /**
  * Everything only the owner's own NEAR wallet may do with the agent wallet. The app
@@ -29,13 +30,21 @@ export type OwnerAction =
   | { kind: "authorise-key"; publicKey: string }
   | { kind: "set-cap"; dailyCap: string }
   | { kind: "set-payment-cap"; perPaymentCap: string }
-  | { kind: "add-payee"; account: string; label: string; registerWithUsdc: boolean }
+  | { kind: "add-payee"; account: string; label: string; registerWithUsdc: boolean; destination?: PayeeDestination }
+  /** Opts a listed payee in to (or, with null, out of) payment on Solana or Base through NEAR Intents. */
+  | { kind: "set-payee-destination"; account: string; label: string; destination: PayeeDestination | null }
   | { kind: "remove-payee"; account: string; label: string }
   | { kind: "deposit"; amount: string }
   | { kind: "withdraw"; amount: string }
   | { kind: "approve"; followupId: string; payee: string; amount: string; context?: PaymentContext }
   | { kind: "cancel"; followupId: string; payee: string; amount: string }
   | { kind: "pause"; paused: boolean };
+
+/** Where a payee is paid outside NEAR; the contract's `Destination`. */
+export interface PayeeDestination {
+  chain: PayoutChain;
+  address: string;
+}
 
 /** Shown on the approve page so the person sees why the payment exists. */
 export interface PaymentContext {
@@ -99,7 +108,10 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
         // The payee must be able to hold USDC, or every payment to them would bounce.
         ...(a.registerWithUsdc ? [call(token, "storage_deposit", { account_id: a.account, registration_only: true }, "1250000000000000000000")] : []),
         call(r.contract, "add_payee", { payee: a.account, label: a.label }),
+        ...(a.destination ? [call(r.contract, "set_payee_destination", { payee: a.account, destination: a.destination })] : []),
       ];
+    case "set-payee-destination":
+      return [call(r.contract, "set_payee_destination", { payee: a.account, destination: a.destination })];
     case "remove-payee":
       return [call(r.contract, "remove_payee", { payee: a.account })];
     case "deposit":
@@ -161,10 +173,27 @@ export function describe(r: SignRequest): Description {
           { label: "Account", value: a.account, mono: true },
           { label: "Label", value: a.label },
           ...(a.registerWithUsdc ? [{ label: "USDC", value: "Registers the account with USDC: 0.00125 NEAR, once" }] : []),
+          ...(a.destination ? destinationRows(a.destination) : []),
         ],
-        walletNote: note("add_payee"),
+        walletNote: a.destination ? note("add_payee and set_payee_destination") : note("add_payee"),
         confirm: a.registerWithUsdc ? "Add and register" : "Add payee",
       };
+    case "set-payee-destination":
+      return a.destination
+        ? {
+            title: `Pay ${a.label} on ${CHAIN_NAME[a.destination.chain]}`,
+            intro: "Lets Aftercall pay this payee outside NEAR through NEAR Intents, within the same caps.",
+            rows: [{ label: "Payee", value: `${a.label} · ${a.account}` }, ...destinationRows(a.destination)],
+            walletNote: note("set_payee_destination"),
+            confirm: "Allow in wallet",
+          }
+        : {
+            title: `Pay ${a.label} on NEAR only`,
+            intro: "Aftercall will no longer pay this payee on another chain.",
+            rows: [{ label: "Payee", value: `${a.label} · ${a.account}` }],
+            walletNote: note("set_payee_destination"),
+            confirm: "Turn off",
+          };
     case "remove-payee":
       return { title: "Remove a payee", intro: "Aftercall won't be able to pay them any more.", rows: [{ label: "Payee", value: `${a.label} · ${a.account}` }], walletNote: note("remove_payee"), confirm: "Remove" };
     case "deposit":
@@ -208,6 +237,14 @@ export function describe(r: SignRequest): Description {
   }
 }
 
+function destinationRows(d: PayeeDestination) {
+  return [
+    { label: "Paid on", value: `${CHAIN_NAME[d.chain]}, through NEAR Intents` },
+    { label: "Address", value: d.address, mono: true },
+    { label: "Check", value: "Aftercall can't prove where NEAR Intents sends the money; it trusts the quote. Only add an address you got from the payee." },
+  ];
+}
+
 // ---------- links ----------
 
 function toBase64Url(text: string): string {
@@ -239,6 +276,10 @@ export function decodeSignRequest(fragment: string): SignRequest {
   for (const k of amounts) if (k in a && !DIGITS.test((a as Record<string, string>)[k])) throw new Error("BAD_AMOUNT");
   if ("account" in a && !ACCOUNT.test(a.account)) throw new Error("BAD_ACCOUNT");
   if ("payee" in a && !ACCOUNT.test(a.payee)) throw new Error("BAD_ACCOUNT");
+  if ("destination" in a && a.destination != null) {
+    const d = a.destination as PayeeDestination;
+    if (!PAYOUT_CHAINS.includes(d.chain) || !isValidPayoutAddress(d.chain, d.address)) throw new Error("BAD_DESTINATION");
+  }
   if (a.kind === "authorise-key" && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.publicKey)) throw new Error("BAD_KEY");
   toTransactions(r); // throws on an unknown kind
   if (!describe(r)) throw new Error("BAD_ACTION");

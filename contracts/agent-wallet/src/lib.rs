@@ -8,6 +8,13 @@
 //!
 //! There is no admin method that can move user funds, and every user pays for
 //! the storage their own records use.
+//!
+//! Cross-chain payments (NEAR Intents 1Click): the owner may give a payee a
+//! Solana or Base address with `set_payee_destination`. `pay` with a `cross_chain`
+//! route then sends the USDC to a 1Click deposit address instead of the payee's
+//! NEAR account, under the same caps and pause. The contract cannot check that a
+//! deposit address really routes to the payee's address: that promise comes from
+//! the 1Click quote, which the app fetched. See docs/near-intents-1click.md.
 
 use near_sdk::json_types::U128;
 use near_sdk::store::{LookupMap, LookupSet};
@@ -29,6 +36,14 @@ const MAX_PAYEES: usize = 50;
 /// one-byte collection prefixes or near-sdk's `STATE` key.
 const STATS_KEY: &[u8] = b"stats";
 
+/// storage_deposit + ft_transfer + callback.
+const MIN_GAS_FOR_CROSS_CHAIN: Gas = Gas::from_tgas(70);
+const GAS_FOR_STORAGE_DEPOSIT: Gas = Gas::from_tgas(10);
+/// NEP-145 registration for a 1Click deposit address on the USDC contract, paid from
+/// the owner's storage credit. If the address was already registered, the token
+/// returns it to this contract, not to the owner.
+const DEPOSIT_ADDRESS_REGISTRATION: NearToken = NearToken::from_yoctonear(1_250_000_000_000_000_000_000);
+
 #[derive(BorshStorageKey)]
 #[near]
 enum StorageKey {
@@ -37,6 +52,10 @@ enum StorageKey {
     Paid,
     Pending,
     Proofs,
+    // Appended, so existing keys keep their prefixes. These maps are not fields of
+    // the contract state, so the state layout of a deployed contract is unchanged.
+    Destinations,
+    CrossChainPayments,
 }
 
 #[near(serializers = [borsh, json])]
@@ -92,6 +111,45 @@ pub struct Stats {
     pub parked: u64,
 }
 
+/// Where a payee is paid outside NEAR. Set only by the owner (1 yocto).
+#[near(serializers = [borsh, json])]
+#[derive(Clone, PartialEq, Debug)]
+pub struct Destination {
+    /// "solana" or "base".
+    pub chain: String,
+    /// A Solana address (base58, 32 to 44 characters) or a Base address (0x and 40 hex).
+    pub address: String,
+}
+
+#[near(serializers = [json])]
+pub struct PayeeDestination {
+    pub payee: AccountId,
+    pub chain: String,
+    pub address: String,
+}
+
+/// The 1Click quote the app accepted for one cross-chain payment.
+#[near(serializers = [json])]
+pub struct CrossChainRoute {
+    /// The quote's deposit address on NEAR: a 64-hex implicit account.
+    pub deposit_address: AccountId,
+    /// The quote's id (1Click `correlationId`), kept for disputes.
+    pub quote_id: String,
+}
+
+/// What the contract recorded about a cross-chain payment.
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct CrossChainPayment {
+    pub payee: AccountId,
+    pub amount: U128,
+    pub chain: String,
+    pub address: String,
+    pub deposit_address: AccountId,
+    pub quote_id: String,
+    pub sent_at: u64,
+}
+
 #[near(serializers = [json])]
 pub struct PayResult {
     /// "sending" (transfer started; the outcome lands in the callback) or "blocked".
@@ -105,6 +163,17 @@ pub struct PayResult {
 #[allow(dead_code)]
 trait FungibleToken {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
+    fn storage_deposit(&mut self, account_id: Option<AccountId>, registration_only: Option<bool>);
+}
+
+/// Owner and payee -> the payee's address outside NEAR.
+fn destinations() -> LookupMap<(AccountId, AccountId), Destination> {
+    LookupMap::new(StorageKey::Destinations)
+}
+
+/// Owner and follow-up id -> the cross-chain payment sent for it.
+fn cross_chain_payments() -> LookupMap<(AccountId, String), CrossChainPayment> {
+    LookupMap::new(StorageKey::CrossChainPayments)
 }
 
 #[near(contract_state)]
@@ -231,6 +300,36 @@ impl AgentWallet {
                 list.retain(|p| p.account != payee);
             }
             this.payees.flush();
+            // A payee added again later starts without an address outside NEAR.
+            let mut d = destinations();
+            d.remove(&(owner.clone(), payee.clone()));
+            d.flush();
+        });
+    }
+
+    /// Opts a listed payee in to cross-chain payments: the app may then pay them on
+    /// Solana or Base through NEAR Intents, within the same caps. `None` opts them out.
+    #[payable]
+    pub fn set_payee_destination(&mut self, payee: AccountId, destination: Option<Destination>) {
+        assert_one_yocto();
+        let owner = env::predecessor_account_id();
+        self.wallet_mut(&owner);
+        require!(self.is_listed(&owner, &payee), "UNKNOWN_PAYEE");
+        if let Some(d) = &destination {
+            require!(valid_destination(d), "BAD_DESTINATION");
+        }
+        self.with_storage(&owner, |_| {
+            let mut map = destinations();
+            let key = (owner.clone(), payee);
+            match destination {
+                Some(d) => {
+                    map.insert(key, d);
+                }
+                None => {
+                    map.remove(&key);
+                }
+            }
+            map.flush();
         });
     }
 
@@ -274,17 +373,26 @@ impl AgentWallet {
     // ---------- limited key: pay and record_proof ----------
 
     /// Pays a listed payee within the caps, or parks the payment for the owner's approval.
+    ///
+    /// With `cross_chain`, the USDC goes to the 1Click deposit address instead, which
+    /// pays the payee's Solana or Base address. Only payees the owner gave a destination
+    /// qualify. Same caps and pause; but an over-cap cross-chain payment is refused, not
+    /// parked, because the quote behind it expires.
     pub fn pay(
         &mut self,
         payee: AccountId,
         amount: U128,
         memo: Option<String>,
         followup_id: String,
+        cross_chain: Option<CrossChainRoute>,
     ) -> PayResult {
         require!(env::prepaid_gas() >= MIN_GAS_FOR_PAY, "NEEDS_50_TGAS");
         require!(amount.0 > 0, "ZERO_AMOUNT");
         let owner = env::predecessor_account_id();
         self.check_payable(&owner, &payee, amount, &followup_id);
+        if let Some(route) = cross_chain {
+            return self.pay_cross_chain(owner, payee, amount, memo, followup_id, route);
+        }
 
         let w = self.wallet_mut(&owner);
         roll_day(w);
@@ -354,6 +462,14 @@ impl AgentWallet {
             // A refunded payment was never made.
             bump(|s| s.payments = s.payments.saturating_sub(1));
         }
+        let key = (owner.clone(), followup_id.clone());
+        if cross_chain_payments().contains_key(&key) && self.wallets.get(&owner).is_some() {
+            self.with_storage(&owner, |_| {
+                let mut map = cross_chain_payments();
+                map.remove(&key);
+                map.flush();
+            });
+        }
         env::log_str(&format!("PAYMENT_FAILED owner={owner} followup_id={followup_id} refunded={}", amount.0));
         false
     }
@@ -392,6 +508,26 @@ impl AgentWallet {
     pub fn get_stats(&self) -> Stats {
         read_stats()
     }
+
+    /// Every listed payee who may be paid outside NEAR, with where.
+    pub fn get_payee_destinations(&self, owner: AccountId) -> Vec<PayeeDestination> {
+        let map = destinations();
+        self.payees
+            .get(&owner)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|p| {
+                        map.get(&(owner.clone(), p.account.clone()))
+                            .map(|d| PayeeDestination { payee: p.account.clone(), chain: d.chain.clone(), address: d.address.clone() })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn get_cross_chain_payment(&self, owner: AccountId, followup_id: String) -> Option<CrossChainPayment> {
+        cross_chain_payments().get(&(owner, followup_id)).cloned()
+    }
 }
 
 impl AgentWallet {
@@ -399,10 +535,86 @@ impl AgentWallet {
         self.wallets.get_mut(owner).unwrap_or_else(|| env::panic_str("NOT_REGISTERED"))
     }
 
+    fn is_listed(&self, owner: &AccountId, payee: &AccountId) -> bool {
+        self.payees.get(owner).is_some_and(|list| list.iter().any(|p| &p.account == payee))
+    }
+
+    /// The cross-chain half of `pay`, after the usual checks passed.
+    fn pay_cross_chain(
+        &mut self,
+        owner: AccountId,
+        payee: AccountId,
+        amount: U128,
+        memo: Option<String>,
+        followup_id: String,
+        route: CrossChainRoute,
+    ) -> PayResult {
+        require!(env::prepaid_gas() >= MIN_GAS_FOR_CROSS_CHAIN, "NEEDS_70_TGAS");
+        require!(is_deposit_address(&route.deposit_address), "BAD_DEPOSIT_ADDRESS");
+        require!(!route.quote_id.is_empty() && route.quote_id.len() <= 64, "BAD_QUOTE_ID");
+        let destination = destinations()
+            .get(&(owner.clone(), payee.clone()))
+            .cloned()
+            .unwrap_or_else(|| env::panic_str("NO_DESTINATION"));
+
+        let w = self.wallet_mut(&owner);
+        roll_day(w);
+        let over_payment_cap = w.per_payment_cap.0 > 0 && amount.0 > w.per_payment_cap.0;
+        let over_daily_cap = w.spent_today.0 + amount.0 > w.daily_cap.0;
+        if over_payment_cap || over_daily_cap {
+            let reason = if over_payment_cap { "OVER_PAYMENT_CAP" } else { "OVER_CAP" };
+            let left = U128(w.daily_cap.0.saturating_sub(w.spent_today.0));
+            return PayResult { status: "blocked".into(), reason: Some(reason.into()), left_today: left };
+        }
+        // Registering the deposit address with USDC comes out of the owner's storage credit.
+        let fee = DEPOSIT_ADDRESS_REGISTRATION.as_yoctonear();
+        require!(w.storage_credit.0 >= fee, "STORAGE_CREDIT_LOW");
+        w.storage_credit = U128(w.storage_credit.0 - fee);
+        w.balance = U128(w.balance.0 - amount.0);
+        w.spent_today = U128(w.spent_today.0 + amount.0);
+        let left = U128(w.daily_cap.0 - w.spent_today.0);
+
+        let record = CrossChainPayment {
+            payee,
+            amount,
+            chain: destination.chain,
+            address: destination.address,
+            deposit_address: route.deposit_address.clone(),
+            quote_id: route.quote_id,
+            sent_at: env::block_timestamp(),
+        };
+        let key = (owner.clone(), followup_id.clone());
+        self.with_storage(&owner, |_| {
+            let mut map = cross_chain_payments();
+            map.insert(key, record);
+            map.flush();
+        });
+        self.paid.insert((owner.clone(), followup_id.clone()));
+        bump(|s| s.payments += 1);
+        env::log_str(&format!("CROSS_CHAIN_PAY owner={owner} followup_id={followup_id} deposit_address={}", route.deposit_address));
+
+        let _ = ext_ft::ext(self.usdc.clone())
+            .with_attached_deposit(DEPOSIT_ADDRESS_REGISTRATION)
+            .with_static_gas(GAS_FOR_STORAGE_DEPOSIT)
+            .storage_deposit(Some(route.deposit_address.clone()), Some(true))
+            .then(
+                ext_ft::ext(self.usdc.clone())
+                    .with_attached_deposit(NearToken::from_yoctonear(1))
+                    .with_static_gas(GAS_FOR_FT_TRANSFER)
+                    .ft_transfer(route.deposit_address, amount, memo),
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(GAS_FOR_CALLBACK)
+                    .on_pay_complete(owner, followup_id, amount, true),
+            );
+        PayResult { status: "sending".into(), reason: None, left_today: left }
+    }
+
     fn check_payable(&mut self, owner: &AccountId, payee: &AccountId, amount: U128, followup_id: &str) {
         require!(followup_id.len() <= 64, "FOLLOWUP_ID_TOO_LONG");
         require!(!self.paid.contains(&(owner.clone(), followup_id.to_string())), "ALREADY_PAID");
-        require!(self.payees.get(owner).is_some_and(|list| list.iter().any(|p| &p.account == payee)), "UNKNOWN_PAYEE");
+        require!(self.is_listed(owner, payee), "UNKNOWN_PAYEE");
         let w = self.wallet_mut(owner);
         require!(!w.paused, "PAUSED");
         require!(w.balance.0 >= amount.0, "LOW_BALANCE");
@@ -473,6 +685,22 @@ fn bump(change: impl FnOnce(&mut Stats)) {
     env::storage_write(STATS_KEY, &near_sdk::borsh::to_vec(&stats).unwrap_or_else(|_| env::panic_str("BAD_STATS")));
 }
 
+/// 1Click deposit addresses on NEAR are implicit accounts: 64 lowercase hex characters.
+/// Anything else (a named account, an EVM-style 0x address) is refused.
+fn is_deposit_address(id: &AccountId) -> bool {
+    let s = id.as_str();
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+fn valid_destination(d: &Destination) -> bool {
+    let a = d.address.as_str();
+    match d.chain.as_str() {
+        "solana" => (32..=44).contains(&a.len()) && a.bytes().all(|b| b.is_ascii_alphanumeric() && !b"0OIl".contains(&b)),
+        "base" => a.len() == 42 && a.starts_with("0x") && a[2..].bytes().all(|b| b.is_ascii_hexdigit()),
+        _ => false,
+    }
+}
+
 fn today() -> u64 {
     env::block_timestamp() / NANOS_PER_DAY
 }
@@ -520,11 +748,11 @@ mod tests {
     fn daily_cap_resets_next_day() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into()).status, "sending");
-        assert_eq!(c.pay(payee.clone(), U128(100 * USDC), None, "b".into()).status, "blocked");
+        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None).status, "sending");
+        assert_eq!(c.pay(payee.clone(), U128(100 * USDC), None, "b".into(), None).status, "blocked");
 
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(100 * USDC), None, "c".into()).status, "sending");
+        assert_eq!(c.pay(payee, U128(100 * USDC), None, "c".into(), None).status, "sending");
         assert_eq!(c.get_wallet(owner).unwrap().spent_today.0, 100 * USDC);
     }
 
@@ -532,8 +760,8 @@ mod tests {
     fn approval_on_a_new_day_counts_towards_that_day() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(150 * USDC), None, "a".into());
-        assert_eq!(c.pay(payee.clone(), U128(500 * USDC), None, "big".into()).status, "blocked");
+        c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None);
+        assert_eq!(c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None).status, "blocked");
 
         // Approved the next day: yesterday's 150 no longer counts, today's 500 does.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 11));
@@ -542,7 +770,7 @@ mod tests {
 
         // So a small payment the same day is over the cap, not silently allowed.
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(10 * USDC), None, "c".into()).status, "blocked");
+        assert_eq!(c.pay(payee, U128(10 * USDC), None, "c".into(), None).status, "blocked");
     }
 
     #[test]
@@ -550,7 +778,7 @@ mod tests {
         let (mut c, owner, payee) = funded(10);
         let credit_before = c.get_wallet(owner.clone()).unwrap().storage_credit.0;
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(500 * USDC), None, "big".into());
+        c.pay(payee, U128(500 * USDC), None, "big".into(), None);
         assert!(c.get_wallet(owner.clone()).unwrap().storage_credit.0 < credit_before);
 
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
@@ -575,13 +803,122 @@ mod tests {
         assert_eq!(c.get_payee_label(owner, payee), None);
     }
 
+    const DEPOSIT: &str = "69f5eccee1e146961b47ac7cecb0f5caada2b6e1ee124e72e8b47adedd701f74";
+    const SOL: &str = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+
+    fn route() -> Option<CrossChainRoute> {
+        Some(CrossChainRoute { deposit_address: DEPOSIT.parse().unwrap(), quote_id: "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7".into() })
+    }
+
+    /// `funded`, with the payee opted in to Solana payouts.
+    fn funded_cross_chain(day: u64) -> (AgentWallet, AccountId, AccountId) {
+        let (mut c, owner, payee) = funded(day);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), day));
+        c.set_payee_destination(payee.clone(), Some(Destination { chain: "solana".into(), address: SOL.into() }));
+        (c, owner, payee)
+    }
+
+    #[test]
+    fn cross_chain_pay_counts_to_the_cap_and_is_recorded() {
+        let (mut c, owner, payee) = funded_cross_chain(10);
+        let credit_before = c.get_wallet(owner.clone()).unwrap().storage_credit.0;
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        let r = c.pay(payee.clone(), U128(150 * USDC), None, "x-1".into(), route());
+        assert_eq!(r.status, "sending");
+        assert_eq!(r.left_today.0, 50 * USDC);
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!(w.balance.0, 850 * USDC);
+        assert_eq!(w.spent_today.0, 150 * USDC);
+        assert!(w.storage_credit.0 <= credit_before - DEPOSIT_ADDRESS_REGISTRATION.as_yoctonear());
+        let rec = c.get_cross_chain_payment(owner.clone(), "x-1".into()).unwrap();
+        assert_eq!((rec.payee, rec.chain.as_str(), rec.address.as_str(), rec.deposit_address.as_str()), (payee.clone(), "solana", SOL, DEPOSIT));
+        assert_eq!(rec.quote_id, "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7");
+        assert!(c.is_paid(owner.clone(), "x-1".into()));
+
+        // Over what is left today: refused, nothing parked, nothing moved.
+        let blocked = c.pay(payee, U128(60 * USDC), None, "x-2".into(), route());
+        assert_eq!((blocked.status.as_str(), blocked.reason.as_deref()), ("blocked", Some("OVER_CAP")));
+        assert!(c.get_pending(owner.clone(), "x-2".into()).is_none());
+        assert_eq!(c.get_wallet(owner.clone()).unwrap().pending_count, 0);
+        assert_eq!(c.get_wallet(owner).unwrap().balance.0, 850 * USDC);
+    }
+
+    #[test]
+    fn cross_chain_respects_the_per_payment_cap() {
+        let (mut c, owner, payee) = funded_cross_chain(10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_payment_cap(U128(20 * USDC));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        let r = c.pay(payee, U128(21 * USDC), None, "x".into(), route());
+        assert_eq!(r.reason.as_deref(), Some("OVER_PAYMENT_CAP"));
+        assert_eq!(c.get_wallet(owner).unwrap().balance.0, 1_000 * USDC);
+    }
+
+    #[test]
+    #[should_panic(expected = "NO_DESTINATION")]
+    fn cross_chain_needs_the_owner_opt_in() {
+        let (mut c, owner, payee) = funded(10);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
+        c.pay(payee, U128(USDC), None, "x".into(), route());
+    }
+
+    #[test]
+    #[should_panic(expected = "UNKNOWN_PAYEE")]
+    fn cross_chain_refuses_unlisted_payees() {
+        let (mut c, owner, _) = funded_cross_chain(10);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
+        c.pay(accounts(4), U128(USDC), None, "x".into(), route());
+    }
+
+    #[test]
+    #[should_panic(expected = "PAUSED")]
+    fn cross_chain_respects_pause() {
+        let (mut c, owner, payee) = funded_cross_chain(10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_paused(true);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
+        c.pay(payee, U128(USDC), None, "x".into(), route());
+    }
+
+    #[test]
+    #[should_panic(expected = "BAD_DEPOSIT_ADDRESS")]
+    fn cross_chain_only_sends_to_implicit_deposit_addresses() {
+        let (mut c, owner, payee) = funded_cross_chain(10);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
+        c.pay(payee, U128(USDC), None, "x".into(), Some(CrossChainRoute { deposit_address: "attacker.near".parse().unwrap(), quote_id: "q".into() }));
+    }
+
+    #[test]
+    fn destinations_are_validated_listed_and_cleared_with_the_payee() {
+        let (mut c, owner, payee) = funded_cross_chain(10);
+        let ok = |chain: &str, address: &str| valid_destination(&Destination { chain: chain.into(), address: address.into() });
+        assert!(ok("base", "0x2527D02599Ba641c19FEa793cD0F167589a0f10D"));
+        assert!(!ok("base", "0x2527D02599Ba641c19FEa793cD0F167589a0f10"));
+        assert!(!ok("solana", "0OIl0OIl0OIl0OIl0OIl0OIl0OIl0OIl"));
+        assert!(!ok("eth", "0x2527D02599Ba641c19FEa793cD0F167589a0f10D"));
+        assert_eq!(c.get_payee_destinations(owner.clone()).len(), 1);
+
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.remove_payee(payee.clone());
+        c.add_payee(payee, "Designer".into());
+        assert!(c.get_payee_destinations(owner).is_empty(), "re-adding a payee must not bring back an old address");
+    }
+
+    #[test]
+    #[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+    fn only_the_owner_wallet_sets_destinations() {
+        let (mut c, owner, payee) = funded(10);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
+        c.set_payee_destination(payee, Some(Destination { chain: "solana".into(), address: SOL.into() }));
+    }
+
     #[test]
     fn stats_count_wallets_proofs_payments_and_parked() {
         let (mut c, owner, payee) = funded(10);
         assert_eq!(c.get_stats(), Stats { wallets: 1, ..Stats::default() });
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(50 * USDC), None, "a".into());
-        c.pay(payee.clone(), U128(500 * USDC), None, "big".into());
+        c.pay(payee.clone(), U128(50 * USDC), None, "a".into(), None);
+        c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None);
         c.record_proof("m-1".into(), "ab".repeat(32), "Qwen/Qwen3.8-27B".into());
         assert_eq!(c.get_stats(), Stats { wallets: 1, proofs: 1, payments: 1, parked: 1 });
 
@@ -605,7 +942,7 @@ mod tests {
     fn cancel_needs_the_owner_wallet() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(500 * USDC), None, "big".into());
+        c.pay(payee, U128(500 * USDC), None, "big".into(), None);
         c.cancel_pending("big".into());
     }
 }

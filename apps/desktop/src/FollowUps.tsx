@@ -1,6 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Copy, Link2, Mail, Wallet } from "lucide-react";
-import { formatClock, formatUsdc, type Attendee, type EmailFollowUp, type FollowUp, type PaymentFollowUp } from "@aftercall/core";
+import {
+  CHAIN_NAME,
+  formatClock,
+  formatUsdc,
+  type Attendee,
+  routeLabel,
+  type EmailFollowUp,
+  type FollowUp,
+  type PayeeDestination,
+  type PaymentFollowUp,
+  type PayoutPreview,
+} from "@aftercall/core";
 import { Button, Pill, SectionLabel, Spinner } from "./ui";
 import { parseUsdcInput } from "./WalletScreen";
 
@@ -17,6 +28,10 @@ export interface FollowUpHandlers {
   onUndoAutopilot: (id: string) => void;
   /** The person corrects the amount; heard words stay as evidence. */
   onSetAmount: (id: string, amount: bigint) => void;
+  /** The payee's address outside NEAR, when the owner opted them in to NEAR Intents. */
+  routeFor?: (f: PaymentFollowUp) => PayeeDestination | null;
+  /** A dry NEAR Intents quote for that route. */
+  previewRoute?: (f: PaymentFollowUp, dest: PayeeDestination) => Promise<PayoutPreview>;
 }
 
 export function FollowUps({
@@ -150,6 +165,7 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
   const [editing, setEditing] = useState(false);
   const [amountText, setAmountText] = useState(f.amount === null ? "" : formatUsdc(f.amount).replace(/,/g, ""));
   const parsed = parseUsdcInput(amountText);
+  const route = f.payeeListed ? (h.routeFor?.(f) ?? null) : null;
   return (
     <Row last={last} active={proposed}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -160,7 +176,7 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
           </span>
           {f.payeeListed ? (
             <span className="t-mono text-muted">
-              {f.payeeAccount}
+              {route ? `${CHAIN_NAME[route.chain]} ${shortAddress(route.address)}` : f.payeeAccount}
               {proposed && leftToday !== null && ` · ${formatUsdc(leftToday)} left today`}
             </span>
           ) : (
@@ -170,15 +186,18 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
         {f.status === "sending" && <Pill tone="muted" icon={<Spinner size={10} />}>Sending</Pill>}
         {f.status === "paid" && <Pill tone="verdigris" icon={<Check size={11} strokeWidth={2.5} />}>Paid {f.doneAt}</Pill>}
         {f.status === "failed" && <Pill tone="record">Failed · refunded</Pill>}
+        {f.crossChain && f.status === "sending" && <Pill tone="muted">{swapWords[f.crossChain.swapStatus] ?? f.crossChain.swapStatus}</Pill>}
         {proposed && (
           <span className="font-mono text-xl leading-6 tracking-[-0.01em]">
             {f.amount === null ? <span className="text-caution">?</span> : formatUsdc(f.amount)} <span className="text-xs text-muted">USDC</span>
           </span>
         )}
       </div>
+      {f.crossChain && !proposed && <CrossChainTrail c={f.crossChain} />}
       {proposed && (
         <>
           <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
+          {route && f.amount !== null && h.previewRoute && <RoutePreview f={f} dest={route} preview={h.previewRoute} />}
           <div className="ml-8 flex flex-wrap gap-x-4 gap-y-1.5 rounded-sm bg-well px-3 py-2.5">
             <span className="t-label leading-[19px] text-muted">Check before you approve</span>
             <span>
@@ -261,6 +280,75 @@ function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boole
         </>
       )}
     </Row>
+  );
+}
+
+const shortAddress = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+/** 1Click's statuses in plain words. */
+const swapWords: Record<string, string> = {
+  PENDING_DEPOSIT: "Waiting for deposit",
+  KNOWN_DEPOSIT_TX: "Deposit seen",
+  INCOMPLETE_DEPOSIT: "Deposit short",
+  PROCESSING: "Bridging",
+  SUCCESS: "Delivered",
+  REFUNDED: "Refunded",
+  FAILED: "Failed",
+};
+
+/** The route and a dry quote, so the person sees what the payee gets before approving. */
+function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDestination; preview: (f: PaymentFollowUp, d: PayeeDestination) => Promise<PayoutPreview> }) {
+  const [quote, setQuote] = useState<PayoutPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setQuote(null);
+    setError(null);
+    preview(f, dest)
+      .then((q) => live && setQuote(q))
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+    // Re-quote when the amount or the destination changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.amount, dest.chain, dest.address]);
+  return (
+    <div className="ml-8 flex flex-col gap-1.5 rounded-sm px-3 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
+      <span className="t-label text-muted">Route</span>
+      <span>{routeLabel(dest.chain)}</span>
+      <span className="t-mono text-muted">To {dest.address}</span>
+      {quote ? (
+        <span>
+          They get about <span className="t-mono">{formatUsdc(quote.amountOut)} USDC</span>
+          <span className="text-muted">
+            {" "}· fees <span className="t-mono">{formatUsdc(quote.fee)}</span> · about {quote.seconds} s · quote from NEAR Intents, not checked on chain
+          </span>
+        </span>
+      ) : error ? (
+        <span className="text-caution">{error}</span>
+      ) : (
+        <span className="flex items-center gap-2 text-muted">
+          <Spinner size={10} /> Asking NEAR Intents for a quote…
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CrossChainTrail({ c }: { c: NonNullable<PaymentFollowUp["crossChain"]> }) {
+  return (
+    <p className="m-0 pl-8 text-muted">
+      {routeLabel(c.chain)} · {swapWords[c.swapStatus] ?? c.swapStatus}
+      {c.payoutTxUrl && (
+        <>
+          {" · "}
+          <a href={c.payoutTxUrl} target="_blank" rel="noreferrer" className="font-semibold text-verdigris hover:text-verdigris-hover">
+            {CHAIN_NAME[c.chain]} transaction
+          </a>
+        </>
+      )}
+    </p>
   );
 }
 

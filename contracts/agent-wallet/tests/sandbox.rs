@@ -427,3 +427,92 @@ async fn locked_contract_still_serves_owners_and_the_app_key() -> anyhow::Result
     assert_eq!(stats, json!({ "wallets": 1, "proofs": 1, "payments": 2, "parked": 1 }));
     Ok(())
 }
+
+// ---------- cross-chain payments (NEAR Intents 1Click) ----------
+
+/// A 1Click-style deposit address on NEAR: an implicit account nobody registered with USDC yet.
+const DEPOSIT: &str = "69f5eccee1e146961b47ac7cecb0f5caada2b6e1ee124e72e8b47adedd701f74";
+const SOL: &str = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+
+async fn pay_cross_chain(e: &Env, signer: &Account, payee: &str, amount: u128, followup_id: &str) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(signer.call(e.wallet.id(), "pay")
+        .args_json(json!({
+            "payee": payee, "amount": amount.to_string(), "memo": "deposit", "followup_id": followup_id,
+            "cross_chain": { "deposit_address": DEPOSIT, "quote_id": "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7" },
+        }))
+        .gas(near_workspaces::types::Gas::from_tgas(100))
+        .transact().await?)
+}
+
+async fn opt_in_designer(e: &Env) -> anyhow::Result<()> {
+    e.victor.call(e.wallet.id(), "set_payee_destination")
+        .args_json(json!({ "payee": e.designer.id(), "destination": { "chain": "solana", "address": SOL } }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn cross_chain_pays_the_deposit_address_within_caps() -> anyhow::Result<()> {
+    let e = setup().await?;
+    // The contract registers the deposit address with 0.00125 NEAR: enough for this token.
+    let bounds: serde_json::Value = e.usdc.view("storage_balance_bounds").await?.json()?;
+    assert!(bounds["min"].as_str().unwrap().parse::<u128>()? <= 1_250_000_000_000_000_000_000);
+
+    opt_in_designer(&e).await?;
+    let dests: serde_json::Value = e.wallet.view("get_payee_destinations").args_json(json!({ "owner": e.victor.id() })).await?.json()?;
+    assert_eq!(dests[0]["address"], SOL);
+
+    let app = limited_key(&e).await?;
+    let r = pay_cross_chain(&e, &app, e.designer.id().as_str(), 150 * USDC, "x-1").await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    assert_eq!(r.json::<serde_json::Value>()?["status"], "sending");
+    let v: String = e.usdc.view("ft_balance_of").args_json(json!({ "account_id": DEPOSIT })).await?.json()?;
+    assert_eq!(v.parse::<u128>()?, 150 * USDC, "the USDC went to the deposit address");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 0, "not to the payee's NEAR account");
+    assert_eq!(wallet_field(&e, "spent_today").await?, 150 * USDC);
+    let rec: serde_json::Value = e.wallet.view("get_cross_chain_payment").args_json(json!({ "owner": e.victor.id(), "followup_id": "x-1" })).await?.json()?;
+    assert_eq!((rec["chain"].as_str(), rec["address"].as_str(), rec["deposit_address"].as_str()), (Some("solana"), Some(SOL), Some(DEPOSIT)));
+    assert_eq!(rec["quote_id"], "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7");
+
+    // 60 more is over the 200 daily cap: refused and nothing parked.
+    let over = pay_cross_chain(&e, &app, e.designer.id().as_str(), 60 * USDC, "x-2").await?;
+    let out: serde_json::Value = over.json()?;
+    assert_eq!((out["status"].as_str(), out["reason"].as_str()), (Some("blocked"), Some("OVER_CAP")));
+    let pending: Option<serde_json::Value> = e.wallet.view("get_pending").args_json(json!({ "owner": e.victor.id(), "followup_id": "x-2" })).await?.json()?;
+    assert!(pending.is_none());
+    assert_eq!(wallet_field(&e, "balance").await?, 150 * USDC);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cross_chain_refuses_unlisted_unopted_paused_and_other_callers() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+
+    // Listed but not opted in.
+    let not_opted = pay_cross_chain(&e, &app, e.designer.id().as_str(), USDC, "x-a").await?;
+    assert!(format!("{:?}", not_opted.into_result().unwrap_err()).contains("NO_DESTINATION"));
+
+    // The app's key can't opt a payee in: the method isn't on its list.
+    let by_app = app.call(e.wallet.id(), "set_payee_destination")
+        .args_json(json!({ "payee": e.designer.id(), "destination": { "chain": "solana", "address": SOL } }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await;
+    assert!(by_app.is_err() || by_app.unwrap().is_failure());
+
+    opt_in_designer(&e).await?;
+    // Not on the list at all.
+    let unlisted = pay_cross_chain(&e, &app, e.usdc.id().as_str(), USDC, "x-b").await?;
+    assert!(format!("{:?}", unlisted.into_result().unwrap_err()).contains("UNKNOWN_PAYEE"));
+
+    // Someone else's account can't spend Victor's wallet: the contract acts on the caller's own.
+    let other = pay_cross_chain(&e, &e.designer, e.designer.id().as_str(), USDC, "x-c").await?;
+    // Designer has no wallet or payees of their own, so the payee is unknown to them.
+    assert!(format!("{:?}", other.into_result().unwrap_err()).contains("UNKNOWN_PAYEE"));
+
+    e.victor.call(e.wallet.id(), "set_paused").args_json(json!({ "paused": true }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    let paused = pay_cross_chain(&e, &app, e.designer.id().as_str(), USDC, "x-d").await?;
+    assert!(format!("{:?}", paused.into_result().unwrap_err()).contains("PAUSED"));
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+    Ok(())
+}

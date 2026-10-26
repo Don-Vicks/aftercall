@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { encodeSignRequest, explorerTxUrl, type Network, type OnChainProof, type OwnerAction } from "@aftercall/core";
+import { createOneClickClient, encodeSignRequest, explorerTxUrl, type Network, type OnChainProof, type OwnerAction, type PayoutChain } from "@aftercall/core";
 
 export interface NearConfig {
   network: Network;
@@ -33,6 +33,9 @@ export const near = {
   getProof: (owner: string, meetingId: string) => invoke<OnChainProof | null>("near_get_proof", { owner, meetingId }),
   pay: (payee: string, amount: bigint, memo: string, followupId: string) =>
     invoke<PayOutcome>("near_pay", { payee, amount: amount.toString(), memo, followupId }),
+  /** `pay` with a NEAR Intents route: the USDC goes to the quote's deposit address, under the same caps. */
+  payCrossChain: (payee: string, amount: bigint, memo: string, followupId: string, depositAddress: string, quoteId: string) =>
+    invoke<PayOutcome>("near_pay_cross_chain", { payee, amount: amount.toString(), memo, followupId, depositAddress, quoteId }),
   wallet: () => invoke<WalletView>("near_wallet"),
   checkPayee: (account: string) => invoke<{ exists: boolean; usdcReady: boolean }>("near_check_payee", { account }),
   ownerUsdc: () => invoke<string>("near_owner_usdc"),
@@ -59,7 +62,12 @@ export interface WalletView {
     per_payment_cap: string;
   } | null;
   payees: { account: string; label: string }[];
+  /** Payees the owner opted in to payment on Solana or Base (get_payee_destinations). */
+  destinations: { payee: string; chain: PayoutChain; address: string }[];
 }
+
+/** NEAR Intents 1Click, called from the webview (it allows any origin). No API key: 1Click adds its unauthenticated fee. */
+export const oneClick = createOneClickClient({ fetch: (url, init) => fetch(url, init) });
 
 /** A follow-up's id on the contract: unique per user across meetings. */
 export const contractFollowupId = (meetingId: string, followupId: string) => `${meetingId}-${followupId}`;

@@ -301,6 +301,19 @@ async fn near_pay(app: AppHandle, payee: String, amount: String, memo: String, f
 }
 
 #[tauri::command]
+async fn near_pay_cross_chain(
+    app: AppHandle,
+    payee: String,
+    amount: String,
+    memo: String,
+    followup_id: String,
+    deposit_address: String,
+    quote_id: String,
+) -> Result<near::PayOutcome, String> {
+    near::pay_cross_chain(&near_config(&app)?, &payee, &amount, &memo, &followup_id, &deposit_address, &quote_id).await
+}
+
+#[tauri::command]
 async fn near_wallet(app: AppHandle) -> Result<serde_json::Value, String> {
     near::wallet(&near_config(&app)?).await
 }
@@ -467,6 +480,7 @@ pub fn run() {
             near_record_proof,
             near_get_proof,
             near_pay,
+            near_pay_cross_chain,
             near_wallet,
             near_payment_state,
             near_check_payee,

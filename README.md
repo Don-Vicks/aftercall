@@ -10,7 +10,7 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 
 | Do | See |
 | --- | --- |
-| `pnpm install && pnpm verify --quick` | Typecheck of every package, 41 core and 17 backend tests (20 with `DATABASE_URL` set, adding the Postgres runs), the web build, the NEAR signer, the recorder and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (13 more tests, about 5 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
+| `pnpm install && pnpm verify --quick` | Typecheck of every package, 65 core, 24 backend and 14 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs), the web build, the NEAR signer, the recorder, recovery and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (16 more tests, about 5 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
 | `pnpm dev:ui`, open http://localhost:1420 | The Mac app's interface in a browser on a sample meeting: Home, search (sidebar), follow-ups with "check before you approve", the $5,000 payment the contract blocks, the transcript with evidence links. Recording is simulated in the browser. |
 | `pnpm --filter @aftercall/web dev`, open http://localhost:3000/verify | The public Verify page. With a proof link (`/verify#…`, copied from the app's Verify sheet) it reads the proof from NEAR and re-runs every check in your browser. |
 | Read [`contracts/agent-wallet/src/lib.rs`](contracts/agent-wallet/src/lib.rs) and [`tests/sandbox.rs`](contracts/agent-wallet/tests/sandbox.rs) | Why the app can't overspend: its key can call only `pay` and `record_proof`, every rule change needs 1 yoctoNEAR (which a limited key can't attach), and over-cap payments park until the owner's own wallet approves. Each claim has a test on a real local NEAR node. |
@@ -28,7 +28,11 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
  │                                                            ├─ record_proof(meeting, sha256 of proof bundle)
  │                                                            ├─ pay(): listed payee, daily + per-payment caps
  │                                                            └─ over cap → parked for the owner's wallet
- └─ follow-ups: Draft in Mail · send via backend · pay · claim link · autopilot
+ ├─ follow-ups: Draft in Mail · send via backend · pay · claim link · autopilot
+ ├─ pay on Solana or Base: 1Click quote → pay(…, cross_chain) to its deposit address, same caps
+ ├─ macOS calendar (EventKit) → meeting names and recap addresses
+ ├─ recovery phrase → app key (SLIP-10) + encrypted backup of notes and settings
+ └─ local MCP server (apps/mcp): agents read meetings, claim and complete action items
 
  Web (Next.js)                                    Backend (NestJS + Postgres)
  ├─ /verify  re-runs the proof checks in the browser  ├─ sign-in with NEAR (NEP-413); app keys accepted
@@ -47,6 +51,8 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | NEP-413 sign-in, signed by the app's key in Rust and verified in TypeScript | `crates/near-tx`, `apps/backend/src/auth` |
 | NEAR Connect, for owner signatures in any wallet (Meteor, Intear, Ledger, NEAR CLI…) | `apps/web/app/sign` |
 | JSON-RPC: views, `send_tx`, access-key checks | `crates/near-tx`, `apps/web/app/verify` |
+| NEAR Intents 1Click: quotes and deposit addresses for paying a payee in USDC on Solana or Base | `packages/core/src/intents/oneclick.ts`, `contracts/agent-wallet` (`pay` with `cross_chain`), [docs](docs/near-intents-1click.md) |
+| Testnet and mainnet from one network config (FastNEAR RPC, Circle USDC ids, explorers) | `packages/core/src/network.ts`, `crates/near-tx` |
 
 ## What is proven
 
@@ -59,8 +65,13 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | A failed summary doesn't pay to transcribe the same audio again | `pipeline.test.ts` (transcript cache) |
 | Recording captures both sides of a real call | Checked on a real call on macOS (both stems carry sound) |
 | Claim links work once, even when answered twice at the same moment | `claims.test.ts`, run against Postgres |
+| A locked contract (no full-access keys) still serves owners and the app key, and can't be redeployed | `locked_contract_still_serves_owners_and_the_app_key` (sandbox) |
+| A cross-chain payment goes to the 1Click deposit address under the same caps and pause, only for payees the owner opted in | `cross_chain_pays_the_deposit_address_within_caps` and the refusal tests (sandbox); the 1Click client against recorded responses (`oneclick.test.ts`) |
+| The same recovery phrase always gives the same app key, distinct from the NEAR wallet's own key; backups fail with a wrong phrase or a changed byte | `recovery.rs` tests, with the BIP39 and SLIP-10 test vectors |
+| Agents racing for one action item: exactly one claim wins, and no write is lost | `apps/mcp/src/tools.test.ts` (20 concurrent writes, 6 racing agents), plus a real stdio `tools/list` run |
+| `/stats` returns counts only | `apps/backend/src/stats/stats.test.ts` |
 
-**Not proven yet:** a run against live NEAR AI (waits on an API key), the contract on testnet and a wallet-signed change (wait on a testnet account), email through Resend (waits on a key), and the silence warning firing live. Gates 1 and 2 below depend on these.
+**Not proven yet:** a run against live NEAR AI (waits on an API key), the contract on testnet and a wallet-signed change (wait on a testnet account), email through Resend (waits on a key), the silence warning firing live, the mainnet deploy and lock (waits on a mainnet account), a real 1Click payout (1Click is mainnet only), reading a real calendar, a restore in the bundled app, and an agent connected through Claude Code or Codex. Gates 1 and 2 below depend on these.
 
 ## Run it
 
@@ -134,16 +145,16 @@ Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) �
 
 ### M5 · Day 10 (2026-11-10): Real users and trust
 - [x] Onboarding v0: welcome, a real 5-second audio check (triggers the macOS prompts), NEAR AI key, first recording; wallet later in Settings
-- [ ] Meeting names and recap recipients from the macOS calendar
+- [ ] Meeting names and recap recipients from the macOS calendar. Built (EventKit, matching tested in core); first run against a real calendar still to do
 - [x] Projects, cross-meeting action items and local search (⌘K: decisions, action items and transcript lines, on the device)
-- [ ] Deploy to mainnet with tiny amounts; remove the contract account's full-access keys
-- [ ] Staking for Inference funds the team org; counts-only stats endpoint
-- [ ] Recovery phrase, restore on a new Mac, settings. Settings done (NEAR AI key, NEAR, autopilot); recovery not started
+- [ ] Deploy to mainnet with tiny amounts; remove the contract account's full-access keys. `contracts/scripts/deploy-mainnet.sh` (5 USDC a day, 2 a payment, lock as a confirmed last step) and the locked-contract sandbox test are built; the deploy waits on Victor's mainnet account and go-ahead
+- [ ] Staking for Inference funds the team org; counts-only stats endpoint. `/stats` (backend, cached 60 s, from the contract's `get_stats` and Postgres) and the web `/stats` page are built; staking is Victor's step, written up in [docs/staking-for-inference.md](docs/staking-for-inference.md)
+- [x] Recovery phrase, restore on a new Mac, settings: 12-word phrase derives the app key; restore in onboarding and Settings; encrypted backup of notes, projects and settings. Not yet run in the bundled app
 - [ ] Gate 3: 20 outside users, no mocked screens
 
 ### M6 · Day 12 (2026-11-12): Stretch and judges
-- [ ] Agent context: local MCP server (read tools plus claim and complete action items), Connected agents screen
-- [ ] Pay a payee on Solana or Base through NEAR Intents 1Click under the same caps (tiny mainnet amounts)
+- [x] Agent context: local MCP server (read tools plus claim and complete action items), Connected agents screen. Not yet connected to a real Claude Code or Codex
+- [ ] Pay a payee on Solana or Base through NEAR Intents 1Click under the same caps (tiny mainnet amounts). Built and tested on a local NEAR node; a real payout waits on mainnet. The contract can't check that a deposit address routes to the payee, so it's opt-in per payee and capped ([docs](docs/near-intents-1click.md))
 - [x] README for human and AI judges: "do X, see Y" steps, NEAR pieces used, architecture, what is and isn't proven
 - [x] One-command verify script (`pnpm verify`) and all tests in CI
 
