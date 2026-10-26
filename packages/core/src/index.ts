@@ -6,3 +6,4 @@ export * from "./notes/pipeline.ts";
 export * from "./notes/schema.ts";
 export * from "./notes/transcript.ts";
 export * from "./notes/verify.ts";
+export * from "./notes/proof.ts";

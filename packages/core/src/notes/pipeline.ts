@@ -1,5 +1,5 @@
 import { buildMeeting, type Dropped, type Payee } from "./build.ts";
-import { NOTES_SYSTEM_PROMPT, notesJsonSchema, notesSchema } from "./schema.ts";
+import { NOTES_SYSTEM_PROMPT, notesJsonSchema, notesSchema, type Notes } from "./schema.ts";
 import { mergeTranscript, transcriptForPrompt, type TranscribedChunk, type WhisperResult } from "./transcript.ts";
 import { checkAttestation, checkSignature, sha256Hex, type AttestationCheck, type AttestationReport, type SignatureCheck, type SignatureResponse } from "./verify.ts";
 import type { Meeting, Speaker } from "../meeting.ts";
@@ -62,6 +62,8 @@ export interface ProofBundle {
 
 export interface ProcessResult {
   meeting: Meeting;
+  /** The model's notes exactly as returned; their hash is in the proof. */
+  notes: Notes;
   dropped: Dropped[];
   attestation: { summary: AttestationCheck; whisper: AttestationCheck };
   signature: SignatureCheck;
@@ -147,6 +149,7 @@ export async function processRecording(
 
   return {
     meeting,
+    notes,
     dropped,
     attestation: { summary: summaryAttest.check, whisper: whisperAttest.check },
     signature,
