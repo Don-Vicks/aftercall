@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
-import { Button, SectionLabel, Spinner, cx } from "./ui";
+import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
 import { Sheet } from "./Sheet";
 import { isDesktop } from "./recorder";
 
@@ -44,7 +44,14 @@ export function WalletScreen({
 
   const load = useCallback(async () => {
     setError(null);
-    if (!isDesktop) return setError("The agent wallet works in the Aftercall desktop app, not in a browser preview.");
+    if (!isDesktop) {
+      // The browser preview shows a sample wallet, like the sample meeting, so the page can be seen.
+      setConnected(true);
+      setView(SAMPLE_WALLET);
+      setCapText("100.00");
+      setPaymentCapText("25.00");
+      return;
+    }
     try {
       const config = await near.getConfig();
       if (!config) return setConnected(false);
@@ -68,6 +75,7 @@ export function WalletScreen({
   /** Opens the signing page, then refreshes once the contract shows `done`. */
   const signAndWait = async (label: string, action: OwnerAction, done: (v: WalletView) => boolean | Promise<boolean>) => {
     setError(null);
+    if (!isDesktop) return setError(`"${label}" is signed in your NEAR wallet from the Mac app. This is sample data.`);
     try {
       await signInWallet(action);
       setWaiting(label);
@@ -127,6 +135,7 @@ export function WalletScreen({
 
   return (
     <Shell
+      sample={!isDesktop}
       actions={
         <>
           <button onClick={load} aria-label="Refresh" className="text-muted hover:text-ink">
@@ -352,14 +361,36 @@ export function WalletScreen({
   );
 }
 
-function Shell({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+/** What the browser preview shows: a wallet part-way through a day, with one payee on Solana. */
+const SAMPLE_WALLET: WalletView = {
+  wallet: {
+    balance: "412500000",
+    daily_cap: "100000000",
+    spent_today: "50000000",
+    day: Math.floor(Date.now() / 86_400_000),
+    paused: false,
+    pending_count: 1,
+    storage_credit: "0",
+    per_payment_cap: "25000000",
+  },
+  payees: [
+    { account: "designer.near", label: "Designer" },
+    { account: "ada.near", label: "Ada" },
+  ],
+  destinations: [{ payee: "ada.near", chain: "solana", address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }],
+};
+
+function Shell({ children, actions, sample }: { children: ReactNode; actions?: ReactNode; sample?: boolean }) {
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-ground">
       <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-ground" />
       <div className="mx-auto flex max-w-[960px] flex-col gap-10 px-12 pb-16">
         <header className="flex flex-wrap items-end justify-between gap-6">
           <div className="flex max-w-[520px] flex-col gap-2.5">
-            <h1 className="t-display m-0">Agent wallet</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="t-display m-0">Agent wallet</h1>
+              {sample && <Pill tone="muted">Sample</Pill>}
+            </div>
             <p className="t-reading m-0 text-muted">
               A spending-limit wallet you control. Aftercall can pay only the people below, up to your caps. Every change is signed in your NEAR wallet.
             </p>

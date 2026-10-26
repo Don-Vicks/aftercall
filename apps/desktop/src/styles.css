@@ -186,3 +186,10 @@
     transition: none !important;
   }
 }
+
+/* Fields drop the default outline for a calmer look; keyboard focus still shows on the field's own border.
+   Unlayered, so it wins over the `outline-none` utility. */
+:is(input, textarea, select):not(.border-0):focus-visible {
+  border-color: var(--verdigris);
+  box-shadow: 0 0 0 1px var(--verdigris);
+}

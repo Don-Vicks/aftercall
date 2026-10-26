@@ -15,7 +15,7 @@ export function SearchScreen({ meetings, onOpen }: { meetings: Meeting[]; onOpen
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
       <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
       <div className="mx-auto flex max-w-[760px] flex-col gap-8 px-12 pb-16">
-        <label className="flex h-12 items-center gap-3 rounded-md border border-border bg-well px-4">
+        <label className="flex h-12 items-center gap-3 rounded-md border border-border bg-well px-4 focus-within:border-verdigris">
           <SearchIcon size={18} strokeWidth={1.5} className="text-muted" aria-hidden="true" />
           <span className="sr-only">Search all meetings</span>
           <input
@@ -37,11 +37,11 @@ export function SearchScreen({ meetings, onOpen }: { meetings: Meeting[]; onOpen
           </p>
         )}
 
-        <Group label="Decisions" hits={r.decisions} render={(h) => h.kind === "decision" && <Row title={h.text} meta={`${h.project} · ${h.meeting}`} onClick={() => onOpen(h.meetingId)} />} />
+        <Group label="Decisions" hits={r.decisions} render={(h) => h.kind === "decision" && <Row title={<Marked text={h.text} query={query} />} meta={`${h.project} · ${h.meeting}`} onClick={() => onOpen(h.meetingId)} />} />
         <Group
           label="Action items"
           hits={r.actions}
-          render={(h) => h.kind === "action" && <Row title={`${h.text} · ${h.owner} · ${h.done ? "done" : "open"}`} meta={`${h.project} · ${h.meeting}`} onClick={() => onOpen(h.meetingId)} />}
+          render={(h) => h.kind === "action" && <Row title={<Marked text={h.text} query={query} />} meta={`${h.owner} · ${h.done ? "done" : "open"} · ${h.project} · ${h.meeting}`} onClick={() => onOpen(h.meetingId)} />}
         />
         <Group
           label="In transcripts"
@@ -53,7 +53,7 @@ export function SearchScreen({ meetings, onOpen }: { meetings: Meeting[]; onOpen
                 <span className="flex flex-col gap-0.5">
                   <span className="font-serif text-[16px] leading-6">
                     <span className={cx("t-label mr-2 font-sans", h.speaker === "you" ? "text-verdigris" : "text-muted")}>{h.speaker === "you" ? "You" : "Others"}</span>
-                    {h.snippet}
+                    <Marked text={h.snippet} query={query} />
                   </span>
                   <span className="text-muted">{h.meeting}</span>
                 </span>
@@ -83,7 +83,22 @@ function Group({ label, hits, render }: { label: string; hits: Hit[]; render: (h
   );
 }
 
-function Row({ title, meta, onClick }: { title: string; meta: string; onClick: () => void }) {
+/** The text with each match of the query marked, so you can see why a result came up. */
+function Marked({ text, query }: { text: string; query: string }) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return <>{text}</>;
+  const lower = text.toLowerCase();
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (let i = lower.indexOf(q); i !== -1; i = lower.indexOf(q, from)) {
+    parts.push(text.slice(from, i), <mark key={i} className="rounded-[2px] bg-caution-tint text-ink">{text.slice(i, i + q.length)}</mark>);
+    from = i + q.length;
+  }
+  parts.push(text.slice(from));
+  return <>{parts}</>;
+}
+
+function Row({ title, meta, onClick }: { title: ReactNode; meta: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex w-full flex-col gap-0.5 py-3 text-left hover:text-ink">
       <span className="text-[15px] leading-5">{title}</span>

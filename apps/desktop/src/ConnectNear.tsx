@@ -15,6 +15,16 @@ import { RecoverySettings } from "./RecoveryPhrase";
  * authorises it once from their own wallet or near-cli, so the app can only
  * record proofs and pay within the contract's caps.
  */
+/** In the order a new user needs them: notes, this Mac's key, the account it pays from, then extras. */
+const SECTIONS = [
+  ["settings-near-ai", "NEAR AI"],
+  ["settings-key", "Recovery phrase"],
+  ["settings-account", "NEAR account"],
+  ["settings-authorise", "Authorise"],
+  ["settings-calendar", "Calendar"],
+  ["settings-autopilot", "Autopilot"],
+] as const;
+
 export function ConnectNear() {
   const [config, setConfig] = useState<NearConfig>({ network: "testnet", account: "", contract: "" });
   const [publicKey, setPublicKey] = useState("");
@@ -107,9 +117,23 @@ export function ConnectNear() {
           </p>
         </header>
 
-        <NearAiSettings />
+        <nav aria-label="Settings sections" className="-mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {SECTIONS.map(([id, label]) => (
+            <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })} className="font-semibold text-verdigris hover:text-verdigris-hover">
+              {label}
+            </button>
+          ))}
+        </nav>
 
-        <section className="flex flex-col gap-3">
+        <div id="settings-near-ai" className="scroll-mt-12">
+          <NearAiSettings />
+        </div>
+
+        <div id="settings-key" className="scroll-mt-12">
+          <RecoverySettings status={recoveryStatus} onKeyChanged={keyChanged} />
+        </div>
+
+        <section id="settings-account" className="flex scroll-mt-12 flex-col gap-3">
           <SectionLabel>Your NEAR account</SectionLabel>
           <Field label="NEAR account" value={config.account} placeholder={exampleAccount(config.network)} onChange={(account) => setConfig({ ...config, account: account.trim().toLowerCase() })} />
           <Field label="Agent-wallet contract" value={config.contract} placeholder={exampleAccount(config.network, "aftercall-wallet")} onChange={(contract) => setConfig({ ...config, contract: contract.trim().toLowerCase() })} />
@@ -130,11 +154,19 @@ export function ConnectNear() {
             </p>
           )}
           {config.network === "mainnet" && <p className="m-0 text-muted">Mainnet moves real USDC. Keep the caps small.</p>}
+          <div className="flex flex-col gap-2">
+            {status?.keyProblem && <p className="m-0 text-caution">{status.keyProblem}</p>}
+            {error && <p className="selectable m-0 break-words text-record">{error}</p>}
+            <div className="flex justify-end">
+              <Button variant="primary" onClick={check} disabled={!ready || checking}>
+                {checking && <Spinner size={12} />}
+                Save and check
+              </Button>
+            </div>
+          </div>
         </section>
 
-        <RecoverySettings status={recoveryStatus} onKeyChanged={keyChanged} />
-
-        <section className="flex flex-col gap-3">
+        <section id="settings-authorise" className="flex scroll-mt-12 flex-col gap-3">
           <SectionLabel>Authorise this Mac, once</SectionLabel>
           <p className="m-0 text-muted">
             Two signatures in your own NEAR wallet: one creates your agent wallet, the other lets this Mac's key call only{" "}
@@ -162,24 +194,17 @@ export function ConnectNear() {
               </div>
             </details>
           ) : (
-            <p className="m-0 text-caution">Enter your account and the contract first.</p>
+            <p className="m-0 text-muted">Save your NEAR account and contract above, then sign both steps.</p>
           )}
         </section>
 
-        <div className="flex flex-col gap-2">
-          {status?.keyProblem && <p className="m-0 text-caution">{status.keyProblem}</p>}
-          {error && <p className="selectable m-0 break-words text-record">{error}</p>}
-          <div className="flex justify-end">
-            <Button variant="primary" onClick={check} disabled={!ready || checking}>
-              {checking && <Spinner size={12} />}
-              Save and check
-            </Button>
-          </div>
+        <div id="settings-calendar" className="scroll-mt-12">
+          <CalendarSettings />
         </div>
 
-        <CalendarSettings />
-
-        <AutopilotSettings />
+        <div id="settings-autopilot" className="scroll-mt-12">
+          <AutopilotSettings />
+        </div>
       </div>
     </main>
   );

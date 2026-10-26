@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, House, MoreHorizontal, Plus, Search } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, House, MoreHorizontal, Plus, Search, Settings, Wallet } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle, recordingWhen } from "./RecordingScreen";
@@ -210,9 +210,9 @@ export function Sidebar({
       </div>
 
       <div className="mt-auto flex flex-col gap-0.5">
-        {navRow("Agent wallet", walletSelected, onOpenWallet, <span className="font-mono text-xs text-ink">{balance === null ? "—" : formatUsdc(balance)}</span>)}
-        {navRow("Connected agents", agentsSelected, onOpenAgents)}
-        {navRow("Settings", settingsSelected, onOpenSettings)}
+        {navRow("Agent wallet", walletSelected, onOpenWallet, balance === null ? undefined : <span className="font-mono text-xs text-ink">{formatUsdc(balance)}</span>, <Wallet size={14} strokeWidth={1.75} aria-hidden="true" />)}
+        {navRow("Connected agents", agentsSelected, onOpenAgents, undefined, <Bot size={14} strokeWidth={1.75} aria-hidden="true" />)}
+        {navRow("Settings", settingsSelected, onOpenSettings, undefined, <Settings size={14} strokeWidth={1.75} aria-hidden="true" />)}
       </div>
     </nav>
   );
