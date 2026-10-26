@@ -1,0 +1,30 @@
+/* Aftercall design tokens (dark), shared with the desktop app. */
+:root {
+  color-scheme: dark;
+  --ground: #141311;
+  --raised: #1b1a17;
+  --elevated: #24221e;
+  --well: #0f0e0c;
+  --ink: #ede9e1;
+  --muted: #a39e94;
+  --faint: #77726a;
+  --hairline: #2b2925;
+  --border: #6f6a61;
+  --verdigris: #8dbfa8;
+  --verdigris-hover: #b3d6c5;
+  --verdigris-tint: #1a2a23;
+  --caution: #dcac5c;
+  --caution-tint: #2c2416;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--ground); color: var(--ink); }
+body { font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; line-height: 22px; -webkit-font-smoothing: antialiased; }
+a { color: var(--verdigris); text-decoration: none; font-weight: 600; }
+a:hover { color: var(--verdigris-hover); }
+button { font-family: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
+.serif { font-family: var(--font-serif), Georgia, serif; }
+.mono { font-family: var(--font-mono), ui-monospace, monospace; font-size: 13px; }
+.label { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+@media (max-width: 640px) { .facts { grid-template-columns: 1fr !important; } h1 { font-size: 34px !important; line-height: 40px !important; } }

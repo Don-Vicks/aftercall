@@ -114,6 +114,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@aftercall/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       next:
         specifier: ^16
         version: 16.4.3(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -138,6 +141,16 @@ importers:
         version: 6.0.3
 
   packages/core:
+    dependencies:
+      '@noble/curves':
+        specifier: ^1.9.7
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^24.19.2
@@ -1667,6 +1680,9 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
 snapshots:
 
   '@borewit/text-codec@0.2.2': {}
@@ -2943,3 +2959,5 @@ snapshots:
       tsx: 4.23.15
 
   wrappy@1.0.2: {}
+
+  zod@3.25.76: {}

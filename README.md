@@ -43,7 +43,7 @@ pnpm test          # unit tests (core, backend)
 
 Contract tests: see [`contracts/README.md`](contracts/README.md). Backend settings: copy `apps/backend/.env.example` to `.env`.
 
-Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. With a NEAR AI key (pasted once in the app, kept in the macOS Keychain) a recording becomes notes: Whisper and Qwen3.8-27B in NEAR AI's secure hardware, the summary's signature checked against the attested signer, only quote-backed items kept, then the audio is deleted. Approving a follow-up on real notes does nothing yet (M4); the sample meeting still simulates it. Payees come from `apps/desktop/src/sample.ts` until the contract is wired in.
+Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. With a NEAR AI key (pasted once in the app, kept in the macOS Keychain) a recording becomes notes: Whisper and Qwen3.8-27B in NEAR AI's secure hardware, the summary's signature checked against the attested signer, only quote-backed items kept, then the audio is deleted. If NEAR is connected (Settings), the proof hash is recorded with `record_proof`; the Verify sheet re-checks it live and copies a public link to the web Verify page. Approving a follow-up on real notes does nothing yet (M4); the sample meeting still simulates it. Payees come from `apps/desktop/src/sample.ts` until the contract is wired in.
 
 ## Plan
 
@@ -64,11 +64,11 @@ Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.
 - [ ] Attestation preflight and response-signature check for the summary call. Built; signature recovery matches ethers on 20 of 20 messages; first check against real NEAR AI waits on the key
 
 ### M3 · Day 4 (2026-11-04): Proof anyone can check
-- [ ] Deploy the contract to testnet; app adds the limited key (pay, record_proof)
-- [ ] Build the proof bundle, hash it and call `record_proof`
-- [ ] Processing screen with live stages
-- [ ] Verify sheet in the app (5 checks plus "what this does not prove")
-- [ ] Public Verify page on the web, re-running the checks in the browser with no meeting content
+- [ ] Deploy the contract to testnet; app adds the limited key (pay, record_proof). The app's key, Connect NEAR screen and `contracts/scripts/deploy-testnet.sh` are built; the app's signer is tested against a local NEAR node; the testnet deploy waits on a testnet account
+- [x] Build the proof bundle, hash it and call `record_proof` (proven on a local NEAR node: recorded, duplicate refused, nothing else allowed)
+- [x] Processing screen with live stages
+- [x] Verify sheet in the app (5 checks plus "notes unchanged since signing" and "what this does not prove")
+- [x] Public Verify page on the web (`/verify#…`), re-running the checks in the browser against NEAR RPC with no meeting content
 - [ ] Gate 1: a real call becomes verified notes with a public proof link
 
 ### M4 · Day 7 (2026-11-07): It does what the meeting decided
