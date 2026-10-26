@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -16,7 +16,7 @@ import { SearchScreen } from "./SearchScreen";
 import { WalletScreen, type BlockedPayment } from "./WalletScreen";
 import { near } from "./near";
 import { recordingFiles } from "./nearai";
-import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
+import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, payCrossChain, previewCrossChain, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
 import { payees as samplePayees } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
@@ -60,6 +60,8 @@ export default function App() {
   /** From the agent-wallet contract once NEAR is connected; sample payees until then. */
   const [payees, setPayees] = useState<Payee[]>(samplePayees);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
+  /** Payees the owner opted in to payment on Solana or Base, by NEAR account. */
+  const [destinations, setDestinations] = useState<Record<string, PayeeDestination>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [createdProject, setCreatedProject] = useState<string | undefined>(undefined);
@@ -134,6 +136,7 @@ export default function App() {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
       setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
+      setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
       if (v.wallet) {
         const today = Math.floor(Date.now() / 86_400_000);
         const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
@@ -232,8 +235,11 @@ export default function App() {
           return;
         }
         if (f.kind === "email") sendRecap(meeting, f, apply(id), saved[meeting.id]);
+        else if (destinations[f.payeeAccount]) payCrossChain(meeting, f, destinations[f.payeeAccount], apply(id)).then(refreshWallet);
         else pay(meeting, f, apply(id)).then(refreshWallet);
       },
+      routeFor: (f: FollowUp) => (sample || f.kind !== "payment" ? null : (destinations[f.payeeAccount] ?? null)),
+      previewRoute: previewCrossChain,
       onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
       onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, error: undefined }),
@@ -259,6 +265,8 @@ export default function App() {
     const rules = loadRules();
     const at = Date.now() + UNDO_SECONDS * 1000;
     for (const f of m.followUps) {
+      // A payment on another chain needs a fresh quote the person has seen: never autopilot.
+      if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
       if (autopilotDecision(f, rules, limits).run) patchFollowUp(m.id, f.id, { autopilotAt: at });
     }
   };
@@ -273,6 +281,7 @@ export default function App() {
           patchFollowUp(m.id, f.id, { autopilotAt: undefined });
           // Re-check every rule at the moment it runs: limits may have changed.
           if (!autopilotDecision(f, loadRules(), limits).run) continue;
+          if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
           const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch);
           if (f.kind === "email") sendRecap(m, f, apply, saved[m.id]);
           else pay(m, f, apply).then(refreshWallet);

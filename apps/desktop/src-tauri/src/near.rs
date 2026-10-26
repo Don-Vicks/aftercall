@@ -158,13 +158,49 @@ pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, fol
     Ok(PayOutcome { tx_hash: outcome.tx_hash, status: status.into(), reason: None, left_today })
 }
 
-/// The owner's wallet and payees, or nulls if they haven't registered.
+/// Pays a listed payee on Solana or Base: the USDC goes to the 1Click deposit address
+/// of the quote the person approved. Same limited key, same `pay` method and caps;
+/// the contract refuses payees the owner hasn't opted in and records the route.
+pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str, deposit_address: &str, quote_id: &str) -> Result<PayOutcome, String> {
+    if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Bad amount".into());
+    }
+    if !is_deposit_address(deposit_address) {
+        return Err("The quote's deposit address isn't a NEAR implicit account".into());
+    }
+    let rpc = client(config);
+    let args = json!({
+        "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id,
+        "cross_chain": { "deposit_address": deposit_address, "quote_id": quote_id },
+    });
+    let outcome = rpc
+        .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
+        .await?;
+    let result = outcome.value.unwrap_or(Value::Null);
+    let left_today = result["left_today"].as_str().map(String::from);
+    if result["status"] == "blocked" {
+        return Ok(PayOutcome { tx_hash: outcome.tx_hash, status: "blocked".into(), reason: result["reason"].as_str().map(String::from), left_today });
+    }
+    // "paid" here means the USDC reached the deposit address; 1Click's status says when it reaches the payee.
+    let paid = rpc.view(&config.contract, "is_paid", &json!({ "owner": config.account, "followup_id": followup_id })).await?;
+    let status = if paid == Value::Bool(true) { "paid" } else { "failed" };
+    Ok(PayOutcome { tx_hash: outcome.tx_hash, status: status.into(), reason: None, left_today })
+}
+
+/// 1Click deposit addresses on NEAR are implicit accounts (64 lowercase hex), as the contract requires.
+fn is_deposit_address(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// The owner's wallet, payees and their addresses outside NEAR, or nulls if they haven't registered.
 pub async fn wallet(config: &NearConfig) -> Result<Value, String> {
     let rpc = client(config);
     let owner = json!({ "owner": config.account });
     let wallet = rpc.view(&config.contract, "get_wallet", &owner).await?;
     let payees = rpc.view(&config.contract, "get_payees", &owner).await.unwrap_or(json!([]));
-    Ok(json!({ "wallet": wallet, "payees": payees }))
+    // An older contract without the method: no payee has a destination.
+    let destinations = rpc.view(&config.contract, "get_payee_destinations", &owner).await.unwrap_or(json!([]));
+    Ok(json!({ "wallet": wallet, "payees": payees, "destinations": destinations }))
 }
 
 /// Whether a follow-up has been paid, and whether it is still parked.
@@ -239,6 +275,13 @@ mod tests {
         assert!(check_permission(&good, "other.testnet").is_err());
         let wide = json!({ "FunctionCall": { "receiver_id": "w.testnet", "method_names": [] } });
         assert!(check_permission(&wide, "w.testnet").is_err(), "an empty list means every method");
+    }
+
+    #[test]
+    fn only_implicit_accounts_are_deposit_addresses() {
+        assert!(is_deposit_address("69f5eccee1e146961b47ac7cecb0f5caada2b6e1ee124e72e8b47adedd701f74"));
+        assert!(!is_deposit_address("69F5ECCEE1E146961B47AC7CECB0F5CAADA2B6E1EE124E72E8B47ADEDD701F74"));
+        assert!(!is_deposit_address("attacker.near"));
     }
 
     #[test]

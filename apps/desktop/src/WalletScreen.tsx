@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { formatUsdc, type Meeting, type OwnerAction, type PaymentFollowUp } from "@aftercall/core";
+import { CHAIN_NAME, formatUsdc, isValidPayoutAddress, type Meeting, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Button, SectionLabel, Spinner, cx } from "./ui";
 import { Sheet } from "./Sheet";
@@ -251,20 +251,40 @@ export function WalletScreen({
           ) : (
             <table className="w-full border-collapse">
               <tbody>
-                {view.payees.map((p, i) => (
-                  <tr key={p.account}>
-                    <td className={cx("border-t border-hairline py-3 font-semibold", i === view.payees.length - 1 && "border-b")}>{p.label}</td>
-                    <td className={cx("t-mono border-t border-hairline px-4 py-3 text-muted", i === view.payees.length - 1 && "border-b")}>{p.account}</td>
-                    <td className={cx("border-t border-hairline py-3 text-right", i === view.payees.length - 1 && "border-b")}>
-                      <button
-                        onClick={() => signAndWait("Remove payee", { kind: "remove-payee", account: p.account, label: p.label }, (v) => !v.payees.some((x) => x.account === p.account))}
-                        className="text-muted hover:text-ink"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {view.payees.map((p, i) => {
+                  const dest = (view.destinations ?? []).find((d) => d.payee === p.account);
+                  return (
+                    <tr key={p.account}>
+                      <td className={cx("border-t border-hairline py-3 font-semibold", i === view.payees.length - 1 && "border-b")}>{p.label}</td>
+                      <td className={cx("border-t border-hairline px-4 py-3 text-muted", i === view.payees.length - 1 && "border-b")}>
+                        <span className="t-mono">{p.account}</span>
+                        {dest && (
+                          <span className="block">
+                            Paid on {CHAIN_NAME[dest.chain]} · <span className="t-mono">{dest.address.slice(0, 6)}…{dest.address.slice(-4)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className={cx("whitespace-nowrap border-t border-hairline py-3 text-right", i === view.payees.length - 1 && "border-b")}>
+                        {dest && (
+                          <button
+                            onClick={() =>
+                              signAndWait("Pay on NEAR only", { kind: "set-payee-destination", account: p.account, label: p.label, destination: null }, (v) => !(v.destinations ?? []).some((d) => d.payee === p.account))
+                            }
+                            className="mr-4 text-muted hover:text-ink"
+                          >
+                            NEAR only
+                          </button>
+                        )}
+                        <button
+                          onClick={() => signAndWait("Remove payee", { kind: "remove-payee", account: p.account, label: p.label }, (v) => !v.payees.some((x) => x.account === p.account))}
+                          className="text-muted hover:text-ink"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -317,9 +337,11 @@ export function WalletScreen({
       {sheet === "payee" && (
         <PayeeSheet
           onClose={() => setSheet(null)}
-          onConfirm={(account, label, registerWithUsdc) => {
+          onConfirm={(account, label, registerWithUsdc, destination) => {
             setSheet(null);
-            signAndWait("Add payee", { kind: "add-payee", account, label, registerWithUsdc }, (v) => v.payees.some((p) => p.account === account));
+            signAndWait("Add payee", { kind: "add-payee", account, label, registerWithUsdc, destination }, (v) =>
+              v.payees.some((p) => p.account === account) && (!destination || (v.destinations ?? []).some((d) => d.payee === account && d.address === destination.address)),
+            );
           }}
         />
       )}
@@ -399,9 +421,19 @@ function AmountSheet({
   );
 }
 
-function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (account: string, label: string, registerWithUsdc: boolean) => void }) {
+function PayeeSheet({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (account: string, label: string, registerWithUsdc: boolean, destination?: PayeeDestination) => void;
+}) {
   const [account, setAccount] = useState("");
   const [label, setLabel] = useState("");
+  const [paidOn, setPaidOn] = useState<"near" | PayoutChain>("near");
+  const [address, setAddress] = useState("");
+  const external = paidOn !== "near";
+  const addressOk = !external || isValidPayoutAddress(paidOn, address);
   const [check, setCheck] = useState<{ exists: boolean; usdcReady: boolean } | null>(null);
   const [checking, setChecking] = useState(false);
 
@@ -431,7 +463,13 @@ function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (a
         {checking ? (
           <span className="text-muted">Looking it up on NEAR…</span>
         ) : check ? (
-          check.exists ? <span className="text-verdigris">Account found on NEAR</span> : <span className="text-caution">No such account on NEAR</span>
+          check.exists ? (
+            <span className="text-verdigris">Account found on NEAR</span>
+          ) : external ? (
+            <span className="text-muted">Not on NEAR. That's fine for a payee paid on another chain: the contract only uses it as their name.</span>
+          ) : (
+            <span className="text-caution">No such account on NEAR</span>
+          )
         ) : null}
       </div>
       <div className="flex flex-col gap-1.5">
@@ -439,7 +477,38 @@ function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (a
         <input id="lbl" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Designer" className="selectable h-9 rounded-sm border border-border bg-well px-3 text-sm text-ink outline-none" />
         <span className="text-muted">How the AI names them, as in “pay the designer”.</span>
       </div>
-      {check?.exists && !check.usdcReady && (
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="paidon" className="t-label text-muted">Paid on</label>
+        <select
+          id="paidon"
+          value={paidOn}
+          onChange={(e) => setPaidOn(e.target.value as "near" | PayoutChain)}
+          className="h-9 rounded-sm border border-border bg-well px-3 text-sm text-ink outline-none"
+        >
+          <option value="near">NEAR (their NEAR account)</option>
+          <option value="solana">Solana, through NEAR Intents</option>
+          <option value="base">Base, through NEAR Intents</option>
+        </select>
+        {external && (
+          <>
+            <input
+              aria-label={`${CHAIN_NAME[paidOn]} address`}
+              value={address}
+              onChange={(e) => setAddress(e.target.value.trim())}
+              placeholder={paidOn === "base" ? "0x…" : "Solana address"}
+              className={cx("selectable h-9 rounded-sm border bg-well px-3 font-mono text-[13px] text-ink outline-none", address && !addressOk ? "border-caution" : "border-border")}
+            />
+            {address && !addressOk ? (
+              <span className="text-caution">That isn't a {CHAIN_NAME[paidOn]} address.</span>
+            ) : (
+              <span className="text-muted">
+                USDC leaves your agent wallet on NEAR, within your caps, and NEAR Intents pays it out here. Aftercall can't prove where NEAR Intents sends it; only use an address the payee gave you. NEAR mainnet only.
+              </span>
+            )}
+          </>
+        )}
+      </div>
+      {!external && check?.exists && !check.usdcReady && (
         <div className="flex flex-col gap-1 rounded-md bg-caution-tint px-3.5 py-3">
           <span className="font-semibold">{account} can't receive USDC yet</span>
           <span className="text-caution">Registering it costs 0.00125 NEAR, paid once from your wallet in the same signing.</span>
@@ -447,8 +516,12 @@ function PayeeSheet({ onClose, onConfirm }: { onClose: () => void; onConfirm: (a
       )}
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!check?.exists || label.trim().length === 0} onClick={() => onConfirm(account, label.trim(), !check?.usdcReady)}>
-          {check && !check.usdcReady ? "Add and register in wallet" : "Add in wallet"}
+        <Button
+          variant="primary"
+          disabled={!check || (!external && !check.exists) || label.trim().length === 0 || !addressOk || (external && !address)}
+          onClick={() => onConfirm(account, label.trim(), !external && !check?.usdcReady, external ? { chain: paidOn, address } : undefined)}
+        >
+          {!external && check && !check.usdcReady ? "Add and register in wallet" : "Add in wallet"}
         </Button>
       </div>
     </Sheet>
