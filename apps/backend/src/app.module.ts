@@ -3,6 +3,10 @@ import { randomBytes } from "node:crypto";
 import { HealthController } from "./health.controller";
 import { AuthController } from "./auth/auth.controller";
 import { AuthService, rpcKeyChecker } from "./auth/auth.service";
+import { EmailController } from "./email/email.controller";
+import { EmailService, resendMailer } from "./email/email.service";
+import { ClaimsController } from "./claims/claims.controller";
+import { ClaimsService } from "./claims/claims.service";
 
 const DEFAULT_RPC = "https://rpc.testnet.near.org";
 
@@ -16,12 +20,18 @@ function jwtSecret(): string {
 }
 
 @Module({
-  controllers: [HealthController, AuthController],
+  controllers: [HealthController, AuthController, EmailController, ClaimsController],
   providers: [
     {
       provide: AuthService,
-      useFactory: () => new AuthService(rpcKeyChecker(process.env.NEAR_RPC_URL ?? DEFAULT_RPC), jwtSecret()),
+      useFactory: () => new AuthService(rpcKeyChecker(process.env.NEAR_RPC_URL ?? DEFAULT_RPC, process.env.AFTERCALL_CONTRACT), jwtSecret()),
     },
+    {
+      provide: EmailService,
+      useFactory: () =>
+        new EmailService(process.env.RESEND_API_KEY ? resendMailer(process.env.RESEND_API_KEY) : null, process.env.EMAIL_FROM ?? "notes@aftercall.app"),
+    },
+    { provide: ClaimsService, useFactory: () => new ClaimsService() },
   ],
 })
 export class AppModule {}

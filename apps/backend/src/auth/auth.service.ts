@@ -19,7 +19,19 @@ export interface Challenge {
 /** Answers "is this public key a full-access key of this account?" against NEAR RPC. */
 export type KeyChecker = (accountId: string, publicKey: string) => Promise<boolean>;
 
-export function rpcKeyChecker(rpcUrl: string): KeyChecker {
+/**
+ * Accepts the account's full-access keys, and Aftercall app keys: function-call
+ * keys limited to the agent-wallet contract (`appContract`). Such a key can only
+ * have been added by the account owner, for Aftercall.
+ */
+export function isAccepted(permission: unknown, appContract?: string): boolean {
+  if (permission === "FullAccess") return true;
+  if (!appContract || typeof permission !== "object" || permission === null) return false;
+  const fc = (permission as { FunctionCall?: { receiver_id?: string } }).FunctionCall;
+  return fc?.receiver_id === appContract;
+}
+
+export function rpcKeyChecker(rpcUrl: string, appContract?: string): KeyChecker {
   return async (accountId, publicKey) => {
     const res = await fetch(rpcUrl, {
       method: "POST",
@@ -28,12 +40,12 @@ export function rpcKeyChecker(rpcUrl: string): KeyChecker {
         jsonrpc: "2.0",
         id: "aftercall",
         method: "query",
-        params: { request_type: "view_access_key", finality: "final", account_id: accountId, public_key: publicKey },
+        params: { request_type: "view_access_key", finality: "optimistic", account_id: accountId, public_key: publicKey },
       }),
     });
     if (!res.ok) return false;
     const body = (await res.json()) as { result?: { permission?: unknown }; error?: unknown };
-    return body.result?.permission === "FullAccess";
+    return isAccepted(body.result?.permission, appContract);
   };
 }
 
