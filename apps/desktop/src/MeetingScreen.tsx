@@ -135,7 +135,7 @@ function Notes({
             <label htmlFor={item.id} className="flex flex-1 flex-wrap justify-between gap-x-3 gap-y-1 text-[15px] leading-5">
               <span className={cx(item.done && "text-muted line-through")}>{item.text}</span>
               <span className={cx("text-[13px]", item.closedNote ? "text-verdigris" : "text-muted")}>
-                {item.closedNote ?? `${item.owner}${item.due ? ` · ${item.due}` : ""}`}
+                {item.closedNote ?? `${item.owner}${item.due ? ` · ${item.due}` : ""}${agentNote(item)}`}
               </span>
             </label>
           </div>
@@ -228,4 +228,11 @@ function Highlighted({ text, quotes, strong }: { text: string; quotes: string[];
   }
   parts.push(text.slice(cursor));
   return <>{parts}</>;
+}
+
+/** " · Done by Codex" or " · Claude Code on it", when an agent has the item. */
+function agentNote(item: Meeting["actionItems"][number]): string {
+  if (item.done && item.completed) return ` · Done by ${item.completed.agent}`;
+  if (!item.done && item.claimed) return ` · ${item.claimed.agent} on it`;
+  return "";
 }

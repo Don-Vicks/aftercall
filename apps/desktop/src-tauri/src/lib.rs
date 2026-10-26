@@ -2,6 +2,7 @@ mod calendar;
 mod capture;
 mod near;
 mod nearai;
+mod notes_file;
 mod recorder;
 mod recovery;
 
@@ -149,10 +150,34 @@ fn list_chunks(app: AppHandle, id: String) -> Result<Vec<Chunk>, String> {
     Ok(chunks)
 }
 
+/// Saves notes.json, keeping action-item state already on disk (see notes_file.rs).
 #[tauri::command]
 fn save_notes(app: AppHandle, id: String, notes: String) -> Result<(), String> {
-    serde_json::from_str::<serde_json::Value>(&notes).map_err(|e| e.to_string())?;
-    std::fs::write(recording_dir(&app, &id)?.join("notes.json"), notes).map_err(|e| e.to_string())
+    notes_file::save(&recording_dir(&app, &id)?.join("notes.json"), &notes)
+}
+
+/// Ticks or unticks one action item in notes.json; returns the saved notes.
+#[tauri::command]
+fn set_action_item_done(app: AppHandle, id: String, item_id: String, done: bool) -> Result<String, String> {
+    notes_file::set_item_done(&recording_dir(&app, &id)?.join("notes.json"), &item_id, done)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentsInfo {
+    /// Where the app keeps meetings; the MCP server reads the same folder.
+    data_dir: String,
+    /// The MCP server's entry point in this checkout (apps/mcp/src/main.ts).
+    server_path: String,
+    server_found: bool,
+}
+
+/// What the Connected agents screen needs to show the exact setup commands.
+#[tauri::command]
+fn agents_info(app: AppHandle) -> Result<AgentsInfo, String> {
+    let server = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mcp/src/main.ts");
+    let server = server.canonicalize().unwrap_or(server);
+    Ok(AgentsInfo { data_dir: data_dir(&app)?.display().to_string(), server_found: server.exists(), server_path: server.display().to_string() })
 }
 
 /// The cached transcription of one audio chunk, e.g. "mic-000".
@@ -387,11 +412,8 @@ fn move_recordings_project(app: AppHandle, from: String, to: String) -> Result<u
         meta["project"] = to.into();
         std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         let notes_path = entry.path().join("notes.json");
-        if let Ok(notes) = std::fs::read_to_string(&notes_path) {
-            if let Ok(mut notes) = serde_json::from_str::<serde_json::Value>(&notes) {
-                notes["meeting"]["project"] = to.into();
-                std::fs::write(&notes_path, serde_json::to_string_pretty(&notes).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-            }
+        if notes_path.exists() {
+            notes_file::update(&notes_path, |notes| notes["meeting"]["project"] = to.into())?;
         }
         moved += 1;
     }
@@ -427,6 +449,8 @@ pub fn run() {
             list_recordings,
             list_chunks,
             save_notes,
+            set_action_item_done,
+            agents_info,
             delete_audio,
             nearai_set_key,
             nearai_has_key,

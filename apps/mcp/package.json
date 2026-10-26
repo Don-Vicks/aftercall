@@ -1,0 +1,24 @@
+{
+  "name": "@aftercall/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local MCP server: lets coding agents read Aftercall meetings and claim or complete action items.",
+  "bin": {
+    "aftercall-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
+  },
+  "dependencies": {
+    "@aftercall/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "~6.0.3"
+  }
+}
