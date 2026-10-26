@@ -4,6 +4,8 @@
  * quote from the transcript as evidence.
  */
 
+import type { Attendee } from "./calendar.ts";
+
 export type Speaker = "you" | "others";
 
 export interface TranscriptLine {
@@ -81,6 +83,8 @@ export interface Meeting {
   actionItems: ActionItem[];
   followUps: FollowUp[];
   transcript: TranscriptLine[];
+  /** People invited in the calendar event, when the recording matched one. */
+  invited?: Attendee[];
 }
 
 /** "02:14" for 134 seconds. */

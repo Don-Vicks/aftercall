@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, Check, Copy, Link2, Mail, Wallet } from "lucide-react";
-import { formatClock, formatUsdc, type EmailFollowUp, type FollowUp, type PaymentFollowUp } from "@aftercall/core";
+import { formatClock, formatUsdc, type Attendee, type EmailFollowUp, type FollowUp, type PaymentFollowUp } from "@aftercall/core";
 import { Button, Pill, SectionLabel, Spinner } from "./ui";
 import { parseUsdcInput } from "./WalletScreen";
 
@@ -19,7 +19,12 @@ export interface FollowUpHandlers {
   onSetAmount: (id: string, amount: bigint) => void;
 }
 
-export function FollowUps({ followUps, leftToday, ...h }: { followUps: FollowUp[]; leftToday: bigint | null } & FollowUpHandlers) {
+export function FollowUps({
+  followUps,
+  leftToday,
+  invited = [],
+  ...h
+}: { followUps: FollowUp[]; leftToday: bigint | null; invited?: Attendee[] } & FollowUpHandlers) {
   const visible = followUps.filter((f) => f.status !== "dismissed");
   if (visible.length === 0) return null;
   return (
@@ -31,7 +36,7 @@ export function FollowUps({ followUps, leftToday, ...h }: { followUps: FollowUp[
       <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
         {visible.map((f, i) => {
           const last = i === visible.length - 1;
-          if (f.kind === "email") return <EmailRow key={f.id} f={f} last={last} h={h} />;
+          if (f.kind === "email") return <EmailRow key={f.id} f={f} last={last} h={h} invited={invited} />;
           if (f.status === "blocked") return <BlockedRow key={f.id} f={f} last={last} onReview={h.onReviewBlocked} />;
           return <PaymentRow key={f.id} f={f} last={last} h={h} leftToday={leftToday} />;
         })}
@@ -74,7 +79,7 @@ function EvidenceQuote({ quote, at, onJumpTo }: { quote: string; at: number; onJ
   );
 }
 
-function EmailRow({ f, last, h }: { f: EmailFollowUp; last: boolean; h: FollowUpHandlers }) {
+function EmailRow({ f, last, h, invited }: { f: EmailFollowUp; last: boolean; h: FollowUpHandlers; invited: Attendee[] }) {
   const proposed = f.status === "proposed" || f.status === "failed";
   const [email, setEmail] = useState("");
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -108,6 +113,16 @@ function EmailRow({ f, last, h }: { f: EmailFollowUp; last: boolean; h: FollowUp
                 className="selectable h-8 flex-1 rounded-sm border border-border bg-well px-2.5 text-ink outline-none placeholder:text-muted"
               />
               <Button disabled={!valid} onClick={() => h.onSetEmail(f.id, email)}>Use address</Button>
+            </div>
+          )}
+          {!f.to && invited.length > 0 && (
+            <div className="ml-8 flex flex-wrap items-center gap-2">
+              <span className="text-muted">Invited:</span>
+              {invited.map((a) => (
+                <Button key={a.email} variant="ghost" title={a.email} onClick={() => h.onSetEmail(f.id, a.email)}>
+                  {a.name || a.email}
+                </Button>
+              ))}
             </div>
           )}
           {f.error && <p className="m-0 pl-8 text-record">{f.error}</p>}

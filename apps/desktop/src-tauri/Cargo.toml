@@ -35,7 +35,11 @@ base64 = "0.22"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
 cidre = { version = "0.15", default-features = false, features = ["async", "av", "blocks", "cm", "core_audio", "dispatch", "macos_15_0"] }
+objc2 = "0.6"
+objc2-event-kit = { version = "0.3.2", default-features = false, features = ["std", "block2", "EKCalendar", "EKCalendarItem", "EKEvent", "EKEventStore", "EKObject", "EKParticipant", "EKTypes"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSDate", "NSEnumerator", "NSError", "NSString", "NSURL"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

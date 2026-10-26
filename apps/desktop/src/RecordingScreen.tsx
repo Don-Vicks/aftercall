@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { Check, FolderOpen, KeyRound } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { formatDuration, processRecording, type Stage } from "@aftercall/core";
+import { applyCalendarEvent, formatDuration, processRecording, type Stage } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
 import type { Payee } from "@aftercall/core";
 import { Button, Pill, Spinner, cx } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
+import { calendar } from "./calendar";
 
 export function recordingTitle(r: SavedRecording): string {
+  if (r.eventTitle) return r.eventTitle;
   const d = new Date(r.startedAt * 1000);
   return `Recording ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
@@ -83,7 +85,11 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
       },
       (stage, detail) => report(recording.id, { state: "running", stage: order.indexOf(stage), detail }),
     );
-    let saved: SavedNotes = { ...result, processedAt: new Date().toISOString() };
+    // The calendar event names the meeting and fills recap addresses. The proof
+    // doesn't cover either, so this changes nothing on the Verify page.
+    const event = await calendar.eventFor(recording);
+    const meeting = event ? applyCalendarEvent(result.meeting, event) : result.meeting;
+    let saved: SavedNotes = { ...result, meeting, processedAt: new Date().toISOString() };
     await recordingFiles.saveNotes(recording.id, serializeNotes(saved));
 
     report(recording.id, { state: "running", stage: order.indexOf("proof") });

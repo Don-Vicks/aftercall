@@ -1,5 +1,6 @@
 export * from "./money.ts";
 export * from "./meeting.ts";
+export * from "./calendar.ts";
 export * from "./notes/amounts.ts";
 export * from "./notes/build.ts";
 export * from "./notes/pipeline.ts";
