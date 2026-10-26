@@ -8,3 +8,4 @@ target/
 .DS_Store
 *.log
 contracts/target/
+*.tsbuildinfo
