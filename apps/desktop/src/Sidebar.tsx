@@ -2,11 +2,14 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
 import { account, projects, walletBalance } from "./sample";
+import type { SavedRecording } from "./recorder";
+import { recordingTitle, recordingWhen } from "./RecordingScreen";
 import { cx } from "./ui";
 
 export function Sidebar({
   selectedMeetingId,
   pendingByMeeting,
+  recordings,
   onSelectMeeting,
   onNewRecording,
   onOpenWallet,
@@ -15,6 +18,8 @@ export function Sidebar({
   selectedMeetingId: string | null;
   /** Follow-ups waiting for approval, by meeting id. */
   pendingByMeeting: Record<string, number>;
+  /** Real recordings, shown above the sample meetings of their project. */
+  recordings: SavedRecording[];
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
   onOpenWallet: () => void;
@@ -44,7 +49,13 @@ export function Sidebar({
       <div className="flex flex-col gap-0.5">
         <span className="t-label px-2 pb-2 text-muted">Projects</span>
         {projects.map((project) => {
-          const isOpen = open[project.id] ?? false;
+          const ownRecordings = recordings.filter((r) => r.project === project.name);
+          const meetings = [
+            ...ownRecordings.map((r) => ({ id: r.id, title: recordingTitle(r), when: recordingWhen(r), toApprove: 0 })),
+            ...project.meetings,
+          ];
+          // A project opens by itself when it holds the selected meeting.
+          const isOpen = open[project.id] ?? meetings.some((m) => m.id === selectedMeetingId);
           const Chevron = isOpen ? ChevronDown : ChevronRight;
           return (
             <div key={project.id} className="flex flex-col gap-0.5">
@@ -58,11 +69,11 @@ export function Sidebar({
               >
                 <Chevron size={12} strokeWidth={2} className="text-faint" aria-hidden="true" />
                 <span className="flex-1">{project.name}</span>
-                <span className="font-mono text-[11px] font-normal text-muted">{project.meetingCount}</span>
+                <span className="font-mono text-[11px] font-normal text-muted">{project.meetingCount + ownRecordings.length}</span>
               </button>
-              {isOpen && project.meetings.length > 0 && (
+              {isOpen && meetings.length > 0 && (
                 <div className="ml-3.5 flex flex-col gap-0.5 border-l border-hairline pl-2.5">
-                  {project.meetings.map((m) => {
+                  {meetings.map((m) => {
                     const selected = m.id === selectedMeetingId;
                     const toApprove = pendingByMeeting[m.id] ?? m.toApprove ?? 0;
                     return (

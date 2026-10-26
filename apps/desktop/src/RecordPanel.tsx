@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Square } from "lucide-react";
 import { formatClock } from "@aftercall/core";
-import { isDesktop, recorder, type RecordingInfo, type RecordingResult } from "./recorder";
+import { isDesktop, recorder, type RecordingInfo, type SavedRecording } from "./recorder";
 import { projects } from "./sample";
 import { Button } from "./ui";
 
@@ -14,7 +14,7 @@ export function RecordPanel({
   onStop,
 }: {
   onClose: () => void;
-  onStop: (project: string, seconds: number, result?: RecordingResult) => void;
+  onStop: (project: string, seconds: number, saved?: SavedRecording) => void;
 }) {
   const [project, setProject] = useState(projects[0].name);
   // Consent is asked every time; it never defaults to ticked.
@@ -78,7 +78,7 @@ export function RecordPanel({
     }
     setStarting(true);
     try {
-      setInfo(await recorder.start());
+      setInfo(await recorder.start(project));
       setRecording(true);
     } catch (e) {
       setError(String(e));
@@ -96,8 +96,8 @@ export function RecordPanel({
   const stop = async () => {
     if (!isDesktop) return onStop(project, seconds);
     try {
-      const result = await recorder.stop();
-      onStop(project, result.seconds, result);
+      const saved = await recorder.stop();
+      onStop(project, saved.seconds, saved);
     } catch (e) {
       setError(String(e));
     }

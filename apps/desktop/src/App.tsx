@@ -5,11 +5,13 @@ import { MeetingScreen } from "./MeetingScreen";
 import { ProcessingScreen } from "./ProcessingScreen";
 import { RecordPanel } from "./RecordPanel";
 import { syncWithAda } from "./sample";
-import { isDesktop, recorder } from "./recorder";
+import { isDesktop, recorder, type SavedRecording } from "./recorder";
+import { RecordingScreen } from "./RecordingScreen";
 
 type View =
   | { name: "meeting"; id: string }
   | { name: "processing"; project: string; seconds: number }
+  | { name: "recording"; id: string }
   | { name: "placeholder"; title: string; milestone: string };
 
 function nowHHMM() {
@@ -33,6 +35,12 @@ export default function App() {
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
   const [view, setView] = useState<View>({ name: "meeting", id: syncWithAda.id });
   const [recordOpen, setRecordOpen] = useState(false);
+  const [recordings, setRecordings] = useState<SavedRecording[]>([]);
+
+  // Saved recordings from earlier sessions.
+  useEffect(() => {
+    if (isDesktop) recorder.list().then(setRecordings).catch(() => setRecordings([]));
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -72,7 +80,8 @@ export default function App() {
     Object.values(meetings).map((m) => [m.id, m.followUps.filter((f) => f.status === "proposed").length]),
   );
 
-  const selectedMeetingId = view.name === "meeting" ? view.id : null;
+  const selectedMeetingId = view.name === "meeting" || view.name === "recording" ? view.id : null;
+  const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
 
   return (
@@ -80,10 +89,13 @@ export default function App() {
       <Sidebar
         selectedMeetingId={selectedMeetingId}
         pendingByMeeting={pendingByMeeting}
+        recordings={recordings}
         onSelectMeeting={(id) =>
           meetings[id]
             ? setView({ name: "meeting", id })
-            : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
+            : recordings.some((r) => r.id === id)
+              ? setView({ name: "recording", id })
+              : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
         }
         onNewRecording={() => setRecordOpen(true)}
         onOpenWallet={() => setView({ name: "placeholder", title: "Agent wallet", milestone: "Deposit, caps and payees arrive with the contract on testnet (M4)." })}
@@ -101,6 +113,7 @@ export default function App() {
           onReviewBlocked={() => setView({ name: "placeholder", title: "Approve in your wallet", milestone: "Over-cap approvals in your own wallet arrive in M4." })}
         />
       )}
+      {openRecording && <RecordingScreen key={openRecording.id} recording={openRecording} />}
       {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
       {view.name === "placeholder" && (
         <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
@@ -115,9 +128,16 @@ export default function App() {
       {recordOpen && (
         <RecordPanel
           onClose={() => setRecordOpen(false)}
-          onStop={(project, seconds) => {
+          onStop={(project, seconds, saved) => {
             setRecordOpen(false);
-            setView({ name: "processing", project, seconds });
+            if (saved) {
+              // A real recording: show it as its own meeting, with its true status.
+              setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
+              setView({ name: "recording", id: saved.id });
+            } else {
+              // Browser preview: walk through the simulated pipeline on sample data.
+              setView({ name: "processing", project, seconds });
+            }
           }}
         />
       )}

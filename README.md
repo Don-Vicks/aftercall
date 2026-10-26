@@ -50,10 +50,10 @@ Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.
 ### M1 · Day 1 (2026-11-01): Foundations
 - [x] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
 - [x] Desktop interface from the design on sample data: meeting page, follow-ups with "check before you approve", transcript with evidence links, recording panel with the consent tick, processing stages, light and dark
-- [ ] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute 16 kHz WAV chunks (about 9.6 MB each, under NEAR AI's 25 MB limit). Built and unit-tested; waiting on a real-call check in the app bundle
+- [x] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute 16 kHz WAV chunks (about 9.6 MB each, under NEAR AI's 25 MB limit). Checked on a real call: both stems carry sound, saved recordings reload after a restart
 - [x] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI (16 tests pass locally; the CI workflow runs them on push)
 - [x] NestJS backend with NEP-413 NEAR login and a JWT session
-- [ ] Silence watchdog: warn when system audio is exact zeros for 30 s. Built and unit-tested; checked with the real-call test
+- [ ] Silence watchdog: warn when system audio is exact zeros for 30 s. Built and unit-tested; still to see it fire live (record with System Audio Recording turned off)
 
 ### M2 · Day 3 (2026-11-03): Private notes
 - [ ] Transcribe each chunk with Whisper on NEAR AI, passing payee and project names as the prompt

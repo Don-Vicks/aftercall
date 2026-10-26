@@ -10,10 +10,15 @@ export interface RecordingInfo {
   systemAudio: boolean;
 }
 
-export interface RecordingResult {
-  dir: string;
-  chunks: number;
+/** A saved recording (`meeting.json` next to its audio). */
+export interface SavedRecording {
+  id: string;
+  project: string;
+  /** Unix seconds. */
+  startedAt: number;
   seconds: number;
+  chunks: number;
+  dir: string;
 }
 
 export interface Levels {
@@ -28,9 +33,10 @@ export interface SilenceEvent {
 }
 
 export const recorder = {
-  start: () => invoke<RecordingInfo>("start_recording"),
+  start: (project: string) => invoke<RecordingInfo>("start_recording", { project }),
   pause: (paused: boolean) => invoke<void>("pause_recording", { paused }),
-  stop: () => invoke<RecordingResult>("stop_recording"),
+  stop: () => invoke<SavedRecording>("stop_recording"),
+  list: () => invoke<SavedRecording[]>("list_recordings"),
   onLevels: (fn: (l: Levels) => void): Promise<UnlistenFn> => listen<Levels>("recorder:levels", (e) => fn(e.payload)),
   onSilence: (fn: (s: SilenceEvent) => void): Promise<UnlistenFn> => listen<SilenceEvent>("recorder:silence", (e) => fn(e.payload)),
   onMenuNewRecording: (fn: () => void): Promise<UnlistenFn> => listen("menu:new-recording", () => fn()),
