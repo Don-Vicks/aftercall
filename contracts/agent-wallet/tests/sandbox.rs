@@ -311,3 +311,59 @@ async fn owner_can_decline_a_blocked_payment() -> anyhow::Result<()> {
     assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
     Ok(())
 }
+
+/// The desktop app's own signer (crates/near-tx) talking to a real NEAR node:
+/// a limited key it generated records a proof and pays, and can't do anything else.
+#[tokio::test]
+async fn app_signer_records_proofs_and_pays_over_rpc() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app_key = near_tx::KeyPair::generate();
+    let pk: near_workspaces::types::PublicKey = app_key.public_key().parse()?;
+    e.victor.batch(e.victor.id())
+        .add_key(pk, AccessKey::function_call_access(e.wallet.id(), &["pay", "record_proof"], Some(NearToken::from_millinear(250))))
+        .transact().await?.into_result()?;
+
+    let rpc = near_tx::Client::new(e.worker.rpc_addr());
+    let victor = e.victor.id().as_str();
+    let wallet = e.wallet.id().as_str();
+    let gas = 50_000_000_000_000u64;
+
+    let proof = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "record_proof".into(),
+        args: json!({ "meeting_id": "1793006441", "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }).to_string().into_bytes(),
+        gas,
+        deposit: 0,
+    }).await.map_err(anyhow::Error::msg)?;
+    assert!(!proof.tx_hash.is_empty());
+    let stored = rpc.view(wallet, "get_proof", &json!({ "owner": victor, "meeting_id": "1793006441" })).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(stored["proof_hash"], "ab".repeat(32));
+
+    // The same proof can't be recorded twice, and the error says why.
+    let again = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "record_proof".into(),
+        args: json!({ "meeting_id": "1793006441", "proof_hash": "cd".repeat(32), "model": "x" }).to_string().into_bytes(),
+        gas,
+        deposit: 0,
+    }).await;
+    assert!(again.unwrap_err().contains("PROOF_EXISTS"));
+
+    let paid = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "pay".into(),
+        args: json!({ "payee": e.designer.id(), "amount": (50 * USDC).to_string(), "memo": "deposit", "followup_id": "f-app" }).to_string().into_bytes(),
+        gas: 100_000_000_000_000,
+        deposit: 0,
+    }).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(paid.value.unwrap()["status"], "sending");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 50 * USDC);
+
+    // Anything else is refused by the protocol before the contract runs.
+    let rules = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "set_cap".into(),
+        args: json!({ "daily_cap": (1_000_000 * USDC).to_string() }).to_string().into_bytes(),
+        gas,
+        deposit: 1,
+    }).await;
+    assert!(rules.is_err());
+    assert_eq!(wallet_field(&e, "daily_cap").await?, 200 * USDC);
+    Ok(())
+}

@@ -18,4 +18,14 @@ cargo test -p agent-wallet --lib                                  # unit tests
 cargo test -p agent-wallet --test sandbox -- --test-threads=1     # local NEAR node; needs cargo-near and the wasm32 target
 ```
 
-16 tests: 4 unit, 12 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token, and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer, the private callback and proof storage.
+17 tests: 4 unit, 13 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token, and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer, the private callback and proof storage.
+
+The last sandbox test drives the contract through `crates/near-tx`, the desktop app's own signer, over the node's JSON-RPC: the app's limited key records a proof, is refused a duplicate, pays a listed payee, and can't change a rule.
+
+## Deploy to testnet
+
+```bash
+./scripts/deploy-testnet.sh yourname.testnet
+```
+
+Creates `wallet.yourname.testnet`, deploys and initialises it with Circle's testnet USDC, and registers it with the token. Needs [near-cli-rs](https://github.com/near/near-cli-rs) with your key in the keychain, and about 3 testnet NEAR. Not run yet: it waits on a testnet account.
