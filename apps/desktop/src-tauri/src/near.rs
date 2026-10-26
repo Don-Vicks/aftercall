@@ -123,6 +123,106 @@ pub async fn record_proof(config: &NearConfig, meeting_id: &str, proof_hash: &st
     Ok(outcome.tx_hash)
 }
 
+const PAY_GAS: u64 = 100_000_000_000_000;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayOutcome {
+    pub tx_hash: String,
+    /// "paid", "failed" (the transfer bounced and was refunded) or "blocked".
+    pub status: String,
+    /// OVER_CAP or OVER_PAYMENT_CAP when blocked.
+    pub reason: Option<String>,
+    pub left_today: Option<String>,
+}
+
+/// Pays a listed payee with the app's limited key. The contract decides: it sends
+/// within the caps, or parks the payment for the owner's wallet.
+pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str) -> Result<PayOutcome, String> {
+    if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Bad amount".into());
+    }
+    let rpc = client(config);
+    let args = json!({ "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id });
+    let outcome = rpc
+        .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
+        .await?;
+    let result = outcome.value.unwrap_or(Value::Null);
+    let left_today = result["left_today"].as_str().map(String::from);
+    if result["status"] == "blocked" {
+        return Ok(PayOutcome { tx_hash: outcome.tx_hash, status: "blocked".into(), reason: result["reason"].as_str().map(String::from), left_today });
+    }
+    // The transfer and its callback have run by now; a bounced transfer was refunded and unmarked.
+    let paid = rpc.view(&config.contract, "is_paid", &json!({ "owner": config.account, "followup_id": followup_id })).await?;
+    let status = if paid == Value::Bool(true) { "paid" } else { "failed" };
+    Ok(PayOutcome { tx_hash: outcome.tx_hash, status: status.into(), reason: None, left_today })
+}
+
+/// The owner's wallet and payees, or nulls if they haven't registered.
+pub async fn wallet(config: &NearConfig) -> Result<Value, String> {
+    let rpc = client(config);
+    let owner = json!({ "owner": config.account });
+    let wallet = rpc.view(&config.contract, "get_wallet", &owner).await?;
+    let payees = rpc.view(&config.contract, "get_payees", &owner).await.unwrap_or(json!([]));
+    Ok(json!({ "wallet": wallet, "payees": payees }))
+}
+
+/// Whether a follow-up has been paid, and whether it is still parked.
+pub async fn payment_state(config: &NearConfig, followup_id: &str) -> Result<Value, String> {
+    let rpc = client(config);
+    let args = json!({ "owner": config.account, "followup_id": followup_id });
+    let paid = rpc.view(&config.contract, "is_paid", &args).await?;
+    let pending = rpc.view(&config.contract, "get_pending", &args).await?;
+    Ok(json!({ "paid": paid, "pending": !pending.is_null() }))
+}
+
+/// Circle USDC on NEAR.
+fn usdc_contract(config: &NearConfig) -> &'static str {
+    if config.network == "mainnet" {
+        "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
+    } else {
+        "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af"
+    }
+}
+
+/// Before adding a payee: does the account exist, and can it already hold USDC?
+pub async fn check_payee(config: &NearConfig, account: &str) -> Result<Value, String> {
+    let rpc = client(config);
+    if !rpc.account_exists(account).await? {
+        return Ok(json!({ "exists": false, "usdcReady": false }));
+    }
+    let storage = rpc.view(usdc_contract(config), "storage_balance_of", &json!({ "account_id": account })).await.unwrap_or(Value::Null);
+    Ok(json!({ "exists": true, "usdcReady": !storage.is_null() }))
+}
+
+/// The owner's own USDC balance (outside the agent wallet), for deposits.
+pub async fn owner_usdc(config: &NearConfig) -> Result<String, String> {
+    let v = client(config).view(usdc_contract(config), "ft_balance_of", &json!({ "account_id": config.account })).await?;
+    Ok(v.as_str().unwrap_or("0").to_string())
+}
+
+/// Signs a backend sign-in challenge (NEP-413) with the app's key.
+pub fn sign_in_message(config: &NearConfig, message: &str, nonce_b64: &str, recipient: &str) -> Result<Value, String> {
+    use base64::Engine as _;
+    let nonce: [u8; 32] = base64::engine::general_purpose::STANDARD
+        .decode(nonce_b64)
+        .map_err(|e| e.to_string())?
+        .try_into()
+        .map_err(|_| "Nonce must be 32 bytes")?;
+    if message != "Sign in to Aftercall" || recipient != "aftercall" {
+        return Err("The app only signs Aftercall's sign-in message".into());
+    }
+    let key = app_key()?;
+    Ok(json!({
+        "accountId": config.account,
+        "publicKey": key.public_key(),
+        "signature": near_tx::sign_message(&key, message, &nonce, recipient),
+        "message": message,
+        "nonce": nonce_b64,
+        "recipient": recipient,
+    }))
+}
+
 pub async fn get_proof(config: &NearConfig, owner: &str, meeting_id: &str) -> Result<Value, String> {
     client(config).view(&config.contract, "get_proof", &json!({ "owner": owner, "meeting_id": meeting_id })).await
 }

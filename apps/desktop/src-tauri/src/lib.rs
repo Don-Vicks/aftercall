@@ -236,6 +236,36 @@ async fn near_get_proof(app: AppHandle, owner: String, meeting_id: String) -> Re
     near::get_proof(&near_config(&app)?, &owner, &meeting_id).await
 }
 
+#[tauri::command]
+async fn near_pay(app: AppHandle, payee: String, amount: String, memo: String, followup_id: String) -> Result<near::PayOutcome, String> {
+    near::pay(&near_config(&app)?, &payee, &amount, &memo, &followup_id).await
+}
+
+#[tauri::command]
+async fn near_wallet(app: AppHandle) -> Result<serde_json::Value, String> {
+    near::wallet(&near_config(&app)?).await
+}
+
+#[tauri::command]
+async fn near_payment_state(app: AppHandle, followup_id: String) -> Result<serde_json::Value, String> {
+    near::payment_state(&near_config(&app)?, &followup_id).await
+}
+
+#[tauri::command]
+async fn near_check_payee(app: AppHandle, account: String) -> Result<serde_json::Value, String> {
+    near::check_payee(&near_config(&app)?, &account).await
+}
+
+#[tauri::command]
+async fn near_owner_usdc(app: AppHandle) -> Result<String, String> {
+    near::owner_usdc(&near_config(&app)?).await
+}
+
+#[tauri::command]
+fn near_sign_in_message(app: AppHandle, message: String, nonce: String, recipient: String) -> Result<serde_json::Value, String> {
+    near::sign_in_message(&near_config(&app)?, &message, &nonce, &recipient)
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -267,7 +297,13 @@ pub fn run() {
             near_public_key,
             near_status,
             near_record_proof,
-            near_get_proof
+            near_get_proof,
+            near_pay,
+            near_wallet,
+            near_payment_state,
+            near_check_payee,
+            near_owner_usdc,
+            near_sign_in_message
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

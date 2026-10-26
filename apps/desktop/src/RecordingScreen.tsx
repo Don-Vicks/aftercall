@@ -5,7 +5,7 @@ import { formatDuration, processRecording, type Stage } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, type SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
-import { payees } from "./sample";
+import type { Payee } from "@aftercall/core";
 import { Button, Pill, Spinner, cx } from "./ui";
 
 export function recordingTitle(r: SavedRecording): string {
@@ -39,7 +39,7 @@ type Run = { state: "idle" } | { state: "running"; stage: number; detail?: strin
  * A real recording that has no notes yet. With a NEAR AI key it runs the notes
  * pipeline; the proof on NEAR follows in M3.
  */
-export function RecordingScreen({ recording, onProcessed }: { recording: SavedRecording; onProcessed: (notes: string) => void }) {
+export function RecordingScreen({ recording, payees, onProcessed }: { recording: SavedRecording; payees: Payee[]; onProcessed: (notes: string) => void }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [run, setRun] = useState<Run>({ state: "idle" });
 

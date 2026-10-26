@@ -1,25 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Search, ShieldCheck } from "lucide-react";
 import { formatClock, formatDuration, type Meeting } from "@aftercall/core";
-import { FollowUps } from "./FollowUps";
+import { FollowUps, type FollowUpHandlers } from "./FollowUps";
 import { Pill, SectionLabel, cx } from "./ui";
 
 type Tab = "notes" | "transcript";
 
 export function MeetingScreen({
   meeting,
+  leftToday,
   onToggleItem,
-  onApprove,
-  onDismiss,
   onOpenVerify,
-  onReviewBlocked,
+  handlers,
 }: {
   meeting: Meeting;
+  /** What the agent wallet can still pay today, when connected. */
+  leftToday: bigint | null;
   onToggleItem: (id: string) => void;
-  onApprove: (id: string) => void;
-  onDismiss: (id: string) => void;
   onOpenVerify: () => void;
-  onReviewBlocked: (id: string) => void;
+  handlers: Omit<FollowUpHandlers, "onJumpTo">;
 }) {
   const [tab, setTab] = useState<Tab>("notes");
   const [target, setTarget] = useState<{ at: number; quote: string } | null>(null);
@@ -53,7 +52,7 @@ export function MeetingScreen({
         </header>
 
         {tab === "notes" ? (
-          <Notes meeting={meeting} onToggleItem={onToggleItem} onApprove={onApprove} onDismiss={onDismiss} onJumpTo={jumpTo} onReviewBlocked={onReviewBlocked} />
+          <Notes meeting={meeting} leftToday={leftToday} onToggleItem={onToggleItem} handlers={{ ...handlers, onJumpTo: jumpTo }} />
         ) : (
           <Transcript meeting={meeting} target={target} />
         )}
@@ -85,18 +84,14 @@ function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
 
 function Notes({
   meeting,
+  leftToday,
   onToggleItem,
-  onApprove,
-  onDismiss,
-  onJumpTo,
-  onReviewBlocked,
+  handlers,
 }: {
   meeting: Meeting;
+  leftToday: bigint | null;
   onToggleItem: (id: string) => void;
-  onApprove: (id: string) => void;
-  onDismiss: (id: string) => void;
-  onJumpTo: (at: number, quote: string) => void;
-  onReviewBlocked: (id: string) => void;
+  handlers: FollowUpHandlers;
 }) {
   return (
     <>
@@ -134,7 +129,7 @@ function Notes({
         ))}
       </section>
 
-      <FollowUps followUps={meeting.followUps} onApprove={onApprove} onDismiss={onDismiss} onJumpTo={onJumpTo} onReviewBlocked={onReviewBlocked} />
+      <FollowUps followUps={meeting.followUps} leftToday={leftToday} {...handlers} />
     </>
   );
 }

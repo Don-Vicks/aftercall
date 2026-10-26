@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { near, setupCommands, type NearConfig, type NearStatus } from "./near";
+import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
 import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
+import { AutopilotSettings } from "./AutopilotSettings";
+import { isDesktop } from "./recorder";
 
 /**
  * Connects the user's NEAR account. The app holds its own limited key; the user
@@ -18,6 +20,7 @@ export function ConnectNear() {
 
   useEffect(() => {
     near.getConfig().then((c) => c && setConfig(c));
+    if (!isDesktop) return setError("Connecting NEAR works in the Mac app, not the browser preview.");
     near.publicKey().then(setPublicKey).catch((e) => setError(String(e)));
   }, []);
 
@@ -44,6 +47,27 @@ export function ConnectNear() {
   };
 
   const connected = status?.registered && status.keyAdded;
+  const [waiting, setWaiting] = useState<string | null>(null);
+
+  /** Opens the signing page in the browser and checks NEAR until the step lands. */
+  const signStep = async (label: string, kind: "register" | "authorise-key") => {
+    setError(null);
+    try {
+      await near.saveConfig(config);
+      await signInWallet(kind === "register" ? { kind } : { kind, publicKey });
+      setWaiting(label);
+      const done = await waitFor(async () => {
+        const s = await near.status();
+        setStatus(s);
+        return kind === "register" ? s.registered : s.keyAdded;
+      });
+      if (!done) setError(`Didn't see "${label}" on NEAR yet. If you signed, press Save and check in a moment.`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setWaiting(null);
+    }
+  };
 
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
@@ -80,20 +104,32 @@ export function ConnectNear() {
         <section className="flex flex-col gap-3">
           <SectionLabel>Authorise this Mac, once</SectionLabel>
           <p className="m-0 text-muted">
-            Run these with near-cli from your own account. The first creates your agent wallet; the second lets this Mac's key call only{" "}
+            Two signatures in your own NEAR wallet: one creates your agent wallet, the other lets this Mac's key call only{" "}
             <span className="t-mono text-ink">pay</span> and <span className="t-mono text-ink">record_proof</span>. Any rule change still needs your wallet.
           </p>
+          <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
+            <StepRow n={1} title="Create your agent wallet" done={status?.registered} disabled={!ready || !!waiting} onSign={() => signStep("Create wallet", "register")} />
+            <StepRow n={2} title="Authorise this Mac's key" done={status?.keyAdded} disabled={!ready || !!waiting || !publicKey} onSign={() => signStep("Authorise this Mac", "authorise-key")} last />
+          </div>
+          {waiting && (
+            <p className="m-0 flex items-center gap-2 text-muted">
+              <Spinner size={12} /> Waiting for you to sign “{waiting}” in your browser…
+            </p>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-muted">This Mac's key</span>
             <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey || "…"}</span>
           </div>
           {commands ? (
-            <>
-              <Command n={1} text={commands.register} done={status?.registered} copied={copied === "register"} onCopy={() => copy("register", commands.register)} />
-              <Command n={2} text={commands.addKey} done={status?.keyAdded} copied={copied === "addKey"} onCopy={() => copy("addKey", commands.addKey)} />
-            </>
+            <details className="flex flex-col gap-2">
+              <summary className="cursor-pointer font-semibold text-verdigris">Prefer near-cli?</summary>
+              <div className="mt-2 flex flex-col gap-2">
+                <Command n={1} text={commands.register} done={status?.registered} copied={copied === "register"} onCopy={() => copy("register", commands.register)} />
+                <Command n={2} text={commands.addKey} done={status?.keyAdded} copied={copied === "addKey"} onCopy={() => copy("addKey", commands.addKey)} />
+              </div>
+            </details>
           ) : (
-            <p className="m-0 text-caution">Enter your account and the contract to see the commands.</p>
+            <p className="m-0 text-caution">Enter your account and the contract first.</p>
           )}
         </section>
 
@@ -107,8 +143,26 @@ export function ConnectNear() {
             </Button>
           </div>
         </div>
+
+        <AutopilotSettings />
       </div>
     </main>
+  );
+}
+
+function StepRow({ n, title, done, disabled, onSign, last }: { n: number; title: string; done?: boolean; disabled: boolean; onSign: () => void; last?: boolean }) {
+  return (
+    <div className={cx("flex items-center gap-4 px-5 py-4", !last && "border-b border-hairline")}>
+      <span className="font-mono text-xs text-muted">0{n}</span>
+      <span className={cx("t-title flex-1", done && "text-muted")}>{title}</span>
+      {done ? (
+        <span className="flex items-center gap-1.5 font-semibold text-verdigris">
+          <Check size={14} strokeWidth={2} aria-hidden="true" /> Done
+        </span>
+      ) : (
+        <Button variant="primary" disabled={disabled} onClick={onSign}>Sign in wallet</Button>
+      )}
+    </div>
   );
 }
 

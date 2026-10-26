@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Meeting } from "@aftercall/core";
+import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type WalletLimits } from "@aftercall/core";
+import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
 import { ProcessingScreen } from "./ProcessingScreen";
@@ -10,12 +11,20 @@ import { RecordingScreen } from "./RecordingScreen";
 import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
 import { ConnectNear } from "./ConnectNear";
 import { VerifySheet } from "./VerifySheet";
+import { HomeScreen } from "./HomeScreen";
+import { WalletScreen, type BlockedPayment } from "./WalletScreen";
+import { near } from "./near";
+import { recordingFiles } from "./nearai";
+import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
+import { payees as samplePayees } from "./sample";
 
 type View =
+  | { name: "home" }
   | { name: "meeting"; id: string }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
   | { name: "settings" }
+  | { name: "wallet" }
   | { name: "placeholder"; title: string; milestone: string };
 
 function nowHHMM() {
@@ -37,12 +46,36 @@ function useSystemTheme() {
 export default function App() {
   useSystemTheme();
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
-  const [view, setView] = useState<View>({ name: "meeting", id: syncWithAda.id });
+  const [view, setView] = useState<View>({ name: "home" });
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
   const [verifyId, setVerifyId] = useState<string | null>(null);
+  /** From the agent-wallet contract once NEAR is connected; sample payees until then. */
+  const [payees, setPayees] = useState<Payee[]>(samplePayees);
+  const [limits, setLimits] = useState<WalletLimits | null>(null);
+  const leftToday = limits?.leftToday ?? null;
+
+  const refreshWallet = useCallback(async () => {
+    if (!isDesktop || !(await near.getConfig().catch(() => null))) return;
+    try {
+      const v = await near.wallet();
+      setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
+      if (v.wallet) {
+        const today = Math.floor(Date.now() / 86_400_000);
+        const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
+        const cap = BigInt(v.wallet.daily_cap);
+        setLimits({ leftToday: cap > spent ? cap - spent : 0n, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+      }
+    } catch {
+      // Offline or not set up: keep what we have.
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshWallet();
+  }, [refreshWallet]);
 
   // Recordings that have notes open as meetings.
   const addProcessed = (list: SavedRecording[]) => {
@@ -94,25 +127,105 @@ export default function App() {
   const toggleItem = (meetingId: string, itemId: string) =>
     update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? { ...a, done: !a.done } : a)) }));
 
-  const setFollowUpStatus = (meetingId: string, fuId: string, status: Meeting["followUps"][number]["status"], doneAt?: string) =>
-    update(meetingId, (m) => ({ ...m, followUps: m.followUps.map((f) => (f.id === fuId ? { ...f, status, doneAt } : f)) }));
-
-  // Until the contract and email service are wired (M4), approving simulates the round trip.
-  const approve = (meetingId: string, fuId: string) => {
-    const fu = meetings[meetingId].followUps.find((f) => f.id === fuId);
-    if (!fu) return;
-    // On real notes nothing is faked: sending and paying arrive with M4.
-    if (meetingId !== syncWithAda.id) {
-      setView({
-        name: "placeholder",
-        title: fu.kind === "email" ? "Sending the recap" : "Paying from your agent wallet",
-        milestone: `Nothing was sent. ${fu.kind === "email" ? "Email follow-ups" : "Payments under your contract's caps"} arrive in M4.`,
-      });
-      return;
-    }
-    setFollowUpStatus(meetingId, fuId, "sending");
-    setTimeout(() => setFollowUpStatus(meetingId, fuId, fu.kind === "email" ? "sent" : "paid", nowHHMM()), 1600);
+  /** Changes one follow-up and, for real meetings, saves it to the meeting's notes.json. */
+  const patchFollowUp = (meetingId: string, fuId: string, patch: Patch) => {
+    setMeetings((all) => {
+      const m = all[meetingId];
+      const next = { ...m, followUps: m.followUps.map((f) => (f.id === fuId ? ({ ...f, ...patch } as FollowUp) : f)) };
+      const notes = saved[meetingId];
+      if (notes) {
+        const updated = { ...notes, meeting: next };
+        setSaved((s) => ({ ...s, [meetingId]: updated }));
+        recordingFiles.saveNotes(meetingId, serializeNotes(updated)).catch(() => {});
+      }
+      return { ...all, [meetingId]: next };
+    });
   };
+
+  const handlersFor = (meeting: Meeting) => {
+    const find = (id: string) => meeting.followUps.find((f) => f.id === id)!;
+    const apply = (id: string) => (patch: Patch) => patchFollowUp(meeting.id, id, patch);
+    const sample = meeting.id === syncWithAda.id;
+    return {
+      onApprove: (id: string) => {
+        const f = find(id);
+        if (sample) {
+          // The sample meeting only simulates the round trip.
+          apply(id)({ status: "sending" });
+          setTimeout(() => apply(id)({ status: f.kind === "email" ? "sent" : "paid", doneAt: nowHHMM() }), 1600);
+          return;
+        }
+        if (f.kind === "email") sendRecap(meeting, f, apply(id), saved[meeting.id]);
+        else pay(meeting, f, apply(id)).then(refreshWallet);
+      },
+      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
+      onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
+      onReviewBlocked: () => setView({ name: "wallet" }),
+      onDraft: (id: string) => {
+        const f = find(id);
+        if (f.kind === "email") draftInMail(meeting, f, saved[meeting.id]);
+      },
+      onSetEmail: (id: string, email: string) => apply(id)({ to: email, error: undefined }),
+      onClaimLink: (id: string) => {
+        const f = find(id);
+        if (f.kind === "payment") createClaim(meeting, f, apply(id));
+      },
+      onConfirmClaim: (id: string) => {
+        const f = find(id);
+        if (f.kind === "payment") confirmClaim(f, apply(id)).then(refreshWallet);
+      },
+    };
+  };
+
+  /** Queues what autopilot may do in a freshly processed meeting, each with an undo window. */
+  const scheduleAutopilot = (m: Meeting) => {
+    const rules = loadRules();
+    const at = Date.now() + UNDO_SECONDS * 1000;
+    for (const f of m.followUps) {
+      if (autopilotDecision(f, rules, limits).run) patchFollowUp(m.id, f.id, { autopilotAt: at });
+    }
+  };
+
+  // Runs autopilot follow-ups whose undo window has passed.
+  useEffect(() => {
+    const due = Object.values(meetings).flatMap((m) => m.followUps.filter((f) => f.autopilotAt).map((f) => ({ m, f })));
+    if (due.length === 0) return;
+    const t = setInterval(() => {
+      for (const { m, f } of due) {
+        if (f.autopilotAt && f.autopilotAt <= Date.now()) {
+          patchFollowUp(m.id, f.id, { autopilotAt: undefined });
+          // Re-check every rule at the moment it runs: limits may have changed.
+          if (!autopilotDecision(f, loadRules(), limits).run) continue;
+          const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch);
+          if (f.kind === "email") sendRecap(m, f, apply, saved[m.id]);
+          else pay(m, f, apply).then(refreshWallet);
+        }
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  });
+
+  // While a payee hasn't answered a claim link, check every 15 seconds.
+  const meetingList = Object.values(meetings);
+  const anyWaiting = waitingForClaims(meetingList);
+  useEffect(() => {
+    if (!anyWaiting) return;
+    const t = setInterval(async () => {
+      const shared = await claimedAccounts().catch(() => ({}) as Record<string, string>);
+      for (const m of Object.values(meetings)) {
+        for (const f of m.followUps) {
+          if (f.kind === "payment" && f.claim && !f.claim.account && shared[f.claim.id]) {
+            patchFollowUp(m.id, f.id, { claim: { ...f.claim, account: shared[f.claim.id] } });
+          }
+        }
+      }
+    }, 15_000);
+    return () => clearInterval(t);
+  });
+
+  const blocked: BlockedPayment[] = meetingList
+    .filter((m) => saved[m.id])
+    .flatMap((m) => m.followUps.filter((f) => f.kind === "payment" && f.status === "blocked").map((f) => ({ meeting: m, followUp: f as BlockedPayment["followUp"] })));
 
   const finishProcessing = useCallback(() => setView({ name: "meeting", id: syncWithAda.id }), []);
 
@@ -132,6 +245,8 @@ export default function App() {
         pendingByMeeting={pendingByMeeting}
         recordings={recordings}
         meetingTitles={meetingTitles}
+        homeSelected={view.name === "home"}
+        onOpenHome={() => setView({ name: "home" })}
         onSelectMeeting={(id) =>
           meetings[id]
             ? setView({ name: "meeting", id })
@@ -140,7 +255,7 @@ export default function App() {
               : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
         }
         onNewRecording={() => setRecordOpen(true)}
-        onOpenWallet={() => setView({ name: "placeholder", title: "Agent wallet", milestone: "Deposit, caps and payees arrive with the contract on testnet (M4)." })}
+        onOpenWallet={() => setView({ name: "wallet" })}
         onOpenSettings={() => setView({ name: "settings" })}
       />
 
@@ -148,26 +263,48 @@ export default function App() {
         <MeetingScreen
           key={meeting.id}
           meeting={meeting}
+          leftToday={meeting.id === syncWithAda.id ? null : leftToday}
           onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
-          onApprove={(fuId) => approve(meeting.id, fuId)}
-          onDismiss={(fuId) => setFollowUpStatus(meeting.id, fuId, "dismissed")}
+          handlers={handlersFor(meeting)}
           onOpenVerify={() =>
             saved[meeting.id]
               ? setVerifyId(meeting.id)
               : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
           }
-          onReviewBlocked={() => setView({ name: "placeholder", title: "Approve in your wallet", milestone: "Over-cap approvals in your own wallet arrive in M4." })}
         />
       )}
       {openRecording && (
         <RecordingScreen
           key={openRecording.id}
           recording={openRecording}
+          payees={payees}
           onProcessed={(notes) => {
             const updated = { ...openRecording, notes };
             setRecordings((all) => all.map((r) => (r.id === updated.id ? updated : r)));
             addProcessed([updated]);
             setView({ name: "meeting", id: updated.id });
+            const processed = parseNotes(notes).meeting;
+            setTimeout(() => scheduleAutopilot(processed), 0);
+          }}
+        />
+      )}
+      {view.name === "home" && (
+        <HomeScreen
+          meetings={Object.values(meetings)}
+          recordings={recordings}
+          onNewRecording={() => setRecordOpen(true)}
+          onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
+          onOpenSettings={() => setView({ name: "settings" })}
+          onOpenWallet={() => setView({ name: "wallet" })}
+        />
+      )}
+      {view.name === "wallet" && (
+        <WalletScreen
+          blocked={blocked}
+          onOpenSettings={() => setView({ name: "settings" })}
+          onResolved={(meetingId, fuId, status) => {
+            patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
+            refreshWallet();
           }}
         />
       )}

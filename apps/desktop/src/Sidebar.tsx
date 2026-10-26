@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, House } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
 import { account, projects, walletBalance } from "./sample";
 import type { SavedRecording } from "./recorder";
@@ -11,6 +11,8 @@ export function Sidebar({
   pendingByMeeting,
   recordings,
   meetingTitles,
+  homeSelected,
+  onOpenHome,
   onSelectMeeting,
   onNewRecording,
   onOpenWallet,
@@ -23,6 +25,8 @@ export function Sidebar({
   recordings: SavedRecording[];
   /** Titles of meetings that have notes, by id. */
   meetingTitles: Record<string, string>;
+  homeSelected: boolean;
+  onOpenHome: () => void;
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
   onOpenWallet: () => void;
@@ -47,6 +51,15 @@ export function Sidebar({
         <span aria-hidden="true" className="size-2 rounded-full bg-record" />
         New recording
         <span className="ml-auto font-mono text-[11px] font-normal text-muted">⌘⇧R</span>
+      </button>
+
+      <button
+        onClick={onOpenHome}
+        aria-current={homeSelected ? "page" : undefined}
+        className={cx("-mt-3 flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-left", homeSelected ? "bg-elevated font-semibold text-ink" : "text-muted hover:text-ink")}
+      >
+        <House size={14} strokeWidth={1.75} aria-hidden="true" />
+        Home
       </button>
 
       <div className="flex flex-col gap-0.5">
