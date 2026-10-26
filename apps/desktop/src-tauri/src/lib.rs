@@ -6,7 +6,7 @@ mod recorder;
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
 pub mod test_api {
-    pub use crate::nearai::{chat, transcribe};
+    pub use crate::nearai::{chat, check_key, transcribe};
 }
 
 use std::path::PathBuf;
@@ -200,6 +200,16 @@ fn nearai_has_key() -> bool {
 }
 
 #[tauri::command]
+fn nearai_key_hint() -> Option<String> {
+    nearai::key_hint()
+}
+
+#[tauri::command]
+async fn nearai_check_key(key: String) -> String {
+    nearai::check_key(&key).await
+}
+
+#[tauri::command]
 fn nearai_clear_key() -> Result<(), String> {
     nearai::clear_key()
 }
@@ -356,6 +366,8 @@ pub fn run() {
             nearai_set_key,
             nearai_has_key,
             nearai_clear_key,
+            nearai_key_hint,
+            nearai_check_key,
             nearai_transcribe,
             nearai_chat,
             nearai_get,

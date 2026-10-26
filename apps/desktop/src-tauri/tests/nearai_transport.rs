@@ -83,3 +83,13 @@ async fn transcribe_uploads_the_file_as_multipart() {
     }
     std::fs::remove_file(file).unwrap();
 }
+
+/// Hits the real NEAR AI; run with `cargo test -- --ignored`.
+#[tokio::test]
+#[ignore]
+async fn a_made_up_key_is_reported_invalid_by_near_ai() {
+    let _g = LOCK.lock().unwrap();
+    // SAFETY: under LOCK.
+    unsafe { std::env::remove_var("NEARAI_BASE_URL") };
+    assert_eq!(aftercall_desktop_lib::test_api::check_key("sk-not-a-real-key-000000000000").await, "invalid");
+}

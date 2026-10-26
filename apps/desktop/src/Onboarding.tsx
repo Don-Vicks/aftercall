@@ -4,6 +4,7 @@ import { isDesktop, recorder } from "./recorder";
 import { deleteRecording } from "./projects";
 import { nearAiKey } from "./nearai";
 import { Button, Spinner, cx } from "./ui";
+import { NearAiConnect } from "./NearAiConnect";
 
 const KEY = "aftercall.onboarded";
 
@@ -224,53 +225,19 @@ function Source({
 }
 
 function NearAiStep({ onNext }: { onNext: () => void }) {
-  const [key, setKey] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
+  const [connected, setConnected] = useState(false);
   useEffect(() => {
-    if (isDesktop) nearAiKey.has().then(setSaved).catch(() => {});
+    if (isDesktop) nearAiKey.has().then(setConnected).catch(() => {});
   }, []);
-
-  const save = async () => {
-    setError(null);
-    try {
-      await nearAiKey.set(key);
-      setKey("");
-      setSaved(true);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
   return (
     <>
-      <Title intro="Your notes are made by NEAR AI's private models, which run in secure hardware. Paste an API key from cloud.near.ai, with a spend limit set there. It's kept in your macOS Keychain.">
+      <Title intro="Your notes are made by NEAR AI's private models, which run in secure hardware. Paste an API key from cloud.near.ai; Aftercall checks it, then keeps it in your macOS Keychain.">
         Connect NEAR AI
       </Title>
-      {saved ? (
-        <p className="m-0 flex items-center gap-2 font-semibold text-verdigris">
-          <Check size={16} strokeWidth={2} aria-hidden="true" /> Key saved in your Keychain
-        </p>
-      ) : (
-        <div className="flex gap-2">
-          <label htmlFor="onboarding-key" className="sr-only">NEAR AI API key</label>
-          <input
-            id="onboarding-key"
-            type="password"
-            autoComplete="off"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="sk-…"
-            className="selectable h-10 flex-1 rounded-sm border border-border bg-well px-3 text-ink outline-none placeholder:text-muted"
-          />
-          <Button variant="primary" size="lg" disabled={key.trim().length < 16 || !isDesktop} onClick={save}>Save key</Button>
-        </div>
-      )}
-      {error && <p className="m-0 text-record">{error}</p>}
+      <NearAiConnect compact onConnected={() => setConnected(true)} />
       <div className="flex items-center justify-between">
-        <span className="text-muted">{saved ? "" : "You can record without it; notes wait until you add a key."}</span>
-        <Button variant={saved ? "primary" : "secondary"} size="lg" onClick={onNext}>{saved ? "Continue" : "Skip for now"}</Button>
+        <span className="text-muted">{connected ? "" : "You can record without it; notes wait until you add a key."}</span>
+        <Button variant={connected ? "primary" : "secondary"} size="lg" onClick={onNext}>{connected ? "Continue" : "Skip for now"}</Button>
       </div>
     </>
   );

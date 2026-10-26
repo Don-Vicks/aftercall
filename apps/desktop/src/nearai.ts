@@ -14,6 +14,10 @@ export const nearAiKey = {
   has: () => invoke<boolean>("nearai_has_key"),
   set: (key: string) => invoke<void>("nearai_set_key", { key }),
   clear: () => invoke<void>("nearai_clear_key"),
+  /** Last four characters of the saved key, or null. */
+  hint: () => invoke<string | null>("nearai_key_hint"),
+  /** Asks NEAR AI whether the key works, without spending anything. */
+  check: (key: string) => invoke<"valid" | "invalid" | "unknown">("nearai_check_key", { key }),
 };
 
 /** Keeps each chunk's transcription next to the recording until the notes are saved. */

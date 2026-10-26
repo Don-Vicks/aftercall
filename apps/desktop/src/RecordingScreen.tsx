@@ -7,6 +7,7 @@ import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptC
 import { nearReady, recordProof } from "./proofs";
 import type { Payee } from "@aftercall/core";
 import { Button, Pill, Spinner, cx } from "./ui";
+import { NearAiConnect } from "./NearAiConnect";
 
 export function recordingTitle(r: SavedRecording): string {
   const d = new Date(r.startedAt * 1000);
@@ -170,47 +171,15 @@ export function RecordingScreen({ recording, payees, onProcessed, onDelete }: { 
   );
 }
 
-/** Saves the NEAR AI API key to the macOS Keychain. It never leaves the Rust side again. */
+/** Connects NEAR AI right where it's needed. */
 function KeyForm({ onSaved }: { onSaved: () => void }) {
-  const [key, setKey] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const save = async () => {
-    try {
-      await nearAiKey.set(key);
-      setKey("");
-      onSaved();
-    } catch (e) {
-      setError(String(e));
-    }
-  };
   return (
     <section className="flex flex-col gap-3 rounded-md p-5 shadow-[inset_0_0_0_1px_var(--hairline)]">
       <div className="flex items-center gap-2.5">
         <KeyRound size={16} strokeWidth={1.5} className="text-muted" aria-hidden="true" />
-        <span className="t-title">Connect NEAR AI</span>
+        <span className="t-title">Connect NEAR AI to make notes</span>
       </div>
-      <p className="m-0 text-muted">
-        Paste an API key from cloud.near.ai (set a spend limit on it). It's stored in your macOS Keychain and only used to call NEAR AI's
-        secure models.
-      </p>
-      <div className="flex gap-2">
-        <label className="sr-only" htmlFor="nearai-key">
-          NEAR AI API key
-        </label>
-        <input
-          id="nearai-key"
-          type="password"
-          autoComplete="off"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder="sk-…"
-          className="selectable h-8 flex-1 rounded-sm border border-border bg-well px-2.5 text-ink outline-none placeholder:text-muted"
-        />
-        <Button variant="primary" onClick={save} disabled={key.trim().length < 16}>
-          Save key
-        </Button>
-      </div>
-      {error && <p className="m-0 text-record">{error}</p>}
+      <NearAiConnect compact onConnected={onSaved} />
     </section>
   );
 }

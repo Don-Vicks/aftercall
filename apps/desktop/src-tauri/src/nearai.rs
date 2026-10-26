@@ -34,16 +34,48 @@ fn api_key() -> Result<String, String> {
     }
 }
 
+/// Cleans a pasted key: surrounding spaces, quotes, a "Bearer " prefix.
+pub fn clean_key(key: &str) -> String {
+    let k = key.trim().trim_matches(|c| c == '"' || c == '\'');
+    k.strip_prefix("Bearer ").unwrap_or(k).trim().to_string()
+}
+
 pub fn set_key(key: &str) -> Result<(), String> {
-    let key = key.trim();
+    let key = clean_key(key);
     if key.len() < 16 || key.contains(char::is_whitespace) {
-        return Err("That doesn't look like a NEAR AI API key".into());
+        return Err("That doesn't look like a NEAR AI API key. Copy it again from cloud.near.ai.".into());
     }
-    entry()?.set_password(key).map_err(|e| e.to_string())
+    entry()?
+        .set_password(&key)
+        .map_err(|e| format!("macOS Keychain didn't save the key ({e}). If macOS asked, choose Allow or Always Allow."))
 }
 
 pub fn has_key() -> bool {
     api_key().is_ok()
+}
+
+/// The last four characters of the saved key, to show which key is in use.
+pub fn key_hint() -> Option<String> {
+    let k = api_key().ok()?;
+    let tail: String = k.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
+    Some(tail)
+}
+
+/// Asks NEAR AI whether a key works, without spending anything: an attestation
+/// report needs a valid key. "valid", "invalid", or "unknown" when NEAR AI can't be reached.
+pub async fn check_key(key: &str) -> String {
+    let key = clean_key(key);
+    let nonce: String = (0..32).map(|i| format!("{:02x}", (i * 37 + 11) % 256)).collect();
+    let url = format!("{}/attestation/report?model=openai%2Fwhisper-large-v3&signing_algo=ecdsa&nonce={nonce}", base());
+    let res = match client() {
+        Ok(c) => c.get(url).bearer_auth(&key).header("accept", "application/json").send().await,
+        Err(_) => return "unknown".into(),
+    };
+    match res {
+        Ok(r) if r.status().is_success() => "valid".into(),
+        Ok(r) if r.status() == reqwest::StatusCode::UNAUTHORIZED || r.status() == reqwest::StatusCode::FORBIDDEN => "invalid".into(),
+        _ => "unknown".into(),
+    }
 }
 
 pub fn clear_key() -> Result<(), String> {
@@ -144,6 +176,13 @@ pub async fn get(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pasted_keys_are_cleaned() {
+        assert_eq!(clean_key("  sk-abc123  "), "sk-abc123");
+        assert_eq!(clean_key("\"sk-abc123\""), "sk-abc123");
+        assert_eq!(clean_key("Bearer sk-abc123"), "sk-abc123");
+    }
 
     #[test]
     fn only_verification_paths_can_be_read() {

@@ -123,8 +123,8 @@ export function HomeScreen({
                 done={setup.nearAi}
                 icon={<KeyRound size={16} strokeWidth={1.5} />}
                 title="Connect NEAR AI"
-                detail="So recordings become private notes. Paste a key on any recording waiting for notes."
-                action={todo.find((t) => t.kind === "notes") ? { label: "Open a recording", onClick: () => onOpenMeeting(todo.find((t) => t.kind === "notes")!.meetingId) } : undefined}
+                detail="So recordings become private notes, made in NEAR AI's secure hardware."
+                action={{ label: "Connect", onClick: onOpenSettings }}
               />
               <SetupRow
                 done={setup.near}
