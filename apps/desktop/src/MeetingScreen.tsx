@@ -38,13 +38,15 @@ export function MeetingScreen({
             <span className="t-label text-muted">
               {meeting.project} · {meeting.startedAt} · {formatDuration(meeting.durationSec)}
             </span>
-            {meeting.verified && (
-              <button onClick={onOpenVerify} className="rounded-full">
+            <button onClick={onOpenVerify} className="rounded-full">
+              {meeting.verified ? (
                 <Pill tone="verdigris" icon={<ShieldCheck size={13} strokeWidth={1.75} />}>
                   Verified
                 </Pill>
-              </button>
-            )}
+              ) : (
+                <Pill tone="caution">Not verified</Pill>
+              )}
+            </button>
           </div>
           <h1 className="t-display selectable m-0">{meeting.title}</h1>
           <Tabs tab={tab} onChange={setTab} />

@@ -28,6 +28,7 @@ hound = "3.5.1"
 cpal = "0.17"
 reqwest = { version = "0.12", default-features = false, features = ["multipart", "rustls-tls"] }
 keyring = { version = "3", features = ["apple-native"] }
+near-tx = { path = "../../../crates/near-tx" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

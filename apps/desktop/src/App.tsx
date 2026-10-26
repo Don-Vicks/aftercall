@@ -7,12 +7,15 @@ import { RecordPanel } from "./RecordPanel";
 import { syncWithAda } from "./sample";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
-import { parseNotes } from "./nearai";
+import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
+import { ConnectNear } from "./ConnectNear";
+import { VerifySheet } from "./VerifySheet";
 
 type View =
   | { name: "meeting"; id: string }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
+  | { name: "settings" }
   | { name: "placeholder"; title: string; milestone: string };
 
 function nowHHMM() {
@@ -37,19 +40,25 @@ export default function App() {
   const [view, setView] = useState<View>({ name: "meeting", id: syncWithAda.id });
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
+  /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
+  const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
+  const [verifyId, setVerifyId] = useState<string | null>(null);
 
   // Recordings that have notes open as meetings.
   const addProcessed = (list: SavedRecording[]) => {
     const processed: Record<string, Meeting> = {};
+    const notes: Record<string, SavedNotes> = {};
     for (const r of list) {
       if (!r.notes) continue;
       try {
-        processed[r.id] = parseNotes(r.notes).meeting;
+        notes[r.id] = parseNotes(r.notes);
+        processed[r.id] = notes[r.id].meeting;
       } catch {
         // A damaged notes.json leaves the recording on its status page.
       }
     }
     setMeetings((all) => ({ ...all, ...processed }));
+    setSaved((all) => ({ ...all, ...notes }));
   };
 
   // Saved recordings from earlier sessions.
@@ -132,7 +141,7 @@ export default function App() {
         }
         onNewRecording={() => setRecordOpen(true)}
         onOpenWallet={() => setView({ name: "placeholder", title: "Agent wallet", milestone: "Deposit, caps and payees arrive with the contract on testnet (M4)." })}
-        onOpenSettings={() => setView({ name: "placeholder", title: "Settings", milestone: "Settings arrive with onboarding and recovery (M5)." })}
+        onOpenSettings={() => setView({ name: "settings" })}
       />
 
       {view.name === "meeting" && meeting && (
@@ -142,7 +151,11 @@ export default function App() {
           onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
           onApprove={(fuId) => approve(meeting.id, fuId)}
           onDismiss={(fuId) => setFollowUpStatus(meeting.id, fuId, "dismissed")}
-          onOpenVerify={() => setView({ name: "placeholder", title: "Verify", milestone: "The five proof checks arrive with record_proof on testnet (M3)." })}
+          onOpenVerify={() =>
+            saved[meeting.id]
+              ? setVerifyId(meeting.id)
+              : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
+          }
           onReviewBlocked={() => setView({ name: "placeholder", title: "Approve in your wallet", milestone: "Over-cap approvals in your own wallet arrive in M4." })}
         />
       )}
@@ -155,6 +168,22 @@ export default function App() {
             setRecordings((all) => all.map((r) => (r.id === updated.id ? updated : r)));
             addProcessed([updated]);
             setView({ name: "meeting", id: updated.id });
+          }}
+        />
+      )}
+      {view.name === "settings" && <ConnectNear />}
+      {verifyId && saved[verifyId] && (
+        <VerifySheet
+          recordingId={verifyId}
+          saved={saved[verifyId]}
+          onClose={() => setVerifyId(null)}
+          onUpdated={(updated) => {
+            setSaved((all) => ({ ...all, [verifyId]: updated }));
+            setRecordings((all) => all.map((r) => (r.id === verifyId ? { ...r, notes: serializeNotes(updated) } : r)));
+          }}
+          onConnect={() => {
+            setVerifyId(null);
+            setView({ name: "settings" });
           }}
         />
       )}

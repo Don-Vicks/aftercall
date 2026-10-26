@@ -1,4 +1,5 @@
 mod capture;
+mod near;
 mod nearai;
 mod recorder;
 
@@ -197,6 +198,44 @@ async fn nearai_get(path: String) -> Result<String, String> {
     nearai::get(path).await
 }
 
+fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().app_data_dir().map_err(|e| e.to_string())
+}
+
+fn near_config(app: &AppHandle) -> Result<near::NearConfig, String> {
+    near::load_config(&data_dir(app)?).ok_or_else(|| "Connect your NEAR account first".to_string())
+}
+
+#[tauri::command]
+fn near_get_config(app: AppHandle) -> Result<Option<near::NearConfig>, String> {
+    Ok(near::load_config(&data_dir(&app)?))
+}
+
+#[tauri::command]
+fn near_save_config(app: AppHandle, config: near::NearConfig) -> Result<(), String> {
+    near::save_config(&data_dir(&app)?, &config)
+}
+
+#[tauri::command]
+fn near_public_key() -> Result<String, String> {
+    Ok(near::app_key()?.public_key())
+}
+
+#[tauri::command]
+async fn near_status(app: AppHandle) -> Result<near::NearStatus, String> {
+    near::status(&near_config(&app)?).await
+}
+
+#[tauri::command]
+async fn near_record_proof(app: AppHandle, meeting_id: String, proof_hash: String, model: String) -> Result<String, String> {
+    near::record_proof(&near_config(&app)?, &meeting_id, &proof_hash, &model).await
+}
+
+#[tauri::command]
+async fn near_get_proof(app: AppHandle, owner: String, meeting_id: String) -> Result<serde_json::Value, String> {
+    near::get_proof(&near_config(&app)?, &owner, &meeting_id).await
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -222,7 +261,13 @@ pub fn run() {
             nearai_clear_key,
             nearai_transcribe,
             nearai_chat,
-            nearai_get
+            nearai_get,
+            near_get_config,
+            near_save_config,
+            near_public_key,
+            near_status,
+            near_record_proof,
+            near_get_proof
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

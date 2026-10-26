@@ -4,6 +4,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatDuration, processRecording, type Stage } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, type SavedNotes } from "./nearai";
+import { nearReady, recordProof } from "./proofs";
 import { payees } from "./sample";
 import { Button, Pill, Spinner, cx } from "./ui";
 
@@ -23,11 +24,12 @@ export function recordingStartedAt(r: SavedRecording): string {
   return `${recordingWhen(r)} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-const STAGES: { id: Stage | "saved" | "deleted"; title: string; detail: string }[] = [
+const STAGES: { id: Stage | "proof" | "deleted"; title: string; detail: string }[] = [
   { id: "attest", title: "Secure hardware checked", detail: "Whisper and Qwen3.8-27B attested with a fresh nonce" },
   { id: "transcribe", title: "Transcribed", detail: "Whisper in NEAR AI secure hardware; You and Others kept apart" },
   { id: "summarise", title: "Writing the notes", detail: "Decisions, action items and follow-ups, each with an exact quote" },
   { id: "signature", title: "Signature checked", detail: "Summary signed by the attested model" },
+  { id: "proof", title: "Proof recorded on NEAR", detail: "record_proof from this Mac's limited key" },
   { id: "deleted", title: "Audio deleted from this Mac", detail: "Only the transcript and notes are kept" },
 ];
 
@@ -65,12 +67,18 @@ export function RecordingScreen({ recording, onProcessed }: { recording: SavedRe
         },
         (stage, detail) => setRun({ state: "running", stage: order.indexOf(stage), detail }),
       );
-      const saved: SavedNotes = { ...result, processedAt: new Date().toISOString() };
-      const json = serializeNotes(saved);
-      await recordingFiles.saveNotes(recording.id, json);
+      let saved: SavedNotes = { ...result, processedAt: new Date().toISOString() };
+      await recordingFiles.saveNotes(recording.id, serializeNotes(saved));
+
+      setRun({ state: "running", stage: order.indexOf("proof") });
+      if (await nearReady()) {
+        // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
+        saved = await recordProof(recording.id, saved).catch(() => saved);
+      }
+
       setRun({ state: "running", stage: order.indexOf("deleted") });
       await recordingFiles.deleteAudio(recording.id);
-      onProcessed(json);
+      onProcessed(serializeNotes(saved));
     } catch (e) {
       setRun({ state: "failed", error: e instanceof Error ? e.message : String(e) });
     }

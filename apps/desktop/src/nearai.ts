@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AudioChunk, Meeting, NearAiTransport, ProcessResult } from "@aftercall/core";
+import type { ProofOnChain } from "./near";
 
 /** NEAR AI through the Rust side, which holds the key in the Keychain. */
 export const nearAiTransport: NearAiTransport = {
@@ -22,7 +23,12 @@ export const recordingFiles = {
 };
 
 /** What `notes.json` holds: the meeting plus everything the Verify page and NEAR proof need. */
-export type SavedNotes = Omit<ProcessResult, "meeting"> & { meeting: Meeting; processedAt: string };
+export type SavedNotes = Omit<ProcessResult, "meeting"> & {
+  meeting: Meeting;
+  processedAt: string;
+  /** Set once the proof is recorded on NEAR. */
+  onChain?: ProofOnChain;
+};
 
 // USDC amounts are bigints; JSON stores them as strings.
 export function serializeNotes(notes: SavedNotes): string {
