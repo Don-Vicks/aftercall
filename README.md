@@ -36,6 +36,7 @@ Needs Node 24, pnpm 10 and Rust (stable).
 
 ```bash
 pnpm install
+./scripts/dev.sh   # backend (Postgres), web pages and the Mac app together
 pnpm dev:desktop   # the Mac app (Tauri); first build compiles Rust for a few minutes
 pnpm dev:ui        # the same interface in a browser at http://localhost:1420
 pnpm test          # unit tests (core, backend)
@@ -77,7 +78,7 @@ Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.
 - [x] Agent wallet in the app: balance, spent today, caps, payees, pause, deposit and withdraw, read live from the contract; every change is signed in your own NEAR wallet through the web signing page. The page opens real NEAR wallets; a signed change on testnet waits on a testnet account
 - [x] Capped payment after one tap; payment states (sending, paid, failed with refund), sent with this Mac's limited key (pay is proven on a local NEAR node)
 - [x] Over-cap $5,000 blocked; approve-in-wallet web page (`/sign`, any NEAR wallet via NEAR Connect); app updates when the wallet signs (polls NEAR; first live check waits on a testnet account)
-- [x] Claim link: single-use link (7 days), phone claim page, owner confirms the payee in their wallet. Tested end to end against the backend; emailing the link waits on Resend
+- [x] Claim link: single-use link (7 days), stored in Postgres with only a hash of the token, phone claim page, owner confirms the payee in their wallet. Tested end to end against the backend; emailing the link waits on Resend
 - [x] Autopilot rules (team-domain recaps, listed payees within the per-payment cap and today's allowance), with a 60-second undo
 - [ ] Gate 2: the full demo works end to end on testnet
 - [ ] 5 Nov: public rough build and a video reply in the teaser thread to Illia

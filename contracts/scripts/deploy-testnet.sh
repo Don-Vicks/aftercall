@@ -14,6 +14,9 @@ CONTRACT="${2:-wallet}.${OWNER}"
 USDC="3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af"
 NET="network-config testnet"
 
+command -v near >/dev/null || { echo "Needs near-cli-rs: https://github.com/near/near-cli-rs#installation (then: near account import-account)"; exit 1; }
+command -v cargo-near >/dev/null || { echo "Needs cargo-near: https://github.com/near/cargo-near#installation"; exit 1; }
+
 cd "$(dirname "$0")/../agent-wallet"
 echo "Building agent-wallet…"
 cargo near build non-reproducible-wasm
