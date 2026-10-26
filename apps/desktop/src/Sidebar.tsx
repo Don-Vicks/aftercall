@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, House, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, House, Plus, Search } from "lucide-react";
 import { formatUsdc } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle, recordingWhen } from "./RecordingScreen";
@@ -23,9 +23,11 @@ export function Sidebar({
   pendingByMeeting,
   meetingTitles,
   homeSelected,
+  searchSelected,
   walletSelected,
   settingsSelected,
   onOpenHome,
+  onOpenSearch,
   onSelectMeeting,
   onNewRecording,
   onNewProject,
@@ -43,9 +45,11 @@ export function Sidebar({
   pendingByMeeting: Record<string, number>;
   meetingTitles: Record<string, string>;
   homeSelected: boolean;
+  searchSelected: boolean;
   walletSelected: boolean;
   settingsSelected: boolean;
   onOpenHome: () => void;
+  onOpenSearch: () => void;
   onSelectMeeting: (id: string) => void;
   onNewRecording: () => void;
   onNewProject: () => void;
@@ -115,7 +119,10 @@ export function Sidebar({
         <span className="ml-auto font-mono text-[11px] font-normal text-muted">⌘⇧R</span>
       </button>
 
-      <div className="-mt-3">{navRow("Home", homeSelected, onOpenHome, undefined, <House size={14} strokeWidth={1.75} aria-hidden="true" />)}</div>
+      <div className="-mt-3 flex flex-col gap-0.5">
+        {navRow("Home", homeSelected, onOpenHome, undefined, <House size={14} strokeWidth={1.75} aria-hidden="true" />)}
+        {navRow("Search", searchSelected, onOpenSearch, <span className="font-mono text-[11px] text-muted">⌘K</span>, <Search size={14} strokeWidth={1.75} aria-hidden="true" />)}
+      </div>
 
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center justify-between px-2 pb-2">

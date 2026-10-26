@@ -153,10 +153,32 @@ fn save_notes(app: AppHandle, id: String, notes: String) -> Result<(), String> {
     std::fs::write(recording_dir(&app, &id)?.join("notes.json"), notes).map_err(|e| e.to_string())
 }
 
-/// Deletes the audio once it has been transcribed. Notes and metadata stay.
+/// The cached transcription of one audio chunk, e.g. "mic-000".
+fn transcript_path(app: &AppHandle, id: &str, chunk: &str) -> Result<PathBuf, String> {
+    let valid = chunk.len() <= 32 && chunk.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    if !valid {
+        return Err("Bad chunk name".into());
+    }
+    Ok(recording_dir(app, id)?.join("transcripts").join(format!("{chunk}.json")))
+}
+
+#[tauri::command]
+fn read_chunk_transcript(app: AppHandle, id: String, chunk: String) -> Result<Option<String>, String> {
+    Ok(std::fs::read_to_string(transcript_path(&app, &id, &chunk)?).ok())
+}
+
+#[tauri::command]
+fn write_chunk_transcript(app: AppHandle, id: String, chunk: String, raw: String) -> Result<(), String> {
+    let path = transcript_path(&app, &id, &chunk)?;
+    std::fs::create_dir_all(path.parent().ok_or("No parent")?).map_err(|e| e.to_string())?;
+    std::fs::write(path, raw).map_err(|e| e.to_string())
+}
+
+/// Deletes the audio and the cached chunk transcriptions once the notes are saved.
 #[tauri::command]
 fn delete_audio(app: AppHandle, id: String) -> Result<usize, String> {
     let dir = recording_dir(&app, &id)?;
+    let _ = std::fs::remove_dir_all(dir.join("transcripts"));
     let mut deleted = 0;
     for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
         if e.path().extension().and_then(|x| x.to_str()) == Some("wav") {
@@ -351,7 +373,9 @@ pub fn run() {
             near_sign_in_message,
             list_projects,
             save_projects,
-            delete_recording
+            delete_recording,
+            read_chunk_transcript,
+            write_chunk_transcript
         ])
         .setup(|app| {
             // Menu bar item: start a recording or open the app from anywhere.

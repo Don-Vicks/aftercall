@@ -3,7 +3,7 @@ import { Check, FolderOpen, KeyRound } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatDuration, processRecording, type Stage } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
-import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, type SavedNotes } from "./nearai";
+import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
 import type { Payee } from "@aftercall/core";
 import { Button, Pill, Spinner, cx } from "./ui";
@@ -64,6 +64,7 @@ export function RecordingScreen({ recording, payees, onProcessed, onDelete }: { 
           chunks,
           payees,
           vocabulary: [recording.project, ...payees.map((p) => p.name)],
+          transcriptCache: transcriptCache(recording.id),
         },
         (stage, detail) => setRun({ state: "running", stage: order.indexOf(stage), detail }),
       );

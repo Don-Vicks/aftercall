@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AudioChunk, Meeting, NearAiTransport, ProcessResult } from "@aftercall/core";
+import type { AudioChunk, Meeting, NearAiTransport, ProcessResult, TranscriptCache } from "@aftercall/core";
 import type { ProofOnChain } from "./near";
 
 /** NEAR AI through the Rust side, which holds the key in the Keychain. */
@@ -15,6 +15,15 @@ export const nearAiKey = {
   set: (key: string) => invoke<void>("nearai_set_key", { key }),
   clear: () => invoke<void>("nearai_clear_key"),
 };
+
+/** Keeps each chunk's transcription next to the recording until the notes are saved. */
+export function transcriptCache(recordingId: string): TranscriptCache {
+  const name = (c: AudioChunk) => c.path.split("/").pop()!.replace(/\.wav$/, "");
+  return {
+    get: (c) => invoke<string | null>("read_chunk_transcript", { id: recordingId, chunk: name(c) }),
+    set: (c, raw) => invoke<void>("write_chunk_transcript", { id: recordingId, chunk: name(c), raw }),
+  };
+}
 
 export const recordingFiles = {
   chunks: (id: string) => invoke<AudioChunk[]>("list_chunks", { id }),

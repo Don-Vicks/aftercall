@@ -12,6 +12,7 @@ import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
 import { ConnectNear } from "./ConnectNear";
 import { VerifySheet } from "./VerifySheet";
 import { HomeScreen } from "./HomeScreen";
+import { SearchScreen } from "./SearchScreen";
 import { WalletScreen, type BlockedPayment } from "./WalletScreen";
 import { near } from "./near";
 import { recordingFiles } from "./nearai";
@@ -19,10 +20,12 @@ import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, sendRecap
 import { payees as samplePayees } from "./sample";
 import { deleteRecording, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
+import { Onboarding, needsOnboarding } from "./Onboarding";
 
 type View =
   | { name: "home" }
-  | { name: "meeting"; id: string }
+  | { name: "search" }
+  | { name: "meeting"; id: string; at?: number }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
   | { name: "settings" }
@@ -59,6 +62,7 @@ export default function App() {
   const [limits, setLimits] = useState<WalletLimits | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [onboarding, setOnboarding] = useState(needsOnboarding);
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<bigint | null>(null);
 
@@ -147,6 +151,10 @@ export default function App() {
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
         setRecordOpen(true);
+      }
+      if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setView({ name: "search" });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -290,6 +298,8 @@ export default function App() {
         walletSelected={view.name === "wallet"}
         settingsSelected={view.name === "settings"}
         onOpenHome={() => setView({ name: "home" })}
+        searchSelected={view.name === "search"}
+        onOpenSearch={() => setView({ name: "search" })}
         onNewProject={() => setNewProjectOpen(true)}
         onSelectMeeting={(id) =>
           meetings[id]
@@ -305,7 +315,8 @@ export default function App() {
 
       {view.name === "meeting" && meeting && (
         <MeetingScreen
-          key={meeting.id}
+          key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
+          openAt={view.name === "meeting" ? view.at : undefined}
           meeting={meeting}
           leftToday={meeting.id === syncWithAda.id ? null : leftToday}
           onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
@@ -356,6 +367,12 @@ export default function App() {
         />
       )}
       {view.name === "settings" && <ConnectNear />}
+      {view.name === "search" && (
+        <SearchScreen
+          meetings={Object.values(meetings)}
+          onOpen={(id, at) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id })}
+        />
+      )}
       {verifyId && saved[verifyId] && (
         <VerifySheet
           recordingId={verifyId}
@@ -382,6 +399,14 @@ export default function App() {
         </main>
       )}
 
+      {onboarding && (
+        <Onboarding
+          onDone={(record) => {
+            setOnboarding(false);
+            if (record) setRecordOpen(true);
+          }}
+        />
+      )}
       {newProjectOpen && <NewProjectSheet existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
       {recordOpen && (
         <RecordPanel

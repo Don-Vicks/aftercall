@@ -13,6 +13,7 @@ export function MeetingScreen({
   onOpenVerify,
   handlers,
   onDelete,
+  openAt,
 }: {
   meeting: Meeting;
   /** What the agent wallet can still pay today, when connected. */
@@ -22,9 +23,11 @@ export function MeetingScreen({
   handlers: Omit<FollowUpHandlers, "onJumpTo">;
   /** Real meetings can be deleted from this Mac. */
   onDelete?: () => void;
+  /** Opens on the transcript at this second (from search). */
+  openAt?: number;
 }) {
-  const [tab, setTab] = useState<Tab>("notes");
-  const [target, setTarget] = useState<{ at: number; quote: string } | null>(null);
+  const [tab, setTab] = useState<Tab>(openAt === undefined ? "notes" : "transcript");
+  const [target, setTarget] = useState<{ at: number; quote: string } | null>(openAt === undefined ? null : { at: openAt, quote: "" });
 
   const jumpTo = (at: number, quote: string) => {
     setTarget({ at, quote });
