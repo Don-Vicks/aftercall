@@ -56,6 +56,17 @@ impl KeyPair {
     }
 }
 
+// ---------- NEP-413 ----------
+
+/// NEP-413 "sign in with NEAR": signs sha256(tag ++ borsh(message, nonce, recipient, None)).
+/// Returns the signature as base64, as wallets do.
+pub fn sign_message(key: &KeyPair, message: &str, nonce: &[u8; 32], recipient: &str) -> String {
+    let mut b = Borsh::default();
+    b.u32((1u32 << 31) + 413).string(message).raw(nonce).string(recipient).u8(0);
+    let hash: [u8; 32] = Sha256::digest(&b.0).into();
+    base64::engine::general_purpose::STANDARD.encode(key.0.sign(&hash).to_bytes())
+}
+
 // ---------- borsh ----------
 
 #[derive(Default)]
@@ -200,6 +211,15 @@ impl Client {
         }
     }
 
+    /// Whether an account exists.
+    pub async fn account_exists(&self, account: &str) -> Result<bool, Error> {
+        match self.rpc("query", json!({ "request_type": "view_account", "finality": "optimistic", "account_id": account })).await {
+            Ok(_) => Ok(true),
+            Err(e) if e.contains("UNKNOWN_ACCOUNT") || e.contains("does not exist") => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Calls a view method and parses its JSON result.
     pub async fn view(&self, contract: &str, method: &str, args: &Value) -> Result<Value, Error> {
         let args = base64::engine::general_purpose::STANDARD.encode(args.to_string());
@@ -290,5 +310,20 @@ mod tests {
         let raw = base64::engine::general_purpose::STANDARD.decode(signed).unwrap();
         assert_eq!(raw.len(), tx.len() + 1 + 64);
         assert_eq!(hash, bs58::encode(Sha256::digest(&tx)).into_string());
+    }
+}
+
+#[cfg(test)]
+mod nep413_tests {
+    use super::*;
+
+    #[test]
+    fn signs_the_nep413_payload() {
+        let key = KeyPair(SigningKey::from_bytes(&[2u8; 32]));
+        let sig = sign_message(&key, "Sign in to Aftercall", &[7u8; 32], "aftercall");
+        let raw = base64::engine::general_purpose::STANDARD.decode(&sig).unwrap();
+        assert_eq!(raw.len(), 64);
+        // Print a vector for the cross-check against the backend's TypeScript verifier.
+        println!("NEP413_VECTOR {} {}", key.public_key(), sig);
     }
 }
