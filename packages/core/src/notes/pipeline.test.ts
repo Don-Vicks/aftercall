@@ -110,3 +110,18 @@ test("a model reply outside the schema stops processing", async () => {
   const bad = fakeNearAi({ notes: { title: "x" } });
   await assert.rejects(processRecording(bad.transport, input, undefined, noWait));
 });
+
+test("a retry after the summary fails reuses the transcription instead of paying for it again", async () => {
+  const ai = fakeNearAi({ notes });
+  const stored = new Map<string, string>();
+  const cache = { get: async (c: { path: string }) => stored.get(c.path) ?? null, set: async (c: { path: string }, raw: string) => void stored.set(c.path, raw) };
+  const failingChat = { ...ai.transport, chat: async () => { throw new Error("gateway timeout"); } };
+
+  await assert.rejects(processRecording(failingChat, { ...input, transcriptCache: cache }, undefined, noWait), /gateway timeout/);
+  assert.equal(stored.size, 2, "both chunks were kept");
+  const transcribedBefore = ai.calls.filter((c) => c.startsWith("transcribe")).length;
+
+  const result = await processRecording(ai.transport, { ...input, transcriptCache: cache }, undefined, noWait);
+  assert.equal(ai.calls.filter((c) => c.startsWith("transcribe")).length, transcribedBefore, "no new transcription calls");
+  assert.equal(result.meeting.verified, true);
+});

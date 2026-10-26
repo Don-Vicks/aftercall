@@ -10,3 +10,4 @@ export * from "./notes/proof.ts";
 export * from "./wallet/actions.ts";
 export * from "./followups/recap.ts";
 export * from "./followups/autopilot.ts";
+export * from "./search/search.ts";

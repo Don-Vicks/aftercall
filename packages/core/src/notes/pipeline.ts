@@ -42,6 +42,16 @@ export interface ProcessInput {
   payees: Payee[];
   /** Names Whisper should spell right: payees, project, people. */
   vocabulary: string[];
+  /**
+   * Keeps each chunk's transcription, so a retry after a later step fails doesn't
+   * pay to transcribe the same audio again.
+   */
+  transcriptCache?: TranscriptCache;
+}
+
+export interface TranscriptCache {
+  get(chunk: AudioChunk): Promise<string | null>;
+  set(chunk: AudioChunk, raw: string): Promise<void>;
 }
 
 export interface ProofBundle {
@@ -112,7 +122,12 @@ export async function processRecording(
   const transcribed: TranscribedChunk[] = [];
   for (const [i, chunk] of input.chunks.entries()) {
     onStage("transcribe", `${i + 1} of ${input.chunks.length}`);
-    const result = JSON.parse(await t.transcribe(chunk.path, WHISPER_MODEL, prompt)) as WhisperResult;
+    let raw = (await input.transcriptCache?.get(chunk).catch(() => null)) ?? null;
+    if (raw === null) {
+      raw = await t.transcribe(chunk.path, WHISPER_MODEL, prompt);
+      await input.transcriptCache?.set(chunk, raw).catch(() => {});
+    }
+    const result = JSON.parse(raw) as WhisperResult;
     transcribed.push({ speaker: chunk.speaker, index: chunk.index, result });
   }
   const transcript = mergeTranscript(transcribed, input.chunkSeconds);
