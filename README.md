@@ -43,7 +43,7 @@ pnpm test          # unit tests (core, backend)
 
 Contract tests: see [`contracts/README.md`](contracts/README.md). Backend settings: copy `apps/backend/.env.example` to `.env`.
 
-Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. Meetings, approvals and processing still run on sample data (`apps/desktop/src/sample.ts`) until NEAR AI and the contract are wired in (M2–M4).
+Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. With a NEAR AI key (pasted once in the app, kept in the macOS Keychain) a recording becomes notes: Whisper and Qwen3.8-27B in NEAR AI's secure hardware, the summary's signature checked against the attested signer, only quote-backed items kept, then the audio is deleted. Approving a follow-up on real notes does nothing yet (M4); the sample meeting still simulates it. Payees come from `apps/desktop/src/sample.ts` until the contract is wired in.
 
 ## Plan
 
@@ -56,12 +56,12 @@ Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.
 - [ ] Silence watchdog: warn when system audio is exact zeros for 30 s. Built and unit-tested; still to see it fire live (record with System Audio Recording turned off)
 
 ### M2 · Day 3 (2026-11-03): Private notes
-- [ ] Transcribe each chunk with Whisper on NEAR AI, passing payee and project names as the prompt
-- [ ] Label "You" (mic) and "Others" (system audio) by transcribing the two stems
-- [ ] Summarise with Qwen3.8-27B into the zod schema (decisions, action items, follow-ups, evidence quotes); drop items whose quote isn't in the transcript
-- [ ] Meeting page and transcript view with quote links
+- [ ] Transcribe each chunk with Whisper on NEAR AI, passing payee and project names as the prompt. Built and tested against a fake NEAR AI; first real run waits on a NEAR AI key
+- [x] Label "You" (mic) and "Others" (system audio) by transcribing the two stems
+- [ ] Summarise with Qwen3.8-27B into the zod schema (decisions, action items, follow-ups, evidence quotes); drop items whose quote isn't in the transcript. Built and tested with a fake model; real quality check waits on the key
+- [x] Meeting page and transcript view with quote links, on real notes once a recording is processed
 - [ ] Backend mints a spend-limited NEAR AI key per user
-- [ ] Attestation preflight and response-signature check for the summary call
+- [ ] Attestation preflight and response-signature check for the summary call. Built; signature recovery matches ethers on 20 of 20 messages; first check against real NEAR AI waits on the key
 
 ### M3 · Day 4 (2026-11-04): Proof anyone can check
 - [ ] Deploy the contract to testnet; app adds the limited key (pay, record_proof)
