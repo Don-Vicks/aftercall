@@ -9,7 +9,8 @@
     "dev:backend": "pnpm --filter @aftercall/backend dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "verify": "./scripts/verify.sh"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
