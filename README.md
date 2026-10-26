@@ -28,7 +28,7 @@ Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) �
 | Contract | Rust, near-sdk 5.29, cargo-near 0.22, near-sandbox tests; Circle USDC (NEP-141) |
 | Wallets | @hot-labs/near-connect |
 
-Repo layout: `apps/desktop` (Tauri app), `apps/backend` (NestJS), `apps/web` (Next.js), `packages/core` (shared types and helpers), `contracts/agent-wallet` (coming in M1), `docs/` (rules, design source).
+Repo layout: `apps/desktop` (Tauri app), `apps/backend` (NestJS), `apps/web` (Next.js), `packages/core` (shared types and helpers), `contracts/agent-wallet` (NEAR contract), `docs/` (rules, design source).
 
 ## Run it
 
@@ -38,20 +38,22 @@ Needs Node 24, pnpm 10 and Rust (stable).
 pnpm install
 pnpm dev:desktop   # the Mac app (Tauri); first build compiles Rust for a few minutes
 pnpm dev:ui        # the same interface in a browser at http://localhost:1420
-pnpm test          # unit tests
+pnpm test          # unit tests (core, backend)
 ```
 
-The desktop interface currently runs on sample data (`apps/desktop/src/sample.ts`): approving a follow-up and processing a recording are simulated until capture, NEAR AI and the contract are wired in (M1–M4).
+Contract tests: see [`contracts/README.md`](contracts/README.md). Backend settings: copy `apps/backend/.env.example` to `.env`.
+
+Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. Meetings, approvals and processing still run on sample data (`apps/desktop/src/sample.ts`) until NEAR AI and the contract are wired in (M2–M4).
 
 ## Plan
 
 ### M1 · Day 1 (2026-11-01): Foundations
-- [ ] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
+- [x] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
 - [x] Desktop interface from the design on sample data: meeting page, follow-ups with "check before you approve", transcript with evidence links, recording panel with the consent tick, processing stages, light and dark
-- [ ] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute WebM/Opus chunks
-- [ ] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI
-- [ ] NestJS backend with NEP-413 NEAR login and a JWT session
-- [ ] Silence watchdog: warn when system audio is exact zeros for 30 s
+- [ ] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute 16 kHz WAV chunks (about 9.6 MB each, under NEAR AI's 25 MB limit). Built and unit-tested; waiting on a real-call check in the app bundle
+- [x] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI (16 tests pass locally; the CI workflow runs them on push)
+- [x] NestJS backend with NEP-413 NEAR login and a JWT session
+- [ ] Silence watchdog: warn when system audio is exact zeros for 30 s. Built and unit-tested; checked with the real-call test
 
 ### M2 · Day 3 (2026-11-03): Private notes
 - [ ] Transcribe each chunk with Whisper on NEAR AI, passing payee and project names as the prompt
