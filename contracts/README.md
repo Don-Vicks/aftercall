@@ -18,7 +18,7 @@ cargo test -p agent-wallet --lib                                  # unit tests
 cargo test -p agent-wallet --test sandbox -- --test-threads=1     # local NEAR node; needs cargo-near and the wasm32 target
 ```
 
-17 tests: 4 unit, 13 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token, and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer, the private callback and proof storage.
+18 tests: 5 unit, 13 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token, and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer, the private callback and proof storage.
 
 The last sandbox test drives the contract through `crates/near-tx`, the desktop app's own signer, over the node's JSON-RPC: the app's limited key records a proof, is refused a duplicate, pays a listed payee, and can't change a rule.
 

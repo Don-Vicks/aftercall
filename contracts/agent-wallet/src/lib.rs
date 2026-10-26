@@ -23,6 +23,7 @@ const MIN_GAS_FOR_PAY: Gas = Gas::from_tgas(50);
 /// 0.05 NEAR, kept as the user's storage credit for proofs and parked payments.
 const MIN_REGISTRATION: NearToken = NearToken::from_millinear(50);
 const MAX_PENDING: u32 = 20;
+const MAX_PAYEES: usize = 50;
 
 #[derive(BorshStorageKey)]
 #[near]
@@ -66,6 +67,13 @@ pub struct Proof {
     pub recorded_at: u64,
 }
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Payee {
+    pub account: AccountId,
+    pub label: String,
+}
+
 #[near(serializers = [json])]
 pub struct PayResult {
     /// "sending" (transfer started; the outcome lands in the callback) or "blocked".
@@ -86,8 +94,8 @@ trait FungibleToken {
 pub struct AgentWallet {
     usdc: AccountId,
     wallets: LookupMap<AccountId, Wallet>,
-    /// (owner, payee) -> label
-    payees: LookupMap<(AccountId, AccountId), String>,
+    /// owner -> their payees (at most 50), so the app can list them.
+    payees: LookupMap<AccountId, Vec<Payee>>,
     /// (owner, follow-up id) for every payment sent or in flight.
     paid: LookupSet<(AccountId, String)>,
     /// (owner, follow-up id) -> payment parked for the owner's approval.
@@ -183,7 +191,14 @@ impl AgentWallet {
         self.wallet_mut(&owner);
         require!(label.len() <= 64, "LABEL_TOO_LONG");
         self.with_storage(&owner, |this| {
-            this.payees.insert((owner.clone(), payee), label);
+            let list = this.payees.entry(owner.clone()).or_default();
+            match list.iter_mut().find(|p| p.account == payee) {
+                Some(existing) => existing.label = label,
+                None => {
+                    require!(list.len() < MAX_PAYEES, "TOO_MANY_PAYEES");
+                    list.push(Payee { account: payee, label });
+                }
+            }
             this.payees.flush();
         });
     }
@@ -193,7 +208,9 @@ impl AgentWallet {
         assert_one_yocto();
         let owner = env::predecessor_account_id();
         self.with_storage(&owner, |this| {
-            this.payees.remove(&(owner.clone(), payee));
+            if let Some(list) = this.payees.get_mut(&owner) {
+                list.retain(|p| p.account != payee);
+            }
             this.payees.flush();
         });
     }
@@ -321,7 +338,11 @@ impl AgentWallet {
     }
 
     pub fn get_payee_label(&self, owner: AccountId, payee: AccountId) -> Option<String> {
-        self.payees.get(&(owner, payee)).cloned()
+        self.payees.get(&owner)?.iter().find(|p| p.account == payee).map(|p| p.label.clone())
+    }
+
+    pub fn get_payees(&self, owner: AccountId) -> Vec<Payee> {
+        self.payees.get(&owner).cloned().unwrap_or_default()
     }
 
     pub fn is_paid(&self, owner: AccountId, followup_id: String) -> bool {
@@ -349,7 +370,7 @@ impl AgentWallet {
     fn check_payable(&mut self, owner: &AccountId, payee: &AccountId, amount: U128, followup_id: &str) {
         require!(followup_id.len() <= 64, "FOLLOWUP_ID_TOO_LONG");
         require!(!self.paid.contains(&(owner.clone(), followup_id.to_string())), "ALREADY_PAID");
-        require!(self.payees.get(&(owner.clone(), payee.clone())).is_some(), "UNKNOWN_PAYEE");
+        require!(self.payees.get(owner).is_some_and(|list| list.iter().any(|p| &p.account == payee)), "UNKNOWN_PAYEE");
         let w = self.wallet_mut(owner);
         require!(!w.paused, "PAUSED");
         require!(w.balance.0 >= amount.0, "LOW_BALANCE");
@@ -494,6 +515,19 @@ mod tests {
         assert_eq!(w.pending_count, 0);
         assert_eq!(w.balance.0, 1_000 * USDC);
         assert!(c.get_pending(owner, "big".into()).is_none());
+    }
+
+    #[test]
+    fn payees_are_listed_relabelled_and_removed() {
+        let (mut c, owner, payee) = funded(10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.add_payee(accounts(3), "Legal review".into());
+        c.add_payee(payee.clone(), "Designer, deck".into());
+        let list = c.get_payees(owner.clone());
+        assert_eq!(list.iter().map(|p| p.label.as_str()).collect::<Vec<_>>(), ["Designer, deck", "Legal review"]);
+        c.remove_payee(payee.clone());
+        assert_eq!(c.get_payees(owner.clone()).len(), 1);
+        assert_eq!(c.get_payee_label(owner, payee), None);
     }
 
     #[test]

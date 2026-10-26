@@ -43,7 +43,7 @@ pnpm test          # unit tests (core, backend)
 
 Contract tests: see [`contracts/README.md`](contracts/README.md). Backend settings: copy `apps/backend/.env.example` to `.env`.
 
-Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. With a NEAR AI key (pasted once in the app, kept in the macOS Keychain) a recording becomes notes: Whisper and Qwen3.8-27B in NEAR AI's secure hardware, the summary's signature checked against the attested signer, only quote-backed items kept, then the audio is deleted. If NEAR is connected (Settings), the proof hash is recorded with `record_proof`; the Verify sheet re-checks it live and copies a public link to the web Verify page. Approving a follow-up on real notes does nothing yet (M4); the sample meeting still simulates it. Payees come from `apps/desktop/src/sample.ts` until the contract is wired in.
+Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.wav` (Others) to `~/Library/Application Support/dev.aftercall.app/recordings/<id>/`. macOS only grants system-audio capture to the bundled app, so test recording with `pnpm --filter @aftercall/desktop tauri build --debug --bundles app` and open the `.app`. With a NEAR AI key (pasted once in the app, kept in the macOS Keychain) a recording becomes notes: Whisper and Qwen3.8-27B in NEAR AI's secure hardware, the summary's signature checked against the attested signer, only quote-backed items kept, then the audio is deleted. The app opens on Home: start a recording, what needs you, recent meetings and setup. If NEAR is connected (Settings), the proof hash is recorded with `record_proof`; the Verify sheet re-checks it live and copies a public link to the web Verify page. On real notes, approving a payment pays through the contract and a recap sends through the backend; the sample meeting only simulates both. Payees come from `apps/desktop/src/sample.ts` until the contract is wired in.
 
 ## Plan
 
@@ -72,13 +72,13 @@ Recording is real in the Mac app: it writes `mic-NNN.wav` (You) and `system-NNN.
 - [ ] Gate 1: a real call becomes verified notes with a public proof link
 
 ### M4 · Day 7 (2026-11-07): It does what the meeting decided
-- [ ] Recap email card: Approve and send (Resend, consent line) or Draft in Mail
-- [ ] Payment card with the "check before you approve" row (heard words vs parsed amount and payee)
-- [ ] Agent wallet in the app: deposit testnet USDC, set caps, add payees
-- [ ] Capped payment after one tap; payment states (sending, paid, failed with refund)
-- [ ] Over-cap $5,000 blocked; approve-in-wallet web page; app updates when the wallet signs
-- [ ] Claim link: email, phone claim page, owner confirms in wallet
-- [ ] Autopilot rules (internal recaps, listed payees, per-payment cap)
+- [x] Recap email card: Approve and send (backend + Resend, consent line, 50 a day per account) or Draft in Mail (opens your own mail app; nothing leaves the Mac). Sending through Resend waits on a Resend key
+- [x] Payment card with the "check before you approve" row (heard words vs parsed amount and payee)
+- [x] Agent wallet in the app: balance, spent today, caps, payees, pause, deposit and withdraw, read live from the contract; every change is signed in your own NEAR wallet through the web signing page. The page opens real NEAR wallets; a signed change on testnet waits on a testnet account
+- [x] Capped payment after one tap; payment states (sending, paid, failed with refund), sent with this Mac's limited key (pay is proven on a local NEAR node)
+- [x] Over-cap $5,000 blocked; approve-in-wallet web page (`/sign`, any NEAR wallet via NEAR Connect); app updates when the wallet signs (polls NEAR; first live check waits on a testnet account)
+- [x] Claim link: single-use link (7 days), phone claim page, owner confirms the payee in their wallet. Tested end to end against the backend; emailing the link waits on Resend
+- [x] Autopilot rules (team-domain recaps, listed payees within the per-payment cap and today's allowance), with a 60-second undo
 - [ ] Gate 2: the full demo works end to end on testnet
 - [ ] 5 Nov: public rough build and a video reply in the teaser thread to Illia
 
