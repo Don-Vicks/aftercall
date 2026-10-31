@@ -1,12 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AudioChunk, Meeting, NearAiTransport, ProcessResult, TranscriptCache } from "@aftercall/core";
+import type { AudioChunk, Meeting, NearAiTransport, ProcessResult, ProofBundle, QuoteReport, TeeCheck, TranscriptCache } from "@aftercall/core";
 import type { ProofOnChain } from "./near";
 
-/** NEAR AI through the Rust side, which holds the key in the Keychain. */
+/**
+ * NEAR AI, Intel PCS and NVIDIA NRAS through the Rust side, which holds the key
+ * in the Keychain and can reach services that don't allow browser requests.
+ */
 export const nearAiTransport: NearAiTransport = {
   transcribe: (path, model, prompt) => invoke<string>("nearai_transcribe", { path, model, prompt }),
-  chat: (body) => invoke<string>("nearai_chat", { body }),
+  chat: (body, e2ee) => invoke<string>("nearai_chat", { body, e2ee: e2ee ?? null }),
   get: (path) => invoke<string>("nearai_get", { path }),
+  verifyQuote: (quote) => invoke<QuoteReport>("tee_verify_quote", { quote }),
+  nvidiaAttest: (payload) => invoke<string>("tee_nvidia_attest", { payload }),
+  nvidiaKeys: () => invoke<string>("tee_nvidia_keys"),
   randomHex: () => Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => b.toString(16).padStart(2, "0")).join(""),
 };
 
@@ -35,9 +41,15 @@ export const recordingFiles = {
   deleteAudio: (id: string) => invoke<number>("delete_audio", { id }),
 };
 
-/** What `notes.json` holds: the meeting plus everything the Verify page and NEAR proof need. */
-export type SavedNotes = Omit<ProcessResult, "meeting"> & {
+/**
+ * What `notes.json` holds: the meeting plus everything the Verify page and NEAR
+ * proof need. Notes made before full attestation checks have a version 1 proof
+ * and no `checks`.
+ */
+export type SavedNotes = Omit<ProcessResult, "meeting" | "proof" | "checks"> & {
   meeting: Meeting;
+  proof: ProofBundle;
+  checks?: TeeCheck[];
   processedAt: string;
   /** Set once the proof is recorded on NEAR. */
   onChain?: ProofOnChain;

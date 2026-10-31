@@ -28,9 +28,9 @@ export function recordingStartedAt(r: SavedRecording): string {
 }
 
 const STAGES: { id: Stage | "proof" | "deleted"; title: string; detail: string }[] = [
-  { id: "attest", title: "Secure hardware checked", detail: "Whisper and Qwen3.8-27B attested with a fresh nonce" },
+  { id: "attest", title: "Secure hardware checked", detail: "Gateway, Whisper and Qwen3.8-27B checked with Intel and NVIDIA, fresh nonce" },
   { id: "transcribe", title: "Transcribed", detail: "Whisper in NEAR AI secure hardware; You and Others kept apart" },
-  { id: "summarise", title: "Writing the notes", detail: "Decisions, action items and follow-ups, each with an exact quote" },
+  { id: "summarise", title: "Writing the notes", detail: "Transcript encrypted to the attested model; each item needs an exact quote" },
   { id: "signature", title: "Signature checked", detail: "Summary signed by the attested model" },
   { id: "proof", title: "Proof recorded on NEAR", detail: "record_proof from this Mac's limited key" },
   { id: "deleted", title: "Audio deleted from this Mac", detail: "Only the transcript and notes are kept" },
