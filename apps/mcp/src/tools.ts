@@ -1,30 +1,30 @@
 import { formatClock, formatUsdc, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
-import { readMeetings, readNotes, readProjects, updateNotes, type StoredMeeting } from "./store.ts";
+import { claimItem, completeItem, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
 
 /**
- * The tools behind the MCP server, as plain functions over the data dir so they
- * can be tested without a transport. Everything here reads, except claiming and
- * completing an action item, which change only that item in notes.json.
+ * The tools behind the MCP server, as plain functions over the channel to the app
+ * (store.ts), so they can be tested without an MCP transport. Everything here reads,
+ * except claiming and completing an action item, which the app does on that one item.
  */
 
 const norm = (s: string) => s.trim().toLowerCase();
 
 /** Accepts a project's name or id. */
-async function projectMatcher(dataDir: string, project?: string): Promise<(m: Meeting) => boolean> {
+async function projectMatcher(app: AppChannel, project?: string): Promise<(m: Meeting) => boolean> {
   if (!project) return () => true;
   const wanted = norm(project);
-  const byId = (await readProjects(dataDir)).find((p) => norm(p.id) === wanted);
+  const byId = (await readProjects(app)).find((p) => norm(p.id) === wanted);
   const name = norm(byId?.name ?? project);
   return (m) => norm(m.project) === name;
 }
 
 const isOpen = (a: ActionItem) => !a.done;
 
-export async function listMeetings(dataDir: string, args: { project?: string; limit?: number } = {}) {
-  const inProject = await projectMatcher(dataDir, args.project);
-  const all = (await readMeetings(dataDir)).filter((s) => inProject(s.notes.meeting));
+export async function listMeetings(app: AppChannel, args: { project?: string; limit?: number } = {}) {
+  const inProject = await projectMatcher(app, args.project);
+  const all = (await readMeetings(app)).filter((s) => inProject(s.notes.meeting));
   return {
-    projects: (await readProjects(dataDir)).map((p) => p.name),
+    projects: (await readProjects(app)).map((p) => p.name),
     meetings: all.slice(0, args.limit ?? 50).map(({ id, notes }) => {
       const m = notes.meeting;
       return {
@@ -72,10 +72,8 @@ function itemView(meetingId: string, m: Meeting, a: ActionItem) {
   };
 }
 
-export async function getMeeting(dataDir: string, args: { id: string; includeTranscript?: boolean }) {
-  const notes = await readNotes(dataDir, args.id).catch(() => {
-    throw new Error(`No processed meeting with id "${args.id}". Use list_meetings to see ids.`);
-  });
+export async function getMeeting(app: AppChannel, args: { id: string; includeTranscript?: boolean }) {
+  const notes = await readNotes(app, args.id);
   const m = notes.meeting;
   return {
     id: args.id,
@@ -92,9 +90,9 @@ export async function getMeeting(dataDir: string, args: { id: string; includeTra
   };
 }
 
-export async function search(dataDir: string, args: { query: string; project?: string }) {
-  const inProject = await projectMatcher(dataDir, args.project);
-  const meetings = (await readMeetings(dataDir)).map((s) => ({ ...s.notes.meeting, id: s.id })).filter(inProject);
+export async function search(app: AppChannel, args: { query: string; project?: string }) {
+  const inProject = await projectMatcher(app, args.project);
+  const meetings = (await readMeetings(app)).map((s) => ({ ...s.notes.meeting, id: s.id })).filter(inProject);
   const r = searchMeetings(meetings, args.query);
   return {
     meetingsMatched: r.meetings,
@@ -105,12 +103,12 @@ export async function search(dataDir: string, args: { query: string; project?: s
 }
 
 export async function listActionItems(
-  dataDir: string,
+  app: AppChannel,
   args: { owner?: string; project?: string; includeClaimed?: boolean; includeDone?: boolean } = {},
 ) {
-  const inProject = await projectMatcher(dataDir, args.project);
+  const inProject = await projectMatcher(app, args.project);
   const owner = args.owner ? norm(args.owner) : null;
-  const items = (await readMeetings(dataDir)).flatMap(({ id, notes }: StoredMeeting) =>
+  const items = (await readMeetings(app)).flatMap(({ id, notes }: StoredMeeting) =>
     inProject(notes.meeting)
       ? notes.meeting.actionItems
           .filter((a) => args.includeDone || !a.done)
@@ -122,52 +120,10 @@ export async function listActionItems(
   return { items, total: items.length };
 }
 
-function checkAgent(agent: string): string {
-  const name = agent.trim();
-  if (!name || name.length > 60) throw new Error("Give your agent name, 1 to 60 characters (e.g. \"Claude Code\")");
-  return name;
+export async function claimActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string }) {
+  return { claimed: true, item: await claimItem(app, args) };
 }
 
-function findItem(notes: { meeting: Meeting }, itemId: string): ActionItem {
-  const item = notes.meeting.actionItems.find((a) => a.id === itemId);
-  if (!item) throw new Error(`No action item "${itemId}" in this meeting. Use get_meeting to see item ids.`);
-  return item;
-}
-
-export async function claimActionItem(dataDir: string, args: { meetingId: string; itemId: string; agent: string }, now = () => new Date()) {
-  const agent = checkAgent(args.agent);
-  let result: ActionItem | undefined;
-  await updateNotes(dataDir, args.meetingId, (notes) => {
-    const item = findItem(notes, args.itemId);
-    if (item.done) throw new Error("This action item is already done");
-    if (item.claimed && item.claimed.agent !== agent) {
-      throw new Error(`Already claimed by ${item.claimed.agent} at ${item.claimed.at}`);
-    }
-    item.claimed ??= { agent, at: now().toISOString() };
-    result = item;
-  });
-  return { claimed: true, item: result };
-}
-
-export async function completeActionItem(
-  dataDir: string,
-  args: { meetingId: string; itemId: string; agent: string; note?: string },
-  now = () => new Date(),
-) {
-  const agent = checkAgent(args.agent);
-  const note = args.note?.trim().slice(0, 500) || undefined;
-  let result: ActionItem | undefined;
-  await updateNotes(dataDir, args.meetingId, (notes) => {
-    const item = findItem(notes, args.itemId);
-    if (item.done) throw new Error("This action item is already done");
-    if (item.claimed && item.claimed.agent !== agent) {
-      throw new Error(`Claimed by ${item.claimed.agent}; only that agent can complete it`);
-    }
-    const at = now().toISOString();
-    item.claimed ??= { agent, at };
-    item.done = true;
-    item.completed = { agent, at, ...(note ? { note } : {}) };
-    result = item;
-  });
-  return { completed: true, item: result };
+export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string }) {
+  return { completed: true, item: await completeItem(app, args) };
 }

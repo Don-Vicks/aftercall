@@ -134,7 +134,8 @@ pub async fn transcribe(file: PathBuf, model: String, prompt: String) -> Result<
 
 async fn tokio_read(path: &Path) -> Result<Vec<u8>, String> {
     let path = path.to_path_buf();
-    tauri::async_runtime::spawn_blocking(move || std::fs::read(path)).await.map_err(|e| e.to_string())?.map_err(|e| e.to_string())
+    // Chunks are encrypted at rest: decrypt in memory only, never to a file.
+    tauri::async_runtime::spawn_blocking(move || crate::at_rest::read_audio(&path).map(|wav| wav.to_vec())).await.map_err(|e| e.to_string())?
 }
 
 pub async fn chat(body: String) -> Result<String, String> {

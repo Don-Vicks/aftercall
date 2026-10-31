@@ -1,26 +1,35 @@
-import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Meeting } from "@aftercall/core";
+import type { ActionItem, Meeting } from "@aftercall/core";
 
 /**
- * Reads and writes the files the Aftercall app keeps on this Mac:
+ * Talks to the running Aftercall app. Meetings are encrypted on disk with a key in
+ * the macOS Keychain, so this server can't read them as files. While the user has
+ * Settings → Connected agents turned on, the app listens on a Unix socket,
+ * `<data dir>/agents/aftercall.sock` (owner-only), and answers one JSON request per
+ * line, each carrying the token shown on that screen
+ * (apps/desktop/src-tauri/src/agents.rs):
  *
- *   <data dir>/projects.json                  [{ id, name }]
- *   <data dir>/recordings/<id>/meeting.json   recording metadata
- *   <data dir>/recordings/<id>/notes.json     the processed meeting (once processed)
+ *   → {"token":"…","op":"projects"|"meetings"|"notes"|"claim"|"complete", ...args}
+ *   ← {"ok":true,"result":…} or {"ok":false,"error":"…"}
  *
- * Writes follow the same rules as the app (apps/desktop/src-tauri/src/notes_file.rs):
- * take `notes.json.lock`, re-read the file, change it, write a temp file and rename it
- * over the old one. A reader never sees half a file and two writers never lose each
- * other's change.
+ * The app does every write itself, under the same lock as its own saves, and only
+ * lets an agent claim or complete one action item.
  */
 
 /** Where the app keeps its data: Tauri's app data dir for `dev.aftercall.app`. */
 export function defaultDataDir(): string {
   return process.env.AFTERCALL_DATA_DIR || join(homedir(), "Library", "Application Support", "dev.aftercall.app");
 }
+
+export function socketPathFor(dataDir: string): string {
+  return join(dataDir, "agents", "aftercall.sock");
+}
+
+export const NOT_RUNNING = "Aftercall isn't reachable. Open Aftercall and turn on Connected agents (Settings → Connected agents).";
+export const NO_TOKEN =
+  "This MCP server has no Aftercall token. Open Aftercall, turn on Connected agents and run the setup command it shows (it sets AFTERCALL_TOKEN).";
 
 export interface Project {
   id: string;
@@ -41,98 +50,72 @@ export interface StoredMeeting {
   notes: NotesFile;
 }
 
-const LOCK_STALE_MS = 10_000;
-const LOCK_WAIT_MS = 5_000;
+/** One request to the app; resolves with its result or rejects with its error. */
+export type AppChannel = (op: string, args?: Record<string, unknown>) => Promise<unknown>;
 
-/** Recording ids are the Unix second they started; anything else could point outside the folder. */
+/** A channel over the app's Unix socket. Each call is one short connection. */
+export function connectApp(opts: { socketPath: string; token: string | undefined; timeoutMs?: number }): AppChannel {
+  return (op, args = {}) =>
+    new Promise((resolve, reject) => {
+      if (!opts.token) return reject(new Error(NO_TOKEN));
+      const sock = createConnection(opts.socketPath);
+      let buf = "";
+      let settled = false;
+      const done = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        sock.destroy();
+        fn();
+      };
+      sock.setTimeout(opts.timeoutMs ?? 10_000, () => done(() => reject(new Error("Aftercall didn't answer in time. Is it still open?"))));
+      sock.on("connect", () => sock.write(JSON.stringify({ ...args, token: opts.token, op }) + "\n"));
+      sock.on("data", (d) => {
+        buf += d.toString("utf8");
+        const nl = buf.indexOf("\n");
+        if (nl < 0) return;
+        done(() => {
+          try {
+            const reply = JSON.parse(buf.slice(0, nl)) as { ok: boolean; result?: unknown; error?: string };
+            if (reply.ok) resolve(reply.result);
+            else reject(new Error(reply.error || "Aftercall refused the request"));
+          } catch {
+            reject(new Error("Aftercall sent a reply this server can't read"));
+          }
+        });
+      });
+      // No socket (agents off, app closed) or one left by a crash: nobody is listening.
+      sock.on("error", (e: NodeJS.ErrnoException) =>
+        done(() => reject(new Error(["ENOENT", "ECONNREFUSED", "ENOTSOCK"].includes(e.code ?? "") ? NOT_RUNNING : `${NOT_RUNNING} (${e.message})`))),
+      );
+      sock.on("end", () => done(() => reject(new Error(NOT_RUNNING))));
+    });
+}
+
+/** Recording ids are the Unix second they started. */
 export function checkId(id: string): string {
   if (!/^\d{1,20}$/.test(id)) throw new Error(`No meeting with id "${id}"`);
   return id;
 }
 
-const recordingsDir = (dataDir: string) => join(dataDir, "recordings");
-const notesPath = (dataDir: string, id: string) => join(recordingsDir(dataDir), checkId(id), "notes.json");
-
-export async function readProjects(dataDir: string): Promise<Project[]> {
-  try {
-    return JSON.parse(await readFile(join(dataDir, "projects.json"), "utf8")) as Project[];
-  } catch {
-    return [{ id: "general", name: "General" }];
-  }
+export async function readProjects(app: AppChannel): Promise<Project[]> {
+  return (await app("projects")) as Project[];
 }
 
-/** Every processed meeting, newest first. Unprocessed or damaged recordings are skipped. */
-export async function readMeetings(dataDir: string): Promise<StoredMeeting[]> {
-  let ids: string[];
-  try {
-    ids = (await readdir(recordingsDir(dataDir))).filter((d) => /^\d+$/.test(d));
-  } catch {
-    return [];
-  }
-  const out: StoredMeeting[] = [];
-  for (const id of ids) {
-    const notes = await readNotes(dataDir, id).catch(() => null);
-    if (notes?.meeting) out.push({ id, notes });
-  }
-  return out.sort((a, b) => Number(b.id) - Number(a.id));
+/** Every processed meeting, newest first. */
+export async function readMeetings(app: AppChannel): Promise<StoredMeeting[]> {
+  return (await app("meetings")) as StoredMeeting[];
 }
 
-export async function readNotes(dataDir: string, id: string): Promise<NotesFile> {
-  return JSON.parse(await readFile(notesPath(dataDir, id), "utf8")) as NotesFile;
+export async function readNotes(app: AppChannel, id: string): Promise<NotesFile> {
+  return (await app("notes", { id })) as NotesFile;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Holds `<file>.lock` while `fn` runs. A lock older than 10 s is left over from a crash and is taken over. */
-export async function withLock<T>(file: string, fn: () => Promise<T>): Promise<T> {
-  const lock = `${file}.lock`;
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      const h = await open(lock, "wx");
-      await h.writeFile(`mcp ${process.pid}`);
-      await h.close();
-      break;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
-      if (age > LOCK_STALE_MS) await rm(lock, { force: true });
-      else if (Date.now() > deadline) throw new Error("The notes file is busy; try again in a moment");
-      else await sleep(15 + Math.random() * 30);
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    await rm(lock, { force: true });
-  }
+/** Claims one action item for `agent`; the app stamps the time. */
+export async function claimItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string }): Promise<ActionItem> {
+  return ((await app("claim", args)) as { item: ActionItem }).item;
 }
 
-/** Writes a temp file next to `file`, then renames it over `file`. */
-export async function writeAtomic(file: string, contents: string): Promise<void> {
-  const tmp = `${file}.tmp-${process.pid}-${randomBytes(4).toString("hex")}`;
-  await writeFile(tmp, contents);
-  try {
-    await rename(tmp, file);
-  } catch (e) {
-    await rm(tmp, { force: true });
-    throw e;
-  }
-}
-
-/** Locks, re-reads notes.json, applies `change` and saves it. Returns the saved notes. */
-export async function updateNotes(dataDir: string, id: string, change: (notes: NotesFile) => void): Promise<NotesFile> {
-  const file = notesPath(dataDir, id);
-  await mkdir(join(recordingsDir(dataDir), id), { recursive: true });
-  return withLock(file, async () => {
-    let notes: NotesFile;
-    try {
-      notes = JSON.parse(await readFile(file, "utf8")) as NotesFile;
-    } catch {
-      throw new Error(`No processed meeting with id "${id}"`);
-    }
-    change(notes);
-    await writeAtomic(file, JSON.stringify(notes, null, 2));
-    return notes;
-  });
+/** Completes one action item for `agent`, with an optional note; the app stamps the time. */
+export async function completeItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string }): Promise<ActionItem> {
+  return ((await app("complete", args)) as { item: ActionItem }).item;
 }

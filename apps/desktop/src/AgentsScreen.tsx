@@ -3,7 +3,7 @@ import { Check, Copy, X } from "lucide-react";
 import type { Meeting } from "@aftercall/core";
 import { PREVIEW_INFO, agentActivity, agentsApi, claudeCommand, codexConfig, type AgentsInfo } from "./agents";
 import { isDesktop } from "./recorder";
-import { Pill, SectionLabel, cx } from "./ui";
+import { Button, Pill, SectionLabel, cx } from "./ui";
 
 const CAN = [
   "List meetings and search them, on this Mac",
@@ -17,20 +17,38 @@ const CANNOT = [
   "Make payments or touch the agent wallet",
   "Record proofs on NEAR",
   "Change notes, decisions or follow-ups, or delete anything",
-  "Reach the internet: the server only reads and writes files in Aftercall's folder",
+  "Reach meetings while this switch is off or Aftercall is closed",
+  "Reach the internet: the server only talks to Aftercall, on this Mac",
 ];
 
 /**
  * Connects coding agents (Claude Code, Codex) to Aftercall through the local MCP
- * server in apps/mcp, so they can pick up action items from meetings.
+ * server in apps/mcp, so they can pick up action items from meetings. Meetings are
+ * encrypted on disk, so the server asks the app over a local socket that is open
+ * only while the switch here is on, and only with the token shown here.
  */
 export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[]; onOpenMeeting: (id: string) => void }) {
   const [info, setInfo] = useState<AgentsInfo>(PREVIEW_INFO);
   const [copied, setCopied] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isDesktop) agentsApi.info().then(setInfo).catch(() => {});
   }, []);
+
+  const change = async (fn: () => Promise<AgentsInfo>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setInfo(await fn());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggle = () => (isDesktop ? change(() => agentsApi.setEnabled(!info.enabled)) : setInfo({ ...info, enabled: !info.enabled }));
 
   const copy = async (label: string, text: string) => {
     await navigator.clipboard.writeText(text);
@@ -50,28 +68,74 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
           <span className="t-label text-muted">Settings</span>
           <h1 className="t-display m-0">Connected agents</h1>
           <p className="t-reading m-0 text-muted">
-            Let Claude Code or Codex pick up action items from your meetings. They talk to a small server on this Mac that reads Aftercall's files. Nothing is sent anywhere.
+            Let Claude Code or Codex pick up action items from your meetings. They talk to a small server on this Mac, which asks Aftercall over a private local channel while this is on. Nothing is sent anywhere.
           </p>
         </header>
 
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Claude Code</SectionLabel>
-          <p className="m-0 text-muted">Run this once in Terminal. It adds Aftercall to every project.</p>
-          <Snippet text={claude} copied={copied === "claude"} onCopy={() => copy("claude", claude)} />
+        <section className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
+          <div className="flex items-start gap-4 px-5 py-4">
+            <span className="flex flex-1 flex-col gap-0.5">
+              <span id="agents-switch" className="t-title">
+                Let agents reach my meetings
+              </span>
+              <span className="text-muted">
+                {info.enabled
+                  ? "On while Aftercall is open. Agents need the token below. Turning this off closes the channel and forgets the token."
+                  : "Off. No agent can read your meetings. Turn on to get a setup command with a fresh token."}
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={info.enabled}
+              aria-labelledby="agents-switch"
+              disabled={busy}
+              onClick={toggle}
+              className={cx(
+                "relative mt-0.5 h-[22px] w-[38px] shrink-0 rounded-full transition-colors disabled:opacity-40",
+                info.enabled ? "bg-verdigris" : "bg-elevated shadow-[inset_0_0_0_1px_var(--border)]",
+              )}
+            >
+              <span className={cx("absolute top-[3px] size-4 rounded-full bg-raised shadow transition-[left]", info.enabled ? "left-[19px]" : "left-[3px]")} />
+            </button>
+          </div>
+          {info.enabled && (
+            <div className="flex items-center gap-3 border-t border-hairline px-5 py-3">
+              <span className="text-muted">Token</span>
+              <span className="t-mono selectable min-w-0 flex-1 truncate">{info.token ?? "(preview)"}</span>
+              <Button variant="ghost" disabled={busy || !isDesktop} onClick={() => change(agentsApi.newToken)}>
+                New token
+              </Button>
+            </div>
+          )}
+          {error && <p className="m-0 border-t border-hairline px-5 py-3 text-caution">Couldn't change Connected agents: {error}</p>}
         </section>
 
-        <section className="flex flex-col gap-3">
-          <SectionLabel>Codex</SectionLabel>
-          <p className="m-0 text-muted">
-            Add this to <span className="t-mono text-ink">~/.codex/config.toml</span>, then restart Codex.
-          </p>
-          <Snippet text={codex} copied={copied === "codex"} onCopy={() => copy("codex", codex)} />
-        </section>
+        {info.enabled ? (
+          <>
+            <section className="flex flex-col gap-3">
+              <SectionLabel>Claude Code</SectionLabel>
+              <p className="m-0 text-muted">Run this in Terminal. It adds Aftercall to every project, replacing an older setup. Run it again after a new token.</p>
+              <Snippet text={claude} copied={copied === "claude"} onCopy={() => copy("claude", claude)} />
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <SectionLabel>Codex</SectionLabel>
+              <p className="m-0 text-muted">
+                Add this to <span className="t-mono text-ink">~/.codex/config.toml</span> (replace an older Aftercall block), then restart Codex.
+              </p>
+              <Snippet text={codex} copied={copied === "codex"} onCopy={() => copy("codex", codex)} />
+            </section>
+          </>
+        ) : (
+          <p className="m-0 text-muted">The setup commands for Claude Code and Codex appear here once agents are on.</p>
+        )}
 
         <section className="flex flex-col gap-3">
           <SectionLabel>The server</SectionLabel>
           <Path label="Server (Node 24)" value={info.serverPath} />
-          <Path label="Meetings folder" value={info.dataDir} />
+          <Path label="Meetings folder (encrypted)" value={info.dataDir} />
+          <Path label="Local channel, open only while agents are on" value={info.socketPath} />
           {isDesktop && !info.serverFound && (
             <p className="m-0 text-caution">The server isn't at that path. It ships in the Aftercall repo under apps/mcp; run pnpm install there first.</p>
           )}
@@ -80,6 +144,16 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
         <section className="grid grid-cols-2 gap-6">
           <List title="Agents can" items={CAN} icon={<Check size={14} strokeWidth={2} className="mt-[3px] shrink-0 text-verdigris" aria-hidden="true" />} />
           <List title="Agents can't" items={CANNOT} icon={<X size={14} strokeWidth={2} className="mt-[3px] shrink-0 text-muted" aria-hidden="true" />} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <SectionLabel>How your meetings are kept</SectionLabel>
+          <p className="m-0 text-muted">
+            Audio, transcripts and notes are encrypted on disk with a key kept in your macOS Keychain. Other apps, and backup or sync tools that copy Aftercall's folder, see only scrambled bytes.
+          </p>
+          <p className="m-0 text-muted">
+            It doesn't protect against someone using your Mac while you're signed in, or malware running as you that can open your Keychain. While agents are on, the token sits in your agent's config file, so software that can read that file can reach your meetings too.
+          </p>
         </section>
 
         <section className="flex flex-col gap-3">

@@ -5,6 +5,10 @@
 //!
 //! It reports levels for the meter and warns when a stem has been exact zeros
 //! for 30 seconds, which is how a missing system-audio permission shows up.
+//!
+//! Chunks are encrypted as they are written (at_rest::AudioWriter): about one second
+//! of audio is held in memory, then sealed and appended. No plaintext audio touches
+//! the disk, and a crash loses at most that last second.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,6 +18,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use ringbuf::traits::Consumer;
 use serde::Serialize;
+
+use crate::at_rest::{AudioWriter, Key};
 
 pub const TARGET_RATE: u32 = 16_000;
 pub const CHUNK_SECONDS: u64 = 300;
@@ -120,7 +126,8 @@ struct Stem {
     dir: PathBuf,
     resampler: Resampler,
     source_rate: u32,
-    writer: Option<hound::WavWriter<std::io::BufWriter<fs::File>>>,
+    key: Key,
+    writer: Option<AudioWriter>,
     silence: SilenceWatch,
     raw: Vec<f32>,
     out: Vec<f32>,
@@ -128,10 +135,11 @@ struct Stem {
 }
 
 impl Stem {
-    fn new(name: &'static str, dir: &Path, source_rate: u32) -> Self {
+    fn new(name: &'static str, dir: &Path, source_rate: u32, key: &Key) -> Self {
         Self {
             name,
             dir: dir.to_path_buf(),
+            key: key.clone(),
             resampler: Resampler::new(source_rate),
             source_rate,
             writer: None,
@@ -143,14 +151,13 @@ impl Stem {
     }
 
     fn open(&mut self, index: usize) -> Result<()> {
-        let spec = hound::WavSpec { channels: 1, sample_rate: TARGET_RATE, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
-        self.writer = Some(hound::WavWriter::create(chunk_path(&self.dir, self.name, index), spec)?);
+        self.writer = Some(AudioWriter::create(&chunk_path(&self.dir, self.name, index), &self.key, TARGET_RATE).map_err(anyhow::Error::msg)?);
         Ok(())
     }
 
     fn close(&mut self) -> Result<()> {
         if let Some(w) = self.writer.take() {
-            w.finalize()?;
+            w.finish().map_err(anyhow::Error::msg)?;
         }
         Ok(())
     }
@@ -180,7 +187,7 @@ impl Stem {
             self.resampler.process(chunk, &mut self.out);
             if let Some(w) = self.writer.as_mut() {
                 for &s in &self.out {
-                    w.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)?;
+                    w.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).map_err(anyhow::Error::msg)?;
                 }
             }
         }
@@ -241,13 +248,14 @@ pub struct Recording {
 
 impl Recording {
     /// Starts both sources on a new thread and waits until they are running.
-    pub fn start(dir: PathBuf, events: impl Events) -> Result<(Self, RecordingInfo)> {
+    /// Chunks are encrypted with `key` (the data key from at_rest).
+    pub fn start(dir: PathBuf, key: Key, events: impl Events) -> Result<(Self, RecordingInfo)> {
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
         let (commands, inbox) = mpsc::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
         std::thread::Builder::new()
             .name("recorder".into())
-            .spawn(move || run(dir, inbox, ready_tx, events))?;
+            .spawn(move || run(dir, key, inbox, ready_tx, events))?;
         let info = ready_rx.recv().context("recorder thread ended")?.map_err(anyhow::Error::msg)?;
         Ok((Self { commands }, info))
     }
@@ -263,7 +271,7 @@ impl Recording {
     }
 }
 
-fn run(dir: PathBuf, inbox: Receiver<Command>, ready: Sender<Result<RecordingInfo, String>>, events: impl Events) {
+fn run(dir: PathBuf, key: Key, inbox: Receiver<Command>, ready: Sender<Result<RecordingInfo, String>>, events: impl Events) {
     // The audio devices are created and dropped on this thread; they are not Send.
     #[cfg(target_os = "macos")]
     let speaker = crate::capture::start_speaker();
@@ -285,8 +293,8 @@ fn run(dir: PathBuf, inbox: Receiver<Command>, ready: Sender<Result<RecordingInf
         }
     };
 
-    let mut mic_stem = Stem::new("mic", &dir, mic.sample_rate);
-    let mut sys_stem = system.as_ref().map(|s| Stem::new("system", &dir, s.sample_rate));
+    let mut mic_stem = Stem::new("mic", &dir, mic.sample_rate, &key);
+    let mut sys_stem = system.as_ref().map(|s| Stem::new("system", &dir, s.sample_rate, &key));
     let mut index = 0;
     let open_all = |index: usize, mic_stem: &mut Stem, sys_stem: &mut Option<Stem>| -> Result<()> {
         mic_stem.open(index)?;
@@ -429,6 +437,37 @@ mod tests {
         let mut w = SilenceWatch::default();
         let quiet = vec![0.0001f32; 40_000];
         assert!(matches!(w.feed(&quiet, 1_000), SilenceChange::None));
+    }
+
+    #[test]
+    fn a_stem_writes_its_chunk_encrypted_and_it_decrypts_to_the_same_audio() {
+        use ringbuf::traits::{Producer, Split};
+        let dir = std::env::temp_dir().join(format!("aftercall-recorder-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let key = crate::at_rest::new_key().unwrap();
+        let (mut prod, mut cons) = ringbuf::HeapRb::<f32>::new(64_000).split();
+        let mut stem = Stem::new("mic", &dir, TARGET_RATE, &key);
+        stem.open(0).unwrap();
+        // 2.5 s of a tone at 16 kHz: two whole frames and a half one sealed on close.
+        let tone: Vec<f32> = (0..40_000).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        for part in tone.chunks(8_000) {
+            prod.push_slice(part);
+            stem.drain(&mut cons, true).unwrap();
+        }
+        stem.close().unwrap();
+
+        let raw = fs::read(chunk_path(&dir, "mic", 0)).unwrap();
+        assert!(!raw.starts_with(b"RIFF"), "a plaintext WAV header on disk");
+        assert!(!raw.windows(4).any(|w| w == b"WAVE" || w == b"data"));
+        let wav = crate::at_rest::open_audio(&key, &raw).unwrap();
+        let reader = hound::WavReader::new(std::io::Cursor::new(wav.to_vec())).unwrap();
+        assert_eq!((reader.spec().sample_rate, reader.spec().channels, reader.spec().bits_per_sample), (TARGET_RATE, 1, 16));
+        let samples: Vec<i16> = reader.into_samples::<i16>().map(Result::unwrap).collect();
+        assert!((samples.len() as i64 - 40_000).abs() <= 2, "{} samples", samples.len());
+        // At 16 kHz the resampler passes samples through, one sample late.
+        assert_eq!(samples[1001], (tone[1000] * i16::MAX as f32) as i16);
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

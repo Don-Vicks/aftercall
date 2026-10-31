@@ -50,10 +50,11 @@ pub fn install(recordings: &Path, sample: &str, project: &str, now: u64) -> Resu
     if !project.is_empty() && project.chars().count() <= 60 {
         meta["project"] = project.into();
     }
-    std::fs::write(dir.join("mic-000.wav"), s.mic).map_err(|e| e.to_string())?;
-    std::fs::write(dir.join("system-000.wav"), s.system).map_err(|e| e.to_string())?;
+    // Fictional, but stored like any recording: sealed with the data key, never plaintext on disk.
+    crate::at_rest::write_bytes(&dir.join("mic-000.wav"), s.mic)?;
+    crate::at_rest::write_bytes(&dir.join("system-000.wav"), s.system)?;
     // meeting.json last: list_recordings only shows folders that have one.
-    std::fs::write(dir.join("meeting.json"), serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    crate::at_rest::write_json(&dir.join("meeting.json"), &meta)?;
     Ok(dir)
 }
 
@@ -80,7 +81,7 @@ mod tests {
         assert_eq!(first, root.join("1800000000"));
         assert_eq!(second, root.join("1800000001"), "a taken id is skipped");
 
-        let meta: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(first.join("meeting.json")).unwrap()).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(&crate::at_rest::read_string(&first.join("meeting.json")).unwrap()).unwrap();
         assert_eq!(meta["id"], "1800000000");
         assert_eq!(meta["startedAt"], 1_800_000_000u64);
         assert_eq!(meta["project"], "General");
@@ -88,7 +89,7 @@ mod tests {
         assert_eq!(meta["chunks"], 1);
         assert!(first.join("mic-000.wav").exists() && first.join("system-000.wav").exists());
 
-        let kept: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(second.join("meeting.json")).unwrap()).unwrap();
+        let kept: serde_json::Value = serde_json::from_str(&crate::at_rest::read_string(&second.join("meeting.json")).unwrap()).unwrap();
         assert!(kept["project"].as_str().unwrap().starts_with("Sample"), "no project keeps the sample's own");
         assert!(install(&root, "../etc", "General", 1).is_err());
         std::fs::remove_dir_all(root).unwrap();

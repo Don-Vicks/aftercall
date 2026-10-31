@@ -1,12 +1,15 @@
-//! notes.json is written by the app and by the local MCP server (apps/mcp), which
-//! lets agents claim and complete action items. Both follow the same rules: hold
-//! `notes.json.lock`, re-read the file, change it, write a temp file and rename it
-//! over the old one. A lock older than 10 s is left over from a crash and is taken over.
+//! notes.json is written by the interface and, through the app, by connected agents
+//! (agents.rs), which claim and complete action items. Every write follows the same
+//! rules: hold `notes.json.lock`, re-read the file, change it, write a temp file and
+//! rename it over the old one. A lock older than 10 s is left over from a crash and is
+//! taken over. The file is encrypted at rest (at_rest.rs); the lock file holds no content.
 
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
+
+use crate::at_rest;
 
 use serde_json::Value;
 
@@ -49,17 +52,14 @@ pub fn with_lock<T>(file: &Path, f: impl FnOnce() -> Result<T, String>) -> Resul
     out
 }
 
-/// Writes a temp file next to `file`, then renames it over `file`.
+/// Encrypts `contents`, writes a temp file next to `file`, then renames it over `file`.
 pub fn write_atomic(file: &Path, contents: &str) -> Result<(), String> {
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
-    let mut tmp = file.as_os_str().to_owned();
-    tmp.push(format!(".tmp-{}-{nanos:x}", std::process::id()));
-    let tmp = PathBuf::from(tmp);
-    std::fs::write(&tmp, contents).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, file).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        e.to_string()
-    })
+    at_rest::write_string(file, contents)
+}
+
+/// The notes on disk (encrypted, or plaintext from an earlier version).
+pub fn read(file: &Path) -> Result<Value, String> {
+    serde_json::from_str(&at_rest::read_string(file)?).map_err(|e| e.to_string())
 }
 
 /// Copies done/claimed/completed for each action item from the notes on disk into
@@ -84,7 +84,7 @@ pub fn keep_item_state(incoming: &mut Value, disk: &Value) {
 pub fn save(file: &Path, notes: &str) -> Result<(), String> {
     let mut incoming: Value = serde_json::from_str(notes).map_err(|e| e.to_string())?;
     with_lock(file, || {
-        if let Some(disk) = std::fs::read_to_string(file).ok().and_then(|s| serde_json::from_str::<Value>(&s).ok()) {
+        if let Ok(disk) = read(file) {
             keep_item_state(&mut incoming, &disk);
         }
         write_atomic(file, &serde_json::to_string_pretty(&incoming).map_err(|e| e.to_string())?)
@@ -95,7 +95,7 @@ pub fn save(file: &Path, notes: &str) -> Result<(), String> {
 /// Returns the saved notes.
 pub fn set_item_done(file: &Path, item_id: &str, done: bool) -> Result<String, String> {
     with_lock(file, || {
-        let mut notes: Value = serde_json::from_str(&std::fs::read_to_string(file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut notes = read(file)?;
         let item = notes["meeting"]["actionItems"]
             .as_array_mut()
             .and_then(|items| items.iter_mut().find(|i| i["id"] == item_id))
@@ -113,10 +113,19 @@ pub fn set_item_done(file: &Path, item_id: &str, done: bool) -> Result<String, S
 
 /// Rewrites a JSON file under its lock (used when re-filing meetings under another project).
 pub fn update(file: &Path, change: impl FnOnce(&mut Value)) -> Result<(), String> {
+    try_update(file, |v| {
+        change(v);
+        Ok(())
+    })
+}
+
+/// Like `update`, but `change` may refuse; then nothing is written.
+pub fn try_update<T>(file: &Path, change: impl FnOnce(&mut Value) -> Result<T, String>) -> Result<T, String> {
     with_lock(file, || {
-        let mut v: Value = serde_json::from_str(&std::fs::read_to_string(file).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-        change(&mut v);
-        write_atomic(file, &serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?)
+        let mut v = read(file)?;
+        let out = change(&mut v)?;
+        write_atomic(file, &serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?)?;
+        Ok(out)
     })
 }
 
@@ -124,9 +133,11 @@ pub fn update(file: &Path, change: impl FnOnce(&mut Value)) -> Result<(), String
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::time::SystemTime;
 
     fn temp_notes(v: &Value) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("aftercall-notes-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("notes.json");
         std::fs::write(&file, v.to_string()).unwrap();
@@ -145,7 +156,8 @@ mod tests {
         let mut stale = notes(json!([{ "id": "a1", "text": "Send plan", "done": false }, { "id": "a2", "done": false }]));
         stale["meeting"]["title"] = "Renamed".into();
         save(&file, &stale.to_string()).unwrap();
-        let saved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert!(at_rest::is_sealed(&std::fs::read(&file).unwrap()), "saved encrypted");
+        let saved = read(&file).unwrap();
         assert_eq!(saved["meeting"]["title"], "Renamed");
         assert_eq!(saved["meeting"]["actionItems"][0]["claimed"], claim);
         assert_eq!(saved["meeting"]["actionItems"][1]["done"], true);
@@ -172,5 +184,20 @@ mod tests {
         std::fs::File::options().write(true).open(&lock).unwrap().set_modified(old).unwrap();
         set_item_done(&file, "a1", true).unwrap();
         assert!(!lock.exists());
+    }
+
+    #[test]
+    fn notes_save_and_load_encrypted_and_plaintext_is_migrated_on_save() {
+        let file = temp_notes(&notes(json!([{ "id": "a1", "text": "Send the board deck", "done": false }])));
+        // Written by an earlier version: plaintext, still readable.
+        assert!(!at_rest::is_sealed(&std::fs::read(&file).unwrap()));
+        assert_eq!(read(&file).unwrap()["meeting"]["actionItems"][0]["text"], "Send the board deck");
+        let json = set_item_done(&file, "a1", true).unwrap();
+        let raw = std::fs::read(&file).unwrap();
+        assert!(at_rest::is_sealed(&raw));
+        assert!(!raw.windows(10).any(|w| w == b"board deck"));
+        assert_eq!(read(&file).unwrap(), serde_json::from_str::<Value>(&json).unwrap());
+        let leftovers: Vec<_> = std::fs::read_dir(file.parent().unwrap()).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(leftovers, ["notes.json"]);
     }
 }
