@@ -2,6 +2,8 @@
 
 Private meeting notes that do the follow-ups. Built for NEAR HACKATHON (1–14 Nov 2026).
 
+**The problem:** meetings are some of the most sensitive things people say, and every AI note-taker asks you to trust a company with them. Aftercall sends your audio and transcript only to models running in NEAR AI Cloud's secure hardware, checks that hardware's attestation on every run, encrypts the transcript so only the attested model can read it, and keeps nothing on its own servers.
+
 Aftercall records a call on your Mac, transcribes and summarises it inside NEAR AI Cloud's secure hardware (TEEs), and records a proof of that on NEAR that anyone can check. Then it does what the meeting decided: the recap email goes out and the agreed payment is made in USDC on NEAR, after one approval or under autopilot rules you set. A NEAR contract caps what the app can ever pay, so even a hijacked app or a tricked AI can't overspend.
 
 > **Status:** in development for NEAR HACKATHON (tracks: privacy, security, agents). Building started on 26 Oct 2026, after the event was announced on 19 Oct; the official FAQ counts code from the announcement onward ([HACKATHON.md](https://nearhackathon.com/HACKATHON.md), Q-001), so the whole history is hackathon work. The commit history shows the real timeline. What runs against live NEAR AI and NEAR testnet, and what is so far proven only locally, is listed under [What is proven](#what-is-proven).
@@ -10,8 +12,10 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 
 | Do | See |
 | --- | --- |
-| `pnpm install && pnpm verify --quick` | Typecheck of every package, 65 core, 24 backend and 14 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs), the web build, the NEAR signer, the recorder, recovery and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (16 more tests, about 5 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
+| `pnpm install && pnpm verify --quick` | Typecheck of every package, 102 core, 27 backend and 14 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs), the web build, the NEAR signer, the desktop Rust tests (recorder, encryption at rest, TDX quote verification, recovery) and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (16 more tests, about 5 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
 | `pnpm dev:ui`, open http://localhost:1420 | The Mac app's interface in a browser on a sample meeting: Home, search (sidebar), follow-ups with "check before you approve", the $5,000 payment the contract blocks, the transcript with evidence links. Recording is simulated in the browser. |
+| `pnpm sample:notes` (needs `NEAR_AI_API_KEY` in `.env`) | One of the two fictional sample calls in [`samples/`](samples) goes through the real pipeline on NEAR AI Cloud: every attestation check below, Whisper on both stems, the transcript end-to-end encrypted to the attested Qwen TEE, the strict-schema summary and the signature check. It prints the notes (including a 40 USDC deposit to the designer, with its quote) and ✓/✗ for every check, grouped Gateway / Whisper TEE / Qwen TEE / Response. `pnpm sample:notes all` runs both. Without a key it stops before sending anything. |
+| In the Mac app: Home → "Open a sample recording", then Make notes | The same sample becomes an ordinary recording labelled Sample, processed with your NEAR AI key; the Verify sheet lists every check. In `pnpm dev:ui` it opens with its script. |
 | `pnpm --filter @aftercall/web dev`, open http://localhost:3000/verify | The public Verify page. With a proof link (`/verify#…`, copied from the app's Verify sheet) it reads the proof from NEAR and re-runs every check in your browser. |
 | Read [`contracts/agent-wallet/src/lib.rs`](contracts/agent-wallet/src/lib.rs) and [`tests/sandbox.rs`](contracts/agent-wallet/tests/sandbox.rs) | Why the app can't overspend: its key can call only `pay` and `record_proof`, every rule change needs 1 yoctoNEAR (which a limited key can't attach), and over-cap payments park until the owner's own wallet approves. Each claim has a test on a real local NEAR node. |
 | Read [`packages/core/src/notes/`](packages/core/src/notes) | The notes pipeline: two audio stems become one transcript, the model's output must match a strict schema, any item without an exact quote from the transcript is dropped, amounts are read from the spoken words (never from the model's number), and the summary's signature must recover to the attested enclave. |
@@ -22,7 +26,12 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
  Mac app (Tauri)                                  NEAR AI Cloud (TEEs)
  ├─ Core Audio tap + mic → mic/system WAV ───────▶ openai/whisper-large-v3
  ├─ notes pipeline (packages/core) ──────────────▶ Qwen/Qwen3.8-27B (strict JSON schema)
- │    attestation (fresh nonce) + response signature checked against the attested signer
+ │    every run: fresh nonce → Intel TDX quote (dcap-qvl) → report data binds key + nonce
+ │    → RTMR3 event log, compose hash in mr_config → NVIDIA GPU evidence via NRAS (JWTs checked
+ │    against NVIDIA's keys) → response signature from that attested key; gateway TEE too.
+ │    Fail closed: nothing is sent unless the gateway and the model TEEs pass.
+ │    Transcript encrypted on the Mac to the Qwen TEE's attested key (E2EE v2)
+ ├─ audio, transcripts, notes encrypted at rest (XChaCha20-Poly1305, key in Keychain)
  ├─ NEAR AI key in the macOS Keychain; called from Rust, only for Aftercall's own audio
  ├─ app key in the Keychain (limited: pay, record_proof) ──▶ agent-wallet contract on NEAR
  │                                                            ├─ record_proof(meeting, sha256 of proof bundle)
@@ -32,19 +41,20 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
  ├─ pay on Solana or Base: 1Click quote → pay(…, cross_chain) to its deposit address, same caps
  ├─ macOS calendar (EventKit) → meeting names and recap addresses
  ├─ recovery phrase → app key (SLIP-10) + encrypted backup of notes and settings
- └─ local MCP server (apps/mcp): agents read meetings, claim and complete action items
+ └─ local MCP server (apps/mcp): agents read meetings, claim and complete action items,
+      only through the running app (owner-only socket + token), off by default
 
  Web (Next.js)                                    Backend (NestJS + Postgres)
  ├─ /verify  re-runs the proof checks in the browser  ├─ sign-in with NEAR (NEP-413); app keys accepted
  ├─ /sign    owner actions signed in any NEAR wallet  ├─ recap email via Resend (consent line required)
- └─ /claim   payee shares where to be paid            └─ single-use claim links (only token hashes stored)
+ └─ /claim   payee shares where to be paid            └─ single-use claim links (token hash + amount; no names or titles)
 ```
 
 ## NEAR pieces used
 
 | Piece | Where |
 | --- | --- |
-| NEAR AI Cloud: Confidential TEE models (Whisper, Qwen3.8-27B), attestation reports, response signatures | `packages/core/src/notes/pipeline.ts`, `verify.ts`; Rust transport `apps/desktop/src-tauri/src/nearai.rs` |
+| NEAR AI Cloud: Confidential TEE models (Whisper, Qwen3.8-27B) through the OpenAI-compatible API; attestation reports verified the way [the verification docs](https://docs.near.ai/cloud/verification) and NEAR's [reference verifier](https://github.com/nearai/nearai-cloud-verifier) describe; response signatures; end-to-end encrypted chat | `packages/core/src/tee/` (checks, NVIDIA, E2EE), `packages/core/src/notes/pipeline.ts`; Rust `apps/desktop/src-tauri/src/attest.rs` (TDX quotes with dcap-qvl, NRAS) and `nearai.rs` |
 | A NEAR smart contract (near-sdk 5.29): caps, payees, parked payments, proof registry, per-user storage | `contracts/agent-wallet` |
 | Function-call access keys as the app's limited authority; the 1-yocto rule for owner methods | `crates/near-tx`, `contracts/agent-wallet` |
 | NEP-141 (Circle USDC): `ft_transfer_call` deposits, payee registration with `storage_deposit` | `contracts/agent-wallet`, `packages/core/src/wallet/actions.ts` |
@@ -68,10 +78,25 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | A locked contract (no full-access keys) still serves owners and the app key, and can't be redeployed | `locked_contract_still_serves_owners_and_the_app_key` (sandbox) |
 | A cross-chain payment goes to the 1Click deposit address under the same caps and pause, only for payees the owner opted in | `cross_chain_pays_the_deposit_address_within_caps` and the refusal tests (sandbox); the 1Click client against recorded responses (`oneclick.test.ts`) |
 | The same recovery phrase always gives the same app key, distinct from the NEAR wallet's own key; backups fail with a wrong phrase or a changed byte | `recovery.rs` tests, with the BIP39 and SLIP-10 test vectors |
-| Agents racing for one action item: exactly one claim wins, and no write is lost | `apps/mcp/src/tools.test.ts` (20 concurrent writes, 6 racing agents), plus a real stdio `tools/list` run |
+| Agents racing for one action item: exactly one claim wins, and no write is lost | `concurrent_claims_of_one_item_have_one_winner` and `writes_change_only_the_one_item_and_stay_encrypted` (`apps/desktop/src-tauri/src/agents.rs`); the MCP tools through the socket client (`apps/mcp/src/tools.test.ts`), plus a real stdio `tools/list` run |
+| A genuine Intel TDX quote verifies against Intel's collateral; a changed byte, expired collateral or garbage doesn't | `apps/desktop/src-tauri/tests/tdx_quote.rs` (Phala's sample quote and collateral); live Intel PCS fetch checked |
+| Each attestation check catches its own failure: key or nonce not in the report data, wrong compose, broken event log, revoked TCB, debug TD; NVIDIA tokens not signed by NVIDIA, stale nonce, secure boot off | `packages/core/src/tee/checks.test.ts`, `nvidia.test.ts` |
+| Nothing leaves the Mac unless the gateway and the model TEEs pass; the transcript is encrypted to the attested model, never falling back to plaintext when a node failed | `pipeline.test.ts`: "nothing leaves the Mac when the gateway or Whisper TEE fails a check", "a failing summary node is avoided by pinning E2EE to a verified one", "no plaintext fallback when E2EE is refused and a summary node failed"; `e2ee.test.ts` (cross-checked against Node's own X25519 and HKDF) |
+| Audio never touches the disk unencrypted; notes and transcripts are sealed; any changed byte or wrong key fails | `audio_round_trips_as_a_wav_and_has_no_riff_on_disk`, `any_tampered_byte_fails`, `wrong_key_fails`, `plaintext_files_are_read_then_sealed_by_migration` (`at_rest.rs`) |
+| The backend keeps nothing about a recap after sending it, and nothing about a claim beyond a token hash and amount | `email.test.ts`: "a sent recap leaves only counts behind…"; `claims.test.ts` (the live Postgres table has only the allowed columns) |
 | `/stats` returns counts only | `apps/backend/src/stats/stats.test.ts` |
 
-**Not proven yet:** a run against live NEAR AI (waits on an API key), the contract on testnet and a wallet-signed change (wait on a testnet account), email through Resend (waits on a key), the silence warning firing live, the mainnet deploy and lock (waits on a mainnet account), a real 1Click payout (1Click is mainnet only), reading a real calendar, a restore in the bundled app, and an agent connected through Claude Code or Codex. Gates 1 and 2 below depend on these.
+**Not proven yet:** a run against live NEAR AI (waits on an API key): real attestation reports through the checks above, E2EE accepted by Qwen3.8-27B, and Whisper on the sample voices, the contract on testnet and a wallet-signed change (wait on a testnet account), email through Resend (waits on a key), the silence warning firing live, the mainnet deploy and lock (waits on a mainnet account), a real 1Click payout (1Click is mainnet only), reading a real calendar, a restore in the bundled app, and an agent connected through Claude Code or Codex. Gates 1 and 2 below depend on these.
+
+## Privacy
+
+Meeting audio and text go only to NEAR AI Cloud's Confidential TEE models, and only after their attestation passes. Aftercall's own servers keep nothing about a meeting after a response returns. What each party sees and keeps, with file:line pointers: [docs/privacy.md](docs/privacy.md).
+
+- **Verified every run.** Each recording gets a fresh nonce. The app checks the gateway TEE and every Whisper and Qwen TEE node: Intel's TDX quote, the signing key and nonce in its report data, the boot event log, the software (compose hash), NVIDIA's GPU evidence through NRAS, and the response signature. The Verify sheet lists each check; the public `/verify` page re-checks what a browser can and labels the rest "as recorded by the app".
+- **End-to-end encrypted summaries.** The transcript is encrypted on the Mac to the Qwen TEE's attested key, so the gateway relays ciphertext. Audio isn't end-to-end encrypted (NEAR AI doesn't offer it for transcription); it goes over TLS through the attested gateway, and transcriptions aren't signed per response. The app says so.
+- **Encrypted on this Mac.** Audio is sealed about once a second while recording, and deleted after transcription; transcripts and notes are sealed with a key in your Keychain. This stops other apps, backup and sync tools from reading them; it doesn't protect a compromised user account.
+- **Nothing kept server-side.** Draft in Mail, the default, opens the recap in your own mail app. Send through Aftercall holds it in memory for one request and hands it to Resend, which keeps sent mail under its own policy; the backend keeps a count. Claim links store a token hash and an amount; the payee's name and the meeting title travel in the link's `#fragment`. Payments carry a fixed memo, so no meeting title goes on chain.
+- **Agents only when you say so.** Connected agents are off by default and reach meetings through the running app over an owner-only socket with a token.
 
 ## Run it
 
