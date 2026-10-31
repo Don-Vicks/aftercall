@@ -4,7 +4,7 @@ Private meeting notes that do the follow-ups. Built for NEAR HACKATHON (1–14 N
 
 Aftercall records a call on your Mac, transcribes and summarises it inside NEAR AI Cloud's secure hardware (TEEs), and records a proof of that on NEAR that anyone can check. Then it does what the meeting decided: the recap email goes out and the agreed payment is made in USDC on NEAR, after one approval or under autopilot rules you set. A NEAR contract caps what the app can ever pay, so even a hijacked app or a tricked AI can't overspend.
 
-> **Status:** in development. Building started on 26 Oct 2026, before the 1–14 Nov window, after a NEAR HACKATHON moderator confirmed in the event Discord (22 Oct) that early development is allowed. The commit history shows the real timeline. What runs against live NEAR AI and NEAR testnet, and what is so far proven only locally, is listed under [What is proven](#what-is-proven).
+> **Status:** in development for NEAR HACKATHON (tracks: privacy, security, agents). Building started on 26 Oct 2026, after the event was announced on 19 Oct; the official FAQ counts code from the announcement onward ([HACKATHON.md](https://nearhackathon.com/HACKATHON.md), Q-001), so the whole history is hackathon work. The commit history shows the real timeline. What runs against live NEAR AI and NEAR testnet, and what is so far proven only locally, is listed under [What is proven](#what-is-proven).
 
 ## Check it in five minutes
 
@@ -97,6 +97,25 @@ macOS grants system-audio capture only to a bundled app, so to record, build it 
 Repo layout: `apps/desktop`, `apps/backend`, `apps/web`, `packages/core`, `contracts/agent-wallet`, `crates/near-tx`, `scripts/`, `docs/` (rules, design source).
 
 Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) · [Design system](https://claude.ai/artifact/96RdBedZXsLxdXixzAdk6x) (private links for the team).
+
+## Built with
+
+Disclosed per the hackathon FAQ (Q-005).
+
+- **AI-written code:** most of this repository was written by Claude Code (Anthropic's coding agent) under Victor's direction, from a plan and design he set. Commits carry a `Co-Authored-By: Claude` line.
+- **No templates or pre-existing project code.** Everything here was written from 26 Oct 2026.
+- **Libraries:**
+  - Desktop: Tauri 2, React 19, Tailwind CSS 4, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
+  - Shared core: zod, @noble/curves, @noble/hashes
+  - Backend: NestJS, pg, jose, @scure/base
+  - Web: Next.js, @hot-labs/near-connect
+  - MCP server: @modelcontextprotocol/sdk
+  - Contract: near-sdk 5.29, near-workspaces (tests); signer crate: ed25519-dalek
+- **Design:** made with Claude in an artifact ([Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW)); fonts Newsreader, Instrument Sans and Geist Mono.
+
+## License
+
+[MIT](LICENSE).
 
 ## MVP
 
