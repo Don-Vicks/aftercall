@@ -1,3 +1,4 @@
+mod attest;
 mod calendar;
 mod capture;
 mod near;
@@ -9,7 +10,8 @@ mod recovery;
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
 pub mod test_api {
-    pub use crate::nearai::{chat, check_key, transcribe};
+    pub use crate::attest::{QuoteReport, decode_hex, nvidia_keys, verify_quote, verify_quote_with};
+    pub use crate::nearai::{E2ee, chat, check_key, transcribe};
 }
 
 use std::path::PathBuf;
@@ -247,14 +249,30 @@ async fn nearai_transcribe(app: AppHandle, path: String, model: String, prompt: 
     nearai::transcribe(file, model, prompt).await
 }
 
+/// `e2ee` carries the two public keys for an end-to-end encrypted request.
 #[tauri::command]
-async fn nearai_chat(body: String) -> Result<String, String> {
-    nearai::chat(body).await
+async fn nearai_chat(body: String, e2ee: Option<nearai::E2ee>) -> Result<String, String> {
+    nearai::chat(body, e2ee).await
 }
 
 #[tauri::command]
 async fn nearai_get(path: String) -> Result<String, String> {
     nearai::get(path).await
+}
+
+#[tauri::command]
+async fn tee_verify_quote(quote: String) -> Result<attest::QuoteReport, String> {
+    attest::verify_quote(&quote).await
+}
+
+#[tauri::command]
+async fn tee_nvidia_attest(payload: String) -> Result<String, String> {
+    attest::nvidia_attest(payload).await
+}
+
+#[tauri::command]
+async fn tee_nvidia_keys() -> Result<String, String> {
+    attest::nvidia_keys().await
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -473,6 +491,9 @@ pub fn run() {
             nearai_transcribe,
             nearai_chat,
             nearai_get,
+            tee_verify_quote,
+            tee_nvidia_attest,
+            tee_nvidia_keys,
             near_get_config,
             near_save_config,
             near_public_key,
