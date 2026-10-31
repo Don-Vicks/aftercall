@@ -1,3 +1,5 @@
+mod agents;
+mod at_rest;
 mod calendar;
 mod capture;
 mod near;
@@ -74,7 +76,8 @@ fn start_recording(project: String, app: AppHandle, state: State<RecorderState>)
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
     let dir = recordings_dir(&app)?.join(stamp.to_string());
     let meta = MeetingMeta { id: stamp.to_string(), project, started_at: stamp, seconds: 0, chunks: 0, dir: dir.display().to_string(), notes: None };
-    let (recording, info) = Recording::start(dir, AppEvents(app.clone())).map_err(|e| format!("{e:#}"))?;
+    let key = at_rest::data_key()?;
+    let (recording, info) = Recording::start(dir, key, AppEvents(app.clone())).map_err(|e| format!("{e:#}"))?;
     *slot = Some((recording, meta));
     set_tray_recording(&app, true);
     Ok(info)
@@ -95,7 +98,7 @@ fn stop_recording(app: AppHandle, state: State<RecorderState>) -> Result<Meeting
     meta.seconds = result.seconds;
     meta.chunks = result.chunks;
     let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
-    std::fs::write(PathBuf::from(&meta.dir).join("meeting.json"), json).map_err(|e| e.to_string())?;
+    at_rest::write_string(&PathBuf::from(&meta.dir).join("meeting.json"), &json)?;
     Ok(meta)
 }
 
@@ -107,8 +110,8 @@ fn list_recordings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
     let mut out: Vec<MeetingMeta> = entries
         .flatten()
         .filter_map(|e| {
-            let mut meta: MeetingMeta = serde_json::from_str(&std::fs::read_to_string(e.path().join("meeting.json")).ok()?).ok()?;
-            meta.notes = std::fs::read_to_string(e.path().join("notes.json")).ok();
+            let mut meta: MeetingMeta = serde_json::from_str(&at_rest::read_string(&e.path().join("meeting.json")).ok()?).ok()?;
+            meta.notes = at_rest::read_string(&e.path().join("notes.json")).ok();
             Some(meta)
         })
         .collect();
@@ -162,22 +165,82 @@ fn set_action_item_done(app: AppHandle, id: String, item_id: String, done: bool)
     notes_file::set_item_done(&recording_dir(&app, &id)?.join("notes.json"), &item_id, done)
 }
 
+/// The agents socket while Connected agents is on (see agents.rs).
+#[derive(Default)]
+struct AgentsState(Mutex<Option<agents::Server>>);
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentsInfo {
-    /// Where the app keeps meetings; the MCP server reads the same folder.
+    /// Where the app keeps meetings; the MCP server finds the socket under it.
     data_dir: String,
     /// The MCP server's entry point in this checkout (apps/mcp/src/main.ts).
     server_path: String,
     server_found: bool,
+    /// Connected agents is on and the socket is open.
+    enabled: bool,
+    /// The token agents must send; only while enabled.
+    token: Option<String>,
+    socket_path: String,
 }
 
-/// What the Connected agents screen needs to show the exact setup commands.
-#[tauri::command]
-fn agents_info(app: AppHandle) -> Result<AgentsInfo, String> {
+fn agents_snapshot(app: &AppHandle, state: &AgentsState) -> Result<AgentsInfo, String> {
+    let dir = data_dir(app)?;
     let server = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mcp/src/main.ts");
     let server = server.canonicalize().unwrap_or(server);
-    Ok(AgentsInfo { data_dir: data_dir(&app)?.display().to_string(), server_found: server.exists(), server_path: server.display().to_string() })
+    let running = state.0.lock().map_err(|e| e.to_string())?.is_some();
+    let settings = agents::load_settings(&dir);
+    Ok(AgentsInfo {
+        socket_path: agents::socket_path(&dir).display().to_string(),
+        data_dir: dir.display().to_string(),
+        server_found: server.exists(),
+        server_path: server.display().to_string(),
+        enabled: running,
+        token: if running { settings.token } else { None },
+    })
+}
+
+/// What the Connected agents screen needs to show the switch and the exact setup commands.
+#[tauri::command]
+fn agents_info(app: AppHandle, state: State<AgentsState>) -> Result<AgentsInfo, String> {
+    agents_snapshot(&app, &state)
+}
+
+/// Opens the socket with the saved token (making one if needed), replacing any running server.
+fn agents_start(dir: &std::path::Path, state: &AgentsState, fresh_token: bool) -> Result<(), String> {
+    let mut slot = state.0.lock().map_err(|e| e.to_string())?;
+    slot.take(); // close the old socket first
+    let mut settings = agents::load_settings(dir);
+    if fresh_token || settings.token.is_none() {
+        settings.token = Some(agents::new_token()?);
+    }
+    settings.enabled = true;
+    agents::save_settings(dir, &settings)?;
+    *slot = Some(agents::Server::start(dir, settings.token.clone().unwrap_or_default())?);
+    Ok(())
+}
+
+/// Turns Connected agents on or off. Off closes the socket and forgets the token.
+#[tauri::command]
+fn agents_set_enabled(app: AppHandle, state: State<AgentsState>, enabled: bool) -> Result<AgentsInfo, String> {
+    let dir = data_dir(&app)?;
+    if enabled {
+        agents_start(&dir, &state, false)?;
+    } else {
+        state.0.lock().map_err(|e| e.to_string())?.take();
+        agents::save_settings(&dir, &agents::Settings::default())?;
+    }
+    agents_snapshot(&app, &state)
+}
+
+/// Replaces the token; agents set up with the old one stop working.
+#[tauri::command]
+fn agents_new_token(app: AppHandle, state: State<AgentsState>) -> Result<AgentsInfo, String> {
+    if state.0.lock().map_err(|e| e.to_string())?.is_none() {
+        return Err("Turn on Connected agents first".into());
+    }
+    agents_start(&data_dir(&app)?, &state, true)?;
+    agents_snapshot(&app, &state)
 }
 
 /// The cached transcription of one audio chunk, e.g. "mic-000".
@@ -191,14 +254,14 @@ fn transcript_path(app: &AppHandle, id: &str, chunk: &str) -> Result<PathBuf, St
 
 #[tauri::command]
 fn read_chunk_transcript(app: AppHandle, id: String, chunk: String) -> Result<Option<String>, String> {
-    Ok(std::fs::read_to_string(transcript_path(&app, &id, &chunk)?).ok())
+    Ok(at_rest::read_string(&transcript_path(&app, &id, &chunk)?).ok())
 }
 
 #[tauri::command]
 fn write_chunk_transcript(app: AppHandle, id: String, chunk: String, raw: String) -> Result<(), String> {
     let path = transcript_path(&app, &id, &chunk)?;
     std::fs::create_dir_all(path.parent().ok_or("No parent")?).map_err(|e| e.to_string())?;
-    std::fs::write(path, raw).map_err(|e| e.to_string())
+    at_rest::write_string(&path, &raw)
 }
 
 /// Deletes the audio and the cached chunk transcriptions once the notes are saved.
@@ -383,7 +446,7 @@ fn projects_path(app: &AppHandle) -> Result<PathBuf, String> {
 /// The user's projects. A first run starts with one, "General".
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Result<Vec<Project>, String> {
-    match std::fs::read_to_string(projects_path(&app)?) {
+    match at_rest::read_string(&projects_path(&app)?) {
         Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
         Err(_) => Ok(vec![Project { id: "general".into(), name: "General".into() }]),
     }
@@ -402,7 +465,7 @@ fn save_projects(app: AppHandle, projects: Vec<Project>) -> Result<(), String> {
     }
     let dir = data_dir(&app)?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    std::fs::write(projects_path(&app)?, serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    at_rest::write_string(&projects_path(&app)?, &serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?)
 }
 
 /// Moves every recording filed under project `from` to project `to` (rename or delete
@@ -417,13 +480,13 @@ fn move_recordings_project(app: AppHandle, from: String, to: String) -> Result<u
     let mut moved = 0;
     for entry in entries.flatten() {
         let meta_path = entry.path().join("meeting.json");
-        let Ok(json) = std::fs::read_to_string(&meta_path) else { continue };
+        let Ok(json) = at_rest::read_string(&meta_path) else { continue };
         let Ok(mut meta) = serde_json::from_str::<serde_json::Value>(&json) else { continue };
         if meta["project"] != from.as_str() {
             continue;
         }
         meta["project"] = to.into();
-        std::fs::write(&meta_path, serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        at_rest::write_json(&meta_path, &meta)?;
         let notes_path = entry.path().join("notes.json");
         if notes_path.exists() {
             notes_file::update(&notes_path, |notes| notes["meeting"]["project"] = to.into())?;
@@ -455,6 +518,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(RecorderState::default())
+        .manage(AgentsState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
             pause_recording,
@@ -464,6 +528,8 @@ pub fn run() {
             save_notes,
             set_action_item_done,
             agents_info,
+            agents_set_enabled,
+            agents_new_token,
             delete_audio,
             nearai_set_key,
             nearai_has_key,
@@ -502,6 +568,22 @@ pub fn run() {
             backup_import
         ])
         .setup(|app| {
+            if let Ok(dir) = data_dir(app.handle()) {
+                // Seal files an earlier version left in plaintext. Off the main thread:
+                // the first run asks the Keychain for the data key.
+                let migrate_dir = dir.clone();
+                std::thread::spawn(move || match at_rest::data_key().and_then(|_| at_rest::migrate(&migrate_dir)) {
+                    Ok(0) => {}
+                    Ok(n) => eprintln!("at rest: encrypted {n} files left by an earlier version"),
+                    Err(e) => eprintln!("at rest: {e}"),
+                });
+                // Connected agents stays on across restarts, with the same token.
+                if agents::load_settings(&dir).enabled
+                    && let Err(e) = agents_start(&dir, &app.state::<AgentsState>(), false)
+                {
+                    eprintln!("agents: {e}");
+                }
+            }
             // Menu bar item: start a recording or open the app from anywhere.
             let record = MenuItem::with_id(app, "record", "New recording…", true, Some("CmdOrCtrl+Shift+R"))?;
             let open = MenuItem::with_id(app, "open", "Open Aftercall", true, None::<&str>)?;

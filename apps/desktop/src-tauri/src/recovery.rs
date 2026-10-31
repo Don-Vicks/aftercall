@@ -195,8 +195,10 @@ pub struct BackupMeeting {
     pub notes: Value,
 }
 
+/// Meeting files and projects.json are encrypted at rest with the data key: a backup
+/// decrypts them here and seals the whole backup with the backup key instead.
 fn read_json(path: &Path) -> Option<Value> {
-    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    crate::at_rest::read_json(path)
 }
 
 fn valid_meeting_id(id: &str) -> bool {
@@ -246,9 +248,10 @@ pub struct Restored {
 /// Writes a backup into the data dir without overwriting anything already there:
 /// existing meetings and the NEAR settings stay, projects are merged by id.
 pub fn apply(data_dir: &Path, backup: Backup) -> Result<Restored, String> {
+    // Restored files are sealed with this Mac's data key.
     let write = |path: &Path, value: &Value| -> Result<(), String> {
         std::fs::create_dir_all(path.parent().ok_or("No parent folder")?).map_err(|e| e.to_string())?;
-        std::fs::write(path, serde_json::to_string_pretty(value).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+        crate::at_rest::write_json(path, value)
     };
 
     let mut projects = 0;
@@ -328,7 +331,7 @@ pub fn import(data_dir: &Path, file: &[u8]) -> Result<Restored, String> {
 }
 
 /// UTC year, month, day from Unix seconds (for the file name).
-fn civil_date(secs: u64) -> (i64, u32, u32) {
+pub(crate) fn civil_date(secs: u64) -> (i64, u32, u32) {
     let z = (secs / 86_400) as i64 + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
@@ -442,6 +445,8 @@ mod tests {
             ("aftercall.onboarded".to_string(), "1".to_string()),
             ("other.app".to_string(), "x".to_string()),
         ]);
+        // One file already sealed on the old Mac, the rest plaintext from an earlier version: both are read.
+        crate::at_rest::migrate_file(&done.join("notes.json")).unwrap();
         let backup = collect(&from, local, 1_700_000_000);
         assert_eq!(backup.meetings.len(), 1, "meetings waiting for notes are left out");
         assert_eq!(backup.local.keys().collect::<Vec<_>>(), ["aftercall.autopilot"]);
@@ -455,6 +460,9 @@ mod tests {
         let r = apply(&to, restored).unwrap();
         assert_eq!((r.meetings, r.skipped, r.projects), (1, 0, 1));
         assert_eq!(r.local["aftercall.autopilot"], r#"{"enabled":true}"#);
+        for f in ["projects.json", "recordings/1700000000/meeting.json", "recordings/1700000000/notes.json"] {
+            assert!(crate::at_rest::is_sealed(&std::fs::read(to.join(f)).unwrap()), "{f} restored as plaintext");
+        }
         let meta = read_json(&to.join("recordings/1700000000/meeting.json")).unwrap();
         assert_eq!(meta["dir"], to.join("recordings/1700000000").display().to_string());
         assert_eq!(read_json(&to.join("recordings/1700000000/notes.json")).unwrap()["title"], "Sync");

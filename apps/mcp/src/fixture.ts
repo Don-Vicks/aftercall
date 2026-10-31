@@ -1,12 +1,28 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Meeting } from "@aftercall/core";
+import type { ActionItem, Meeting } from "@aftercall/core";
+import type { NotesFile } from "./store.ts";
 
-/** A temp data dir laid out like the app's: projects.json and two processed meetings, one unprocessed. */
-export async function makeDataDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "aftercall-mcp-"));
-  await writeFile(join(dir, "projects.json"), JSON.stringify([{ id: "general", name: "General" }, { id: "fundraise-k3x", name: "Fundraise" }]));
+/**
+ * A stand-in for the Aftercall app's agents socket (apps/desktop/src-tauri/src/agents.rs):
+ * the same line protocol, token check and claim rules, over in-memory notes. The real
+ * rules, locking and encryption are tested in Rust (`cargo test agents`).
+ */
+export interface FakeApp {
+  dataDir: string;
+  socketPath: string;
+  token: string;
+  /** The notes as the app holds them now. */
+  notes: (id: string) => NotesFile;
+  /** Stops listening and removes the temp dir. */
+  close: () => Promise<void>;
+}
+
+/** Two processed meetings and one recorded but not processed (no notes). */
+function fixtureMeetings(): Map<string, NotesFile> {
 
   const ada: Meeting = {
     id: "1761000000",
@@ -55,15 +71,94 @@ export async function makeDataDir(): Promise<string> {
     transcript: [{ at: 5, speaker: "others", text: "The release goes out Thursday" }],
   };
 
-  for (const m of [ada, standup]) {
-    const rec = join(dir, "recordings", m.id);
-    await mkdir(rec, { recursive: true });
-    await writeFile(join(rec, "meeting.json"), JSON.stringify({ id: m.id, project: m.project, startedAt: Number(m.id), seconds: m.durationSec, chunks: 1, dir: rec }));
-    await writeFile(join(rec, "notes.json"), JSON.stringify({ meeting: m, processedAt: m.startedAt, notes: { summary: m.summary }, proof: { notesHash: "abc" } }, null, 2));
+  const notes = new Map<string, NotesFile>();
+  for (const m of [ada, standup]) notes.set(m.id, { meeting: m, processedAt: m.startedAt, notes: { summary: m.summary }, proof: { notesHash: "abc" } });
+  return notes;
+}
+
+const PROJECTS = [
+  { id: "general", name: "General" },
+  { id: "fundraise-k3x", name: "Fundraise" },
+];
+
+type Req = { token?: string; op?: string; [k: string]: unknown };
+
+function handle(store: Map<string, NotesFile>, req: Req, now: () => string): unknown {
+  const missing = (id: unknown) => new Error(`No processed meeting with id "${String(id)}". Use list_meetings to see ids.`);
+  const notesOf = (id: unknown) => {
+    const n = typeof id === "string" && /^\d{1,20}$/.test(id) ? store.get(id) : undefined;
+    if (!n) throw missing(id);
+    return n;
+  };
+  const openItem = (r: Req, otherClaim: (by: string, at: string) => string) => {
+    const agent = String(r.agent ?? "").trim();
+    if (!agent || agent.length > 60) throw new Error('Give your agent name, 1 to 60 characters (e.g. "Claude Code")');
+    const item = notesOf(r.meetingId).meeting.actionItems.find((a) => a.id === r.itemId);
+    if (!item) throw new Error(`No action item "${String(r.itemId)}" in this meeting. Use get_meeting to see item ids.`);
+    if (item.done) throw new Error("This action item is already done");
+    if (item.claimed && item.claimed.agent !== agent) throw new Error(otherClaim(item.claimed.agent, item.claimed.at));
+    return { item: item as ActionItem, agent };
+  };
+  switch (req.op) {
+    case "projects":
+      return PROJECTS;
+    case "meetings":
+      return [...store.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).map(([id, notes]) => ({ id, notes }));
+    case "notes":
+      return notesOf(req.id);
+    case "claim": {
+      const { item, agent } = openItem(req, (by, at) => `Already claimed by ${by} at ${at}`);
+      item.claimed ??= { agent, at: now() };
+      return { claimed: true, item };
+    }
+    case "complete": {
+      const { item, agent } = openItem(req, (by) => `Claimed by ${by}; only that agent can complete it`);
+      const note = typeof req.note === "string" ? req.note.trim().slice(0, 500) : "";
+      const at = now();
+      item.claimed ??= { agent, at };
+      item.done = true;
+      item.completed = { agent, at, ...(note ? { note } : {}) };
+      return { completed: true, item };
+    }
+    default:
+      throw new Error("Unknown request");
   }
-  // Recorded but not processed yet: no notes.json.
-  const pending = join(dir, "recordings", "1761200000");
-  await mkdir(pending, { recursive: true });
-  await writeFile(join(pending, "meeting.json"), JSON.stringify({ id: "1761200000", project: "General", startedAt: 1761200000, seconds: 30, chunks: 1, dir: pending }));
-  return dir;
+}
+
+/** Starts the stand-in app on a Unix socket in a new temp data dir. */
+export async function startFakeApp(opts: { now?: () => string } = {}): Promise<FakeApp> {
+  const dataDir = await mkdtemp(join(tmpdir(), "ac-mcp-"));
+  const socketPath = join(dataDir, "agents.sock");
+  const token = randomBytes(32).toString("hex");
+  const store = fixtureMeetings();
+  const now = opts.now ?? (() => new Date().toISOString());
+  const server: Server = createServer((sock) => {
+    let buf = "";
+    sock.on("data", (d) => {
+      buf += d.toString("utf8");
+      const nl = buf.indexOf("\n");
+      if (nl < 0) return;
+      let reply: unknown;
+      try {
+        const req = JSON.parse(buf.slice(0, nl)) as Req;
+        if (req.token !== token) throw new Error("Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.");
+        reply = { ok: true, result: handle(store, req, now) };
+      } catch (e) {
+        reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+      sock.end(JSON.stringify(reply) + "\n");
+    });
+    sock.on("error", () => {});
+  });
+  await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+  return {
+    dataDir,
+    socketPath,
+    token,
+    notes: (id) => structuredClone(store.get(id)!),
+    close: async () => {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await rm(dataDir, { recursive: true, force: true });
+    },
+  };
 }

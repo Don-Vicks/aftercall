@@ -1,9 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import type { AppChannel } from "./store.ts";
 import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 
 const READ_ONLY =
-  "Aftercall's MCP server only reads meetings, plus claiming and completing action items. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or follow-ups: those stay in the app, with the user.";
+  "Aftercall's MCP server only reads meetings, plus claiming and completing action items. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or follow-ups: those stay in the app, with the user. It works only while the Aftercall app is open with Connected agents turned on.";
 
 export const INSTRUCTIONS = `Aftercall keeps private meeting notes on this Mac: summary, decisions, action items with owners, and follow-ups. Use list_action_items to find work, claim_action_item before you start one (with your agent name), and complete_action_item when it's done. ${READ_ONLY}`;
 
@@ -25,7 +26,7 @@ const itemWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint:
 
 const agentArg = z.string().min(1).max(60).describe('Your name as an agent, shown to the user in Aftercall, e.g. "Claude Code" or "Codex"');
 
-export function createServer(dataDir: string): McpServer {
+export function createServer(app: AppChannel): McpServer {
   const server = new McpServer({ name: "aftercall", version: "0.1.0" }, { instructions: INSTRUCTIONS });
 
   server.registerTool(
@@ -39,7 +40,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: readOnly,
     },
-    (args) => run(() => listMeetings(dataDir, args)),
+    (args) => run(() => listMeetings(app, args)),
   );
 
   server.registerTool(
@@ -53,7 +54,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: readOnly,
     },
-    (args) => run(() => getMeeting(dataDir, args)),
+    (args) => run(() => getMeeting(app, args)),
   );
 
   server.registerTool(
@@ -67,7 +68,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: readOnly,
     },
-    (args) => run(() => search(dataDir, args)),
+    (args) => run(() => search(app, args)),
   );
 
   server.registerTool(
@@ -83,7 +84,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: readOnly,
     },
-    (args) => run(() => listActionItems(dataDir, args)),
+    (args) => run(() => listActionItems(app, args)),
   );
 
   server.registerTool(
@@ -98,7 +99,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: itemWrite,
     },
-    (args) => run(() => claimActionItem(dataDir, args)),
+    (args) => run(() => claimActionItem(app, args)),
   );
 
   server.registerTool(
@@ -114,7 +115,7 @@ export function createServer(dataDir: string): McpServer {
       },
       annotations: { ...itemWrite, idempotentHint: false },
     },
-    (args) => run(() => completeActionItem(dataDir, args)),
+    (args) => run(() => completeActionItem(app, args)),
   );
 
   return server;
