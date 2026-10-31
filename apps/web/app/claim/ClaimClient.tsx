@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { exampleAccount, formatUsdc } from "@aftercall/core";
+import { exampleAccount, formatUsdc, parseClaimFragment, type ClaimDetails } from "@aftercall/core";
 import { Page, button } from "../ui";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
 const ACCOUNT = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
 
+/** What the backend knows about the link: who pays, how much, and whether it's used. */
 interface ClaimView {
   owner: string;
-  payeeName: string;
   amount: string;
-  memo?: string;
-  meeting: string;
   status: "open" | "claimed";
 }
 
@@ -21,14 +19,26 @@ type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: 
 /**
  * The payee's side of a claim link, on their phone. It only shares where to send
  * money; the payer confirms the account in their own wallet before paying.
+ *
+ * The link's #fragment holds the token plus the payee's name, memo and meeting
+ * title. Browsers never send the fragment to a server; only the token goes to the
+ * backend, and the details are shown from the link itself.
  */
 export function ClaimClient() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [account, setAccount] = useState("");
   const [sending, setSending] = useState(false);
-  const token = typeof window === "undefined" ? "" : window.location.hash.slice(1);
+  const [details, setDetails] = useState<ClaimDetails>({});
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
+    const { token, ...rest } = parseClaimFragment(window.location.hash);
+    setDetails(rest);
+    setToken(token);
+  }, []);
+
+  useEffect(() => {
+    if (token === null) return;
     if (!token) return setState({ kind: "error", message: "This link is missing its code. Open it again from the email." });
     fetch(`${BACKEND}/claims/link/${encodeURIComponent(token)}`)
       .then(async (r) => {
@@ -43,7 +53,7 @@ export function ClaimClient() {
     if (state.kind !== "open") return;
     setSending(true);
     try {
-      const r = await fetch(`${BACKEND}/claims/link/${encodeURIComponent(token)}`, {
+      const r = await fetch(`${BACKEND}/claims/link/${encodeURIComponent(token ?? "")}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ account }),
@@ -67,6 +77,7 @@ export function ClaimClient() {
   }
 
   const c = state.claim;
+  const { payeeName, memo, meeting } = details;
   const amount = formatUsdc(BigInt(c.amount));
   const valid = ACCOUNT.test(account);
   // Claims don't carry a network; the payer's own account shows which one they use.
@@ -77,10 +88,12 @@ export function ClaimClient() {
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span className="label">A payment for you</span>
         <h1 className="serif" style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 500, letterSpacing: "-0.015em" }}>
+          {payeeName ? `${payeeName}, ` : ""}
           {c.owner} wants to pay you <span className="mono" style={{ fontSize: 26 }}>{amount} USDC</span>
         </h1>
         <p className="muted" style={{ margin: 0 }}>
-          {c.memo ? `For: ${c.memo}, agreed in “${c.meeting}”.` : `Agreed in “${c.meeting}”.`} Tell them where to send it.
+          {memo && meeting ? `For: ${memo}, agreed in “${meeting}”. ` : memo ? `For: ${memo}. ` : meeting ? `Agreed in “${meeting}”. ` : ""}
+          Tell them where to send it.
         </p>
       </div>
 
@@ -123,6 +136,11 @@ export function ClaimClient() {
       </div>
 
       <p className="muted" style={{ margin: 0, fontSize: 13 }}>This link only shares where to send money; it can't take anything from you. It works once and expires in 7 days.</p>
+      {(payeeName || memo || meeting) && (
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          Your name and what this is for come from the link itself and were never stored on Aftercall's server. The amount and {c.owner} come from the server.
+        </p>
+      )}
     </Page>
   );
 }

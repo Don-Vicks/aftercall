@@ -5,7 +5,8 @@ import type { Claim } from "./claims.service";
 /**
  * Where claims live. Postgres in production; memory for unit tests.
  * Only the sha256 of a claim's token is stored, so a copy of the database
- * can't be used to answer someone's claim link.
+ * can't be used to answer someone's claim link. No names, memos or meeting
+ * titles: those travel in the link's fragment and never reach the server.
  */
 export interface ClaimsStore {
   insert(tokenHash: string, claim: Claim): Promise<void>;
@@ -24,8 +25,10 @@ export const hashToken = (token: string) => createHash("sha256").update(token).d
 export class MemoryClaimsStore implements ClaimsStore {
   private readonly rows = new Map<string, Claim>();
 
-  async insert(tokenHash: string, claim: Claim) {
-    this.rows.set(tokenHash, { ...claim });
+  async insert(tokenHash: string, c: Claim) {
+    // The same columns as Postgres, so the tests see what a real row would hold.
+    const { id, owner, amount, createdAt, expiresAt, status } = c;
+    this.rows.set(tokenHash, { id, owner, amount, createdAt, expiresAt, status });
   }
   async byTokenHash(tokenHash: string) {
     const c = this.rows.get(tokenHash);
@@ -60,10 +63,7 @@ CREATE TABLE IF NOT EXISTS claims (
   id              text PRIMARY KEY,
   token_hash      text UNIQUE NOT NULL,
   owner           text NOT NULL,
-  payee_name      text NOT NULL,
   amount          numeric(40, 0) NOT NULL,
-  memo            text,
-  meeting         text NOT NULL,
   created_at      bigint NOT NULL,
   expires_at      bigint NOT NULL,
   status          text NOT NULL CHECK (status IN ('open', 'claimed', 'cancelled')),
@@ -71,15 +71,18 @@ CREATE TABLE IF NOT EXISTS claims (
   claimed_at      bigint
 );
 CREATE INDEX IF NOT EXISTS claims_owner ON claims (owner, created_at DESC);
+-- Earlier versions kept the payee's name, a memo and the meeting title. Drop them,
+-- with whatever they held: the claim page now reads them from the link itself.
+ALTER TABLE claims DROP COLUMN IF EXISTS payee_name, DROP COLUMN IF EXISTS memo, DROP COLUMN IF EXISTS meeting;
 `;
+
+/** Every column of the claims table. A test checks the live table has exactly these. */
+export const CLAIM_COLUMNS = ["id", "token_hash", "owner", "amount", "created_at", "expires_at", "status", "claimed_account", "claimed_at"];
 
 interface Row {
   id: string;
   owner: string;
-  payee_name: string;
   amount: string;
-  memo: string | null;
-  meeting: string;
   created_at: string;
   expires_at: string;
   status: Claim["status"];
@@ -90,10 +93,7 @@ interface Row {
 const toClaim = (r: Row): Claim => ({
   id: r.id,
   owner: r.owner,
-  payeeName: r.payee_name,
   amount: r.amount,
-  memo: r.memo ?? undefined,
-  meeting: r.meeting,
   createdAt: Number(r.created_at),
   expiresAt: Number(r.expires_at),
   status: r.status,
@@ -111,9 +111,9 @@ export class PgClaimsStore implements ClaimsStore {
 
   async insert(tokenHash: string, c: Claim) {
     await this.pool.query(
-      `INSERT INTO claims (id, token_hash, owner, payee_name, amount, memo, meeting, created_at, expires_at, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [c.id, tokenHash, c.owner, c.payeeName, c.amount, c.memo ?? null, c.meeting, c.createdAt, c.expiresAt, c.status],
+      `INSERT INTO claims (id, token_hash, owner, amount, created_at, expires_at, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [c.id, tokenHash, c.owner, c.amount, c.createdAt, c.expiresAt, c.status],
     );
   }
   async byTokenHash(tokenHash: string) {

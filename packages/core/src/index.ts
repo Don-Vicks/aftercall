@@ -14,3 +14,4 @@ export * from "./followups/recap.ts";
 export * from "./followups/autopilot.ts";
 export * from "./search/search.ts";
 export * from "./intents/oneclick.ts";
+export * from "./followups/claimLink.ts";

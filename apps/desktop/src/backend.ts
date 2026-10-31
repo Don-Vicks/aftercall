@@ -37,11 +37,10 @@ async function token(): Promise<string> {
   return token;
 }
 
+/** What the backend keeps about a claim link: no names, memos or meeting titles. */
 export interface ClaimInfo {
   id: string;
-  payeeName: string;
   amount: string;
-  meeting: string;
   status: "open" | "claimed" | "cancelled";
   claimedAccount?: string;
   expiresAt: number;
@@ -50,7 +49,7 @@ export interface ClaimInfo {
 export const backend = {
   sendRecap: (mail: { to: string; subject: string; text: string; replyTo?: string; senderName?: string }) =>
     call<{ id: string }>("/email/recap", { method: "POST", body: JSON.stringify(mail) }),
-  createClaim: (c: { payeeName: string; amount: string; memo?: string; meeting: string }) =>
+  createClaim: (c: { amount: string }) =>
     call<{ id: string; token: string; expiresAt: number }>("/claims", { method: "POST", body: JSON.stringify(c) }),
   claims: () => call<ClaimInfo[]>("/claims"),
   cancelClaim: (id: string) => call<{ ok: true }>(`/claims/${id}`, { method: "DELETE" }),
