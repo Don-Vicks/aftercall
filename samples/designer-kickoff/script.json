@@ -1,0 +1,98 @@
+{
+  "id": "designer-kickoff",
+  "title": "Kickoff with Ines, freelance designer",
+  "fictional": "Every person, company and amount in this call is made up. Voices are macOS text-to-speech.",
+  "seconds": 67,
+  "payees": [
+    {
+      "name": "Designer",
+      "account": "designer.near"
+    }
+  ],
+  "vocabulary": [
+    "Ines",
+    "Paper Kite Studio",
+    "Moonbeam Bikes",
+    "Tobias",
+    "Designer"
+  ],
+  "lines": [
+    {
+      "at": 1,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "Hi, thanks for having me. I'm Ines from Paper Kite Studio, and I'll be your designer for the new shop website."
+    },
+    {
+      "at": 8.6,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Great to meet you, Ines. We run Moonbeam Bikes, a small repair shop, and our site hasn't changed in six years."
+    },
+    {
+      "at": 16.3,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "I had a look. I'd start with the home page and the booking page, then do the rest once you're happy with the style."
+    },
+    {
+      "at": 23.2,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "That works. Let's agree the home page and the booking page come first, and the rest waits for phase two."
+    },
+    {
+      "at": 29.4,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "Perfect. I'll send you three style directions by Friday, and a first home page draft the week after."
+    },
+    {
+      "at": 36.4,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Lovely. I'll share our logo files and the workshop photos by Wednesday."
+    },
+    {
+      "at": 41.1,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "And for the deposit, forty dollars is enough to book the slot."
+    },
+    {
+      "at": 45.3,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Sure. I'll send the 40 dollar deposit to the designer today, and the rest when the home page is signed off."
+    },
+    {
+      "at": 52,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "Thanks. Last thing, who approves the designs on your side?"
+    },
+    {
+      "at": 56.6,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "I do, and my business partner Tobias sees the final draft. I'll email you a short recap after this call."
+    },
+    {
+      "at": 63.7,
+      "speaker": "others",
+      "name": "Ines Varga (Paper Kite Studio)",
+      "voice": "Moira",
+      "text": "Great. Talk Friday, bye for now."
+    }
+  ]
+}

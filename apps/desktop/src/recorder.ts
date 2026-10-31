@@ -21,6 +21,10 @@ export interface SavedRecording {
   dir: string;
   /** Contents of notes.json once the recording has been processed. */
   notes?: string;
+  /** "Sample" for the built-in fictional calls (samples/); absent for real recordings. */
+  label?: string;
+  /** The name a sample comes with. Real recordings are named from the calendar. */
+  title?: string;
   /** The calendar event's title, looked up in the app (not saved). */
   eventTitle?: string;
 }

@@ -13,7 +13,7 @@ export const projectsApi = {
   save: (projects: Project[]) => (isDesktop ? invoke<void>("save_projects", { projects }) : Promise.resolve()),
 };
 
-export const deleteRecording = (id: string) => invoke<void>("delete_recording", { id });
+export const deleteRecording = (id: string) => (isDesktop ? invoke<void>("delete_recording", { id }) : Promise.resolve());
 
 /** Re-files every recording of one project under another (rename or delete). */
 export const moveRecordings = (from: string, to: string) => (isDesktop ? invoke<number>("move_recordings_project", { from, to }) : Promise.resolve(0));

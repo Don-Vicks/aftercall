@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowRight, Check, KeyRound, Link2, Mic, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, FileAudio, KeyRound, Link2, Mic, Wallet } from "lucide-react";
 import { formatDuration, formatUsdc, type Meeting } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingStartedAt, recordingTitle } from "./RecordingScreen";
@@ -7,6 +7,7 @@ import { isDesktop } from "./recorder";
 import { nearAiKey } from "./nearai";
 import { near } from "./near";
 import { Button, Pill, SectionLabel, cx } from "./ui";
+import { sampleScripts } from "./sampleRecordings";
 
 interface NeedsYou {
   id: string;
@@ -47,6 +48,7 @@ export function HomeScreen({
   recordings,
   sampleId,
   onNewRecording,
+  onOpenSample,
   onOpenMeeting,
   onOpenSettings,
   onOpenWallet,
@@ -56,6 +58,8 @@ export function HomeScreen({
   /** The built-in sample meeting, labelled wherever it shows. */
   sampleId?: string;
   onNewRecording: () => void;
+  /** Opens a fictional sample call as a recording, to try the notes pipeline without a real call. */
+  onOpenSample: (sampleId: string) => void;
   onOpenMeeting: (id: string) => void;
   onOpenSettings: () => void;
   onOpenWallet: () => void;
@@ -79,7 +83,7 @@ export function HomeScreen({
     ...recordings.map((r) => ({
       id: r.id,
       title: meetings.find((m) => m.id === r.id)?.title ?? recordingTitle(r),
-      meta: `${r.project} · ${recordingStartedAt(r)} · ${formatDuration(r.seconds)}`,
+      meta: `${r.project} · ${recordingStartedAt(r)} · ${formatDuration(r.seconds)}${r.label ? ` · ${r.label}` : ""}`,
       state: r.notes ? "notes" : "waiting",
     })),
     ...meetings
@@ -114,6 +118,31 @@ export function HomeScreen({
             <ArrowRight size={18} className="text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </span>
         </button>
+
+        {recordings.length === 0 && (
+          <section className="flex flex-col gap-3">
+            <SectionLabel>No call handy? Open a sample recording</SectionLabel>
+            <p className="m-0 text-muted">
+              Two short made-up calls, recorded like a real one (your microphone and the call audio). Press Make notes to run them through NEAR AI.
+            </p>
+            <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
+              {sampleScripts.map((s, i) => (
+                <button
+                  key={s.id}
+                  onClick={() => onOpenSample(s.id)}
+                  className={cx("flex items-center gap-4 px-5 py-3.5 text-left hover:bg-elevated", i < sampleScripts.length - 1 && "border-b border-hairline")}
+                >
+                  <FileAudio size={16} strokeWidth={1.5} className="shrink-0 text-muted" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="t-title truncate">{s.title}</span>
+                    <span className="truncate text-muted">Fictional · {formatDuration(s.seconds)}</span>
+                  </span>
+                  <Pill tone="muted">Sample</Pill>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {setup && (!setup.nearAi || !setup.near) && (
           <section className="flex flex-col gap-3">

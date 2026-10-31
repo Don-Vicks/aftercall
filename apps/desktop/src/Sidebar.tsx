@@ -156,7 +156,7 @@ export function Sidebar({
           </button>
         </div>
         {groups.map((g, gi) => {
-          const meetings = g.recordings.map((r) => ({ id: r.id, title: meetingTitles[r.id] ?? recordingTitle(r), when: recordingWhen(r), toApprove: 0 }));
+          const meetings = g.recordings.map((r) => ({ id: r.id, title: meetingTitles[r.id] ?? recordingTitle(r), when: r.label ?? recordingWhen(r), toApprove: 0 }));
           const isOpen = open[g.id] ?? (meetings.some((m) => m.id === selectedMeetingId) || gi === 0);
           const Chevron = isOpen ? ChevronDown : ChevronRight;
           return (

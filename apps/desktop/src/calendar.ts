@@ -25,6 +25,6 @@ export const calendar = {
 /** Calendar titles for recordings that have no notes yet, by recording id. */
 export async function eventTitles(list: SavedRecording[]): Promise<Record<string, string>> {
   if ((await calendar.status().catch(() => "denied")) !== "granted") return {};
-  const found = await Promise.all(list.filter((r) => !r.notes).map(async (r) => [r.id, (await calendar.eventFor(r))?.title ?? ""] as const));
+  const found = await Promise.all(list.filter((r) => !r.notes && !r.label).map(async (r) => [r.id, (await calendar.eventFor(r))?.title ?? ""] as const));
   return Object.fromEntries(found.filter(([, title]) => title));
 }

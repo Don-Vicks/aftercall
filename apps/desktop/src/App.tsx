@@ -24,6 +24,7 @@ import { Onboarding, needsOnboarding } from "./Onboarding";
 import { eventTitles } from "./calendar";
 import { AgentsScreen } from "./AgentsScreen";
 import { agentsApi } from "./agents";
+import { openSample } from "./sampleRecordings";
 
 type View =
   | { name: "home" }
@@ -129,6 +130,17 @@ export default function App() {
       return rest;
     });
     setView({ name: "home" });
+  };
+  /** Copies a fictional sample call in as a recording labelled "Sample" and opens it. */
+  const openSampleRecording = async (sampleId: string, project?: string) => {
+    try {
+      const r = await openSample(sampleId, project ?? projects[0]?.name ?? "General");
+      setRecordings((all) => [r, ...all.filter((x) => x.id !== r.id)]);
+      setRecordOpen(false);
+      setView({ name: "recording", id: r.id });
+    } catch (e) {
+      window.alert(`Couldn't open the sample: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
   const leftToday = limits?.leftToday ?? null;
 
@@ -451,6 +463,7 @@ export default function App() {
           recordings={recordings}
           sampleId={syncWithAda.id}
           onNewRecording={() => setRecordOpen(true)}
+          onOpenSample={(sampleId) => openSampleRecording(sampleId)}
           onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
           onOpenSettings={() => setView({ name: "settings" })}
           onOpenWallet={() => setView({ name: "wallet" })}
@@ -516,6 +529,7 @@ export default function App() {
           selectProject={createdProject}
           onNewProject={() => setNewProjectOpen(true)}
           onClose={() => setRecordOpen(false)}
+          onOpenSample={openSampleRecording}
           onStop={(project, seconds, saved) => {
             setRecordOpen(false);
             if (saved) {
