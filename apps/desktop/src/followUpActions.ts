@@ -56,11 +56,14 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
  * decides: paid within the caps, blocked for the owner's wallet, or failed and
  * refunded if the transfer bounced.
  */
+/** The on-chain memo is public forever, so it names the app and nothing about the meeting. */
+const PAY_MEMO = "Aftercall payment";
+
 export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): Promise<void> {
   if (f.amount === null || !f.payeeListed) return;
   apply({ status: "sending", error: undefined });
   try {
-    const out = await near.pay(f.payeeAccount, f.amount, `Aftercall: ${meeting.title}`.slice(0, 60), contractFollowupId(meeting.id, f.id));
+    const out = await near.pay(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id));
     if (out.status === "paid") apply({ status: "paid", doneAt: hhmm(), ref: out.txHash });
     else if (out.status === "blocked") apply({ status: "blocked", ref: out.txHash });
     else apply({ status: "failed", ref: out.txHash, error: "The transfer bounced and the amount went back to your agent wallet. Check the payee can receive USDC." });
@@ -118,7 +121,7 @@ export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: 
     const p = previewOf(q);
     if (p.fee * 10_000n > f.amount * MAX_FEE_BPS) throw new Error(`NEAR Intents quoted ${formatUsdc(p.fee)} USDC in fees, over 3%. Nothing was sent.`);
     route = { chain: dest.chain, address: dest.address, depositAddress: q.quote.depositAddress!, quoteId: q.correlationId, amountOut: q.quote.amountOut, swapStatus: "PENDING_DEPOSIT" };
-    const out = await near.payCrossChain(f.payeeAccount, f.amount, `Aftercall: ${meeting.title}`.slice(0, 60), contractFollowupId(meeting.id, f.id), route.depositAddress, route.quoteId);
+    const out = await near.payCrossChain(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id), route.depositAddress, route.quoteId);
     if (out.status === "blocked") {
       // Nothing is parked: the quote would expire before the owner could approve it.
       return apply({ status: "proposed", error: "Over your caps. A payment on another chain can't wait for approval; raise the cap in your agent wallet, then try again." });

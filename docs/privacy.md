@@ -61,7 +61,7 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 ## NEAR blockchain (public, permanent)
 
 - `record_proof(meeting_id, proof_hash, model)`: `apps/desktop/src-tauri/src/near.rs:130`. The meeting id is the recording's start time in Unix seconds. The hash covers the proof bundle; no transcript or notes are on-chain. The public Verify page reads only this from NEAR RPC (`apps/web/app/verify/VerifyClient.tsx:21`); the bundle itself travels in the proof link's fragment.
-- `pay(payee, amount, memo, followup_id)`: `apps/desktop/src-tauri/src/near.rs:158`. Note: the memo the app sends today is `Aftercall: <meeting title>` (`apps/desktop/src/followUpActions.ts:63`), so a paid meeting's title is public on NEAR.
+- `pay(payee, amount, memo, followup_id)`: `apps/desktop/src-tauri/src/near.rs:158`. The memo is the fixed text `Aftercall payment` (`PAY_MEMO` in `apps/desktop/src/followUpActions.ts`), so nothing about the meeting goes on chain; the follow-up id is `<recording id>-<follow-up id>` (`contractFollowupId`, `apps/desktop/src/near.ts:73`), and the recording id is its start time in Unix seconds, so the chain shows when a paid meeting started.
 
 ## Other services
 
