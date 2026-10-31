@@ -4,15 +4,30 @@ import { useCallback, useEffect, useState } from "react";
 import {
   NETWORK_CONFIG,
   NOT_PROVEN,
+  WHISPER_NOTE,
   decodePublicProof,
   explorerAccountUrl,
+  groupChecks,
   isNetwork,
   proofHash,
   verifyProof,
+  verifyProofGpu,
   type Check,
+  type Jwks,
   type OnChainProof,
   type PublicProof,
+  type TeeCheck,
 } from "@aftercall/core";
+
+/** NVIDIA publishes its NRAS keys to browsers (CORS allows any origin). */
+async function nvidiaKeys(): Promise<Jwks | null> {
+  try {
+    const res = await fetch("https://nras.attestation.nvidia.com/.well-known/jwks.json");
+    return res.ok ? ((await res.json()) as Jwks) : null;
+  } catch {
+    return null;
+  }
+}
 
 
 /** Reads the proof straight from the agent-wallet contract, at final finality. */
@@ -58,11 +73,16 @@ export function VerifyClient() {
       return setState({ kind: "bad-link" });
     }
     setState({ kind: "loading" });
+    const gpu = verifyProofGpu(proof.bundle, await nvidiaKeys());
+    const withGpu = async (checks: Check[]) => {
+      const g = await gpu;
+      return g ? [...checks, g] : checks;
+    };
     try {
       const onChain = await readProof(proof);
-      setState({ kind: "done", proof, onChain, checks: verifyProof(proof.bundle, onChain) });
+      setState({ kind: "done", proof, onChain, checks: await withGpu(verifyProof(proof.bundle, onChain)) });
     } catch (e) {
-      setState({ kind: "done", proof, onChain: null, checks: verifyProof(proof.bundle, null), rpcError: String(e) });
+      setState({ kind: "done", proof, onChain: null, checks: await withGpu(verifyProof(proof.bundle, null)), rpcError: String(e) });
     }
   }, []);
 
@@ -97,7 +117,9 @@ export function VerifyClient() {
 function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; onRerun: () => void }) {
   const { proof, checks, onChain } = state;
   const passed = checks.filter((c) => c.ok).length;
-  const allOk = passed === checks.length;
+  const recorded: TeeCheck[] | null = proof.bundle.version === 2 ? proof.bundle.checks : null;
+  // E2EE has its own line; "processed privately" rests on attestation and signatures.
+  const allOk = passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
   const when = onChain ? new Date(onChain.recorded_at / 1e6).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) : null;
 
   const download = () => {
@@ -132,34 +154,40 @@ function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; o
         </h1>
         <p className="serif muted" style={{ margin: 0, maxWidth: 640, fontSize: 19, lineHeight: "30px" }}>
           {allOk
-            ? `A meeting recorded with Aftercall${when ? ` on ${when}` : ""} was summarised inside attested secure hardware on NEAR AI Cloud. This page holds no meeting content: only the evidence, which your browser has just checked again.`
+            ? `A meeting recorded with Aftercall${when ? ` on ${when}` : ""} was summarised inside attested secure hardware on NEAR AI Cloud. This page holds no meeting content, only the evidence. Your browser has just re-checked what it can; the rest is shown as the app recorded it.`
             : "Some checks failed. The list below says which, and why. This page holds no meeting content."}
         </p>
       </div>
 
-      <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-        {checks.map((c, i) => (
-          <li
-            key={c.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "28px minmax(0, 1fr)",
-              gap: 12,
-              padding: "16px 0",
-              borderTop: "1px solid var(--hairline)",
-              borderBottom: i === checks.length - 1 ? "1px solid var(--hairline)" : undefined,
-            }}
-          >
-            <span aria-label={c.ok ? "Passed" : "Failed"} style={{ color: c.ok ? "var(--verdigris)" : "var(--caution)", fontWeight: 600 }}>
-              {c.ok ? "✓" : "✕"}
-            </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-              <span style={{ fontWeight: 600 }}>{c.label}</span>
-              <span className="muted" style={{ overflowWrap: "anywhere" }}>{c.detail}</span>
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h2 className="label" style={{ margin: 0 }}>Re-checked in your browser</h2>
+        <CheckList checks={checks} />
+      </section>
+
+      {recorded ? (
+        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <h2 className="label" style={{ margin: 0 }}>As recorded by the app</h2>
+            <p className="muted" style={{ margin: 0, maxWidth: 680 }}>
+              The app ran these on the Mac when the meeting was processed{proof.bundle.version === 2 ? `, ${new Date(proof.bundle.checkedAt).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}. Your
+              browser can&apos;t repeat the Intel quote check: Intel&apos;s collateral service doesn&apos;t accept browser requests, and the quotes aren&apos;t in the link.
+              The checks above re-use the values the app read from them.
+            </p>
+          </div>
+          {groupChecks(recorded, proof.bundle).map((g) => (
+            <div key={g.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{g.title}</h3>
+              <CheckList checks={g.checks} />
+              {g.key === "whisper" && <p className="muted" style={{ margin: "8px 0 0" }}>{WHISPER_NOTE}</p>}
             </div>
-          </li>
-        ))}
-      </ol>
+          ))}
+        </section>
+      ) : (
+        <p className="muted" style={{ margin: 0 }}>
+          This proof was made before Aftercall verified attestation quotes. The app checked the signature and that attestation evidence came back with a fresh nonce.
+        </p>
+      )}
+
       {state.rpcError && <p style={{ margin: 0, color: "var(--caution)", overflowWrap: "anywhere" }}>Couldn't read NEAR: {state.rpcError.replace(/^Error: /, "")}</p>}
 
       <dl className="facts" style={{ margin: 0, display: "grid", gridTemplateColumns: "160px minmax(0, 1fr)", gap: "12px 20px", padding: "20px 24px", borderRadius: 10, background: "var(--well)" }}>
@@ -188,7 +216,11 @@ function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; o
           {NOT_PROVEN.map((n) => (
             <li key={n}>{n}</li>
           ))}
-          <li>That the secure-hardware evidence itself is genuine: the app checked it was present and fresh when the meeting was processed; this page trusts that record.</li>
+          <li>
+            {recorded
+              ? "That the Intel quotes were genuine: the app verified them with Intel when the meeting was processed; this page trusts that record and re-checks what it can."
+              : "That the secure-hardware evidence itself is genuine: the app checked it was present and fresh when the meeting was processed; this page trusts that record."}
+          </li>
         </ul>
       </section>
 
@@ -199,6 +231,34 @@ function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; o
         <a href="/">What is Aftercall?</a>
       </div>
     </>
+  );
+}
+
+function CheckList({ checks }: { checks: (Check | TeeCheck)[] }) {
+  return (
+    <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+      {checks.map((c, i) => (
+        <li
+          key={c.id}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "28px minmax(0, 1fr)",
+            gap: 12,
+            padding: "16px 0",
+            borderTop: "1px solid var(--hairline)",
+            borderBottom: i === checks.length - 1 ? "1px solid var(--hairline)" : undefined,
+          }}
+        >
+          <span aria-label={c.ok ? "Passed" : "Failed"} style={{ color: c.ok ? "var(--verdigris)" : "var(--caution)", fontWeight: 600 }}>
+            {c.ok ? "✓" : "✕"}
+          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <span style={{ fontWeight: 600 }}>{c.label}</span>
+            <span className="muted" style={{ overflowWrap: "anywhere" }}>{c.detail}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }
 

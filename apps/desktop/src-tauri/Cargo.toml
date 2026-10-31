@@ -37,6 +37,7 @@ chacha20poly1305 = "0.10"
 getrandom = "0.2"
 bs58 = "0.5"
 zeroize = "1"
+dcap-qvl = "0.7"
 
 [dev-dependencies]
 # Chunks are written by at_rest::AudioWriter; tests read the decrypted WAV back with hound.

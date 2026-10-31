@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
+import { createRequire } from "node:module";
 import type { NearAiTransport } from "../notes/pipeline.ts";
+import type { QuoteReport } from "../tee/checks.ts";
 
 /**
  * NEAR AI Cloud from Node, for `pnpm sample:notes`. It mirrors the Mac app's Rust
@@ -11,6 +13,32 @@ import type { NearAiTransport } from "../notes/pipeline.ts";
  */
 
 export const NEAR_AI_BASE = "https://cloud-api.near.ai/v1";
+const INTEL_PCS = "https://api.trustedservices.intel.com/tdx/certification/v4";
+const NRAS = "https://nras.attestation.nvidia.com/v3/attest/gpu";
+const NVIDIA_KEYS = "https://nras.attestation.nvidia.com/.well-known/jwks.json";
+
+/**
+ * Verifies a TDX quote against Intel's collateral with Phala's dcap-qvl, the
+ * WebAssembly build of the same library the Mac app runs in Rust. Rejects when
+ * the quote doesn't verify, so callers fail closed.
+ */
+export async function verifyQuoteNode(quoteHex: string): Promise<QuoteReport> {
+  const { js_get_collateral, js_verify } = createRequire(import.meta.url)("@phala/dcap-qvl-node");
+  const raw = Buffer.from(quoteHex.trim().replace(/^0x/i, ""), "hex");
+  if (raw.length === 0) throw new Error("That isn't a TDX quote");
+  const collateral = await js_get_collateral(INTEL_PCS, raw);
+  const r = js_verify(raw, collateral, BigInt(Math.floor(Date.now() / 1000)));
+  const td = r?.report?.TD10;
+  if (!td) throw new Error("Not a TDX quote");
+  return {
+    status: String(r.status),
+    advisoryIds: r.advisory_ids ?? [],
+    reportData: String(td.report_data),
+    mrConfigId: String(td.mr_config_id),
+    tdAttributes: String(td.td_attributes),
+    rtMr3: String(td.rt_mr3),
+  };
+}
 
 export class MissingKeyError extends Error {
   constructor() {
@@ -56,11 +84,15 @@ export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fe
       if (prompt) form.append("prompt", prompt);
       return bodyText(await doFetch(`${base}/audio/transcriptions`, { method: "POST", headers: auth, body: form, signal: AbortSignal.timeout(180_000) }));
     },
-    async chat(body) {
+    async chat(body, e2ee) {
+      // End-to-end encryption headers, as nearai.rs e2ee_headers sends them.
+      const encrypted: Record<string, string> = e2ee
+        ? { "x-signing-algo": "ed25519", "x-client-pub-key": e2ee.clientPubKey.toLowerCase(), "x-model-pub-key": e2ee.modelPubKey.toLowerCase(), "x-encryption-version": "2" }
+        : {};
       const res = await doFetch(`${base}/chat/completions`, {
         method: "POST",
         // The signature covers the exact response bytes, so no compression in between.
-        headers: { ...auth, "content-type": "application/json", "accept-encoding": "identity", "x-no-aliasing": "true" },
+        headers: { ...auth, ...encrypted, "content-type": "application/json", "accept-encoding": "identity", "x-no-aliasing": "true" },
         body,
         signal: AbortSignal.timeout(180_000),
       });
@@ -73,6 +105,18 @@ export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fe
         signal: AbortSignal.timeout(60_000),
       });
       return bodyText(res);
+    },
+    verifyQuote: (quote) => verifyQuoteNode(quote),
+    async nvidiaAttest(payload) {
+      const res = await doFetch(NRAS, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: payload, signal: AbortSignal.timeout(60_000) });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`NVIDIA NRAS ${res.status}: ${text.slice(0, 300)}`);
+      return text;
+    },
+    async nvidiaKeys() {
+      const res = await doFetch(NVIDIA_KEYS, { signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`NVIDIA keys ${res.status}`);
+      return res.text();
     },
     randomHex: () => randomBytes(32).toString("hex"),
   };

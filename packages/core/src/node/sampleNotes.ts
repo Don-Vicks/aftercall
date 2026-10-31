@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { formatClock } from "../meeting.ts";
 import { formatUsdc } from "../money.ts";
 import type { Payee } from "../notes/build.ts";
-import { processRecording, type NearAiTransport, type ProcessResult } from "../notes/pipeline.ts";
+import { processRecording, WHISPER_MODEL, type NearAiTransport, type ProcessResult } from "../notes/pipeline.ts";
+import { groupChecks, WHISPER_NOTE } from "../notes/proof.ts";
 
 /** samples/<id>/script.json, written by scripts/make-samples.mjs. */
 export interface SampleScript {
@@ -74,11 +75,12 @@ export function formatSampleNotes(script: SampleScript, r: ProcessResult): strin
   out.push(
     "",
     "## Verification",
-    `- Summary model attested (our fresh nonce echoed, TDX quote and GPU evidence present): ${ok(r.attestation.summary.ok)}${r.attestation.summary.reasons.length ? ` ${r.attestation.summary.reasons.join(", ")}` : ""}`,
-    `- Whisper attested: ${ok(r.attestation.whisper.ok)}${r.attestation.whisper.reasons.length ? ` ${r.attestation.whisper.reasons.join(", ")}` : ""}`,
-    `- Summary signed by the attested enclave over the exact request and response: ${ok(r.signature.ok)}${r.signature.reasons.length ? ` ${r.signature.reasons.join(", ")}` : ""}`,
-    `  signer ${r.signature.signer ?? "none"}`,
-    "- Not proven: NEAR AI does not sign transcription responses, so the transcript itself has no per-response signature.",
+    ...groupChecks(r.checks, { whisperModel: WHISPER_MODEL, summaryModel: r.proof.summaryModel }).flatMap((g) => [
+      `${g.title}:`,
+      ...g.checks.map((c) => `  ${ok(c.ok)} ${c.label} — ${c.detail}`),
+    ]),
+    `- ${WHISPER_NOTE}`,
+    `- Transcript end-to-end encrypted to the attested summary model: ${r.proof.e2ee.used ? "yes" : `no (${r.proof.e2ee.reason ?? "unavailable"})`}`,
     `- Proof bundle: request ${r.proof.requestHash.slice(0, 16)}…, response ${r.proof.responseHash.slice(0, 16)}…, notes ${r.proof.notesHash.slice(0, 16)}…`,
   );
   return out.join("\n");

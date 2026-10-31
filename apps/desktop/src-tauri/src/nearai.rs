@@ -138,18 +138,48 @@ async fn tokio_read(path: &Path) -> Result<Vec<u8>, String> {
     tauri::async_runtime::spawn_blocking(move || crate::at_rest::read_audio(&path).map(|wav| wav.to_vec())).await.map_err(|e| e.to_string())?
 }
 
-pub async fn chat(body: String) -> Result<String, String> {
-    let res = client()?
+/// The public keys for an end-to-end encrypted chat (NEAR AI E2EE v2): ours, made
+/// fresh for the request, and the model TEE's attested Ed25519 key, which also pins
+/// the gateway to that TEE.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct E2ee {
+    pub client_pub_key: String,
+    pub model_pub_key: String,
+}
+
+/// An Ed25519 public key: 32 bytes as 64 hex characters.
+fn is_ed25519_hex(key: &str) -> bool {
+    key.len() == 64 && key.bytes().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The headers an E2EE request adds, after checking both keys are well formed.
+pub fn e2ee_headers(e2ee: &E2ee) -> Result<Vec<(&'static str, String)>, String> {
+    if !is_ed25519_hex(&e2ee.client_pub_key) || !is_ed25519_hex(&e2ee.model_pub_key) {
+        return Err("E2EE keys must be 32-byte Ed25519 keys in hex".into());
+    }
+    Ok(vec![
+        ("x-signing-algo", "ed25519".into()),
+        ("x-client-pub-key", e2ee.client_pub_key.to_lowercase()),
+        ("x-model-pub-key", e2ee.model_pub_key.to_lowercase()),
+        ("x-encryption-version", "2".into()),
+    ])
+}
+
+pub async fn chat(body: String, e2ee: Option<E2ee>) -> Result<String, String> {
+    let mut req = client()?
         .post(format!("{}/chat/completions", base()))
         .bearer_auth(api_key()?)
         .header("content-type", "application/json")
         // The signature covers the exact response bytes, so no compression in between.
         .header("accept-encoding", "identity")
-        .header("x-no-aliasing", "true")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .header("x-no-aliasing", "true");
+    if let Some(e2ee) = &e2ee {
+        for (name, value) in e2ee_headers(e2ee)? {
+            req = req.header(name, value);
+        }
+    }
+    let res = req.body(body).send().await.map_err(|e| e.to_string())?;
     body_text(res).await
 }
 
@@ -183,6 +213,18 @@ mod tests {
         assert_eq!(clean_key("  sk-abc123  "), "sk-abc123");
         assert_eq!(clean_key("\"sk-abc123\""), "sk-abc123");
         assert_eq!(clean_key("Bearer sk-abc123"), "sk-abc123");
+    }
+
+    #[test]
+    fn e2ee_keys_are_checked_before_sending() {
+        let key = "ab".repeat(32);
+        let ok = E2ee { client_pub_key: key.clone(), model_pub_key: "CD".repeat(32) };
+        let headers = e2ee_headers(&ok).unwrap();
+        assert!(headers.contains(&("x-encryption-version", "2".into())));
+        assert!(headers.contains(&("x-signing-algo", "ed25519".into())));
+        assert!(headers.contains(&("x-model-pub-key", "cd".repeat(32))));
+        assert!(e2ee_headers(&E2ee { client_pub_key: key.clone(), model_pub_key: "ab".into() }).is_err());
+        assert!(e2ee_headers(&E2ee { client_pub_key: format!("{key}\r\nx-evil: 1"), model_pub_key: key }).is_err());
     }
 
     #[test]

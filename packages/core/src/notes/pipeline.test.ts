@@ -1,25 +1,72 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { secp256k1 } from "@noble/curves/secp256k1";
-import { keccak_256 } from "@noble/hashes/sha3";
-import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import { processRecording, type NearAiTransport, type ProcessInput } from "./pipeline.ts";
+import { edwardsToMontgomeryPriv } from "@noble/curves/ed25519";
+import { processRecording, type E2eeKeys, type NearAiTransport, type ProcessInput } from "./pipeline.ts";
+import { encodePublicProof, verifyProof, verifyProofGpu } from "./proof.ts";
 import { sha256Hex } from "./verify.ts";
+import { decryptWith, encryptTo } from "../tee/e2ee.ts";
+import { attestationFor, decodeQuote, fakeNras, teeKey, type TeeKey } from "../tee/testkit.ts";
 
-/** A fake NEAR AI that behaves like the real API: attests, transcribes, answers and signs. */
-function fakeNearAi(opts: { notes: object; tamper?: boolean; unattested?: boolean }) {
-  const priv = secp256k1.utils.randomPrivateKey();
-  const address = `0x${bytesToHex(keccak_256(secp256k1.getPublicKey(priv, false).slice(1)).slice(-20))}`;
-  const sign = (m: string) => {
-    const b = utf8ToBytes(m);
-    const s = secp256k1.sign(keccak_256(new Uint8Array([...utf8ToBytes(`\x19Ethereum Signed Message:\n${b.length}`), ...b])), priv);
-    return `0x${bytesToHex(s.toCompactRawBytes())}${(27 + s.recovery).toString(16)}`;
-  };
+interface FakeOpts {
+  notes: object;
+  /** The response bytes the signature covers differ from what we got. */
+  tamper?: boolean;
+  /** The summary is signed by a key that wasn't attested. */
+  rogueSigner?: boolean;
+  /** NEAR AI refuses encrypted requests. */
+  e2eeRefused?: boolean;
+  /** Quotes for this model (or "gateway") don't verify. */
+  badQuote?: string;
+  /** Summary TEE nodes; node 2 onward can be made to fail. */
+  summaryNodes?: number;
+  badSecondNode?: boolean;
+}
+
+/**
+ * A fake NEAR AI that behaves like the real API: attests with real keys and nonces,
+ * hands GPU evidence to a fake NRAS that signs real ES384 tokens, decrypts E2EE
+ * requests inside the "TEE", answers, encrypts the reply and signs the exchange.
+ */
+async function fakeNearAi(opts: FakeOpts) {
+  const nv = await fakeNras();
+  const gateway = teeKey("ed25519");
+  const summaryNodes = Array.from({ length: opts.summaryNodes ?? 1 }, () => teeKey("ed25519"));
+  const whisperNodes = [teeKey("ecdsa")];
   const calls: string[] = [];
-  let lastChat = { request: "", response: "" };
+  const seenByGateway: string[] = [];
+  let lastChat = { request: "", response: "", signer: summaryNodes[0] as TeeKey };
   let nonceCounter = 0;
+
   const transport: NearAiTransport = {
-    randomHex: () => `nonce${++nonceCounter}`,
+    randomHex: () => (++nonceCounter).toString(16).padStart(64, "0"),
+    async get(path) {
+      calls.push(`get ${path.split("?")[0]}`);
+      const q = new URLSearchParams(path.split("?")[1]);
+      if (path.startsWith("attestation/report")) {
+        const nonce = q.get("nonce")!;
+        const model = q.get("model")!;
+        const nodes = model.startsWith("Qwen") ? summaryNodes : whisperNodes;
+        return JSON.stringify({
+          gateway_attestation: attestationFor(gateway, nonce, { gpu: false, quote: opts.badQuote === "gateway" ? { status: "Revoked" } : {} }),
+          model_attestations: nodes.map((k, i) =>
+            attestationFor(k, nonce, { quote: opts.badQuote === model || (opts.badSecondNode && i > 0) ? { rtMr3: "00".repeat(48) } : {} }),
+          ),
+        });
+      }
+      const response = opts.tamper ? `${lastChat.response} ` : lastChat.response;
+      const signer = opts.rogueSigner ? teeKey("ed25519") : lastChat.signer;
+      const text = `Qwen/Qwen3.8-27B:${sha256Hex(lastChat.request)}:${sha256Hex(response)}`;
+      return JSON.stringify({ text, signature: signer.sign(text), signing_address: signer.address, signing_algo: "ed25519", signature_kind: "provider_tee" });
+    },
+    async verifyQuote(hex) {
+      return decodeQuote(hex);
+    },
+    async nvidiaAttest(payload) {
+      return JSON.stringify(await nv.answer(JSON.parse(payload).nonce));
+    },
+    async nvidiaKeys() {
+      return JSON.stringify(nv.jwks);
+    },
     async transcribe(path, _model, prompt) {
       calls.push(`transcribe ${path} [${prompt}]`);
       const text = path.includes("mic")
@@ -27,26 +74,26 @@ function fakeNearAi(opts: { notes: object; tamper?: boolean; unattested?: boolea
         : "Great, I'll look out for the recap.";
       return JSON.stringify({ text, segments: [{ start: path.includes("mic") ? 4 : 9, end: 8, text }] });
     },
-    async chat(body) {
-      calls.push("chat");
-      const response = JSON.stringify({ id: "chatcmpl-42", choices: [{ message: { content: JSON.stringify(opts.notes) } }] });
-      lastChat = { request: body, response };
+    async chat(body: string, e2ee?: E2eeKeys) {
+      calls.push(e2ee ? "chat e2ee" : "chat");
+      seenByGateway.push(body);
+      let content = JSON.stringify(opts.notes);
+      let signer = summaryNodes[0];
+      if (e2ee) {
+        if (opts.e2eeRefused) throw new Error("NEAR AI 400 Bad Request: encryption not supported for this model");
+        // Routed to the node whose key was pinned; it decrypts inside the TEE.
+        signer = summaryNodes.find((k) => k.address === e2ee.modelPubKey)!;
+        const secret = edwardsToMontgomeryPriv(signer.seed!);
+        const user = (JSON.parse(body).messages as { content: string }[])[1].content;
+        assert.match(decryptWith(user, secret), /fifty dollar/, "the TEE can read the transcript");
+        content = encryptTo(content, e2ee.clientPubKey);
+      }
+      const response = JSON.stringify({ id: "chatcmpl-42", choices: [{ message: { content } }] });
+      lastChat = { request: body, response, signer };
       return response;
     },
-    async get(path) {
-      calls.push(`get ${path.split("?")[0]}`);
-      if (path.startsWith("attestation/report")) {
-        const nonce = new URLSearchParams(path.split("?")[1]).get("nonce");
-        return JSON.stringify({
-          model_attestations: [{ request_nonce: nonce, signing_address: opts.unattested ? "0x0" : address, intel_quote: "q", nvidia_payload: "p" }],
-        });
-      }
-      const response = opts.tamper ? `${lastChat.response} ` : lastChat.response;
-      const text = `Qwen/Qwen3.8-27B:${sha256Hex(utf8ToBytes(lastChat.request))}:${sha256Hex(utf8ToBytes(response))}`;
-      return JSON.stringify({ text, signature: sign(text), signing_address: address });
-    },
   };
-  return { transport, calls, address };
+  return { transport, calls, seenByGateway, summaryNodes, gateway };
 }
 
 const notes = {
@@ -76,43 +123,101 @@ const input: ProcessInput = {
 };
 
 const noWait = async () => {};
+const failed = (checks: { id: string; ok: boolean }[]) => checks.filter((c) => !c.ok).map((c) => c.id);
 
-test("a recording becomes verified notes with only quote-backed follow-ups", async () => {
-  const ai = fakeNearAi({ notes });
+test("a recording becomes verified, end-to-end encrypted notes with only quote-backed follow-ups", async () => {
+  const ai = await fakeNearAi({ notes, summaryNodes: 2 });
   const stages: string[] = [];
   const result = await processRecording(ai.transport, input, (s) => stages.push(s), noWait);
 
   assert.deepEqual([...new Set(stages)], ["attest", "transcribe", "summarise", "signature"]);
-  assert.equal(result.signature.ok, true);
+  assert.deepEqual(failed(result.checks), []);
   assert.equal(result.meeting.verified, true);
   assert.equal(result.meeting.transcript.length, 2);
-  assert.deepEqual(result.meeting.transcript.map((l) => l.speaker), ["you", "others"]);
   assert.equal(result.meeting.followUps.length, 2, "the invented 5,000 payment is dropped");
   assert.equal(result.dropped[0].text, "Pay Designer five thousand");
   assert.ok(ai.calls.includes("transcribe /r/mic-000.wav [Ada, Designer, Fundraise]"), "names go to Whisper as the prompt");
-  assert.equal(result.proof.attestedSigners[0], ai.address);
-  assert.equal(result.proof.signature.signing_address, ai.address);
+  assert.ok(ai.calls.includes("chat e2ee"));
+  assert.ok(!ai.seenByGateway.join().includes("fifty dollar"), "the gateway only sees ciphertext");
+
+  // Panel groups, in order: gateway, Whisper TEE, Qwen TEE (both nodes), response.
+  const scopes = result.checks.map((c) => (c.scope === "model" ? c.model : c.scope));
+  assert.deepEqual([...new Set(scopes)], ["gateway", "openai/whisper-large-v3", "Qwen/Qwen3.8-27B", "response"]);
+  assert.equal(result.checks.filter((c) => c.model === "Qwen/Qwen3.8-27B" && c.id.includes("gpu-secure")).length, 2, "every node is checked");
+  assert.ok(result.checks.some((c) => c.id === "response-e2ee" && c.ok));
+
+  const p = result.proof;
+  assert.equal(p.version, 2);
+  assert.equal(p.signingAlgo, "ed25519");
+  assert.deepEqual(p.e2ee, { used: true, modelKey: ai.summaryNodes[0].address });
+  assert.deepEqual(p.attestedSigners, ai.summaryNodes.map((k) => k.address));
+  assert.deepEqual(p.gatewaySigners, [ai.gateway.address]);
+  assert.equal(p.evidence.length, 4);
+  assert.equal(p.evidence.filter((e) => e.nvidiaToken).length, 1, "NVIDIA's token is kept for the signing node only");
+  assert.ok(!JSON.stringify(p).includes("fifty dollar"), "the proof holds no meeting content");
+
+  // The proof re-checks on its own, as the public Verify page runs it.
+  assert.deepEqual(failed(verifyProof(p, null, result.notes)), ["on-chain", "matches"]);
+  const gpu = await verifyProofGpu(p, JSON.parse(await ai.transport.nvidiaKeys()));
+  assert.equal(gpu?.ok, true);
+
+  // Every check travels in the public link: about 4 KB per TEE node.
+  const link = encodePublicProof({ network: "testnet", contract: "aftercall.testnet", owner: "victor.testnet", bundle: p });
+  assert.ok(link.length < 20_000, `link is ${link.length} characters`);
 });
 
 test("a response that doesn't match the signature is not verified", async () => {
-  const result = await processRecording(fakeNearAi({ notes, tamper: true }).transport, input, undefined, noWait);
+  const result = await processRecording((await fakeNearAi({ notes, tamper: true })).transport, input, undefined, noWait);
   assert.equal(result.meeting.verified, false);
-  assert.deepEqual(result.signature.reasons, ["RESPONSE_HASH_MISMATCH"]);
+  assert.deepEqual(failed(result.checks), ["response-response"]);
 });
 
 test("a signer that wasn't attested is not verified", async () => {
-  const result = await processRecording(fakeNearAi({ notes, unattested: true }).transport, input, undefined, noWait);
+  const result = await processRecording((await fakeNearAi({ notes, rogueSigner: true })).transport, input, undefined, noWait);
   assert.equal(result.meeting.verified, false);
-  assert.ok(result.signature.reasons.includes("SIGNER_NOT_ATTESTED"));
+  assert.deepEqual(failed(result.checks), ["response-signer"]);
+});
+
+test("nothing leaves the Mac when the gateway or Whisper TEE fails a check", async () => {
+  for (const bad of ["gateway", "openai/whisper-large-v3"]) {
+    const ai = await fakeNearAi({ notes, badQuote: bad });
+    await assert.rejects(processRecording(ai.transport, input, undefined, noWait), /Secure hardware check failed.*Nothing was sent/);
+    assert.ok(!ai.calls.some((c) => c.startsWith("transcribe") || c.startsWith("chat")), `no audio or text sent (${bad})`);
+  }
+});
+
+test("a failing summary node is avoided by pinning E2EE to a verified one", async () => {
+  const ai = await fakeNearAi({ notes, summaryNodes: 2, badSecondNode: true });
+  const result = await processRecording(ai.transport, input, undefined, noWait);
+  assert.equal(result.proof.e2ee.modelKey, ai.summaryNodes[0].address);
+  assert.deepEqual(failed(result.checks), ["model-Qwen/Qwen3.8-27B-rtmr3-2"], "the failing node is shown");
+  assert.equal(result.meeting.verified, false, "a failed check is never hidden behind the badge");
+});
+
+test("if NEAR AI refuses E2EE the summary falls back to TLS and says so", async () => {
+  const ai = await fakeNearAi({ notes, e2eeRefused: true });
+  const result = await processRecording(ai.transport, input, undefined, noWait);
+  assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee", "chat"]);
+  assert.deepEqual(failed(result.checks), ["response-e2ee"]);
+  assert.match(result.checks.find((c) => c.id === "response-e2ee")!.detail, /Not end to end: NEAR AI refused the encrypted request \(400\)/);
+  assert.equal(result.meeting.verified, true, "attested and signed; the E2EE line is shown on its own");
+  assert.deepEqual(result.proof.e2ee, { used: false, reason: "NEAR AI refused the encrypted request (400)" });
+  assert.deepEqual(failed(verifyProof(result.proof, null)), ["on-chain", "matches", "e2ee"]);
+});
+
+test("no plaintext fallback when E2EE is refused and a summary node failed", async () => {
+  const ai = await fakeNearAi({ notes, e2eeRefused: true, summaryNodes: 2, badSecondNode: true });
+  await assert.rejects(processRecording(ai.transport, input, undefined, noWait), /isn't available and not every summary TEE passed/);
+  assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"]);
 });
 
 test("a model reply outside the schema stops processing", async () => {
-  const bad = fakeNearAi({ notes: { title: "x" } });
+  const bad = await fakeNearAi({ notes: { title: "x" } });
   await assert.rejects(processRecording(bad.transport, input, undefined, noWait));
 });
 
 test("a retry after the summary fails reuses the transcription instead of paying for it again", async () => {
-  const ai = fakeNearAi({ notes });
+  const ai = await fakeNearAi({ notes });
   const stored = new Map<string, string>();
   const cache = { get: async (c: { path: string }) => stored.get(c.path) ?? null, set: async (c: { path: string }, raw: string) => void stored.set(c.path, raw) };
   const failingChat = { ...ai.transport, chat: async () => { throw new Error("gateway timeout"); } };

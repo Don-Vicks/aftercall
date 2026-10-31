@@ -12,6 +12,8 @@ import { MissingKeyError, apiKeyFrom, isAllowedGetPath, nodeNearAiTransport } fr
 import { formatSampleNotes, runSampleNotes } from "./sampleNotes.ts";
 import type { NearAiTransport } from "../notes/pipeline.ts";
 import { sha256Hex } from "../notes/verify.ts";
+import { encryptTo } from "../tee/e2ee.ts";
+import { attestationFor, decodeQuote, fakeNras, teeKey } from "../tee/testkit.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..", "..");
@@ -93,37 +95,45 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
   }
 });
 
-/** A fake NEAR AI that "transcribes" each stem from the sample's script and signs its answers. */
-function fakeNearAi(notes: object): NearAiTransport {
-  const priv = secp256k1.utils.randomPrivateKey();
-  const address = `0x${bytesToHex(keccak_256(secp256k1.getPublicKey(priv, false).slice(1)).slice(-20))}`;
-  const sign = (m: string) => {
-    const b = utf8ToBytes(m);
-    const s = secp256k1.sign(keccak_256(new Uint8Array([...utf8ToBytes(`\x19Ethereum Signed Message:\n${b.length}`), ...b])), priv);
-    return `0x${bytesToHex(s.toCompactRawBytes())}${(27 + s.recovery).toString(16)}`;
-  };
+/**
+ * A fake NEAR AI that "transcribes" each stem from the sample's script and otherwise
+ * behaves like the real API: real keys bound in quotes, GPU tokens signed by a fake
+ * NRAS, the reply encrypted to our key, the exchange signed (see tee/testkit.ts).
+ */
+async function fakeNearAi(notes: object): Promise<NearAiTransport> {
+  const nv = await fakeNras();
+  const gateway = teeKey("ed25519");
+  const summary = teeKey("ed25519");
+  const whisper = teeKey("ecdsa");
   let last = { request: "", response: "" };
+  let n = 0;
   return {
-    randomHex: () => "ab".repeat(32),
+    randomHex: () => (++n).toString(16).padStart(64, "0"),
     async transcribe(path) {
       const script = JSON.parse(readFileSync(join(dirname(path), "script.json"), "utf8")) as { lines: { at: number; speaker: string; text: string }[] };
       const speaker = path.endsWith("mic-000.wav") ? "you" : "others";
       const segments = script.lines.filter((l) => l.speaker === speaker).map((l) => ({ start: l.at, end: l.at + 3, text: ` ${l.text}` }));
       return JSON.stringify({ text: segments.map((s) => s.text).join(""), segments });
     },
-    async chat(request) {
-      const response = JSON.stringify({ id: "chatcmpl-sample", choices: [{ message: { content: JSON.stringify(notes) } }] });
+    async chat(request, e2ee) {
+      const content = e2ee ? encryptTo(JSON.stringify(notes), e2ee.clientPubKey) : JSON.stringify(notes);
+      const response = JSON.stringify({ id: "chatcmpl-sample", choices: [{ message: { content } }] });
       last = { request, response };
       return response;
     },
     async get(path) {
+      const q = new URLSearchParams(path.split("?")[1]);
       if (path.startsWith("attestation/report")) {
-        const nonce = new URLSearchParams(path.split("?")[1]).get("nonce");
-        return JSON.stringify({ model_attestations: [{ request_nonce: nonce, signing_address: address, intel_quote: "q", nvidia_payload: "p" }] });
+        const nonce = q.get("nonce")!;
+        const node = q.get("model")!.startsWith("Qwen") ? summary : whisper;
+        return JSON.stringify({ gateway_attestation: attestationFor(gateway, nonce, { gpu: false }), model_attestations: [attestationFor(node, nonce)] });
       }
-      const text = `Qwen/Qwen3.8-27B:${sha256Hex(utf8ToBytes(last.request))}:${sha256Hex(utf8ToBytes(last.response))}`;
-      return JSON.stringify({ text, signature: sign(text), signing_address: address });
+      const text = `Qwen/Qwen3.8-27B:${sha256Hex(last.request)}:${sha256Hex(last.response)}`;
+      return JSON.stringify({ text, signature: summary.sign(text), signing_address: summary.address, signing_algo: "ed25519", signature_kind: "provider_tee" });
     },
+    verifyQuote: async (hex) => decodeQuote(hex),
+    nvidiaAttest: async (payload) => JSON.stringify(await nv.answer(JSON.parse(payload).nonce)),
+    nvidiaKeys: async () => JSON.stringify(nv.jwks),
   };
 }
 
@@ -143,7 +153,7 @@ test("the designer sample yields the 40 dollar deposit, the recap and the action
     ],
   };
   const stages: string[] = [];
-  const { script, result } = await runSampleNotes(fakeNearAi(notes), join(samples, "designer-kickoff"), (s) => stages.push(s), async () => {});
+  const { script, result } = await runSampleNotes(await fakeNearAi(notes), join(samples, "designer-kickoff"), (s) => stages.push(s), async () => {});
 
   assert.deepEqual([...new Set(stages)], ["attest", "transcribe", "summarise", "signature"]);
   assert.equal(result.meeting.verified, true);
@@ -158,7 +168,8 @@ test("the designer sample yields the 40 dollar deposit, the recap and the action
   const text = formatSampleNotes(script, result);
   assert.match(text, /Pay Designer \(designer\.near\) 40\.00 USDC, heard "40 dollar"/);
   assert.match(text, /Recap email to Ines/);
-  assert.match(text, /Summary signed by the attested enclave over the exact request and response: PASS/);
+  assert.match(text, /Transcript end-to-end encrypted to the attested summary model: yes/);
+  assert.doesNotMatch(text, /FAIL/, "every check passes");
   assert.match(text, /Dropped .*\n- follow-up: Pay Designer four hundred/);
 });
 
