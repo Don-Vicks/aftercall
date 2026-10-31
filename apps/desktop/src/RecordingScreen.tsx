@@ -158,7 +158,9 @@ export function RecordingScreen({
           <p className="t-reading m-0 text-muted">
             {run.state === "running"
               ? "Your notes are being made inside NEAR AI's secure hardware. Nothing leaves it except the result."
-              : "Your audio is saved on this Mac. Notes are made inside NEAR AI's secure hardware, then the audio is deleted."}
+              : isDesktop
+                ? "Your audio is saved on this Mac. Notes are made inside NEAR AI's secure hardware, then the audio is deleted."
+                : "This sample's audio is in the repo, in samples/. In the Mac app, notes are made inside NEAR AI's secure hardware."}
           </p>
         </header>
 
