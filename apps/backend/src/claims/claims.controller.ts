@@ -14,7 +14,8 @@ export class ClaimsController {
   @Post()
   async create(@Headers("authorization") authorization: string | undefined, @Body() body: NewClaim) {
     const owner = await sessionAccount(this.auth, authorization);
-    const { claim, token } = await this.claims.create(owner, body);
+    // Only the amount is read; a name, memo or meeting title in the body is dropped here.
+    const { claim, token } = await this.claims.create(owner, { amount: body?.amount });
     return { id: claim.id, token, expiresAt: claim.expiresAt };
   }
 

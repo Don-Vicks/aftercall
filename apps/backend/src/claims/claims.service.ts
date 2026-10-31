@@ -7,14 +7,17 @@ import { hashToken, MemoryClaimsStore, type ClaimsStore } from "./claims.store";
  * share the NEAR account they want to be paid at. The link can only share an
  * account; the owner still confirms the payee in their own wallet before
  * anything is paid.
+ *
+ * Kept server-side: only what the link needs to work once. A hash of the token,
+ * the owner, the amount, the expiry, the status and the account the payee shared.
+ * The payee's name, the memo and the meeting title never reach this server: the
+ * app puts them in the link's #fragment, which browsers don't send, and the claim
+ * page reads them from there (apps/web/app/claim/ClaimClient.tsx).
  */
 
 export interface NewClaim {
-  payeeName: string;
   /** USDC base units, as a string. */
   amount: string;
-  memo?: string;
-  meeting: string;
 }
 
 export interface Claim extends NewClaim {
@@ -43,19 +46,15 @@ export class ClaimsService {
     return this.store.totals();
   }
 
+  /** Anything else in the request (an older app sending a name or memo) is ignored, never stored. */
   async create(owner: string, c: NewClaim): Promise<{ claim: Claim; token: string }> {
-    if (!c.payeeName?.trim() || c.payeeName.length > 80 || !/^\d{1,30}$/.test(c.amount) || !c.meeting || c.meeting.length > 120 || (c.memo?.length ?? 0) > 200) {
-      throw new HttpException("BAD_CLAIM", HttpStatus.BAD_REQUEST);
-    }
+    if (!/^\d{1,30}$/.test(c?.amount ?? "") || /^0+$/.test(c.amount)) throw new HttpException("BAD_CLAIM", HttpStatus.BAD_REQUEST);
     if ((await this.store.countOpen(owner, this.now())) >= MAX_OPEN_PER_OWNER) throw new HttpException("TOO_MANY_OPEN_CLAIMS", HttpStatus.TOO_MANY_REQUESTS);
     const token = randomBytes(24).toString("base64url");
     const claim: Claim = {
       id: randomBytes(8).toString("hex"),
       owner,
-      payeeName: c.payeeName.trim(),
       amount: c.amount,
-      memo: c.memo,
-      meeting: c.meeting,
       createdAt: this.now(),
       expiresAt: this.now() + TTL_MS,
       status: "open",
@@ -71,10 +70,10 @@ export class ClaimsService {
     return claim;
   }
 
-  /** What the payee sees: who wants to pay them, how much, and for what. */
+  /** What the payee sees from the server: who wants to pay them and how much. The "for what" is in their link. */
   async view(token: string) {
     const c = await this.live(token);
-    return { owner: c.owner, payeeName: c.payeeName, amount: c.amount, memo: c.memo, meeting: c.meeting, status: c.status, expiresAt: c.expiresAt };
+    return { owner: c.owner, amount: c.amount, status: c.status, expiresAt: c.expiresAt };
   }
 
   /** The payee shares their account. Works once. */

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, FolderOpen, KeyRound } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { applyCalendarEvent, formatDuration, processRecording, type Stage } from "@aftercall/core";
+import { applyCalendarEvent, formatClock, formatDuration, processRecording, type Stage } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
@@ -9,9 +9,12 @@ import type { Payee } from "@aftercall/core";
 import { Button, Pill, Spinner, cx } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
 import { calendar } from "./calendar";
+import { isDesktop } from "./recorder";
+import { sampleScriptFor } from "./sampleRecordings";
 
 export function recordingTitle(r: SavedRecording): string {
   if (r.eventTitle) return r.eventTitle;
+  if (r.title) return r.title;
   const d = new Date(r.startedAt * 1000);
   return `Recording ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
@@ -87,7 +90,8 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     );
     // The calendar event names the meeting and fills recap addresses. The proof
     // doesn't cover either, so this changes nothing on the Verify page.
-    const event = await calendar.eventFor(recording);
+    // A sample is a made-up call: it never takes the name or guests of a real event.
+    const event = recording.label ? null : await calendar.eventFor(recording);
     const meeting = event ? applyCalendarEvent(result.meeting, event) : result.meeting;
     let saved: SavedNotes = { ...result, meeting, processedAt: new Date().toISOString() };
     await recordingFiles.saveNotes(recording.id, serializeNotes(saved));
@@ -130,9 +134,10 @@ export function RecordingScreen({
 }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const run = useRun(recording.id);
+  const script = sampleScriptFor(recording);
 
   useEffect(() => {
-    nearAiKey.has().then(setHasKey).catch(() => setHasKey(false));
+    if (isDesktop) nearAiKey.has().then(setHasKey).catch(() => setHasKey(false));
   }, []);
 
   return (
@@ -144,17 +149,30 @@ export function RecordingScreen({
             <span className="t-label text-muted">
               {recording.project} · {recordingWhen(recording)} · {formatDuration(recording.seconds)}
             </span>
-            {run.state === "failed" ? <Pill tone="record">Stopped</Pill> : <Pill tone="muted">Waiting for notes</Pill>}
+            <span className="flex items-center gap-2">
+              {recording.label && <Pill tone="muted">{recording.label}</Pill>}
+              {run.state === "failed" ? <Pill tone="record">Stopped</Pill> : <Pill tone="muted">Waiting for notes</Pill>}
+            </span>
           </div>
           <h1 className="t-display m-0">{recordingTitle(recording)}</h1>
           <p className="t-reading m-0 text-muted">
             {run.state === "running"
               ? "Your notes are being made inside NEAR AI's secure hardware. Nothing leaves it except the result."
-              : "Your audio is saved on this Mac. Notes are made inside NEAR AI's secure hardware, then the audio is deleted."}
+              : isDesktop
+                ? "Your audio is saved on this Mac. Notes are made inside NEAR AI's secure hardware, then the audio is deleted."
+                : "This sample's audio is in the repo, in samples/. In the Mac app, notes are made inside NEAR AI's secure hardware."}
           </p>
         </header>
 
-        {run.state === "idle" && hasKey === false && <KeyForm onSaved={() => setHasKey(true)} />}
+        {!isDesktop && (
+          <p role="note" className="m-0 rounded-sm bg-well p-4 text-muted">
+            This is the browser preview, so there is no audio here to process. To make notes from this sample, open it in the Mac app
+            (pnpm dev:desktop) with a NEAR AI key, or run <span className="t-mono">pnpm sample:notes</span> in the repo with{" "}
+            <span className="t-mono">NEAR_AI_API_KEY</span> in .env.
+          </p>
+        )}
+
+        {isDesktop && run.state === "idle" && hasKey === false && <KeyForm onSaved={() => setHasKey(true)} />}
 
         {run.state !== "idle" && (
           <ol className="m-0 flex list-none flex-col p-0" aria-live="polite">
@@ -199,10 +217,12 @@ export function RecordingScreen({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button onClick={() => revealItemInDir(`${recording.dir}/meeting.json`)}>
-              <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
-              Show in Finder
-            </Button>
+            {isDesktop && (
+              <Button onClick={() => revealItemInDir(`${recording.dir}/meeting.json`)}>
+                <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
+                Show in Finder
+              </Button>
+            )}
             {run.state !== "running" && (
               <button onClick={onDelete} className="font-semibold text-muted hover:text-record">
                 Delete
@@ -215,6 +235,27 @@ export function RecordingScreen({
             </Button>
           )}
         </div>
+
+        {script && (
+          <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="t-label text-muted">What this sample call says</span>
+              <span className="text-muted">{script.fictional} Compare it with the notes once they're made.</span>
+            </div>
+            <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
+              {script.lines.map((l) => (
+                <li key={l.at} className="grid grid-cols-[44px_minmax(0,1fr)] gap-3">
+                  <span className="t-mono text-faint">{formatClock(Math.floor(l.at))}</span>
+                  <span>
+                    <span className="font-semibold">{l.speaker === "you" ? "You" : l.name}</span>
+                    <span className="text-muted"> · {l.speaker === "you" ? "microphone" : "call audio"}</span>
+                    <span className="t-reading block">{l.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
       </div>
     </main>
   );

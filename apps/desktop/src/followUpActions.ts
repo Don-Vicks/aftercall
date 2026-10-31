@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   buildRecap,
   CHAIN_NAME,
+  claimLink,
   encodePublicProof,
   formatUsdc,
   mailtoLink,
@@ -151,12 +152,16 @@ export async function followCrossChain(route: CrossChainPayout, apply: Apply): P
   }
 }
 
-/** Creates a claim link for a payee who isn't on the list, and copies it. */
+/**
+ * Creates a claim link for a payee who isn't on the list, and copies it. The backend
+ * gets only the amount; the payee's name and the meeting title go in the link's
+ * #fragment, which never reaches a server (see packages/core claimLink.ts).
+ */
 export async function createClaim(meeting: Meeting, f: PaymentFollowUp, apply: Apply): Promise<void> {
   if (f.amount === null) return;
   try {
-    const { id, token } = await backend.createClaim({ payeeName: f.payeeName, amount: f.amount.toString(), memo: meeting.title, meeting: meeting.title });
-    const link = `${WEB_URL}/claim#${token}`;
+    const { id, token } = await backend.createClaim({ amount: f.amount.toString() });
+    const link = claimLink(`${WEB_URL}/claim`, token, { payeeName: f.payeeName, meeting: meeting.title });
     await navigator.clipboard.writeText(link).catch(() => {});
     apply({ claim: { id, link }, error: undefined });
   } catch (e) {

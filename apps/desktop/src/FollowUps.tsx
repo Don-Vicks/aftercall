@@ -141,16 +141,20 @@ function EmailRow({ f, last, h, invited }: { f: EmailFollowUp; last: boolean; h:
             </div>
           )}
           {f.error && <p className="m-0 pl-8 text-record">{f.error}</p>}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="pl-8 text-muted">Draft in Mail never leaves your Mac.</span>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => h.onDismiss(f.id)}>Dismiss</Button>
-              <Button onClick={() => h.onDraft(f.id)}>Draft in Mail</Button>
-              <Button variant="primary" onClick={() => h.onApprove(f.id)} disabled={!f.to}>
-                Approve and send
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => h.onDismiss(f.id)}>Dismiss</Button>
+            <Button onClick={() => h.onApprove(f.id)} disabled={!f.to}>
+              Send through Aftercall
+            </Button>
+            {/* The private default: the recap opens in your own mail app and no Aftercall server sees it. */}
+            <Button variant="primary" onClick={() => h.onDraft(f.id)}>
+              Draft in Mail
+            </Button>
           </div>
+          <p className="m-0 pl-8 text-muted">
+            Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it. Send through Aftercall passes it through
+            Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy.
+          </p>
         </>
       )}
     </Row>

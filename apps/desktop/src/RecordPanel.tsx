@@ -4,6 +4,7 @@ import { formatClock } from "@aftercall/core";
 import { isDesktop, recorder, type RecordingInfo, type SavedRecording } from "./recorder";
 import type { Project } from "./projects";
 import { Button } from "./ui";
+import { sampleScripts } from "./sampleRecordings";
 
 const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted after transcription.";
 const METER_BARS = 28;
@@ -14,6 +15,7 @@ export function RecordPanel({
   selectProject,
   onNewProject,
   onClose,
+  onOpenSample,
   onStop,
 }: {
   projects: Project[];
@@ -21,6 +23,8 @@ export function RecordPanel({
   selectProject?: string;
   onNewProject: () => void;
   onClose: () => void;
+  /** Opens a fictional sample call as a recording in the chosen project, instead of recording. */
+  onOpenSample?: (sampleId: string, project: string) => void;
   onStop: (project: string, seconds: number, saved?: SavedRecording) => void;
 }) {
   const [project, setProject] = useState(selectProject ?? projects[0]?.name ?? "General");
@@ -221,6 +225,16 @@ export function RecordPanel({
                 ? "Records the call's audio and your microphone on this Mac. macOS asks for permission the first time."
                 : "Preview in a browser: recording is simulated. Run the desktop app to record."}
             </p>
+            {onOpenSample && (
+              <div className="flex flex-col gap-1.5 border-t border-hairline pt-3">
+                <span className="t-label text-muted">No call handy? Open a sample recording</span>
+                {sampleScripts.map((s) => (
+                  <button key={s.id} onClick={() => onOpenSample(s.id, project)} className="text-left font-semibold text-verdigris hover:text-verdigris-hover">
+                    {s.title}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

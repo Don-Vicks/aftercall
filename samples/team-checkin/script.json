@@ -1,0 +1,99 @@
+{
+  "id": "team-checkin",
+  "title": "Weekly check-in, Lantern Loop app team",
+  "fictional": "Every person, company and amount in this call is made up. Voices are macOS text-to-speech.",
+  "seconds": 61,
+  "payees": [],
+  "vocabulary": [
+    "Theo",
+    "Mara",
+    "Lantern Loop",
+    "CSV"
+  ],
+  "lines": [
+    {
+      "at": 1,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Morning both. Quick weekly check-in. Theo, how is the export bug looking?"
+    },
+    {
+      "at": 6.3,
+      "speaker": "others",
+      "name": "Theo (engineer)",
+      "voice": "Daniel",
+      "text": "I found it. The CSV export breaks on dates before the year two thousand. I'll have the fix merged by Thursday."
+    },
+    {
+      "at": 14.1,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Nice work. Can you also add a test for old dates, so it doesn't come back?"
+    },
+    {
+      "at": 19.5,
+      "speaker": "others",
+      "name": "Theo (engineer)",
+      "voice": "Daniel",
+      "text": "Yes, the test goes in with the same fix."
+    },
+    {
+      "at": 22.8,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Great. Mara, where are we on the onboarding emails?"
+    },
+    {
+      "at": 26.5,
+      "speaker": "others",
+      "name": "Mara (marketing)",
+      "voice": "Karen",
+      "text": "The drafts are done. I need the final pricing before I can send them for review."
+    },
+    {
+      "at": 31.5,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Let's decide that now. We keep the price at nine dollars a month for the launch."
+    },
+    {
+      "at": 36.5,
+      "speaker": "others",
+      "name": "Mara (marketing)",
+      "voice": "Karen",
+      "text": "Okay. Then I'll send the onboarding emails for review by Tuesday."
+    },
+    {
+      "at": 40.8,
+      "speaker": "others",
+      "name": "Theo (engineer)",
+      "voice": "Daniel",
+      "text": "One more thing. With the fix landing Thursday, should we still launch on the twelfth?"
+    },
+    {
+      "at": 46.4,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "No, let's move the launch to the eighteenth, so we get a full week of testing."
+    },
+    {
+      "at": 51.5,
+      "speaker": "others",
+      "name": "Mara (marketing)",
+      "voice": "Karen",
+      "text": "Agreed. I'll update the launch checklist today."
+    },
+    {
+      "at": 55,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Perfect. I'll send the recap to both of you after this call. Thanks, everyone."
+    }
+  ]
+}

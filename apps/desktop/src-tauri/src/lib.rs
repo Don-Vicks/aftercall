@@ -5,6 +5,7 @@ mod nearai;
 mod notes_file;
 mod recorder;
 mod recovery;
+mod samples;
 
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
@@ -40,6 +41,12 @@ struct MeetingMeta {
     /// Notes saved after processing (`notes.json`), as the JSON the interface wrote.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
+    /// "Sample" for the built-in fictional recordings (samples.rs); absent for real ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    label: Option<String>,
+    /// A name for recordings that come with one (samples); real ones are named from the calendar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 
 fn recordings_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -73,7 +80,7 @@ fn start_recording(project: String, app: AppHandle, state: State<RecorderState>)
     }
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
     let dir = recordings_dir(&app)?.join(stamp.to_string());
-    let meta = MeetingMeta { id: stamp.to_string(), project, started_at: stamp, seconds: 0, chunks: 0, dir: dir.display().to_string(), notes: None };
+    let meta = MeetingMeta { id: stamp.to_string(), project, started_at: stamp, seconds: 0, chunks: 0, dir: dir.display().to_string(), notes: None, label: None, title: None };
     let (recording, info) = Recording::start(dir, AppEvents(app.clone())).map_err(|e| format!("{e:#}"))?;
     *slot = Some((recording, meta));
     set_tray_recording(&app, true);
@@ -114,6 +121,14 @@ fn list_recordings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
         .collect();
     out.sort_by(|a, b| b.started_at.cmp(&a.started_at));
     Ok(out)
+}
+
+/// Copies a fictional sample call into the recordings folder as a recording labelled "Sample".
+#[tauri::command]
+fn open_sample(app: AppHandle, sample: String, project: String) -> Result<MeetingMeta, String> {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+    let dir = samples::install(&recordings_dir(&app)?, &sample, &project, now)?;
+    serde_json::from_str(&std::fs::read_to_string(dir.join("meeting.json")).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
 /// The folder of one recording, refusing ids that could point elsewhere.
@@ -460,6 +475,7 @@ pub fn run() {
             pause_recording,
             stop_recording,
             list_recordings,
+            open_sample,
             list_chunks,
             save_notes,
             set_action_item_done,
