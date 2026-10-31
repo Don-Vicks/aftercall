@@ -128,10 +128,10 @@ Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) Â
 Disclosed per the hackathon FAQ (Q-005).
 
 - **AI-written code:** most of this repository was written by Claude Code (Anthropic's coding agent) under Victor's direction, from a plan and design he set. Commits carry a `Co-Authored-By: Claude` line.
-- **No templates or pre-existing project code.** Everything here was written from 26 Oct 2026.
+- **No templates or pre-existing project code.** Everything here was written from 26 Oct 2026. The attestation checks follow NEAR's [reference verifier](https://github.com/nearai/nearai-cloud-verifier) and the [NEAR AI Cloud agent skill](https://github.com/near/agent-skills/tree/main/skills/near-ai-cloud); the TDX test fixtures are Phala's sample quote and collateral (MIT), in `apps/desktop/src-tauri/tests/fixtures`.
 - **Libraries:**
-  - Desktop: Tauri 2, React 19, Tailwind CSS 4, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
-  - Shared core: zod, @noble/curves, @noble/hashes
+  - Desktop: Tauri 2, React 19, Tailwind CSS 4, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, dcap-qvl (Phala, Intel TDX quote verification), bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
+  - Shared core: zod, @noble/curves, @noble/hashes, @noble/ciphers; `pnpm sample:notes` uses @phala/dcap-qvl-node
   - Backend: NestJS, pg, jose, @scure/base
   - Web: Next.js, @hot-labs/near-connect
   - MCP server: @modelcontextprotocol/sdk
