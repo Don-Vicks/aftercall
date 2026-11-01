@@ -288,7 +288,7 @@ function DeleteEverything() {
       </div>
       <Why>
         Payments on NEAR stay too. This Mac's NEAR key stays authorised on your account until you remove it in your wallet, and your agent wallet keeps its balance on NEAR; withdraw it first if you're
-        leaving. Backups you exported stay where you saved them.
+        leaving. Backups you exported, and meetings you copied or printed, stay where you put them.
       </Why>
       <AnimatePresence>{open && <ConfirmDelete key="confirm-delete" onClose={() => setOpen(false)} />}</AnimatePresence>
     </section>

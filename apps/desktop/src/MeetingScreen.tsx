@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type FollowUp, type ItemFields, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { ExportMenu } from "./ExportMenu";
 import { EditItemButton, EditedMark, ItemEditor, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
 import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
@@ -28,8 +29,14 @@ export function MeetingScreen({
   autopilotOn,
   onOpenAgents,
   onOpenAutopilot,
+  sample,
+  onNear,
 }: {
   meeting: Meeting;
+  /** Which kind of sample this is, so an export says so. */
+  sample?: ExportOptions["sample"];
+  /** The meeting's proof is recorded on NEAR, so an export can say anyone can check it. */
+  onNear?: boolean;
   /** What the model proposed that the app dropped for lack of an exact quote (notes.json). */
   dropped?: Dropped[];
   /** Your names (NEAR account, name): action items owned by these show as "You". */
@@ -76,20 +83,23 @@ export function MeetingScreen({
               <span className="t-eyebrow text-muted">
                 {meeting.project} · {meetingLabel(meeting)} · {formatDuration(meeting.durationSec)}
               </span>
-              <button
-                type="button"
-                onClick={onOpenVerify}
-                aria-label={meeting.verified ? "Verified. Show the checks" : "Not verified. Show the checks"}
-                className="press rounded-full"
-              >
-                {meeting.verified ? (
-                  <Pill tone="verdigris" icon={<ShieldCheck size={12} strokeWidth={2} aria-hidden="true" />}>
-                    Verified
-                  </Pill>
-                ) : (
-                  <Pill tone="caution">Not verified</Pill>
-                )}
-              </button>
+              <span className="flex items-center gap-1.5">
+                <ExportMenu meeting={meeting} sample={sample} onNear={onNear} me={me} />
+                <button
+                  type="button"
+                  onClick={onOpenVerify}
+                  aria-label={meeting.verified ? "Verified. Show the checks" : "Not verified. Show the checks"}
+                  className="press rounded-full"
+                >
+                  {meeting.verified ? (
+                    <Pill tone="verdigris" icon={<ShieldCheck size={12} strokeWidth={2} aria-hidden="true" />}>
+                      Verified
+                    </Pill>
+                  ) : (
+                    <Pill tone="caution">Not verified</Pill>
+                  )}
+                </button>
+              </span>
             </div>
             <h1 className="t-display selectable m-0">{meeting.title}</h1>
             {others.length > 0 && <People others={others} />}

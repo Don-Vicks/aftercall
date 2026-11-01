@@ -45,6 +45,8 @@ Reduced motion: nothing moves, things fade. The `ac-*` keyframes that move becom
 
 <Menu label="Project options" align="end" trigger={(p) => <IconButton {...p} aria-label="Options"><MoreHorizontal size={14} /></IconButton>}
   items={[{ label: "Rename", onSelect }, null, { label: "Delete project", tone: "danger", onSelect }]} />   // null = divider
+<Menu label="Export this meeting" note="Copies aren't encrypted." trigger={…}
+  items={[{ label: "Copy as Markdown", icon: <Copy size={14} />, onSelect }, null, { label: "Include the transcript", checked: on, onSelect: toggle }]} />   // checked = a checkbox item (ticks, menu stays open); note = a line under the items, read with the menu
 
 <Tabs id="meeting" label="Meeting views" items={[{ id: "notes", label: "Notes" }, { id: "transcript", label: "Transcript", count: 12 }]} value={tab} onChange={setTab} />
 <TabPanel tabsId="meeting" value={tab}>…</TabPanel>
