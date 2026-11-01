@@ -53,7 +53,7 @@ export function Avatar({
       style={{
         width: px,
         height: px,
-        fontSize: Math.round(px * (self ? 0.31 : 0.39)),
+        fontSize: Math.max(9, Math.round(px * (self ? 0.31 : 0.39))),
         background: self ? "var(--verdigris-tint)" : `var(--p${hue})`,
         color: self ? "var(--verdigris)" : `var(--p${hue}i)`,
         boxShadow: ring ? `0 0 0 2px var(--${ring})` : undefined,

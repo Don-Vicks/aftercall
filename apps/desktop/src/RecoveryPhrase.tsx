@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
 import { isDesktop } from "./recorder";
-import { Button, SectionLabel, Spinner, cx } from "./ui";
+import { Button, SectionLabel, Spinner, cx, useConfirm } from "./ui";
 
 /**
  * Shows a new phrase once, asks for three of its words back, then derives this Mac's
@@ -202,9 +202,17 @@ export function RecoverySettings({ status, onKeyChanged }: { status: RecoverySta
     onKeyChanged();
   };
 
-  const startCreate = () => {
-    if (status?.hasKey && !window.confirm("This makes a new key for this Mac. Payments and proofs stop until you authorise the new key once (step 02 below). Continue?")) return;
-    setMode("create");
+  const confirm = useConfirm();
+  const startCreate = async () => {
+    const ok =
+      !status?.hasKey ||
+      (await confirm({
+        title: "Make a new key for this Mac?",
+        body: "Payments and proofs stop until you authorise the new key once (step 02 below).",
+        confirmLabel: "Make a new key",
+        tone: "danger",
+      }));
+    if (ok) setMode("create");
   };
 
   const exportBackup = async () => {

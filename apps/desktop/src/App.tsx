@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
 import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
@@ -25,6 +27,7 @@ import { eventTitles } from "./calendar";
 import { AgentsScreen } from "./AgentsScreen";
 import { agentsApi } from "./agents";
 import { openSample } from "./sampleRecordings";
+import { DialogHost, MotionProvider, Toaster, deferred, toast, useConfirm, view as viewMotion } from "./ui";
 
 type View =
   | { name: "home" }
@@ -87,14 +90,23 @@ export default function App() {
     setRenaming(null);
   };
 
+  const confirm = useConfirm();
   const deleteProject = async (id: string) => {
     const p = projects.find((x) => x.id === id);
     if (!p) return;
-    if (projects.length === 1) return window.alert("Keep at least one project. Rename this one instead.");
+    if (projects.length === 1) {
+      toast({ text: "Keep at least one project. Rename this one instead.", tone: "caution" });
+      return;
+    }
     const target = projects.find((x) => x.id !== id && x.name === "General") ?? projects.find((x) => x.id !== id)!;
     const count = recordings.filter((r) => r.project === p.name).length;
-    const msg = count ? `Delete “${p.name}”? Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.` : `Delete “${p.name}”?`;
-    if (!window.confirm(msg)) return;
+    const ok = await confirm({
+      title: `Delete “${p.name}”?`,
+      body: count ? `Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.` : undefined,
+      confirmLabel: "Delete project",
+      tone: "danger",
+    });
+    if (!ok) return;
     const next = projects.filter((x) => x.id !== id);
     await projectsApi.save(next);
     if (count) await refile(p.name, target.name);
@@ -116,20 +128,51 @@ export default function App() {
     setNewProjectOpen(false);
   };
 
-  /** Removes a recording and its notes from this Mac. */
-  const removeRecording = async (id: string) => {
-    if (!window.confirm("Delete this meeting from this Mac? Its notes and any audio are removed. A proof already on NEAR stays there.")) return;
-    await deleteRecording(id);
-    setRecordings((all) => all.filter((r) => r.id !== id));
-    setMeetings((all) => {
-      const { [id]: _gone, ...rest } = all;
+  /** Meetings deleted in the last few seconds: hidden everywhere, still on disk until their Undo runs out. */
+  const [hidden, setHidden] = useState<Record<string, true>>({});
+  const unhide = (id: string) =>
+    setHidden((all) => {
+      const { [id]: _back, ...rest } = all;
       return rest;
     });
-    setSaved((all) => {
-      const { [id]: _gone, ...rest } = all;
-      return rest;
+
+  /**
+   * Deletes a recording and its notes from this Mac, softly: it disappears at once
+   * and the files go 6 seconds later unless Undo comes first. Quitting in between
+   * deletes nothing. A proof already on NEAR stays there.
+   */
+  const removeRecording = (id: string) => {
+    const r = recordings.find((x) => x.id === id);
+    const title = meetings[id]?.title ?? r?.eventTitle ?? r?.title;
+    setHidden((all) => ({ ...all, [id]: true }));
+    setView((v) => ((v.name === "meeting" || v.name === "recording") && v.id === id ? { name: "home" } : v));
+    setVerifyId((v) => (v === id ? null : v));
+    deferred({
+      id: `delete-meeting:${id}`,
+      text: title ? `Deleted “${title}”` : "Meeting deleted",
+      ms: 6000,
+      undo: () => unhide(id),
+      run: async () => {
+        try {
+          await deleteRecording(id);
+        } catch (e) {
+          unhide(id);
+          toast({ text: `Couldn't delete the meeting: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+          return;
+        }
+        delete diskNotes.current[id];
+        setRecordings((all) => all.filter((x) => x.id !== id));
+        setMeetings((all) => {
+          const { [id]: _gone, ...rest } = all;
+          return rest;
+        });
+        setSaved((all) => {
+          const { [id]: _gone, ...rest } = all;
+          return rest;
+        });
+        unhide(id);
+      },
     });
-    setView({ name: "home" });
   };
   /** Copies a fictional sample call in as a recording labelled "Sample" and opens it. */
   const openSampleRecording = async (sampleId: string, project?: string) => {
@@ -139,7 +182,7 @@ export default function App() {
       setRecordOpen(false);
       setView({ name: "recording", id: r.id });
     } catch (e) {
-      window.alert(`Couldn't open the sample: ${e instanceof Error ? e.message : String(e)}`);
+      toast({ text: `Couldn't open the sample: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
     }
   };
   const leftToday = limits?.leftToday ?? null;
@@ -333,7 +376,10 @@ export default function App() {
 
   // Runs autopilot follow-ups whose undo window has passed.
   useEffect(() => {
-    const due = Object.values(meetings).flatMap((m) => m.followUps.filter((f) => f.autopilotAt).map((f) => ({ m, f })));
+    // A meeting waiting out its delete Undo runs nothing.
+    const due = Object.values(meetings)
+      .filter((m) => !hidden[m.id])
+      .flatMap((m) => m.followUps.filter((f) => f.autopilotAt).map((f) => ({ m, f })));
     if (due.length === 0) return;
     const t = setInterval(() => {
       for (const { m, f } of due) {
@@ -370,7 +416,7 @@ export default function App() {
   });
 
   const blocked: BlockedPayment[] = meetingList
-    .filter((m) => saved[m.id])
+    .filter((m) => saved[m.id] && !hidden[m.id])
     .flatMap((m) => m.followUps.filter((f) => f.kind === "payment" && f.status === "blocked").map((f) => ({ meeting: m, followUp: f as BlockedPayment["followUp"] })));
 
   const finishProcessing = useCallback(() => setView({ name: "meeting", id: syncWithAda.id }), []);
@@ -397,157 +443,172 @@ export default function App() {
   const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;
   const meetingTitles = Object.fromEntries(Object.values(meetings).map((m) => [m.id, m.title]));
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
+  // Everything on screen leaves out meetings that are waiting out their delete Undo.
+  const shownMeetings = meetingList.filter((m) => !hidden[m.id]);
+  const shownRecordings = recordings.filter((r) => !hidden[r.id]);
+  /** One key per screen, so switching screens fades between them. */
+  const viewKey = view.name === "meeting" || view.name === "recording" ? `${view.name}:${view.id}` : view.name;
 
   return (
-    <div className="flex h-full">
-      <Sidebar
-        projects={projects}
-        sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
-        account={account}
-        balance={balance}
-        selectedMeetingId={selectedMeetingId}
-        pendingByMeeting={pendingByMeeting}
-        recordings={recordings}
-        meetingTitles={meetingTitles}
-        homeSelected={view.name === "home"}
-        walletSelected={view.name === "wallet"}
-        settingsSelected={view.name === "settings"}
-        agentsSelected={view.name === "agents"}
-        onOpenAgents={() => setView({ name: "agents" })}
-        onOpenHome={() => setView({ name: "home" })}
-        searchSelected={view.name === "search"}
-        onOpenSearch={() => setView({ name: "search" })}
-        onNewProject={() => setNewProjectOpen(true)}
-        onRenameProject={(id) => setRenaming(projects.find((p) => p.id === id) ?? null)}
-        onDeleteProject={deleteProject}
-        onSelectMeeting={(id) =>
-          meetings[id]
-            ? setView({ name: "meeting", id })
-            : recordings.some((r) => r.id === id)
-              ? setView({ name: "recording", id })
-              : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
-        }
-        onNewRecording={() => setRecordOpen(true)}
-        onOpenWallet={() => setView({ name: "wallet" })}
-        onOpenSettings={() => setView({ name: "settings" })}
-      />
-
-      {view.name === "meeting" && meeting && (
-        <MeetingScreen
-          key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
-          openAt={view.name === "meeting" ? view.at : undefined}
-          meeting={meeting}
-          leftToday={meeting.id === syncWithAda.id ? null : leftToday}
-          onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
-          handlers={handlersFor(meeting)}
-          onDelete={saved[meeting.id] ? () => removeRecording(meeting.id) : undefined}
-          onOpenVerify={() =>
-            saved[meeting.id]
-              ? setVerifyId(meeting.id)
-              : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
-          }
-        />
-      )}
-      {openRecording && (
-        <RecordingScreen
-          key={openRecording.id}
-          recording={openRecording}
-          payees={payees}
-          onDelete={() => removeRecording(openRecording.id)}
-          onProcessed={(id, notes) => onProcessedRef.current(id, notes)}
-        />
-      )}
-      {view.name === "home" && (
-        <HomeScreen
-          meetings={Object.values(meetings)}
-          recordings={recordings}
-          sampleId={syncWithAda.id}
-          onNewRecording={() => setRecordOpen(true)}
-          onOpenSample={(sampleId) => openSampleRecording(sampleId)}
-          onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
-          onOpenSettings={() => setView({ name: "settings" })}
-          onOpenWallet={() => setView({ name: "wallet" })}
-        />
-      )}
-      {view.name === "wallet" && (
-        <WalletScreen
-          blocked={blocked}
-          onOpenSettings={() => setView({ name: "settings" })}
-          onResolved={(meetingId, fuId, status) => {
-            patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
-            refreshWallet();
-          }}
-        />
-      )}
-      {view.name === "settings" && <ConnectNear />}
-      {view.name === "agents" && (
-        <AgentsScreen meetings={Object.values(meetings).filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
-      )}
-      {view.name === "search" && (
-        <SearchScreen
-          meetings={Object.values(meetings)}
-          onOpen={(id, at) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id })}
-        />
-      )}
-      {verifyId && saved[verifyId] && (
-        <VerifySheet
-          recordingId={verifyId}
-          saved={saved[verifyId]}
-          onClose={() => setVerifyId(null)}
-          onUpdated={(updated) => {
-            setSaved((all) => ({ ...all, [verifyId]: updated }));
-            setRecordings((all) => all.map((r) => (r.id === verifyId ? { ...r, notes: serializeNotes(updated) } : r)));
-          }}
-          onConnect={() => {
-            setVerifyId(null);
-            setView({ name: "settings" });
-          }}
-        />
-      )}
-      {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
-      {view.name === "placeholder" && (
-        <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
-          <div data-tauri-drag-region className="h-9" />
-          <div className="mx-auto flex max-w-[680px] flex-1 flex-col justify-center gap-3 px-12 pb-24">
-            <h1 className="t-display m-0">{view.title}</h1>
-            <p className="t-reading m-0 text-muted">{view.milestone}</p>
-          </div>
-        </main>
-      )}
-
-      {onboarding && (
-        <Onboarding
-          onDone={(record) => {
-            setOnboarding(false);
-            if (record) setRecordOpen(true);
-          }}
-        />
-      )}
-      {recordOpen && (
-        <RecordPanel
+    <MotionProvider>
+      <div className="flex h-full">
+        <Sidebar
           projects={projects}
-          selectProject={createdProject}
+          sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
+          account={account}
+          balance={balance}
+          selectedMeetingId={selectedMeetingId}
+          pendingByMeeting={pendingByMeeting}
+          recordings={shownRecordings}
+          meetingTitles={meetingTitles}
+          homeSelected={view.name === "home"}
+          walletSelected={view.name === "wallet"}
+          settingsSelected={view.name === "settings"}
+          agentsSelected={view.name === "agents"}
+          onOpenAgents={() => setView({ name: "agents" })}
+          onOpenHome={() => setView({ name: "home" })}
+          searchSelected={view.name === "search"}
+          onOpenSearch={() => setView({ name: "search" })}
           onNewProject={() => setNewProjectOpen(true)}
-          onClose={() => setRecordOpen(false)}
-          onOpenSample={openSampleRecording}
-          onStop={(project, seconds, saved) => {
-            setRecordOpen(false);
-            if (saved) {
-              // A real recording: show it as its own meeting, with its true status.
-              setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
-              nameFromCalendar([saved]);
-              setView({ name: "recording", id: saved.id });
-            } else {
-              // Browser preview: walk through the simulated pipeline on sample data.
-              setView({ name: "processing", project, seconds });
-            }
-          }}
+          onRenameProject={(id) => setRenaming(projects.find((p) => p.id === id) ?? null)}
+          onDeleteProject={deleteProject}
+          onSelectMeeting={(id) =>
+            meetings[id]
+              ? setView({ name: "meeting", id })
+              : recordings.some((r) => r.id === id)
+                ? setView({ name: "recording", id })
+                : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
+          }
+          onNewRecording={() => setRecordOpen(true)}
+          onOpenWallet={() => setView({ name: "wallet" })}
+          onOpenSettings={() => setView({ name: "settings" })}
         />
-      )}
-      {newProjectOpen && <NewProjectSheet existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
-      {renaming && (
-        <NewProjectSheet existing={projects.map((p) => p.name)} initial={renaming.name} onClose={() => setRenaming(null)} onCreate={(name) => renameProject(renaming, name)} />
-      )}
-    </div>
+
+        <AnimatePresence mode="wait" initial={false}>
+          <m.div key={viewKey} {...viewMotion} className="flex min-w-0 flex-1">
+            {view.name === "meeting" && meeting && (
+              <MeetingScreen
+                key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
+                openAt={view.name === "meeting" ? view.at : undefined}
+                meeting={meeting}
+                leftToday={meeting.id === syncWithAda.id ? null : leftToday}
+                onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
+                handlers={handlersFor(meeting)}
+                onDelete={saved[meeting.id] ? () => removeRecording(meeting.id) : undefined}
+                onOpenVerify={() =>
+                  saved[meeting.id]
+                    ? setVerifyId(meeting.id)
+                    : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
+                }
+              />
+            )}
+            {openRecording && (
+              <RecordingScreen
+                key={openRecording.id}
+                recording={openRecording}
+                payees={payees}
+                onDelete={() => removeRecording(openRecording.id)}
+                onProcessed={(id, notes) => onProcessedRef.current(id, notes)}
+              />
+            )}
+            {view.name === "home" && (
+              <HomeScreen
+                meetings={shownMeetings}
+                recordings={shownRecordings}
+                sampleId={syncWithAda.id}
+                onNewRecording={() => setRecordOpen(true)}
+                onOpenSample={(sampleId) => openSampleRecording(sampleId)}
+                onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
+                onOpenSettings={() => setView({ name: "settings" })}
+                onOpenWallet={() => setView({ name: "wallet" })}
+              />
+            )}
+            {view.name === "wallet" && (
+              <WalletScreen
+                blocked={blocked}
+                onOpenSettings={() => setView({ name: "settings" })}
+                onResolved={(meetingId, fuId, status) => {
+                  patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
+                  refreshWallet();
+                }}
+              />
+            )}
+            {view.name === "settings" && <ConnectNear />}
+            {view.name === "agents" && (
+              <AgentsScreen meetings={shownMeetings.filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
+            )}
+            {view.name === "search" && (
+              <SearchScreen
+                meetings={shownMeetings}
+                onOpen={(id, at) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id })}
+              />
+            )}
+            {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
+            {view.name === "placeholder" && (
+              <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
+                <div data-tauri-drag-region className="h-9" />
+                <div className="mx-auto flex max-w-[680px] flex-1 flex-col justify-center gap-3 px-12 pb-24">
+                  <h1 className="t-display m-0">{view.title}</h1>
+                  <p className="t-reading m-0 text-muted">{view.milestone}</p>
+                </div>
+              </main>
+            )}
+          </m.div>
+        </AnimatePresence>
+        {verifyId && saved[verifyId] && (
+          <VerifySheet
+            recordingId={verifyId}
+            saved={saved[verifyId]}
+            onClose={() => setVerifyId(null)}
+            onUpdated={(updated) => {
+              setSaved((all) => ({ ...all, [verifyId]: updated }));
+              setRecordings((all) => all.map((r) => (r.id === verifyId ? { ...r, notes: serializeNotes(updated) } : r)));
+            }}
+            onConnect={() => {
+              setVerifyId(null);
+              setView({ name: "settings" });
+            }}
+          />
+        )}
+
+        {onboarding && (
+          <Onboarding
+            onDone={(record) => {
+              setOnboarding(false);
+              if (record) setRecordOpen(true);
+            }}
+          />
+        )}
+        {recordOpen && (
+          <RecordPanel
+            projects={projects}
+            selectProject={createdProject}
+            onNewProject={() => setNewProjectOpen(true)}
+            onClose={() => setRecordOpen(false)}
+            onOpenSample={openSampleRecording}
+            onStop={(project, seconds, saved) => {
+              setRecordOpen(false);
+              if (saved) {
+                // A real recording: show it as its own meeting, with its true status.
+                setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
+                nameFromCalendar([saved]);
+                setView({ name: "recording", id: saved.id });
+              } else {
+                // Browser preview: walk through the simulated pipeline on sample data.
+                setView({ name: "processing", project, seconds });
+              }
+            }}
+          />
+        )}
+        <AnimatePresence>
+          {newProjectOpen && <NewProjectSheet key="new-project" existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
+          {renaming && (
+            <NewProjectSheet key="rename-project" existing={projects.map((p) => p.name)} initial={renaming.name} onClose={() => setRenaming(null)} onCreate={(name) => renameProject(renaming, name)} />
+          )}
+        </AnimatePresence>
+      </div>
+      <Toaster />
+      <DialogHost />
+    </MotionProvider>
   );
 }

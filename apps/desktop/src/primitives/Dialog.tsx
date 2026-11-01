@@ -42,7 +42,9 @@ export interface DialogProps {
  * way in; leaves faster. Rendered in a portal.
  */
 export function Dialog({ open = true, ...props }: DialogProps) {
-  return createPortal(<AnimatePresence propagate>{open && <Panel key="dialog" {...props} />}</AnimatePresence>, document.body);
+  // `propagate` lets a parent AnimatePresence play this exit too. Only while open:
+  // an empty presence that propagates never reports done, so its parent would never leave.
+  return createPortal(<AnimatePresence propagate={open}>{open && <Panel key="dialog" {...props} />}</AnimatePresence>, document.body);
 }
 
 function Panel({
@@ -61,25 +63,29 @@ function Panel({
   children,
 }: Omit<DialogProps, "open">) {
   const panel = useRef<HTMLDivElement>(null);
-  const restoreTo = useRef<Element | null>(null);
+  // Read during the first render, before focus moves in (an effect would run twice under StrictMode).
+  const [restoreTo] = useState(() => document.activeElement);
   const titleId = useId();
   const introId = useId();
   const present = useIsPresent();
   const isTop = useLayer(present, () => dismissible && onClose());
 
   // Focus in on open; back to where it was on close, unless something else took it.
+  const restore = () => {
+    const active = document.activeElement;
+    const inside = !active || active === document.body || Boolean(panel.current?.contains(active));
+    if (restoreTo instanceof HTMLElement && restoreTo.isConnected && inside) restoreTo.focus({ preventScroll: true });
+  };
   useEffect(() => {
-    restoreTo.current = document.activeElement;
     const el = panel.current;
     if (!el) return;
     if (initialFocus?.current) initialFocus.current.focus();
     else if (!el.contains(document.activeElement)) (focusables(el)[0] ?? el).focus();
+    // Unmounted outright (no AnimatePresence around it): give focus back now.
+    return restore;
   }, []);
   useEffect(() => {
-    if (present) return;
-    const back = restoreTo.current;
-    const active = document.activeElement;
-    if (back instanceof HTMLElement && back.isConnected && (!active || active === document.body || panel.current?.contains(active))) back.focus({ preventScroll: true });
+    if (!present) restore();
   }, [present]);
 
   const onKeyDown = (e: ReactKeyboardEvent) => {

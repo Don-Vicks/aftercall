@@ -3,7 +3,7 @@ import { Check, ExternalLink } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { nearAiKey } from "./nearai";
 import { isDesktop } from "./recorder";
-import { Button, Spinner } from "./ui";
+import { Button, Spinner, useConfirm } from "./ui";
 
 /**
  * Connects NEAR AI: paste a key, Aftercall checks it with NEAR AI, then keeps it in
@@ -46,8 +46,15 @@ export function NearAiConnect({ onConnected, compact }: { onConnected?: () => vo
     }
   };
 
+  const confirm = useConfirm();
   const remove = async () => {
-    if (!window.confirm("Remove the NEAR AI key from this Mac? Recordings will wait for notes until you add one again.")) return;
+    const ok = await confirm({
+      title: "Remove the NEAR AI key from this Mac?",
+      body: "Recordings will wait for notes until you add one again.",
+      confirmLabel: "Remove key",
+      tone: "danger",
+    });
+    if (!ok) return;
     await nearAiKey.clear();
     setHint(null);
   };
