@@ -11,10 +11,12 @@ import type { ActionItem, Meeting } from "@aftercall/core";
  * line, each carrying the token shown on that screen
  * (apps/desktop/src-tauri/src/agents.rs):
  *
- *   → {"token":"…","op":"projects"|"meetings"|"notes"|"claim"|"complete", ...args}
+ *   → {"token":"…","op":"projects"|"meetings"|"notes"|"access"|"claim"|"complete", ...args}
  *   ← {"ok":true,"result":…} or {"ok":false,"error":"…"}
  *
- * The app does every write itself, under the same lock as its own saves, and only
+ * Agents only read unless the user turns on "Let agents claim and complete action
+ * items" on that screen; until then the app refuses claim and complete. When it is
+ * on, the app does every write itself, under the same lock as its own saves, and only
  * lets an agent claim or complete one action item.
  */
 
@@ -108,6 +110,11 @@ export async function readMeetings(app: AppChannel): Promise<StoredMeeting[]> {
 
 export async function readNotes(app: AppChannel, id: string): Promise<NotesFile> {
   return (await app("notes", { id })) as NotesFile;
+}
+
+/** Whether the user lets agents claim and complete action items right now. */
+export async function readAccess(app: AppChannel): Promise<{ allowWrites: boolean }> {
+  return (await app("access")) as { allowWrites: boolean };
 }
 
 /** Claims one action item for `agent`; the app stamps the time. */

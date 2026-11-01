@@ -3,18 +3,20 @@ import { writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { startFakeApp, type FakeApp } from "./fixture.ts";
+import { WRITES_OFF, startFakeApp, type FakeApp } from "./fixture.ts";
 import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 import { NO_TOKEN, NOT_RUNNING, checkId, connectApp, socketPathFor, type AppChannel } from "./store.ts";
 
 // Every test goes through the real socket client (store.ts) to a stand-in for the app's agents socket.
+// Most tests here are about the claim rules, so the stand-in starts with writes allowed;
+// the read-only default has its own tests below.
 const T0 = "2026-10-26T12:00:00.000Z";
 let fake: FakeApp;
 let app: AppChannel;
 let clock = T0;
 beforeEach(async () => {
   clock = T0;
-  fake = await startFakeApp({ now: () => clock });
+  fake = await startFakeApp({ now: () => clock, allowWrites: true });
   app = connectApp({ socketPath: fake.socketPath, token: fake.token });
 });
 afterEach(() => fake.close());
@@ -65,10 +67,15 @@ test("search: reuses core search across meetings and projects", async () => {
 });
 
 test("list_action_items: open, unclaimed items; filter by owner and project", async () => {
-  assert.deepEqual((await listActionItems(app)).items.map((i) => i.text), ["Write the release notes", "Send Ada the pilot plan", "Share the term sheet"]);
-  assert.deepEqual((await listActionItems(app, { owner: "you" })).items.map((i) => i.itemId), ["a1"]);
-  assert.equal((await listActionItems(app, { project: "General" })).total, 1);
-  assert.equal((await listActionItems(app, { includeDone: true })).total, 4);
+  assert.deepEqual((await listActionItems(app)).items.map((i) => i.text), [
+    "Write the release notes",
+    "Ship the API fix",
+    "Send Ada the pilot plan",
+    "Share the term sheet",
+  ]);
+  assert.deepEqual((await listActionItems(app, { owner: "you" })).items.map((i) => `${i.meetingId}/${i.itemId}`), ["1761100000/a2", "1761000000/a1"]);
+  assert.equal((await listActionItems(app, { project: "General" })).total, 2);
+  assert.equal((await listActionItems(app, { includeDone: true })).total, 5);
 });
 
 test("claim then complete: the app records it, visible to the next read", async () => {
@@ -77,8 +84,8 @@ test("claim then complete: the app records it, visible to the next read", async 
   assert.deepEqual(item.claimed, { agent: "Claude Code", at: T0 });
   assert.equal(item.done, false);
   // Claimed items drop out of the default list.
-  assert.deepEqual((await listActionItems(app, { owner: "you" })).items, []);
-  assert.equal((await listActionItems(app, { owner: "you", includeClaimed: true })).total, 1);
+  assert.deepEqual((await listActionItems(app, { owner: "you", project: "Fundraise" })).items, []);
+  assert.equal((await listActionItems(app, { owner: "you", project: "Fundraise", includeClaimed: true })).total, 1);
 
   // Claiming again as the same agent is harmless; another agent is refused, with the app's reason.
   await claimActionItem(app, { meetingId: "1761000000", itemId: "a1", agent: "Claude Code" });
@@ -92,6 +99,33 @@ test("claim then complete: the app records it, visible to the next read", async 
   assert.deepEqual(item.completed, { agent: "Claude Code", at: clock, note: "Sent the plan as a doc" });
   await assert.rejects(claimActionItem(app, { meetingId: "1761000000", itemId: "a1", agent: "Claude Code" }), /already done/);
   assert.equal((await getMeeting(app, { id: "1761000000" })).actionItems[0].completed?.agent, "Claude Code");
+});
+
+test("read-only by default: reads work, claim and complete are refused by name, nothing changes", async () => {
+  await fake.close();
+  fake = await startFakeApp({ now: () => clock });
+  app = connectApp({ socketPath: fake.socketPath, token: fake.token });
+
+  assert.equal((await listMeetings(app)).total, 2);
+  const list = await listActionItems(app);
+  assert.equal(list.canClaim, false);
+  assert.match(list.note ?? "", /read only/);
+  await assert.rejects(claimActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), (e: Error) => e.message === WRITES_OFF);
+  await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), /Settings → Connected agents/);
+  const item = fake.notes("1761100000").meeting.actionItems[1];
+  assert.equal(item.claimed, undefined);
+  assert.equal(item.done, false);
+
+  // The user turns the switch on: the same call now goes through.
+  fake.setAllowWrites(true);
+  assert.equal((await listActionItems(app)).canClaim, true);
+  assert.equal("note" in (await listActionItems(app)), false);
+  await claimActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" });
+  assert.equal(fake.notes("1761100000").meeting.actionItems[1].claimed?.agent, "Claude Code");
+  // And off again: refused again, the claim already made stays.
+  fake.setAllowWrites(false);
+  await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), (e: Error) => e.message === WRITES_OFF);
+  assert.equal(fake.notes("1761100000").meeting.actionItems[1].done, false);
 });
 
 test("bad input: unknown item, missing agent name, unprocessed meeting", async () => {

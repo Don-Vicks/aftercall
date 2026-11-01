@@ -1,10 +1,11 @@
 import { formatClock, formatUsdc, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
-import { claimItem, completeItem, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
+import { claimItem, completeItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
 
 /**
  * The tools behind the MCP server, as plain functions over the channel to the app
  * (store.ts), so they can be tested without an MCP transport. Everything here reads,
- * except claiming and completing an action item, which the app does on that one item.
+ * except claiming and completing an action item, which the app does on that one item,
+ * and only when the user has allowed it.
  */
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -117,7 +118,13 @@ export async function listActionItems(
           .map((a) => itemView(id, notes.meeting, a))
       : [],
   );
-  return { items, total: items.length };
+  const { allowWrites } = await readAccess(app);
+  return {
+    items,
+    total: items.length,
+    canClaim: allowWrites,
+    ...(allowWrites ? {} : { note: "Aftercall lets agents read only right now. The user can allow claiming and completing in Settings → Connected agents." }),
+  };
 }
 
 export async function claimActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string }) {

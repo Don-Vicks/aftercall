@@ -8,8 +8,9 @@ import type { NotesFile } from "./store.ts";
 
 /**
  * A stand-in for the Aftercall app's agents socket (apps/desktop/src-tauri/src/agents.rs):
- * the same line protocol, token check and claim rules, over in-memory notes. The real
- * rules, locking and encryption are tested in Rust (`cargo test agents`).
+ * the same line protocol, token check, read-only default and claim rules, over in-memory
+ * notes. The real rules, locking, encryption and activity list are tested in Rust
+ * (`cargo test agents`).
  */
 export interface FakeApp {
   dataDir: string;
@@ -17,6 +18,8 @@ export interface FakeApp {
   token: string;
   /** The notes as the app holds them now. */
   notes: (id: string) => NotesFile;
+  /** The "Let agents claim and complete action items" switch. */
+  setAllowWrites: (on: boolean) => void;
   /** Stops listening and removes the temp dir. */
   close: () => Promise<void>;
 }
@@ -68,7 +71,10 @@ function fixtureMeetings(): Map<string, NotesFile> {
     startedAt: "2026-10-22T09:00:00.000Z",
     summary: "Release on Thursday.",
     decisions: ["Ship the release on Thursday"],
-    actionItems: [{ id: "a1", text: "Write the release notes", owner: "Sam", done: false }],
+    actionItems: [
+      { id: "a1", text: "Write the release notes", owner: "Sam", done: false },
+      { id: "a2", text: "Ship the API fix", owner: "You", done: false },
+    ],
     followUps: [],
     transcript: [{ at: 5, speaker: "others", text: "The release goes out Thursday" }],
   };
@@ -84,9 +90,23 @@ const PROJECTS = [
   { id: "fundraise-k3x", name: "Fundraise" },
 ];
 
+/** The app's refusal while agents may only read (agents.rs, `WRITES_OFF`). */
+export const WRITES_OFF =
+  "Aftercall lets agents read only. To let them claim and complete action items, turn that on in Settings → Connected agents.";
+
 type Req = { token?: string; op?: string; [k: string]: unknown };
 
-function handle(store: Map<string, NotesFile>, req: Req, now: () => string): unknown {
+/** One request as the stand-in saw it, for the demo's log. Never meeting content. */
+export interface Seen {
+  op: string;
+  agent?: string;
+  meetingId?: string;
+  itemId?: string;
+  allowed: boolean;
+  error?: string;
+}
+
+function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, now: () => string): unknown {
   const missing = (id: unknown) => new Error(`No processed meeting with id "${String(id)}". Use list_meetings to see ids.`);
   const notesOf = (id: unknown) => {
     const n = typeof id === "string" && /^\d{1,20}$/.test(id) ? store.get(id) : undefined;
@@ -109,12 +129,16 @@ function handle(store: Map<string, NotesFile>, req: Req, now: () => string): unk
       return [...store.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).map(([id, notes]) => ({ id, notes }));
     case "notes":
       return notesOf(req.id);
+    case "access":
+      return { allowWrites };
     case "claim": {
+      if (!allowWrites) throw new Error(WRITES_OFF);
       const { item, agent } = openItem(req, (by, at) => `Already claimed by ${by} at ${at}`);
       item.claimed ??= { agent, at: now() };
       return { claimed: true, item };
     }
     case "complete": {
+      if (!allowWrites) throw new Error(WRITES_OFF);
       const { item, agent } = openItem(req, (by) => `Claimed by ${by}; only that agent can complete it`);
       const note = typeof req.note === "string" ? req.note.trim().slice(0, 500) : "";
       const at = now();
@@ -128,13 +152,17 @@ function handle(store: Map<string, NotesFile>, req: Req, now: () => string): unk
   }
 }
 
-/** Starts the stand-in app on a Unix socket in a new temp data dir. */
-export async function startFakeApp(opts: { now?: () => string } = {}): Promise<FakeApp> {
+/**
+ * Starts the stand-in app on a Unix socket in a new temp data dir. Like the app, agents
+ * only read until `allowWrites` (or `setAllowWrites(true)`).
+ */
+export async function startFakeApp(opts: { now?: () => string; allowWrites?: boolean; onRequest?: (seen: Seen) => void } = {}): Promise<FakeApp> {
   const dataDir = await mkdtemp(join(tmpdir(), "ac-mcp-"));
   const socketPath = join(dataDir, "agents.sock");
   const token = randomBytes(32).toString("hex");
   const store = fixtureMeetings();
   const now = opts.now ?? (() => new Date().toISOString());
+  let allowWrites = opts.allowWrites ?? false;
   const server: Server = createServer((sock) => {
     let buf = "";
     sock.on("data", (d) => {
@@ -142,13 +170,24 @@ export async function startFakeApp(opts: { now?: () => string } = {}): Promise<F
       const nl = buf.indexOf("\n");
       if (nl < 0) return;
       let reply: unknown;
+      let req: Req = {};
       try {
-        const req = JSON.parse(buf.slice(0, nl)) as Req;
+        req = JSON.parse(buf.slice(0, nl)) as Req;
         if (req.token !== token) throw new Error("Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.");
-        reply = { ok: true, result: handle(store, req, now) };
+        reply = { ok: true, result: handle(store, req, allowWrites, now) };
       } catch (e) {
         reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
+      const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+      const r = reply as { ok: boolean; error?: string };
+      opts.onRequest?.({
+        op: str(req.op) ?? "?",
+        agent: str(req.agent) ?? str(req.client),
+        meetingId: str(req.meetingId) ?? str(req.id),
+        itemId: str(req.itemId),
+        allowed: r.ok,
+        ...(r.ok ? {} : { error: r.error }),
+      });
       sock.end(JSON.stringify(reply) + "\n");
     });
     sock.on("error", () => {});
@@ -159,6 +198,9 @@ export async function startFakeApp(opts: { now?: () => string } = {}): Promise<F
     socketPath,
     token,
     notes: (id) => structuredClone(store.get(id)!),
+    setAllowWrites: (on) => {
+      allowWrites = on;
+    },
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await rm(dataDir, { recursive: true, force: true });
