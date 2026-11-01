@@ -80,7 +80,8 @@ export function FollowUps({
 } & FollowUpHandlers) {
   const network = useNetwork();
   const visible = followUps.filter((f) => f.status !== "dismissed");
-  if (visible.length === 0) return null;
+  // Kept while every row is dismissed, so the last one can collapse and its Undo still has a place to return to.
+  if (followUps.length === 0) return null;
   const anyAutopilot = autopilotOn || followUps.some((f) => f.autopilotAt || f.byAutopilot);
 
   const dismiss = (f: FollowUp) => {
@@ -124,6 +125,7 @@ export function FollowUps({
               </m.div>
             ))}
           </AnimatePresence>
+          {visible.length === 0 && <p className="m-0 text-[13px] text-ink-2">Every follow-up was dismissed.</p>}
         </div>
       </LayoutMotion>
     </section>
