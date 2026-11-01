@@ -1,21 +1,30 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Search, ShieldCheck } from "lucide-react";
-import { formatClock, formatDuration, type Meeting } from "@aftercall/core";
-import { FollowUps, type FollowUpHandlers } from "./FollowUps";
-import { Pill, SectionLabel, cx } from "./ui";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Lock, Search, ShieldCheck, Users } from "lucide-react";
+import { formatClock, formatDuration, othersOn, speakerLabel, type ActionItem, type Attendee, type FollowUp, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
+import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, useIsYou } from "./ui";
 
 type Tab = "notes" | "transcript";
 
+/** The board's entrance: each block rises in 40 ms after the one before. */
+const rise = (i: number, ms = 320): CSSProperties => ({ animation: `ac-in ${ms}ms ${Math.min(i, 10) * 40}ms var(--ease) both` });
+
 export function MeetingScreen({
   meeting,
+  me = [],
   leftToday,
   onToggleItem,
   onOpenVerify,
   handlers,
   onDelete,
   openAt,
+  autopilotOn,
+  onOpenAgents,
+  onOpenAutopilot,
 }: {
   meeting: Meeting;
+  /** Your names (NEAR account, name): action items owned by these show as "You". */
+  me?: readonly string[];
   /** What the agent wallet can still pay today, when connected. */
   leftToday: bigint | null;
   onToggleItem: (id: string) => void;
@@ -25,72 +34,115 @@ export function MeetingScreen({
   onDelete?: () => void;
   /** Opens on the transcript at this second (from search). */
   openAt?: number;
+  /** Whether an autopilot rule is on. */
+  autopilotOn?: boolean;
+  onOpenAgents?: () => void;
+  onOpenAutopilot?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(openAt === undefined ? "notes" : "transcript");
   const [target, setTarget] = useState<{ at: number; quote: string } | null>(openAt === undefined ? null : { at: openAt, quote: "" });
+  const [showFollowUp, setShowFollowUp] = useState<string | null>(null);
+  const others = othersOn(meeting);
 
   const jumpTo = (at: number, quote: string) => {
     setTarget({ at, quote });
     setTab("transcript");
   };
+  const openFollowUp = (id: string) => {
+    setShowFollowUp(id);
+    setTab("notes");
+  };
 
   return (
-    <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
-      <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
-      <article className="mx-auto flex max-w-[680px] flex-col gap-9 px-12 pb-16">
-        <header className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="t-label text-muted">
-              {meeting.project} · {meeting.startedAt} · {formatDuration(meeting.durationSec)}
-            </span>
-            <button onClick={onOpenVerify} className="rounded-full">
-              {meeting.verified ? (
-                <Pill tone="verdigris" icon={<ShieldCheck size={13} strokeWidth={1.75} />}>
-                  Verified
-                </Pill>
-              ) : (
-                <Pill tone="caution">Not verified</Pill>
-              )}
-            </button>
-          </div>
-          <h1 className="t-display selectable m-0">{meeting.title}</h1>
-          <Tabs tab={tab} onChange={setTab} />
-        </header>
+    <MeProvider me={me}>
+      <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
+        <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
+        <article className="mx-auto flex max-w-[680px] flex-col gap-9 px-12 pt-3 pb-24">
+          <header className="flex flex-col gap-3" style={rise(0)}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="t-eyebrow text-muted">
+                {meeting.project} · {meeting.startedAt} · {formatDuration(meeting.durationSec)}
+              </span>
+              <button
+                type="button"
+                onClick={onOpenVerify}
+                aria-label={meeting.verified ? "Verified. Show the checks" : "Not verified. Show the checks"}
+                className="press rounded-full"
+              >
+                {meeting.verified ? (
+                  <Pill tone="verdigris" icon={<ShieldCheck size={12} strokeWidth={2} aria-hidden="true" />}>
+                    Verified
+                  </Pill>
+                ) : (
+                  <Pill tone="caution">Not verified</Pill>
+                )}
+              </button>
+            </div>
+            <h1 className="t-display selectable m-0">{meeting.title}</h1>
+            {others.length > 0 && <People others={others} />}
+            <Tabs
+              id="meeting"
+              label="Meeting views"
+              className="mt-2"
+              items={[
+                { id: "notes", label: "Notes" },
+                { id: "transcript", label: "Transcript" },
+              ]}
+              value={tab}
+              onChange={setTab}
+            />
+          </header>
 
-        {tab === "notes" ? (
-          <Notes meeting={meeting} leftToday={leftToday} onToggleItem={onToggleItem} handlers={{ ...handlers, onJumpTo: jumpTo }} />
-        ) : (
-          <Transcript meeting={meeting} target={target} />
-        )}
-        {onDelete && (
-          <div className="border-t border-hairline pt-4">
-            <button onClick={onDelete} className="font-semibold text-muted hover:text-record">
-              Delete meeting from this Mac
-            </button>
-          </div>
-        )}
-      </article>
-    </main>
+          <TabPanel tabsId="meeting" value={tab} className={cx("flex flex-col", tab === "notes" ? "gap-9" : "gap-7")}>
+            {tab === "notes" ? (
+              <Notes
+                meeting={meeting}
+                leftToday={leftToday}
+                onToggleItem={onToggleItem}
+                handlers={{ ...handlers, onJumpTo: jumpTo }}
+                show={showFollowUp}
+                autopilotOn={autopilotOn}
+                onOpenAgents={onOpenAgents}
+                onOpenAutopilot={onOpenAutopilot}
+              />
+            ) : (
+              <Transcript meeting={meeting} others={others} target={target} onOpenFollowUp={openFollowUp} />
+            )}
+          </TabPanel>
+
+          {onDelete && (
+            <div className="border-t border-hairline pt-4">
+              <Button variant="quiet" className="px-0! hover:text-record" onClick={onDelete}>
+                Delete meeting from this Mac
+              </Button>
+            </div>
+          )}
+        </article>
+      </main>
+    </MeProvider>
   );
 }
 
-function Tabs({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+const nameOf = (a: Attendee) => a.name || a.email;
+
+/** "You and Ada", "You, Ada and Theo", "You, Ada, Theo and 2 more". */
+function peopleLine(names: string[]): string {
+  const shown = names.length > 3 ? names.slice(0, 2) : names;
+  const rest = names.length - shown.length;
+  const all = ["You", ...shown];
+  if (rest > 0) return `${all.join(", ")} and ${rest} more`;
+  return `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
+}
+
+/** Who was invited, from the calendar: avatars and their names. */
+function People({ others }: { others: Attendee[] }) {
+  const names = others.map(nameOf);
   return (
-    <div role="tablist" aria-label="Meeting views" className="flex gap-5 border-b border-hairline">
-      {(["notes", "transcript"] as const).map((t) => (
-        <button
-          key={t}
-          role="tab"
-          aria-selected={tab === t}
-          onClick={() => onChange(t)}
-          className={cx(
-            "pb-2.5 font-semibold capitalize",
-            tab === t ? "text-ink shadow-[inset_0_-2px_0_var(--verdigris)]" : "text-muted hover:text-ink",
-          )}
-        >
-          {t}
-        </button>
-      ))}
+    <div className="flex items-center gap-2.5">
+      <span aria-hidden="true" className="inline-flex">
+        <AvatarStack people={["You", ...names]} max={4} size={28} ring="raised" />
+      </span>
+      <span className="text-ink-2">{peopleLine(names)}</span>
     </div>
   );
 }
@@ -100,110 +152,301 @@ function Notes({
   leftToday,
   onToggleItem,
   handlers,
+  show,
+  autopilotOn,
+  onOpenAgents,
+  onOpenAutopilot,
 }: {
   meeting: Meeting;
   leftToday: bigint | null;
   onToggleItem: (id: string) => void;
   handlers: FollowUpHandlers;
+  /** A follow-up to scroll to, from a chip in the transcript. */
+  show: string | null;
+  autopilotOn?: boolean;
+  onOpenAgents?: () => void;
+  onOpenAutopilot?: () => void;
 }) {
+  const open = meeting.actionItems.filter((a) => !a.done).length;
+  const agents = meeting.actionItems.some((a) => a.claimed || a.completed);
+
+  useEffect(() => {
+    if (show) document.getElementById(`followup-${show}`)?.scrollIntoView({ block: "center" });
+  }, [show]);
+
   return (
     <>
-      <div className="-mt-3 flex flex-col gap-3.5">
-        <p className="t-reading selectable m-0">{meeting.summary}</p>
-        <p className="m-0 text-muted">Processed in NEAR AI secure hardware. Audio deleted after transcription.</p>
-      </div>
+      <p className="t-reading selectable m-0" style={rise(1)}>
+        {meeting.summary}
+      </p>
 
-      <section aria-labelledby="dec" className="flex flex-col gap-3">
-        <SectionLabel id="dec">Decisions</SectionLabel>
-        <ol className="t-reading selectable m-0 flex list-decimal flex-col gap-1 pl-[22px]">
-          {meeting.decisions.map((d) => (
-            <li key={d}>{d}</li>
-          ))}
-        </ol>
-      </section>
+      {meeting.yourNotes && (
+        <section aria-labelledby="your-notes" className="flex flex-col gap-2.5" style={rise(2)}>
+          <h2 id="your-notes" className="t-section m-0 flex items-center gap-2 text-ink">
+            <Avatar name="You" you size={22} decorative />
+            Your notes <span className="font-medium text-muted">typed during the call</span>
+          </h2>
+          <div className="selectable py-1 pl-[30px] font-serif text-[17px] leading-[27px] whitespace-pre-line text-ink">{meeting.yourNotes}</div>
+        </section>
+      )}
 
-      <section aria-labelledby="act" className="flex flex-col gap-1">
-        <div className="mb-2">
-          <SectionLabel id="act">Action items</SectionLabel>
-        </div>
-        {meeting.actionItems.map((item, i) => (
-          <div
-            key={item.id}
-            className={cx("flex items-baseline gap-3 py-2.5", i < meeting.actionItems.length - 1 && "border-b border-hairline")}
-          >
-            <input type="checkbox" id={item.id} checked={item.done} onChange={() => onToggleItem(item.id)} className="size-[15px]" />
-            <label htmlFor={item.id} className="flex flex-1 flex-wrap justify-between gap-x-3 gap-y-1 text-[15px] leading-5">
-              <span className={cx(item.done && "text-muted line-through")}>{item.text}</span>
-              <span className={cx("text-[13px]", item.closedNote ? "text-verdigris" : "text-muted")}>
-                {item.closedNote ?? `${item.owner}${item.due ? ` · ${item.due}` : ""}${agentNote(item)}`}
-              </span>
-            </label>
+      {meeting.decisions.length > 0 && (
+        <section aria-labelledby="decisions" className="flex flex-col gap-2.5" style={rise(3)}>
+          <SectionTitle id="decisions" count={meeting.decisions.length}>
+            Decisions
+          </SectionTitle>
+          <ol className="t-reading selectable m-0 flex list-decimal flex-col gap-1.5 pl-[22px] leading-7">
+            {meeting.decisions.map((d, i) => (
+              <li key={`${i}-${d}`}>{d}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {meeting.actionItems.length > 0 && (
+        <section aria-labelledby="actions" className="flex flex-col gap-1.5" style={rise(4)}>
+          <div className="mb-1 flex items-baseline justify-between gap-3">
+            <SectionTitle id="actions" count={`${open} open`}>
+              Action items
+            </SectionTitle>
+            {agents && onOpenAgents && (
+              <button type="button" onClick={onOpenAgents} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+                Connected agents
+              </button>
+            )}
           </div>
-        ))}
-      </section>
+          <ul className="m-0 flex list-none flex-col border-t border-hairline p-0">
+            {meeting.actionItems.map((item) => (
+              <ActionRow key={item.id} item={item} onToggle={() => onToggleItem(item.id)} />
+            ))}
+          </ul>
+          {agents && <p className="m-0 mt-1.5 text-[13px] text-ink-2">Agents can claim and finish action items. They can't send, pay or change your rules.</p>}
+        </section>
+      )}
 
-      <FollowUps followUps={meeting.followUps} leftToday={leftToday} invited={meeting.invited} {...handlers} />
+      <div style={rise(5)}>
+        <FollowUps
+          meetingId={meeting.id}
+          followUps={meeting.followUps}
+          leftToday={leftToday}
+          invited={meeting.invited}
+          autopilotOn={autopilotOn}
+          onOpenAutopilot={onOpenAutopilot}
+          {...handlers}
+        />
+      </div>
     </>
   );
 }
 
-function Transcript({ meeting, target }: { meeting: Meeting; target: { at: number; quote: string } | null }) {
+/** "14:20" today, "28 Oct" before. */
+function when(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString([], { day: "numeric", month: "short" });
+}
+
+/** One action item: the tick, the words, who and when, and what an agent did with it. */
+function ActionRow({ item, onToggle }: { item: ActionItem; onToggle: () => void }) {
+  const textId = useId();
+  const you = useIsYou();
+  const working = !item.done && !!item.claimed;
+  const owner = item.owner && item.owner !== "Unassigned" ? item.owner : null;
+
+  let sub: ReactNode = null;
+  if (item.done && item.completed) {
+    sub = (
+      <>
+        <span className="font-medium text-verdigris">Done by {item.completed.agent}</span>
+        {item.completed.note && <span className="text-ink-2"> · “{item.completed.note}”</span>}
+      </>
+    );
+  } else if (working) {
+    sub = (
+      <>
+        <span className="font-medium text-verdigris">{item.claimed!.agent} is on it</span>
+        <span className="text-muted"> · since {when(item.claimed!.at)}</span>
+      </>
+    );
+  } else if (item.closedNote) {
+    sub = <span className="text-muted">{item.closedNote}</span>;
+  } else if (owner && !you(owner)) {
+    sub = <span className="text-muted">{owner}</span>;
+  }
+
+  return (
+    <li className="flex items-center gap-3 border-b border-hairline py-[13px]">
+      <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span id={textId} className="selectable self-start text-[15px] leading-[21px] text-ink">
+          <Strike on={item.done}>{item.text}</Strike>
+        </span>
+        {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+        {owner && <Avatar name={owner} size={20} />}
+        {item.due}
+      </span>
+    </li>
+  );
+}
+
+/** Consecutive lines from the same side, shown as one turn of bubbles. */
+interface Turn {
+  speaker: TranscriptLine["speaker"];
+  lines: TranscriptLine[];
+}
+
+function turnsOf(lines: TranscriptLine[]): Turn[] {
+  const turns: Turn[] = [];
+  for (const line of lines) {
+    const last = turns[turns.length - 1];
+    if (last && last.speaker === line.speaker) last.lines.push(line);
+    else turns.push({ speaker: line.speaker, lines: [line] });
+  }
+  return turns;
+}
+
+/** Bubble corners as the board draws them: the small corner faces the speaker's side. */
+function corners(you: boolean, i: number, n: number): string {
+  const single = n === 1 || i === 0;
+  if (you) return single ? "18px 18px 6px 18px" : i === n - 1 ? "18px 6px 18px 18px" : "18px 6px 6px 18px";
+  return single ? "18px 18px 18px 6px" : i === n - 1 ? "6px 18px 18px 18px" : "6px 18px 18px 6px";
+}
+
+function Transcript({
+  meeting,
+  others,
+  target,
+  onOpenFollowUp,
+}: {
+  meeting: Meeting;
+  others: Attendee[];
+  target: { at: number; quote: string } | null;
+  onOpenFollowUp: (id: string) => void;
+}) {
   const [query, setQuery] = useState("");
-  const targetRef = useRef<HTMLDivElement>(null);
-  const evidence = meeting.followUps.filter((f) => f.status !== "dismissed").map((f) => f.evidence);
+  const targetRef = useRef<HTMLParagraphElement>(null);
+  const live = meeting.followUps.filter((f) => f.status !== "dismissed");
+  const named = others.length === 1;
+  const them = speakerLabel("others", others);
 
   useEffect(() => {
     targetRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [target]);
 
-  const lines = meeting.transcript.filter((l) => !query || l.text.toLowerCase().includes(query.toLowerCase()));
+  const q = query.trim().toLowerCase();
+  const lines = meeting.transcript.filter((l) => !q || l.text.toLowerCase().includes(q));
+  const turns = turnsOf(lines);
 
   return (
-    <section className="-mt-3 flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="m-0 max-w-[420px] text-muted">
-          Whisper in NEAR AI secure hardware. “You” is your microphone and “Others” is the call's audio; Aftercall never identifies voices.
-        </p>
-        <label className="flex h-8 items-center gap-2 rounded-sm border border-border bg-well px-2.5 text-muted">
-          <Search size={14} strokeWidth={1.5} aria-hidden="true" />
-          <span className="sr-only">Search transcript</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search transcript"
-            className="w-[180px] border-0 bg-transparent text-ink outline-none placeholder:text-muted"
-          />
+    <>
+      <div className="-mt-2 flex flex-wrap items-center gap-3">
+        <label className="relative flex min-w-[240px] flex-[1_1_260px] items-center">
+          <span className="sr-only">Find in transcript</span>
+          <Search size={15} strokeWidth={2} aria-hidden="true" className="pointer-events-none absolute left-3 text-muted" />
+          <Input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find in this call" className="h-[38px]! rounded-[10px]! border-hairline! pl-9!" />
         </label>
+        <details className="text-[13px] text-ink-2">
+          <summary className="cursor-pointer font-semibold text-ink-2 hover:text-ink">How are names shown?</summary>
+          <p className="m-0 mt-1.5 max-w-[320px]">
+            Your mic is You. The other side gets a name only when your calendar invited exactly one other person. Aftercall never identifies voices.
+          </p>
+        </details>
       </div>
 
-      <div className="selectable flex flex-col font-serif text-[17px] leading-7">
-        {lines.map((line) => {
-          const quotes = evidence.filter((e) => e.at === line.at && line.text.includes(e.quote));
-          const isTarget = line.at === target?.at;
+      <div className="flex flex-col gap-[18px]">
+        {turns.length === 0 && <p className="m-0 text-ink-2">{q ? `Nothing in this call matches “${query.trim()}”.` : "This meeting has no transcript."}</p>}
+        {turns.map((turn, ti) => {
+          const you = turn.speaker === "you";
+          const label = you ? "You" : them;
           return (
-            <div key={line.at} ref={isTarget ? targetRef : undefined} className="grid grid-cols-[56px_minmax(0,1fr)] gap-4 py-2.5">
-              <span className={cx("font-mono text-xs leading-7", isTarget ? "text-verdigris" : "text-muted")}>{formatClock(line.at)}</span>
-              <div className="flex flex-col gap-1.5">
-                <p className="m-0">
-                  <span className={cx("t-label mr-2.5 inline-block font-sans", line.speaker === "you" ? "text-verdigris" : "text-muted")}>
-                    {line.speaker === "you" ? "You" : "Others"}
-                  </span>
-                  <Highlighted text={line.text} quotes={quotes.map((q) => q.quote)} strong={isTarget ? target?.quote : undefined} />
-                </p>
-                {isTarget && quotes.length > 0 && <span className="t-label font-sans text-verdigris">Evidence for a follow-up</span>}
-              </div>
+            <div key={`${turn.lines[0].at}-${ti}`} className={cx("flex flex-col gap-1.5", you ? "items-end" : "items-start")} style={rise(ti, 280)}>
+              <span className="inline-flex items-center gap-2 text-[12px] text-muted">
+                {you ? (
+                  <>
+                    <span className="font-mono">{formatClock(turn.lines[0].at)}</span>
+                    <span className="font-semibold text-ink-2">You</span>
+                    <Avatar name="You" you size={24} decorative />
+                  </>
+                ) : (
+                  <>
+                    {named ? <Avatar name={label} size={24} decorative /> : <OthersMark />}
+                    <span className="font-semibold text-ink-2">{label}</span>
+                    {named && <span>from your calendar</span>}
+                    <span className="font-mono">{formatClock(turn.lines[0].at)}</span>
+                  </>
+                )}
+              </span>
+              {turn.lines.map((line, i) => {
+                const evidence = live.filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
+                const isTarget = line.at === target?.at;
+                return (
+                  <BubbleWithChips key={line.at} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
+                    <p
+                      ref={isTarget ? targetRef : undefined}
+                      className={cx(
+                        "selectable m-0 max-w-[78%] scroll-mt-16 px-4 py-3 font-serif text-[17px] leading-[26px] text-ink",
+                        you ? "bg-verdigris-tint" : "bg-elevated shadow-1",
+                      )}
+                      style={{ borderRadius: corners(you, i, turn.lines.length), boxShadow: isTarget ? "0 0 0 2px var(--verdigris)" : undefined }}
+                    >
+                      <Highlighted text={line.text} quotes={evidence.map((f) => f.evidence.quote)} />
+                    </p>
+                  </BubbleWithChips>
+                );
+              })}
             </div>
           );
         })}
       </div>
-    </section>
+
+      <p className="m-0 flex items-center gap-2 text-[13px] text-ink-2">
+        <Lock size={14} strokeWidth={2} aria-hidden="true" className="text-faint" />
+        Transcribed in NEAR AI secure hardware. The audio was deleted afterwards.
+      </p>
+    </>
   );
 }
 
-/** Marks every evidence quote in a line; the one you jumped to is emphasised. */
-function Highlighted({ text, quotes, strong }: { text: string; quotes: string[]; strong?: string }) {
-  const spans = quotes
+/** The other side when the calendar can't say who it was: a neutral mark, not initials. */
+function OthersMark() {
+  return (
+    <span aria-hidden="true" className="inline-flex size-6 items-center justify-center rounded-full bg-elevated text-ink-2 shadow-[inset_0_0_0_1px_var(--hairline)]">
+      <Users size={12} strokeWidth={2} />
+    </span>
+  );
+}
+
+/** A bubble, and under it a chip for each follow-up it is the evidence for. */
+function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence: FollowUp[]; you: boolean; onOpenFollowUp: (id: string) => void; children: ReactNode }) {
+  if (evidence.length === 0) return <>{children}</>;
+  return (
+    <>
+      {children}
+      <span className={cx("flex max-w-[78%] flex-wrap gap-1.5", you ? "justify-end" : "justify-start pl-1")}>
+        {evidence.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onOpenFollowUp(f.id)}
+            aria-label={`${followUpTitle(f)}: show the follow-up`}
+            className="press inline-flex h-6 items-center gap-1.5 rounded-full bg-elevated px-[9px] text-[12px] font-semibold text-ink shadow-1"
+          >
+            <span className="font-mono font-normal text-muted">{formatClock(f.evidence.at)}</span>
+            {followUpTitle(f)}
+          </button>
+        ))}
+      </span>
+    </>
+  );
+}
+
+/** Marks every evidence quote in a line. */
+function Highlighted({ text, quotes }: { text: string; quotes: string[] }) {
+  const spans = [...new Set(quotes)]
     .map((q) => ({ q, start: text.indexOf(q) }))
     .filter((x) => x.start >= 0)
     .sort((a, b) => a.start - b.start);
@@ -214,13 +457,7 @@ function Highlighted({ text, quotes, strong }: { text: string; quotes: string[];
     if (start < cursor) continue;
     parts.push(text.slice(cursor, start));
     parts.push(
-      <mark
-        key={start}
-        className={cx(
-          "rounded-[3px] py-px text-ink",
-          q === strong ? "bg-verdigris-tint shadow-[inset_0_-1px_0_var(--verdigris)]" : "bg-transparent shadow-[inset_0_-1px_0_var(--faint)]",
-        )}
-      >
+      <mark key={start} className="rounded-[4px] bg-caution-tint px-0.5 text-ink">
         {q}
       </mark>,
     );
@@ -228,11 +465,4 @@ function Highlighted({ text, quotes, strong }: { text: string; quotes: string[];
   }
   parts.push(text.slice(cursor));
   return <>{parts}</>;
-}
-
-/** " · Done by Codex" or " · Claude Code on it", when an agent has the item. */
-function agentNote(item: Meeting["actionItems"][number]): string {
-  if (item.done && item.completed) return ` · Done by ${item.completed.agent}`;
-  if (!item.done && item.claimed) return ` · ${item.claimed.agent} on it`;
-  return "";
 }
