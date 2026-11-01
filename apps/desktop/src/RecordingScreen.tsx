@@ -50,7 +50,7 @@ const SEAL_MS = 1600;
 type Run =
   | { state: "idle" }
   | { state: "running"; at: number; part?: string; times: number[] }
-  | { state: "done"; times: number[]; checks: TeeCheck[]; e2ee: boolean; onChain: boolean }
+  | { state: "done"; times: number[]; checks: TeeCheck[]; onChain: boolean }
   | { state: "failed"; at: number; error: string; times: number[] };
 
 /**
@@ -151,7 +151,7 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
       onProcessed(id, notes);
     };
     finishers.set(id, finish);
-    report(id, { state: "done", times: [...times], checks: result.checks, e2ee: result.proof.e2ee.used, onChain: Boolean(saved.onChain) });
+    report(id, { state: "done", times: [...times], checks: result.checks, onChain: Boolean(saved.onChain) });
     void notesReady(meeting);
     // The seal shows for a moment, then the meeting opens (Open notes skips the wait).
     window.setTimeout(finish, SEAL_MS);
@@ -245,7 +245,7 @@ export function RecordingScreen({
           <>
             <ProcessHeader eyebrow={eyebrow} title={title} lede="Your notes are ready." />
             <VerifiedSeal checks={run.checks} onChain={run.onChain} onOpen={() => finishers.get(recording.id)?.()} />
-            <ProcessingSteps view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, e2ee: run.e2ee, onChain: run.onChain, others: one }} />
+            <ProcessingSteps view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, onChain: run.onChain, others: one }} />
           </>
         ) : (
           <>

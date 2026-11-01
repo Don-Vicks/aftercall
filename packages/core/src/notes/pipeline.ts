@@ -7,7 +7,7 @@ import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse
 import { decryptWith, encryptMessages, newClientKeys } from "../tee/e2ee.ts";
 import type { Meeting, NoticeLog, Speaker } from "../meeting.ts";
 import { estimateCost, type CostEstimate, type Usage } from "../cost.ts";
-import { e2eeRefusal, e2eeStaleKey, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
+import { e2eeStaleKey, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
 
 export const WHISPER_MODEL = "openai/whisper-large-v3";
 export const SUMMARY_MODEL = "Qwen/Qwen3.8-27B";
@@ -124,7 +124,10 @@ export interface E2eeRecord {
   used: boolean;
   /** The model TEE's attested Ed25519 key the transcript was encrypted to. */
   modelKey?: string;
-  /** Why it wasn't used, when it wasn't. */
+  /**
+   * Why it wasn't used, when it wasn't. Only in proofs from earlier versions, which
+   * could send the transcript over TLS; the app now sends it encrypted or not at all.
+   */
   reason?: string;
 }
 
@@ -188,8 +191,11 @@ export interface ProcessResult {
 
 const enc = new TextEncoder();
 
-/** Everything that must pass before audio or text leaves the Mac. Throws in plain words if not. */
-function requireAttested(summary: ModelAttestation, whisper: ModelAttestation): void {
+/**
+ * Everything that must pass before audio or text leaves the Mac. Throws in plain words
+ * if not. Returns the verified summary node the transcript will be encrypted to.
+ */
+function requireAttested(summary: ModelAttestation, whisper: ModelAttestation): VerifiedTee {
   const gw = gatewayChecks(summary);
   if (!gw.every((c) => c.ok)) throw new Error(`Secure hardware check failed for the NEAR AI gateway (${failedLabels(gw)}). Nothing was sent.`);
   // Audio can't be pinned to one Whisper node, so every node must pass.
@@ -198,6 +204,10 @@ function requireAttested(summary: ModelAttestation, whisper: ModelAttestation): 
   if (!summary.nodes.some((n) => n.verified)) {
     throw new Error(`Secure hardware check failed for the summary model (${failedLabels(modelChecks(summary))}). Nothing was sent.`);
   }
+  // The transcript only ever goes end-to-end encrypted, so without a key nothing goes, audio included.
+  const node = e2eeNode(summary);
+  if (!node) throw new Error("No attested summary node offered a key for end-to-end encryption, so nothing was sent.");
+  return node;
 }
 
 /** A verified summary node whose E2EE key is the key bound in its quote. */
@@ -285,7 +295,7 @@ export async function processRecording(
   ]);
   // Replaced if NEAR AI asks for a fresh attestation before the summary.
   let summaryAttest = firstSummaryAttest;
-  requireAttested(summaryAttest, whisperAttest);
+  const node = requireAttested(summaryAttest, whisperAttest);
 
   const prompt = input.vocabulary.filter(Boolean).join(", ");
   const transcribed: TranscribedChunk[] = [];
@@ -311,32 +321,30 @@ export async function processRecording(
     { role: "system", content: NOTES_SYSTEM_PROMPT },
     { role: "user", content: summaryRequestText(input.project, input.payees, transcriptForPrompt(transcript), yourNotes) },
   ];
-  const requestFor = (msgs: typeof messages) =>
-    JSON.stringify({
-      model: SUMMARY_MODEL,
-      stream: false,
-      max_tokens: SUMMARY_MAX_TOKENS,
-      messages: msgs,
-      response_format: { type: "json_schema", json_schema: { name: "meeting_notes", strict: true, schema: notesJsonSchema } },
-    });
-
   // End-to-end encryption: the transcript is encrypted here to the attested key of
-  // a verified model TEE, so the gateway only relays ciphertext.
-  let e2ee: E2eeRecord = { used: false, reason: "No verified summary TEE offered an attested Ed25519 key" };
+  // a verified model TEE, so the gateway only relays ciphertext. There is no TLS
+  // fallback: if NEAR AI turns the encrypted request down, nothing else is sent.
   let request = "";
   let response = "";
   let content: string | undefined;
-  /** One summary request encrypted to `node`'s attested key. */
-  const sendEncrypted = async (node: VerifiedTee) => {
+  let modelKey = "";
+  /** One summary request encrypted to `tee`'s attested key. */
+  const sendEncrypted = async (tee: VerifiedTee) => {
     const client = newClientKeys();
-    const modelKey = node.evidence.signingAddress;
-    request = requestFor(encryptMessages(messages, modelKey));
-    response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: modelKey });
+    const key = tee.evidence.signingAddress;
+    request = JSON.stringify({
+      model: SUMMARY_MODEL,
+      stream: false,
+      max_tokens: SUMMARY_MAX_TOKENS,
+      messages: encryptMessages(messages, key),
+      response_format: { type: "json_schema", json_schema: { name: "meeting_notes", strict: true, schema: notesJsonSchema } },
+    });
+    response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: key });
     const reply = JSON.parse(response) as Completion;
     // finish_reason sits outside the encrypted content, so this needs no decryption.
     requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
     content = decryptWith(reply.choices?.[0]?.message?.content ?? "", client.x25519Secret);
-    e2ee = { used: true, modelKey };
+    modelKey = key;
   };
   /** What to throw for a failed encrypted request: any other 4xx is about the request, so it stops in plain words. */
   const requestError = (e: unknown): unknown => {
@@ -346,48 +354,29 @@ export async function processRecording(
     }
     return e;
   };
-  const node = e2eeNode(summaryAttest);
-  if (node) {
+  try {
+    await sendEncrypted(node);
+  } catch (e) {
+    if (!e2eeStaleKey(e)) throw requestError(e);
+    // NEAR AI no longer serves the attested key and asks for a fresh attestation.
+    // The node set may have changed: attest again and retry encrypted once, to a key
+    // from the new quotes.
+    summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks });
+    const gw = gatewayChecks(summaryAttest);
+    const fresh = gw.every((c) => c.ok) ? e2eeNode(summaryAttest) : undefined;
+    if (!fresh) {
+      throw new Error(`NEAR AI asked for a fresh attestation and no summary TEE passed it with an attested key (${failedLabels([...gw, ...modelChecks(summaryAttest)]) || "no attested Ed25519 key"}). The transcript wasn't sent again.`);
+    }
     try {
-      await sendEncrypted(node);
-    } catch (e) {
-      if (e2eeStaleKey(e)) {
-        // NEAR AI no longer serves the attested key and asks for a fresh attestation.
-        // The node set may have changed, so the old attestation can't open TLS: attest
-        // again and retry encrypted once, to a key from the new quotes.
-        summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks });
-        const gw = gatewayChecks(summaryAttest);
-        const fresh = gw.every((c) => c.ok) ? e2eeNode(summaryAttest) : undefined;
-        if (!fresh) {
-          throw new Error(`NEAR AI asked for a fresh attestation and no summary TEE passed it with an attested key (${failedLabels([...gw, ...modelChecks(summaryAttest)]) || "no attested Ed25519 key"}). The transcript wasn't sent again.`);
-        }
-        try {
-          await sendEncrypted(fresh);
-        } catch (again) {
-          if (e2eeStaleKey(again) || e2eeRefusal(again)) {
-            throw new Error(`NEAR AI turned down the encrypted summary request again after a fresh attestation (${nearAiStatus(again)}: ${nearAiErrorText(again)}). The transcript wasn't sent without end-to-end encryption.`);
-          }
-          throw requestError(again);
-        }
-      } else {
-        // Only NEAR AI saying no to the encryption headers themselves may lead to TLS.
-        const refused = e2eeRefusal(e);
-        if (!refused) throw requestError(e);
-        e2ee = { used: false, reason: refused };
+      await sendEncrypted(fresh);
+    } catch (again) {
+      if (e2eeStaleKey(again)) {
+        throw new Error(`NEAR AI turned down the encrypted summary request again after a fresh attestation (${nearAiStatus(again)}: ${nearAiErrorText(again)}). The transcript wasn't sent without end-to-end encryption.`);
       }
+      throw requestError(again);
     }
   }
-  if (!e2ee.used) {
-    // Without E2EE the request can reach any node, so every node must have passed.
-    if (!summaryAttest.nodes.every((n) => n.verified)) {
-      throw new Error(`End-to-end encryption isn't available and not every summary TEE passed (${failedLabels(modelChecks(summaryAttest))}). Nothing was sent.`);
-    }
-    request = requestFor(messages);
-    response = await t.chat(request);
-    const reply = JSON.parse(response) as Completion;
-    requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
-    content = reply.choices?.[0]?.message?.content;
-  }
+  const e2ee: E2eeRecord = { used: true, modelKey };
   const completion = JSON.parse(response) as Completion;
   const notes = notesSchema.parse(JSON.parse(content ?? "null"));
 
@@ -401,15 +390,13 @@ export async function processRecording(
     id: "response-e2ee",
     scope: "response",
     label: "Transcript encrypted to the attested model",
-    ok: e2ee.used,
-    detail: e2ee.used
-      ? `Encrypted on this Mac to Ed25519 key ${short(e2ee.modelKey!)}, bound in a verified quote; the reply came back encrypted to a key made for this request`
-      : `Not end to end: ${e2ee.reason}. It went over TLS to the attested gateway`,
+    ok: true,
+    detail: `Encrypted on this Mac to Ed25519 key ${short(modelKey)}, bound in a verified quote; the reply came back encrypted to a key made for this request`,
   };
 
   const checks = [...gatewayChecks(summaryAttest), ...modelChecks(whisperAttest), ...modelChecks(summaryAttest), ...signed.checks, e2eeCheck];
-  // "Verified" means attested and signed. E2EE is shown on its own line.
-  const verified = checks.filter((c) => c !== e2eeCheck).every((c) => c.ok);
+  // "Verified" means attested and signed. The E2EE line always passes: nothing is sent without it.
+  const verified = checks.every((c) => c.ok);
 
   // Keep NVIDIA's platform token for the node that signed, so the Verify page can check it.
   const evidence = [summaryAttest.gateway, ...whisperAttest.nodes, ...summaryAttest.nodes]

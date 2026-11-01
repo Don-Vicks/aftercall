@@ -45,32 +45,18 @@ export function plainNearAiError(e: unknown): string {
 }
 
 /*
- * NEAR AI's answers about end-to-end encryption that the app recognises, as its gateway
- * words them (github.com/nearai/cloud-api, read 1 Nov 2026): 400 naming an encryption
- * header it didn't accept (validate_encryption_headers), and 421 "The encryption key is
- * no longer valid…" when no node serves the pinned model key. Only these are
- * recognised. Any other 4xx, including "Model '…' does not support encryption" for a
- * model outside the TEE, is treated as a refusal of the request and stops processing.
+ * NEAR AI's answer about end-to-end encryption that the app recognises, as its gateway
+ * words it (github.com/nearai/cloud-api, read 1 Nov 2026): 421 "The encryption key is no
+ * longer valid…" when no node serves the pinned model key. Any other 4xx, a 400 about an
+ * encryption header included, is a refusal of the request and stops processing; the
+ * transcript is never resent without end-to-end encryption.
  */
-const E2EE_HEADER = /\bX-(?:Encryption-Version|Signing-Algo|Client-Pub-Key|Model-Pub-Key)\b/i;
 const E2EE_STALE_KEY = /\bencryption key\b[^.]*\b(?:no longer valid|not valid|invalid)\b/i;
-
-/**
- * Why NEAR AI turned down end-to-end encryption itself, in plain words, when it named an
- * encryption header it didn't accept; null for anything else, account errors and the
- * stale-key answer included. Only this may lead to TLS.
- */
-export function e2eeRefusal(e: unknown): string | null {
-  const status = nearAiStatus(e);
-  if (status !== 400 || isNearAiAccountError(e)) return null;
-  const message = e instanceof Error ? e.message : String(e);
-  return E2EE_HEADER.test(message) ? "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)" : null;
-}
 
 /**
  * True when NEAR AI answered 421 that the attested model key is no longer one it
  * serves. It asks for a fresh attestation, so the app attests again and retries
- * encrypted; it never leads to TLS.
+ * encrypted.
  */
 export function e2eeStaleKey(e: unknown): boolean {
   if (nearAiStatus(e) !== 421) return false;

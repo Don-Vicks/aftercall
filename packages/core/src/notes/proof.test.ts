@@ -164,6 +164,14 @@ test("v2 tampering is caught: report data, nonce, E2EE key, recorded failure", a
   assert.deepEqual(fail({ ...bundle, responseHash: sha256Hex("other") }), ["signed"]);
 });
 
+test("an older proof whose transcript went over TLS still verifies, with only the E2EE line failing", async () => {
+  const { bundle, notes } = await signedV2();
+  const old: ProofBundleV2 = { ...bundle, e2ee: { used: false, reason: "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)" } };
+  const checks = verifyProof(old, onChainFor(old as never), notes);
+  assert.deepEqual(checks.filter((c) => !c.ok).map((c) => c.id), ["e2ee"]);
+  assert.equal(checks.find((c) => c.id === "e2ee")!.detail, "Not end to end: NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)");
+});
+
 test("the panel groups checks as Gateway, Whisper TEE, Qwen TEE, Response", () => {
   const c = (id: string, scope: "gateway" | "model" | "response", model?: string) => ({ id, scope, model, label: id, ok: true, detail: "" });
   const groups = groupChecks(
@@ -245,10 +253,11 @@ test("hasStatements tells a proof made before notices were kept from one with no
   assert.equal(hasStatements({ ...bundle, notice: { by: "you", at: "2026-11-01T14:02:45.000Z" } }), true);
 });
 
-test("what the proof doesn't show includes NEAR AI's data policy and the TLS fallback", () => {
+test("what the proof doesn't show includes NEAR AI's data policy and older meetings sent over TLS", () => {
   assert.ok(NOT_PROVEN.some((l) => /What NEAR AI keeps or trains on/.test(l) && /NEAR AI's own policy/.test(l)));
   assert.ok(!NOT_PROVEN.some((l) => /stated policy/.test(l)), "no claim about what NEAR AI's policy says");
-  assert.ok(NOT_PROVEN.some((l) => /over TLS/.test(l) && /every summary node passed/.test(l) && /no verified node offers an attested key/.test(l)));
+  assert.ok(NOT_PROVEN.some((l) => /older meeting/.test(l) && /earlier versions of the app could send it over TLS/.test(l)));
+  assert.ok(!NOT_PROVEN.some((l) => /every summary node passed|refuses an encryption header/.test(l)), "no TLS path in the app today");
   assert.ok(NOT_PROVEN.some((l) => /Whisper can mishear/.test(l)), "the existing items stay");
   for (const l of NOT_PROVEN) assert.equal(l.split(/\.\s/).length, 1, `one sentence: ${l}`);
 });

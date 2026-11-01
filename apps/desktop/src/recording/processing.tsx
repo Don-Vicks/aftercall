@@ -29,7 +29,6 @@ export interface StepsView {
   others?: string;
   /** Known once finished: */
   checks?: TeeCheck[];
-  e2ee?: boolean;
   /** False when NEAR isn't connected, so no proof went on chain. */
   onChain?: boolean;
 }
@@ -50,9 +49,7 @@ function detail(id: StepId, v: StepsView, state: StageState): string {
     case "transcribe":
       return `Whisper in secure hardware · You and ${v.others ?? "the call"} kept apart${state === "active" && v.part ? ` · part ${v.part}` : ""}`;
     case "summarise":
-      return v.e2ee === false
-        ? "Sent over TLS to the attested gateway: end-to-end encryption wasn't offered. Each item needs a quote from the call"
-        : "Transcript sealed on this Mac for the attested Qwen TEE; each item needs a quote from the call";
+      return "Transcript sealed on this Mac for the attested Qwen TEE; each item needs a quote from the call";
     case "signature":
       return "Signed over the exact request and response by the attested key";
     case "proof":

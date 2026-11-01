@@ -34,7 +34,7 @@ const STEPS: { where: Where; title: string; body: string; travels?: string }[] =
   {
     where: "mac",
     title: "The secure hardware is checked before anything is sent",
-    body: "With a fresh nonce for this recording, the Mac checks the NEAR AI gateway, Whisper and the summary model: Intel TDX quotes, NVIDIA GPU evidence, and the software each one runs. If the gateway or any Whisper node fails, or no summary node passes, nothing is sent.",
+    body: "With a fresh nonce for this recording, the Mac checks the NEAR AI gateway, Whisper and the summary model: Intel TDX quotes, NVIDIA GPU evidence, and the software each one runs. If the gateway or any Whisper node fails, or no summary node passes with a key to encrypt to, nothing is sent.",
   },
   {
     where: "tee",
@@ -45,8 +45,8 @@ const STEPS: { where: Where; title: string; body: string; travels?: string }[] =
   {
     where: "tee",
     title: "Summarised by a model in an attested TEE",
-    travels: "End to end if NEAR AI accepts",
-    body: "The Mac merges both tracks into one transcript and encrypts it to a key bound in the summary model's verified quote, so the gateway passes on text it can't read. If end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI refuses an encryption header), the transcript goes over TLS only when every summary node passed. If NEAR AI no longer serves the attested model key, the Mac checks the hardware again and retries encrypted once, never over TLS. Any other error stops processing, and the transcript isn't sent again. The proof says which happened. The model signs the exchange.",
+    travels: "End to end, or not sent",
+    body: "The Mac merges both tracks into one transcript and encrypts it to a key bound in the summary model's verified quote, so the gateway passes on text it can't read. The transcript is always end-to-end encrypted, or not sent: it never goes over TLS instead. If NEAR AI no longer serves the attested model key, the Mac checks the hardware again and retries encrypted once. If NEAR AI turns down the encrypted request, processing stops and the transcript isn't sent again. The model signs the exchange.",
   },
   {
     where: "mac",
@@ -75,7 +75,7 @@ const FOOTER = recapFooter({
   handlingUrl: "https://aftercall.app/handling",
 }).split("\n");
 const FOOTER_MEANS = [
-  "Every secure-hardware check passed for this meeting. The second sentence says whether the transcript was end-to-end encrypted or went over TLS. When a check failed, this line says so instead.",
+  "Every secure-hardware check passed for this meeting. The second sentence says the transcript was end-to-end encrypted, or, for a meeting made by an earlier version, that it went over TLS. When a check failed, this line says so instead.",
   "The app deletes the audio right after the notes are saved, as in step 8.",
   "Only there when the sender logged a notice. It's their statement; Aftercall can't check it.",
   "A link to this meeting's proof, where your browser re-runs the checks it can. Without a proof link, it points to this page.",
