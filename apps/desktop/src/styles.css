@@ -505,3 +505,8 @@
   border-color: var(--verdigris);
   box-shadow: 0 0 0 1px var(--verdigris);
 }
+/* An invalid field keeps its record edge while focused. */
+:is(input, textarea, select)[aria-invalid="true"]:not(.border-0):focus-visible {
+  border-color: var(--record);
+  box-shadow: 0 0 0 1px var(--record);
+}
