@@ -63,12 +63,12 @@ Reduced motion: nothing moves, things fade. The `ac-*` keyframes that move becom
 
 ```tsx
 <AnimatePresence>
-  {open && <Dialog key="add-payee" title="Add a payee" intro="One line." onClose={close} placement="center|anchored|full" anchor={el} width={560} dismissible>…</Dialog>}
+  {open && <Dialog key="add-payee" title="Add a payee" intro="One line." onClose={close} placement="center|anchored|full|top" anchor={el} width={560} dismissible>…</Dialog>}
 </AnimatePresence>
 ```
 
 - Or keep it mounted and pass `open`. Portal, focus trap, focus goes back on close, Escape closes only the topmost overlay (dialogs and menus share one stack, `overlay.ts`). `initialFocus={ref}` picks the first focus; otherwise an `autoFocus` element, then the first control.
-- `placement="anchored"` sits under `anchor` (or the window's top right) without dimming; `"full"` covers the window (onboarding).
+- `placement="anchored"` sits under `anchor` (or the window's top right) without dimming; `"full"` covers the window (onboarding); `"top"` sits 96px from the top of a dimmed window with no padding of its own, 640 wide (the ⌘K palette).
 - `Sheet` (`../Sheet.tsx`) is a thin wrapper kept for old call sites.
 
 ```tsx
