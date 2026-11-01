@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Sync with Ada</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1800px; display: flex; flex-wrap: wrap;">
+<nav aria-label="Aftercall" style="flex: 1 1 220px; max-width: 248px; box-sizing: border-box; padding: 20px 14px 18px; display: flex; flex-direction: column; gap: 22px; background: var(--ground);">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0;">
+    <span style="font-family: var(--serif); font-size: 21px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent);"></span>victor.near</span>
+  </div>
+  <a href="V2RecordSheet.dc.html" class="press lift" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Home.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span style="flex: 1;">Today</span></a>
+    <a href="V2Palette.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex: 1;">Search</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘K</span></a>
+    <a href="V2Ask.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg><span style="flex: 1;">Ask your meetings</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span></a>
+    <a href="V2ActionItems.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span style="flex: 1;">Action items</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">5</span></a>
+    <a href="V2People.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span style="flex: 1;">People</span></a>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 6px;">
+      <a href="V2Meetings.dc.html" class="quiet" style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Projects</a>
+      <span style="display: inline-flex; align-items: center; gap: 2px;"><a href="V2Meetings.dc.html" class="quiet" style="font-size: 12px; color: var(--muted); padding: 0 6px;">All meetings</a><button aria-label="New project" class="press quiet" style="width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+    </div>
+    <a href="V2Project.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-weight: 600; color: var(--ink);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m6 9 6 6 6-6"/></svg><span style="flex: 1;">Fundraise</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">6</span></a>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--hairline);">
+      <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sync with Ada</span><span role="img" aria-label="1 to approve" style="width: 7px; height: 7px; border-radius: 999px; background: var(--caution);"></span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Deck review</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">28 Oct</span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Investor intro call</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">24 Oct</span></a>
+    </div>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Platform API</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">11</span></a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Hiring</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">3</span></a>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Wallet.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/></svg><span style="flex: 1;">Agent wallet</span><span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">180.00</span></a>
+    <a href="V2Agents.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg><span style="flex: 1;">Connected agents</span></a>
+    <a href="V2Settings.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></svg><span style="flex: 1;">Settings</span></a>
+  </div>
+</nav>
+<main style="position: relative; flex: 999 1 560px; min-width: 0; background: var(--raised); border-left: 1px solid var(--hairline); box-sizing: border-box; padding: 48px 48px 120px;">
+<article style="max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px;">
+
+  <header style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms var(--ease) both;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Fundraise · Today 14:02 · 3 min 12 s</span>
+      <a href="V2Verify.dc.html" class="press" style="height: 26px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</a>
+    </div>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Sync with Ada</h1>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="display: inline-flex;" aria-hidden="true"><span style="width: 28px; height: 28px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">You</span><span style="margin-left: -6px; width: 28px; height: 28px; border-radius: 999px; background: var(--p2); color: var(--p2i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">A</span></span>
+      <span style="color: var(--ink-2);">You and Ada</span>
+    </div>
+    <div role="tablist" style="position: relative; display: flex; gap: 24px; margin-top: 8px; border-bottom: 1px solid var(--hairline);">
+      <span role="tab" aria-selected="true" style="padding: 8px 0; font-weight: 600; color: var(--ink);">Notes</span>
+      <a role="tab" aria-selected="false" href="V2Transcript.dc.html" class="quiet" style="padding: 8px 0; font-weight: 600; color: var(--muted);">Transcript</a>
+      <span aria-hidden="true" style="position: absolute; left: 0; bottom: -1px; width: 42px; height: 2px; border-radius: 2px; background: var(--ink);"></span>
+    </div>
+  </header>
+
+  <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 29px; animation: ac-in 320ms 40ms var(--ease) both;">Ada and Victor agreed the API fix ships before Friday's demo. Victor sends Ada a recap today and pays the designer a 50 USDC deposit to refresh the deck.</p>
+
+  <section aria-labelledby="yn" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms 80ms var(--ease) both;">
+    <h2 id="yn" style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; line-height: 20px; font-weight: 600;"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">You</span>Your notes <span style="color: var(--muted); font-weight: 500;">typed during the call</span></h2>
+    <div style="padding: 4px 0 4px 30px; font-family: var(--serif); font-size: 17px; line-height: 27px; color: var(--ink); white-space: pre-line;">Fix before demo, no exceptions.
+Deck: refresh with the designer, deposit now, rest when it's done.</div>
+  </section>
+
+  <section aria-labelledby="dc" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms 120ms var(--ease) both;">
+    <h2 id="dc" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Decisions <span style="color: var(--muted); font-weight: 500;">2</span></h2>
+    <ol style="margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-family: var(--serif); font-size: 18px; line-height: 28px;">
+      <li>Ship the API fix before Friday's demo.</li>
+      <li>Refresh the deck with the designer, with a 50 USDC deposit now.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="ai" style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms 160ms var(--ease) both;">
+    <h2 id="ai" style="margin: 0 0 4px; font-size: 15px; line-height: 20px; font-weight: 600;">Action items <span style="color: var(--muted); font-weight: 500;">{{openCount}} open</span></h2>
+    <div style="display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+      <sc-for list="{{items}}" as="it" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--hairline);">
+          <button role="checkbox" aria-checked="{{it.aria}}" aria-label="{{it.text}}" onClick="{{it.toggle}}" class="press" style="width: 22px; height: 22px; padding: 0; border: 0; background: transparent; flex-shrink: 0;">
+            <sc-if value="{{it.done}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms 120ms var(--ease) both;"/></svg></sc-if>
+            <sc-if value="{{it.open}}" hint-placeholder-val="{{ true }}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg></sc-if>
+          </button>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+            <span style="position: relative; align-self: flex-start; font-size: 15px; color: {{it.textColor}}; transition: color 200ms 180ms var(--ease);">{{it.text}}<sc-if value="{{it.done}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 50%; height: 1.5px; background: var(--muted); transform-origin: left; animation: ac-strike 240ms 160ms var(--ease) both;"></span></sc-if></span>
+            <sc-if value="{{it.hasNote}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; color: {{it.noteColor}};">{{it.note}}</span></sc-if>
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">You</span>{{it.due}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section aria-labelledby="fu" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 200ms var(--ease) both;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+      <h2 id="fu" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Follow-ups <span style="color: var(--muted); font-weight: 500;">nothing runs until you approve</span></h2>
+    </div>
+
+    <div class="lift" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--p2); color: var(--p2i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">A</span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">Recap to Ada</span><span style="font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Opened as a draft in your Mail · “Recap: API fix before Friday, deck refresh”</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>DRAFTED 14:06</span>
+    </div>
+
+    <sc-if value="{{payVisible}}" hint-placeholder-val="{{ true }}">
+      <div class="lift" style="display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); animation: ac-in 240ms var(--ease) both;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--p4); color: var(--p4i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">D</span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">{{payVerb}} Designer</span><span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2);">designer.near</span></span>
+          <sc-if value="{{isPaid}}" hint-placeholder-val="{{ false }}"><span style="height: 26px; padding: 0 11px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; animation: ac-pop 420ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-dasharray="24" style="animation: ac-draw 260ms 120ms var(--ease) both;"/></svg><span style="font-family: var(--mono); font-weight: 500;">50.00 USDC</span> paid 14:21</span></sc-if>
+          <sc-if value="{{notPaid}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: baseline; gap: 6px;"><span style="font-family: var(--mono); font-size: 28px; line-height: 32px; letter-spacing: -0.02em;">50.00</span><span style="font-size: 12px; color: var(--muted);">USDC</span></span></sc-if>
+        </div>
+        <sc-if value="{{isProposed}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 14px; padding-left: 48px;">
+            <span style="font-family: var(--serif); font-size: 16px; line-height: 24px; font-style: italic; color: var(--ink-2);">“pay the designer the fifty dollar deposit today” <a href="V2Transcript.dc.html" style="font-family: var(--mono); font-style: normal; font-size: 12px;">02:14</a></span>
+            <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--well);">
+              <span style="display: flex; gap: 10px; align-items: baseline;"><span style="font-size: 12px; color: var(--muted); width: 56px;">Heard</span><span><span style="font-family: var(--serif); font-style: italic;">“fifty dollar”</span> <span style="color: var(--muted);">→</span> <span style="font-family: var(--mono); font-size: 13px;">50.00 USDC</span></span></span>
+              <span style="display: flex; gap: 10px; align-items: baseline;"><span style="font-size: 12px; color: var(--muted); width: 56px;">Payee</span><span>Designer <span style="color: var(--accent);">· on your list</span></span></span>
+              <span style="display: flex; gap: 10px; align-items: baseline;"><span style="font-size: 12px; color: var(--muted); width: 56px;">Today</span><span><span style="font-family: var(--mono); font-size: 13px;">150.00</span> <span style="color: var(--ink-2);">left of 200.00</span></span></span>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+              <button onClick="{{dismiss}}" class="press quiet" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Dismiss</button>
+              <button class="press secondary" style="height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600;">Edit amount</button>
+              <button onClick="{{approve}}" class="press primary" style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Approve payment</button>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isCountdown}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 10px; padding-left: 48px; animation: ac-in 200ms var(--ease) both;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <span style="color: var(--ink-2);">Paying in <span style="font-family: var(--mono); color: var(--ink);">{{left}}</span>… you can still take it back.</span>
+              <button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--well); color: var(--ink); font-weight: 600;">Undo <span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘Z</span></button>
+            </div>
+            <div aria-hidden="true" style="height: 3px; border-radius: 999px; background: var(--hairline); overflow: hidden;"><div style="height: 3px; background: var(--accent); transform-origin: left; animation: ac-countdown 5s linear both;"></div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isSending}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 10px; padding-left: 48px; color: var(--ink-2);"><span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span>Sending through your agent wallet on NEAR…</div>
+        </sc-if>
+        <sc-if value="{{isPaid}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 10px; padding-left: 48px; font-size: 13px; color: var(--ink-2);"><span>From your agent wallet · 130.00 left today</span><a href="#" style="font-family: var(--mono); font-size: 12px;">8Hn2…wq4D</a></div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <div class="lift" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: var(--caution-tint);">
+      <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--p4); color: var(--p4i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">D</span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">Pay Designer <span style="font-family: var(--mono); font-weight: 500;">5,000.00 USDC</span></span><span style="font-size: 13px; color: var(--caution);">Over your limits. Your agent wallet refused it; only you can approve, in your wallet.</span></span>
+      <a href="V2ApproveWallet.dc.html" class="press" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--caution); color: var(--caution); font-weight: 600; display: inline-flex; align-items: center;">Review</a>
+    </div>
+  </section>
+</article>
+
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+  <div style="position: absolute; left: 0; right: 0; bottom: 32px; display: flex; justify-content: center; pointer-events: none;">
+    <div role="status" style="pointer-events: auto; display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--elevated); box-shadow: var(--shpill); white-space: nowrap; animation: ac-in 240ms var(--ease) both;">
+      <span>{{toastText}}</span>
+      <sc-if value="{{toastUndo}}" hint-placeholder-val="{{ false }}"><button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font-weight: 600;">Undo</button></sc-if>
+      <sc-if value="{{toastLink}}" hint-placeholder-val="{{ false }}"><a href="#" style="height: 32px; padding: 0 12px; border-radius: 999px; background: var(--well); font-weight: 600; display: inline-flex; align-items: center;">View on NEAR</a></sc-if>
+    </div>
+  </div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { done: { a1: false, a2: false, a3: true }, pay: 'proposed', left: 5, toast: null };
+  }
+  componentWillUnmount() { this.clear(); }
+  clear() { clearInterval(this.countId); clearTimeout(this.sendId); clearTimeout(this.toastId); }
+  showToast(toast, ms) {
+    clearTimeout(this.toastId);
+    this.setState({ toast });
+    if (ms) this.toastId = setTimeout(() => this.setState({ toast: null }), ms);
+  }
+  approve() {
+    this.clear();
+    this.setState({ pay: 'countdown', left: 5, toast: null });
+    this.countId = setInterval(() => {
+      const left = this.state.left - 1;
+      if (left > 0) { this.setState({ left }); return; }
+      clearInterval(this.countId);
+      this.setState({ pay: 'sending' });
+      this.sendId = setTimeout(() => {
+        this.setState({ pay: 'paid' });
+        this.showToast({ text: 'Paid Designer 50.00 USDC', link: true }, 5000);
+      }, 1400);
+    }, 1000);
+  }
+  renderVals() {
+    const s = this.state;
+    const meta = {
+      a1: { text: 'Send Ada the recap', due: 'today', note: '' },
+      a2: { text: 'Ship the API fix', due: 'by Friday', note: 'Claude Code is on it · claimed 14:20' },
+      a3: { text: 'Get deck feedback from Ada', due: 'done', note: 'Closed here · opened in Deck review, 28 Oct' }
+    };
+    const items = ['a1', 'a2', 'a3'].map((id) => {
+      const done = !!s.done[id];
+      return {
+        text: meta[id].text, due: meta[id].due, note: meta[id].note, hasNote: !!meta[id].note,
+        noteColor: id === 'a2' ? 'var(--accent)' : 'var(--muted)',
+        done, open: !done, aria: done ? 'true' : 'false',
+        textColor: done ? 'var(--muted)' : 'var(--ink)',
+        toggle: () => this.setState({ done: Object.assign({}, this.state.done, { [id]: !this.state.done[id] }) })
+      };
+    });
+    const t = s.toast;
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      items,
+      openCount: items.filter((i) => !i.done).length,
+      payVisible: s.pay !== 'dismissed',
+      isProposed: s.pay === 'proposed',
+      isCountdown: s.pay === 'countdown',
+      isSending: s.pay === 'sending',
+      isPaid: s.pay === 'paid',
+      notPaid: s.pay !== 'paid',
+      payVerb: s.pay === 'paid' ? 'Paid' : (s.pay === 'proposed' ? 'Pay' : 'Paying'),
+      left: s.left,
+      approve: () => this.approve(),
+      dismiss: () => { this.clear(); this.setState({ pay: 'dismissed' }); this.showToast({ text: 'Payment to Designer dismissed', undo: true }, 6000); },
+      undo: () => { this.clear(); this.setState({ pay: 'proposed', left: 5, toast: null }); },
+      hasToast: !!t,
+      toastText: t ? t.text : '',
+      toastUndo: !!(t && t.undo),
+      toastLink: !!(t && t.link)
+    };
+  }
+}
+</script>
+</body>
+</html>

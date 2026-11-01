@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-/* Aftercall design system v2 (dark-first warm monochrome). Source: docs/design-source/project/ds/aftercall/tokens.json */
+/* Aftercall design system v3, "calm but alive" (dark-first warm monochrome).
+   Source: docs/design-source/project/ds/aftercall/tokens.json; motion and hover/press from V2System.dc.html. */
 
 @custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
 
@@ -11,6 +12,8 @@
   --elevated: #24221e;
   --well: #0f0e0c;
   --ink: #ede9e1;
+  /* Secondary text you still read; muted is for metadata only, faint is never text. */
+  --ink-2: #cbc6bb;
   --muted: #a39e94;
   --faint: #77726a;
   --hairline: #2b2925;
@@ -23,7 +26,33 @@
   --record-tint: #2e1a15;
   --caution: #dcac5c;
   --caution-tint: #2c2416;
-  --shadow-float: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 20px 48px rgba(0, 0, 0, 0.45);
+
+  /* People: avatar grounds (pN) and initials (pNi), same chroma and lightness for everyone. */
+  --p1: oklch(0.34 0.05 255);
+  --p1i: oklch(0.88 0.06 255);
+  --p2: oklch(0.34 0.05 290);
+  --p2i: oklch(0.88 0.06 290);
+  --p3: oklch(0.34 0.05 325);
+  --p3i: oklch(0.88 0.06 325);
+  --p4: oklch(0.34 0.05 215);
+  --p4i: oklch(0.88 0.06 215);
+  --p5: oklch(0.34 0.05 110);
+  --p5i: oklch(0.88 0.06 110);
+  --p6: oklch(0.34 0.05 355);
+  --p6i: oklch(0.88 0.06 355);
+
+  /* Depth: cards at rest, under the pointer, the live pill and toasts, sheets. */
+  --sh1: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh2: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shpill: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shfloat: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 24px 56px rgba(0, 0, 0, 0.5);
+  --shadow-float: var(--shfloat);
+
+  /* Motion: small state changes, exits, entries. Exits are always faster than entries. */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 [data-theme="light"] {
@@ -33,6 +62,7 @@
   --elevated: #ffffff;
   --well: #ebe7de;
   --ink: #1d1b17;
+  --ink-2: #3d3a35;
   --muted: #65605a;
   --faint: #8a847a;
   --hairline: #e2ddd2;
@@ -45,7 +75,24 @@
   --record-tint: #f7e6e0;
   --caution: #855610;
   --caution-tint: #f4ead6;
-  --shadow-float: 0 0 0 1px rgba(29, 27, 23, 0.06), 0 20px 48px rgba(29, 27, 23, 0.1);
+
+  --p1: oklch(0.9 0.045 255);
+  --p1i: oklch(0.36 0.08 255);
+  --p2: oklch(0.9 0.045 290);
+  --p2i: oklch(0.36 0.08 290);
+  --p3: oklch(0.9 0.045 325);
+  --p3i: oklch(0.36 0.08 325);
+  --p4: oklch(0.9 0.045 215);
+  --p4i: oklch(0.36 0.08 215);
+  --p5: oklch(0.9 0.045 110);
+  --p5i: oklch(0.36 0.08 110);
+  --p6: oklch(0.9 0.045 355);
+  --p6i: oklch(0.36 0.08 355);
+
+  --sh1: 0 0 0 1px rgba(29, 27, 23, 0.07), 0 1px 2px rgba(29, 27, 23, 0.04);
+  --sh2: 0 0 0 1px rgba(29, 27, 23, 0.09), 0 6px 16px rgba(29, 27, 23, 0.06);
+  --shpill: 0 0 0 1px rgba(29, 27, 23, 0.08), 0 12px 32px rgba(29, 27, 23, 0.12);
+  --shfloat: 0 0 0 1px rgba(29, 27, 23, 0.06), 0 24px 56px rgba(29, 27, 23, 0.12);
 }
 
 @theme inline {
@@ -54,6 +101,7 @@
   --color-elevated: var(--elevated);
   --color-well: var(--well);
   --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-hairline: var(--hairline);
@@ -66,15 +114,35 @@
   --color-record-tint: var(--record-tint);
   --color-caution: var(--caution);
   --color-caution-tint: var(--caution-tint);
-  --shadow-float: var(--shadow-float);
+  --color-p1: var(--p1);
+  --color-p1i: var(--p1i);
+  --color-p2: var(--p2);
+  --color-p2i: var(--p2i);
+  --color-p3: var(--p3);
+  --color-p3i: var(--p3i);
+  --color-p4: var(--p4);
+  --color-p4i: var(--p4i);
+  --color-p5: var(--p5);
+  --color-p5i: var(--p5i);
+  --color-p6: var(--p6);
+  --color-p6i: var(--p6i);
+
+  --shadow-1: var(--sh1);
+  --shadow-2: var(--sh2);
+  --shadow-pill: var(--shpill);
+  --shadow-float: var(--shfloat);
+
+  --ease-calm: var(--ease);
 
   --font-serif: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
   --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* Shape by role: controls, cards you act on, floating sheets, pills and avatars. */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
 }
 
 @layer base {
@@ -88,8 +156,8 @@
     background: var(--ground);
     color: var(--ink);
     font-family: var(--font-sans);
-    font-size: 13px;
-    line-height: 19px;
+    font-size: 14px;
+    line-height: 21px;
     -webkit-font-smoothing: antialiased;
     user-select: none;
     -webkit-user-select: none;
@@ -116,10 +184,17 @@
   /* Type styles from the design system */
   .t-display {
     font-family: var(--font-serif);
-    font-size: 34px;
-    line-height: 40px;
+    font-size: 36px;
+    line-height: 42px;
     font-weight: 500;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+  }
+  .t-heading {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
   }
   .t-reading {
     font-family: var(--font-serif);
@@ -128,27 +203,40 @@
   }
   .t-quote {
     font-family: var(--font-serif);
-    font-size: 15px;
-    line-height: 23px;
+    font-size: 16px;
+    line-height: 24px;
     font-style: italic;
   }
   .t-title {
-    font-size: 15px;
-    line-height: 20px;
+    font-size: 16px;
+    line-height: 22px;
     font-weight: 600;
     letter-spacing: -0.005em;
   }
+  /* Section titles in sentence case, with a muted count after. Replaces the uppercase label. */
+  .t-section {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 600;
+  }
+  /* The one quiet line above a title. Sentence case; pair with text-muted. */
+  .t-eyebrow {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+  }
+  /* Uppercase, inside status pills only. */
   .t-label {
     font-size: 11px;
     line-height: 14px;
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
   .t-mono {
     font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 18px;
     font-variant-numeric: tabular-nums;
   }
   .t-figure {
@@ -158,12 +246,149 @@
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
   }
+  /* One hero number per view: the wallet balance, the recording timer. */
+  .t-figure-xl {
+    font-family: var(--font-mono);
+    font-size: 48px;
+    line-height: 52px;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
   /* The macOS title bar overlays the window; this strip can drag it. */
   .drag {
     -webkit-app-region: drag;
   }
+
+  /* Things you press dip to 0.97; cards you act on lift to shadow-2 under the pointer. */
+  .press {
+    transition:
+      transform var(--dur-1) var(--ease),
+      background-color var(--dur-1) var(--ease),
+      box-shadow 160ms var(--ease),
+      color var(--dur-1) var(--ease),
+      opacity var(--dur-1) var(--ease);
+  }
+  .press:active:not(:disabled, [aria-disabled="true"]) {
+    transform: scale(0.97);
+  }
+  .lift {
+    transition:
+      box-shadow 160ms var(--ease),
+      transform 160ms var(--ease);
+  }
+  .lift:hover {
+    box-shadow: var(--sh2);
+  }
 }
 
+/* Motion from the kit. With reduced motion, the moving ones are redefined below as fades. */
+@keyframes ac-bar {
+  0%,
+  100% {
+    transform: scaleY(0.22);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes ac-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--record) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--record) 0%, transparent);
+  }
+}
+@keyframes ac-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ac-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ac-draw {
+  from {
+    stroke-dashoffset: 14;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ac-fill {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ac-strike {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes ac-roll {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ac-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+@keyframes ac-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -178,12 +403,99 @@
     box-shadow: 0 0 0 7px var(--record-tint);
   }
 }
+
+/* Reduced motion: nothing moves, things fade. Spinners, meters and countdowns still
+   show progress (they carry information); state changes land at once. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation: none !important;
-    transition: none !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  .press:active:not(:disabled, [aria-disabled="true"]) {
+    transform: none;
+  }
+  @keyframes ac-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-pop {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-roll {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-rise {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    20%,
+    80% {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-fill {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-draw {
+    from {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+    to {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+  }
+  @keyframes ac-strike {
+    from {
+      transform: none;
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes ac-bar {
+    0%,
+    100% {
+      transform: scaleY(0.5);
+    }
+  }
+  @keyframes ac-breathe {
+    0%,
+    100% {
+      box-shadow: none;
+    }
+  }
+  @keyframes pulse-ring {
+    0%,
+    100% {
+      box-shadow: 0 0 0 4px var(--record-tint);
+    }
   }
 }
 
