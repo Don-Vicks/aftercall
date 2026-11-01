@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   NETWORK_CONFIG,
   NOT_PROVEN,
@@ -13,11 +13,15 @@ import {
   verifyProof,
   verifyProofGpu,
   type Check,
+  type CheckGroup,
   type Jwks,
   type OnChainProof,
   type PublicProof,
   type TeeCheck,
 } from "@aftercall/core";
+import { CopyButton } from "../client";
+import { AppHeader, Icon, Pill, Seal, Tick, vars } from "../ui";
+import v from "./verify.module.css";
 
 /** NVIDIA publishes its NRAS keys to browsers (CORS allows any origin). */
 async function nvidiaKeys(): Promise<Jwks | null> {
@@ -53,14 +57,15 @@ async function readProof(p: PublicProof): Promise<OnChainProof | null> {
   return JSON.parse(new TextDecoder().decode(Uint8Array.from(body.result.result as number[])));
 }
 
-type State =
-  | { kind: "loading" }
-  | { kind: "missing" }
-  | { kind: "bad-link" }
-  | { kind: "done"; proof: PublicProof; checks: Check[]; onChain: OnChainProof | null; rpcError?: string };
+type Done = { kind: "done"; proof: PublicProof; checks: Check[]; onChain: OnChainProof | null; rpcError?: string };
+type State = { kind: "loading" } | { kind: "missing" } | { kind: "bad-link" } | { kind: "checking"; proof: PublicProof } | Done;
+
+/** Row timing: browser checks tick in 70ms apart, then the recorded groups. */
+const rowAt = (i: number) => 140 + i * 70;
 
 export function VerifyClient() {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const latest = useRef(0);
 
   const run = useCallback(async () => {
     const fragment = window.location.hash;
@@ -72,18 +77,22 @@ export function VerifyClient() {
     } catch {
       return setState({ kind: "bad-link" });
     }
-    setState({ kind: "loading" });
+    const id = ++latest.current;
+    setState({ kind: "checking", proof });
     const gpu = verifyProofGpu(proof.bundle, await nvidiaKeys());
     const withGpu = async (checks: Check[]) => {
       const g = await gpu;
       return g ? [...checks, g] : checks;
     };
+    let done: Done;
     try {
       const onChain = await readProof(proof);
-      setState({ kind: "done", proof, onChain, checks: await withGpu(verifyProof(proof.bundle, onChain)) });
+      done = { kind: "done", proof, onChain, checks: await withGpu(verifyProof(proof.bundle, onChain)) };
     } catch (e) {
-      setState({ kind: "done", proof, onChain: null, checks: await withGpu(verifyProof(proof.bundle, null)), rpcError: String(e) });
+      done = { kind: "done", proof, onChain: null, checks: await withGpu(verifyProof(proof.bundle, null)), rpcError: String(e) };
     }
+    // A newer run (the link changed, or "Run the checks again") wins.
+    if (id === latest.current) setState(done);
   }, []);
 
   useEffect(() => {
@@ -92,35 +101,49 @@ export function VerifyClient() {
     return () => window.removeEventListener("hashchange", run);
   }, [run]);
 
-  return (
-    <div style={{ minHeight: "100vh" }}>
-      <header style={{ maxWidth: 880, margin: "0 auto", padding: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Logo />
-          <span className="serif" style={{ fontSize: 20, fontWeight: 500 }}>Aftercall</span>
-        </span>
-        <span className="mono muted" style={{ fontSize: 12 }}>
-          {state.kind === "done" ? `proof ${proofHash(state.proof.bundle).slice(0, 4)}…${proofHash(state.proof.bundle).slice(-4)}` : "verify"}
-        </span>
-      </header>
+  const proof = state.kind === "checking" || state.kind === "done" ? state.proof : null;
+  const hash = proof ? proofHash(proof.bundle) : null;
 
-      <main style={{ maxWidth: 880, margin: "0 auto", padding: "40px 24px 80px", display: "flex", flexDirection: "column", gap: 36 }}>
-        {state.kind === "loading" && <p className="muted">Reading the proof from NEAR and checking it in your browser…</p>}
-        {state.kind === "missing" && <Message title="Open a proof link" body="This page checks a meeting proof shared from the Aftercall app. The link carries the evidence after the # sign." />}
-        {state.kind === "bad-link" && <Message title="This link is damaged" body="The proof in the link can't be read. Ask the person who shared it to copy it again from Aftercall." />}
-        {state.kind === "done" && <Result state={state} onRerun={run} />}
+  return (
+    <>
+      <AppHeader width={760} tag={hash ? `proof ${hash.slice(0, 4)}…${hash.slice(-4)}` : "verify"} />
+      <main className={v.main}>
+        <div className={v.inner}>
+          {state.kind === "loading" && (
+            <p className="ink-2" role="status">
+              Reading the proof link…
+            </p>
+          )}
+          {state.kind === "missing" && (
+            <Message title="Open a proof link" body="This page checks a meeting proof shared from the Aftercall app. The link carries the evidence after the # sign.">
+              <a href="/how-it-works#checks" className="arrow-link">
+                How the checks work
+                <Icon name="arrowRight" size={14} stroke={2.2} />
+              </a>
+            </Message>
+          )}
+          {state.kind === "bad-link" && <Message title="This link is damaged" body="The proof in the link can't be read. Ask the person who shared it to copy it again from Aftercall." />}
+          {proof && <Result proof={proof} done={state.kind === "done" ? state : null} onRerun={run} />}
+        </div>
       </main>
-    </div>
+    </>
   );
 }
 
-function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; onRerun: () => void }) {
-  const { proof, checks, onChain } = state;
+function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | null; onRerun: () => void }) {
+  const checks = done?.checks ?? [];
   const passed = checks.filter((c) => c.ok).length;
   const recorded: TeeCheck[] | null = proof.bundle.version === 2 ? proof.bundle.checks : null;
   // E2EE has its own line; "processed privately" rests on attestation and signatures.
-  const allOk = passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
-  const when = onChain ? new Date(onChain.recorded_at / 1e6).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }) : null;
+  const allOk = !!done && passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
+  const dateOpts = { day: "numeric", month: "short", year: "numeric" } as const;
+  const when = done?.onChain
+    ? new Date(done.onChain.recorded_at / 1e6).toLocaleDateString([], dateOpts)
+    : proof.bundle.version === 2
+      ? new Date(proof.bundle.checkedAt).toLocaleDateString([], dateOpts)
+      : null;
+  const hash = proofHash(proof.bundle);
+  const sealAt = rowAt(checks.length) + 60;
 
   const download = () => {
     const blob = new Blob([JSON.stringify(proof, null, 2)], { type: "application/json" });
@@ -133,157 +156,259 @@ function Result({ state, onRerun }: { state: Extract<State, { kind: "done" }>; o
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <span
-          className="label"
-          style={{
-            alignSelf: "flex-start",
-            display: "inline-flex",
-            alignItems: "center",
-            minHeight: 26,
-            padding: "4px 11px",
-            borderRadius: 999,
-            background: allOk ? "var(--verdigris-tint)" : "var(--caution-tint)",
-            color: allOk ? "var(--verdigris)" : "var(--caution)",
-          }}
-        >
-          {passed} of {checks.length} checks passed in your browser
-        </span>
-        <h1 className="serif" style={{ margin: 0, fontSize: 44, lineHeight: "50px", fontWeight: 500, letterSpacing: "-0.02em" }}>
-          {allOk ? "This meeting was processed privately." : "This proof doesn't fully check out."}
-        </h1>
-        <p className="serif muted" style={{ margin: 0, maxWidth: 640, fontSize: 19, lineHeight: "30px" }}>
-          {allOk
-            ? `A meeting recorded with Aftercall${when ? ` on ${when}` : ""} was summarised inside attested secure hardware on NEAR AI Cloud. This page holds no meeting content, only the evidence. Your browser has just re-checked what it can; the rest is shown as the app recorded it.`
-            : "Some checks failed. The list below says which, and why. This page holds no meeting content."}
-        </p>
-      </div>
+      <section aria-labelledby="vh" className={`${v.hero} enter`}>
+        <div className={v.heroText}>
+          <span className="t-eyebrow">
+            Meeting proof{when ? ` · ${when}` : ""} · recorded by {proof.owner}
+          </span>
+          <h1 id="vh" className={v.h1}>
+            {!done ? "Checking this meeting proof" : allOk ? "This meeting was processed in secure hardware" : "This proof doesn't fully check out"}
+          </h1>
+          <span className="ink-2">
+            {done && !allOk ? "Some checks failed; the lists below say which, and why. " : ""}This page holds the evidence only, never what was said.
+          </span>
+          <div className={v.pills} aria-live="polite">
+            {done ? (
+              <Pill tone={allOk ? "verdigris" : "caution"} className="pop" style={vars({ d: `${sealAt}ms`, dur: "320ms" })} icon={<Icon name={allOk ? "check" : "info"} size={12} stroke={2.5} />}>
+                {passed} of {checks.length} passed in your browser
+              </Pill>
+            ) : (
+              <Pill tone="muted" icon={<span aria-hidden="true" className={`spinner ${v.smallSpinner}`} />}>
+                Checking
+              </Pill>
+            )}
+          </div>
+        </div>
+        {(!done || allOk) && (
+          <div className={v.sealBox}>
+            <svg viewBox="0 0 148 148" aria-hidden="true">
+              <circle cx="74" cy="74" r="70" fill="none" strokeWidth="1.5" strokeDasharray="3 6" stroke="var(--border)" opacity=".6" />
+            </svg>
+            {allOk && (
+              <div role="img" aria-label="Verified" className="pop" style={vars({ d: `${sealAt}ms`, dur: "460ms", "pop-ease": "cubic-bezier(.3,1.4,.5,1)" })}>
+                <Seal id="verify-seal" fine />
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <h2 className="label" style={{ margin: 0 }}>Re-checked in your browser</h2>
-        <CheckList checks={checks} />
+      <section aria-labelledby="vb" className={v.block}>
+        <div className={v.blockHead}>
+          <h2 id="vb" className="t-section">
+            Re-checked in your browser <span className="count">{done ? "just now, from NEAR and the link" : "from NEAR and the link"}</span>
+          </h2>
+          {done && <span>{checks.length} checks</span>}
+        </div>
+        {done ? (
+          <ol className={v.list}>
+            {checks.map((c, i) => (
+              <CheckRow key={c.id} check={c} at={rowAt(i)} />
+            ))}
+          </ol>
+        ) : (
+          <div role="status" className={`${v.status} enter`} style={vars({ dur: "240ms" })}>
+            <span aria-hidden="true" className="spinner" />
+            Reading the proof from NEAR and checking it in your browser…
+          </div>
+        )}
+        {done?.rpcError && <p style={{ color: "var(--caution)", overflowWrap: "anywhere" }}>Couldn&apos;t read NEAR: {done.rpcError.replace(/^Error: /, "")}</p>}
       </section>
 
       {recorded ? (
-        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <h2 className="label" style={{ margin: 0 }}>As recorded by the app</h2>
-            <p className="muted" style={{ margin: 0, maxWidth: 680 }}>
-              The app ran these on the Mac when the meeting was processed{proof.bundle.version === 2 ? `, ${new Date(proof.bundle.checkedAt).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}. Your
-              browser can&apos;t repeat the Intel quote check: Intel&apos;s collateral service doesn&apos;t accept browser requests, and the quotes aren&apos;t in the link.
-              The checks above re-use the values the app read from them.
-            </p>
-          </div>
-          {groupChecks(recorded, proof.bundle).map((g) => (
-            <div key={g.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{g.title}</h3>
-              <CheckList checks={g.checks} />
-              {g.key === "whisper" && <p className="muted" style={{ margin: "8px 0 0" }}>{WHISPER_NOTE}</p>}
-            </div>
-          ))}
-        </section>
+        <Recorded key={hash} proof={proof} recorded={recorded} start={done ? checks.length : 0} />
       ) : (
-        <p className="muted" style={{ margin: 0 }}>
-          This proof was made before Aftercall verified attestation quotes. The app checked the signature and that attestation evidence came back with a fresh nonce.
-        </p>
+        <p className="ink-2">This proof was made before Aftercall verified attestation quotes. The app checked the signature and that attestation evidence came back with a fresh nonce.</p>
       )}
 
-      {state.rpcError && <p style={{ margin: 0, color: "var(--caution)", overflowWrap: "anywhere" }}>Couldn't read NEAR: {state.rpcError.replace(/^Error: /, "")}</p>}
-
-      <dl className="facts" style={{ margin: 0, display: "grid", gridTemplateColumns: "160px minmax(0, 1fr)", gap: "12px 20px", padding: "20px 24px", borderRadius: 10, background: "var(--well)" }}>
-        <dt className="label" style={{ lineHeight: "22px" }}>Proof hash</dt>
-        <dd className="mono" style={{ margin: 0, wordBreak: "break-all" }}>{proofHash(proof.bundle)}</dd>
-        <dt className="label" style={{ lineHeight: "22px" }}>Contract</dt>
-        <dd style={{ margin: 0 }}>
-          <a className="mono" href={explorerAccountUrl(proof.network, proof.contract)} target="_blank" rel="noreferrer">
-            {proof.contract}
-          </a>{" "}
-          <span className="muted">· {proof.network}</span>
-        </dd>
-        <dt className="label" style={{ lineHeight: "22px" }}>Recorded by</dt>
-        <dd className="mono" style={{ margin: 0 }}>{proof.owner}</dd>
-        <dt className="label" style={{ lineHeight: "22px" }}>Raw evidence</dt>
-        <dd style={{ margin: 0 }}>
-          <button onClick={download} style={{ border: 0, padding: 0, background: "none", color: "var(--verdigris)", fontWeight: 600, fontSize: 14 }}>
+      <section aria-label="On-chain proof" className={`${v.onChain} enter`} style={vars({ d: "120ms" })}>
+        <div className={v.onChainTop}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+            <Icon name="chain" size={16} stroke={1.75} className="accent" />
+            {done && !done.onChain ? "Proof hash" : "Proof on NEAR"}
+          </span>
+          <span className="mono" title={hash} style={{ fontSize: 13 }}>
+            {hash.slice(0, 12)}…{hash.slice(-10)}
+          </span>
+          <CopyButton text={hash} label="Copy proof hash" />
+          <a href={explorerAccountUrl(proof.network, proof.contract)} target="_blank" rel="noreferrer" className="arrow-link">
+            View on NEAR Explorer
+            <Icon name="external" size={13} />
+          </a>
+        </div>
+        <div className={v.onChainMeta}>
+          <span>
+            Contract{" "}
+            <span className="mono ink" style={{ overflowWrap: "anywhere" }}>
+              {proof.contract}
+            </span>
+          </span>
+          <span className="muted">·</span>
+          <span>{proof.network}</span>
+          <span className="muted">·</span>
+          <span>
+            Recorded by <span className="mono ink">{proof.owner}</span>
+          </span>
+          <span className="muted">·</span>
+          <button type="button" onClick={download} className="link-button" style={{ fontSize: 13 }}>
             Download bundle (JSON)
           </button>
-        </dd>
-      </dl>
+        </div>
+      </section>
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <h2 className="label" style={{ margin: 0 }}>What this does not prove</h2>
-        <ul className="muted" style={{ margin: 0, paddingLeft: 20 }}>
-          {NOT_PROVEN.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-          <li>
-            {recorded
+      <section aria-labelledby="vn" className={`${v.block} enter`} style={vars({ d: "160ms" })}>
+        <h2 id="vn" className="t-section">
+          What this does not prove <span className="count">read this too</span>
+        </h2>
+        <ul className={v.notProven}>
+          {[
+            ...NOT_PROVEN,
+            recorded
               ? "That the Intel quotes were genuine: the app verified them with Intel when the meeting was processed; this page trusts that record and re-checks what it can."
-              : "That the secure-hardware evidence itself is genuine: the app checked it was present and fresh when the meeting was processed; this page trusts that record."}
-          </li>
+              : "That the secure-hardware evidence itself is genuine: the app checked it was present and fresh when the meeting was processed; this page trusts that record.",
+          ].map((n) => {
+            const cut = n.indexOf(": ");
+            return (
+              <li key={n}>
+                {cut > 0 ? (
+                  <>
+                    <strong>{n.slice(0, cut + 1)}</strong>
+                    {n.slice(cut + 1)}
+                  </>
+                ) : (
+                  n
+                )}
+              </li>
+            );
+          })}
         </ul>
       </section>
 
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16, paddingTop: 24, borderTop: "1px solid var(--hairline)" }}>
-        <button onClick={onRerun} style={{ height: 40, padding: "0 18px", border: "1px solid var(--border)", borderRadius: 6, background: "transparent", color: "var(--ink)", fontSize: 14, fontWeight: 600 }}>
+      <div className={v.foot}>
+        <button type="button" onClick={onRerun} disabled={!done} className="btn btn-secondary press">
+          <Icon name="refresh" size={14} />
           Run the checks again
         </button>
-        <a href="/">What is Aftercall?</a>
+        <a href="/" style={{ fontWeight: 600 }}>
+          What is Aftercall?
+        </a>
       </div>
     </>
   );
 }
 
-function CheckList({ checks }: { checks: (Check | TeeCheck)[] }) {
+/** One check, ticking in at `at` ms. */
+function CheckRow({ check: c, at }: { check: Check | TeeCheck; at: number }) {
   return (
-    <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-      {checks.map((c, i) => (
-        <li
-          key={c.id}
-          style={{
-            display: "grid",
-            gridTemplateColumns: "28px minmax(0, 1fr)",
-            gap: 12,
-            padding: "16px 0",
-            borderTop: "1px solid var(--hairline)",
-            borderBottom: i === checks.length - 1 ? "1px solid var(--hairline)" : undefined,
-          }}
-        >
-          <span aria-label={c.ok ? "Passed" : "Failed"} style={{ color: c.ok ? "var(--verdigris)" : "var(--caution)", fontWeight: 600 }}>
-            {c.ok ? "✓" : "✕"}
+    <li className={`${v.row} enter`} style={vars({ d: `${at}ms`, dur: "280ms" })}>
+      <Tick ok={c.ok} d1={`${at + 60}ms`} d2={`${at + 180}ms`} />
+      <span className={v.label}>{c.label}</span>
+      <span className={`${v.detail}${c.ok ? "" : ` ${v.failedDetail}`}`} title={c.detail}>
+        <Detail text={c.detail} />
+      </span>
+    </li>
+  );
+}
+
+/** Hashes, keys, model names and times in a check's detail are set in mono. */
+function Detail({ text }: { text: string }) {
+  const parts = text.split(/((?:0x)?[0-9a-f]{10,}…?(?:[0-9a-f]{4,})?|\b(?:Qwen|openai)\/[\w.-]+|\d{4}-\d{2}-\d{2} \d{2}:\d{2}|\b\d{2}:\d{2} UTC)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="mono">
+            {p}
           </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-            <span style={{ fontWeight: 600 }}>{c.label}</span>
-            <span className="muted" style={{ overflowWrap: "anywhere" }}>{c.detail}</span>
-          </div>
-        </li>
-      ))}
-    </ol>
+        ) : (
+          <Fragment key={i}>{p}</Fragment>
+        ),
+      )}
+    </>
   );
 }
 
-function Message({ title, body }: { title: string; body: string }) {
+const GROUP_DETAIL: Record<CheckGroup["key"], (g: CheckGroup) => string> = {
+  gateway: () => "Intel TDX quote, debug off, key and nonce, boot log, software",
+  whisper: (g) => `The same CPU checks${g.checks.some((c) => /GPU/.test(c.label)) ? ", plus NVIDIA GPU evidence" : ""}`,
+  summary: (g) => `The same checks${g.checks.some((c) => /GPU/.test(c.label)) ? ", plus NVIDIA GPU evidence" : ""}`,
+  response: () => "Signed over exactly what was sent and what came back",
+};
+
+/** The app's own checks from the proof, grouped as the Mac's Verify sheet shows them. */
+function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: TeeCheck[]; start: number }) {
+  const groups = groupChecks(recorded, proof.bundle);
+  // Groups with a failure start open, so nothing that failed is hidden behind a click.
+  const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(groups.map((g) => [g.key, g.checks.some((c) => !c.ok)])));
+  const checkedAt =
+    proof.bundle.version === 2 ? new Date(proof.bundle.checkedAt).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <h1 className="serif" style={{ margin: 0, fontSize: 40, lineHeight: "46px", fontWeight: 500 }}>{title}</h1>
-      <p className="serif muted" style={{ margin: 0, fontSize: 19, lineHeight: "30px", maxWidth: 640 }}>{body}</p>
+    <section aria-labelledby="vr" className={v.block}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className={v.blockHead}>
+          <h2 id="vr" className="t-section">
+            As recorded by the app <span className="count">on the Mac, {checkedAt}</span>
+          </h2>
+          <span>{recorded.length} checks</span>
+        </div>
+        <div className={v.whyLine}>
+          <span>Your browser can&apos;t repeat the Intel quote check, so these are shown as the app ran them.</span>
+          <details className="why">
+            <summary>Why?</summary>
+            <span className="why-body" style={{ display: "block", marginTop: 6 }}>
+              Intel&apos;s collateral service doesn&apos;t accept browser requests, and the quotes aren&apos;t in the link. The checks above re-use the values the app read from them.
+            </span>
+          </details>
+        </div>
+      </div>
+
+      <div className={v.groups}>
+        {groups.map((g, j) => {
+          const at = rowAt(start + j);
+          const failed = g.checks.filter((c) => !c.ok);
+          const isOpen = !!open[g.key];
+          return (
+            <div key={g.key} className={`${v.group}${isOpen ? ` ${v.groupOpen}` : ""} enter`} style={vars({ d: `${at}ms`, dur: "280ms" })}>
+              <button type="button" onClick={() => setOpen((o) => ({ ...o, [g.key]: !o[g.key] }))} aria-expanded={isOpen} aria-controls={`group-${g.key}`} className={v.groupButton}>
+                <Tick ok={failed.length === 0} label={failed.length === 0 ? "All passed" : "Some failed"} d1={`${at + 60}ms`} d2={`${at + 180}ms`} />
+                <span className={v.groupTitle}>
+                  <span>{g.title}</span>
+                  <span>{failed.length === 0 ? `${g.checks.length} passed` : `${failed.length} of ${g.checks.length} failed`}</span>
+                </span>
+                <span className={v.detail}>{failed.length ? `Failed: ${failed.map((c) => c.label).join(", ")}` : GROUP_DETAIL[g.key](g)}</span>
+                <Icon name="chevronRight" size={16} className={v.chev} />
+              </button>
+              {isOpen && (
+                <div id={`group-${g.key}`} className={v.groupBody}>
+                  <ul className={v.subList}>
+                    {g.checks.map((c, k) => (
+                      <li key={c.id} className={`${v.subRow} enter`} style={vars({ d: `${k * 40}ms`, dur: "240ms" })}>
+                        <Tick ok={c.ok} size={16} d1={`${k * 40 + 40}ms`} d2={`${k * 40 + 160}ms`} />
+                        <span className={v.label}>{c.label}</span>
+                        <span className={`${v.detail}${c.ok ? "" : ` ${v.failedDetail}`}`} title={c.detail}>
+                          <Detail text={c.detail} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {g.key === "whisper" && <p className={v.note}>{WHISPER_NOTE}</p>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Message({ title, body, children }: { title: string; body: string; children?: ReactNode }) {
+  return (
+    <div className={`${v.message} enter`}>
+      <h1 className="t-display">{title}</h1>
+      <p>{body}</p>
+      {children}
     </div>
-  );
-}
-
-function Logo() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 512 512" aria-hidden="true">
-      <rect width="512" height="512" rx="115" fill="#24221e" />
-      <rect x="128" y="92" width="256" height="328" rx="28" fill="#ede9e1" />
-      <g fill="#24221e">
-        <rect x="167" y="200" width="28" height="80" rx="14" />
-        <rect x="214" y="160" width="28" height="160" rx="14" />
-        <rect x="261" y="185" width="28" height="110" rx="14" />
-        <rect x="308" y="205" width="28" height="70" rx="14" />
-      </g>
-      <circle cx="378" cy="398" r="56" fill="#24221e" />
-      <circle cx="378" cy="398" r="44" fill="#8dbfa8" />
-    </svg>
   );
 }

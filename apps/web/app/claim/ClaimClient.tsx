@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { exampleAccount, formatUsdc, parseClaimFragment, type ClaimDetails } from "@aftercall/core";
-import { Page, button } from "../ui";
+import { Avatar, Logo, Tick } from "../ui";
+import k from "./claim.module.css";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
 const ACCOUNT = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
@@ -28,13 +29,16 @@ export function ClaimClient() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [account, setAccount] = useState("");
   const [sending, setSending] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [details, setDetails] = useState<ClaimDetails>({});
   const [token, setToken] = useState<string | null>(null);
+  const [host, setHost] = useState("");
 
   useEffect(() => {
     const { token, ...rest } = parseClaimFragment(window.location.hash);
     setDetails(rest);
     setToken(token);
+    setHost(window.location.host);
   }, []);
 
   useEffect(() => {
@@ -52,6 +56,7 @@ export function ClaimClient() {
   const share = async () => {
     if (state.kind !== "open") return;
     setSending(true);
+    setShareError(null);
     try {
       const r = await fetch(`${BACKEND}/claims/link/${encodeURIComponent(token ?? "")}`, {
         method: "POST",
@@ -61,18 +66,44 @@ export function ClaimClient() {
       if (!r.ok) throw new Error((await r.json()).message === "BAD_ACCOUNT" ? "That isn't a NEAR account name." : "Couldn't share it. Try again.");
       setState({ kind: "done", claim: state.claim, account });
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      setShareError(e instanceof Error ? e.message : String(e));
     } finally {
       setSending(false);
     }
   };
 
-  if (state.kind === "loading") return <Page width={480}>{null}</Page>;
+  const header = (
+    <header className={k.header}>
+      <a href="/" className={k.brand} aria-label="Aftercall, home">
+        <Logo size={22} />
+        <span>Aftercall</span>
+      </a>
+      {host && <span className={k.host}>{host}</span>}
+    </header>
+  );
+
+  if (state.kind === "loading") {
+    return (
+      <div className={k.page}>
+        <div className={k.inner}>
+          {header}
+          <p className="ink-2" role="status">
+            Opening the link…
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (state.kind === "error") {
     return (
-      <Page width={480}>
-        <h1 className="serif" style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 500 }}>{state.message}</h1>
-      </Page>
+      <div className={k.page}>
+        <div className={k.inner}>
+          {header}
+          <h1 className="serif enter" style={{ fontSize: 30, lineHeight: "36px", fontWeight: 500, letterSpacing: "-0.015em" }}>
+            {state.message}
+          </h1>
+        </div>
+      </div>
     );
   }
 
@@ -82,65 +113,122 @@ export function ClaimClient() {
   const valid = ACCOUNT.test(account);
   // Claims don't carry a network; the payer's own account shows which one they use.
   const network = c.owner.endsWith(".testnet") ? "testnet" : "mainnet";
+  const done = state.kind === "done";
+  const steps: [string, "done" | "now" | "later"][] = [
+    ["You share your NEAR account here.", done ? "done" : "now"],
+    [`${c.owner} confirms in their own wallet that this account is you.`, done ? "now" : "later"],
+    ["The payment is sent in USDC on NEAR, usually within seconds.", "later"],
+  ];
 
   return (
-    <Page width={480}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span className="label">A payment for you</span>
-        <h1 className="serif" style={{ margin: 0, fontSize: 30, lineHeight: "36px", fontWeight: 500, letterSpacing: "-0.015em" }}>
-          {payeeName ? `${payeeName}, ` : ""}
-          {c.owner} wants to pay you <span className="mono" style={{ fontSize: 26 }}>{amount} USDC</span>
-        </h1>
-        <p className="muted" style={{ margin: 0 }}>
-          {memo && meeting ? `For: ${memo}, agreed in “${meeting}”. ` : memo ? `For: ${memo}. ` : meeting ? `Agreed in “${meeting}”. ` : ""}
-          Tell them where to send it.
-        </p>
-      </div>
+    <div className={k.page}>
+      <div className={k.inner}>
+        {header}
 
-      {state.kind === "done" ? (
-        <div style={{ padding: "18px 20px", borderRadius: 10, background: "var(--verdigris-tint)", display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontWeight: 600, color: "var(--verdigris)" }}>Shared {state.account}</span>
-          <span className="muted">{c.owner} confirms it in their own wallet, then the payment is sent in USDC on NEAR.</span>
-        </div>
-      ) : (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label htmlFor="acct" className="label">Your NEAR account</label>
-            <input
-              id="acct"
-              value={account}
-              onChange={(e) => setAccount(e.target.value.trim().toLowerCase())}
-              placeholder={exampleAccount(network)}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              className="mono"
-              style={{ height: 48, padding: "0 14px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--well)", color: "var(--ink)", fontSize: 15 }}
-            />
-            <span className="muted" style={{ fontSize: 13 }}>
-              No account yet? <a href="https://wallet.meteorwallet.app" target="_blank" rel="noreferrer">Create one in a NEAR wallet</a>, then come back to this link.
+        <section aria-labelledby="ch" className={`${k.intro} enter`}>
+          <span className="t-eyebrow">A payment for you{payeeName ? `, ${payeeName}` : ""}</span>
+          <div className={k.payer}>
+            <Avatar name={c.owner} size={36} decorative />
+            <span>
+              <span className="mono" style={{ fontWeight: 500 }}>
+                {c.owner}
+              </span>
+              <span className="ink-2" style={{ fontSize: 13, lineHeight: "18px" }}>
+                on NEAR {network}
+              </span>
             </span>
           </div>
-          <button onClick={share} disabled={!valid || sending} style={{ ...button("primary"), height: 48, opacity: !valid || sending ? 0.5 : 1 }}>
-            Share account with {c.owner}
-          </button>
-        </>
-      )}
+          <h1 id="ch" className={k.h1}>
+            <span>{c.owner} wants to pay you</span>
+            <span className={k.amountClip}>
+              <span className={`${k.amount} roll`} style={{ ["--d" as string]: "160ms" }}>
+                {amount}
+                <span>USDC</span>
+              </span>
+            </span>
+          </h1>
+          <p className="ink-2" style={{ fontSize: 15, lineHeight: "22px" }}>
+            {memo && meeting ? `For: ${memo}, agreed in “${meeting}”. ` : memo ? `For: ${memo}. ` : meeting ? `Agreed in “${meeting}”. ` : ""}
+            Tell them where to send it.
+          </p>
+        </section>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: 16, borderRadius: 10, background: "var(--raised)", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
-        <span className="label">What happens next</span>
-        <ol className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: "20px" }}>
-          <li>{c.owner} confirms in their own wallet that this account is you.</li>
-          <li>The payment is sent in USDC on NEAR, usually within seconds.</li>
-        </ol>
-      </div>
+        {done ? (
+          <section role="status" className={`${k.done} pop pop-spring`} style={{ ["--dur" as string]: "360ms" }}>
+            <Tick size={24} d1="80ms" d2="220ms" decorative />
+            <span>
+              <span style={{ fontWeight: 600, color: "var(--verdigris)" }}>
+                Shared{" "}
+                <span className="mono" style={{ fontSize: 13, fontWeight: 500 }}>
+                  {state.account}
+                </span>
+              </span>
+              <span className="ink-2">{c.owner} confirms it in their own wallet, then the payment is sent in USDC on NEAR. You can close this page.</span>
+            </span>
+          </section>
+        ) : (
+          <section className={`${k.form} enter`} style={{ ["--d" as string]: "40ms" }}>
+            <div className={k.fieldBlock}>
+              <label htmlFor="acct">Your NEAR account</label>
+              <input
+                id="acct"
+                value={account}
+                onChange={(e) => {
+                  setAccount(e.target.value.trim().toLowerCase());
+                  setShareError(null);
+                }}
+                placeholder={exampleAccount(network)}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-invalid={shareError ? true : undefined}
+                aria-describedby="acct-hint"
+                className={`field ${k.field}`}
+              />
+              <span id="acct-hint" className="ink-2" style={{ fontSize: 13, lineHeight: "19px" }}>
+                No account yet?{" "}
+                <a href="https://wallet.meteorwallet.app" target="_blank" rel="noreferrer" style={{ fontWeight: 600 }}>
+                  Create one in a NEAR wallet
+                </a>
+                , then come back to this link.
+              </span>
+            </div>
+            <button type="button" onClick={share} disabled={!valid || sending} className={`btn btn-primary press ${k.share}`}>
+              {sending && <span aria-hidden="true" className="spinner spinner-on-accent" />}
+              {sending ? "Sharing…" : `Share account with ${c.owner}`}
+            </button>
+            {shareError && (
+              <p role="alert" style={{ color: "var(--record)" }}>
+                {shareError}
+              </p>
+            )}
+          </section>
+        )}
 
-      <p className="muted" style={{ margin: 0, fontSize: 13 }}>This link only shares where to send money; it can't take anything from you. It works once and expires in 7 days.</p>
-      {(payeeName || memo || meeting) && (
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          Your name and what this is for come from the link itself and were never stored on Aftercall's server. The amount and {c.owner} come from the server.
+        <section aria-labelledby="nx" className={`enter`} style={{ ["--d" as string]: "80ms", display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 id="nx" className="t-section">
+            What happens next
+          </h2>
+          <ol className={k.next}>
+            {steps.map(([label, s], i) => (
+              <li key={i}>
+                <span aria-hidden="true" className={`${k.stepMark} ${s === "done" ? k.markDone : s === "now" ? k.markNow : k.markLater}`}>
+                  {s === "done" ? "✓" : i + 1}
+                </span>
+                <span className={s === "later" ? k.later : undefined}>
+                  {label}
+                  {s === "done" && <span className="sr-only"> Done.</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <p className={k.fine}>
+          This link only shares where to send money; it can&apos;t take anything from you. It works once and expires in 7 days.
+          {(payeeName || memo || meeting) && ` Your name and what this is for come from the link itself and were never stored on Aftercall's server. The amount and ${c.owner} come from the server.`}
         </p>
-      )}
-    </Page>
+      </div>
+    </div>
   );
 }

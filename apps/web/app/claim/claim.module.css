@@ -1,0 +1,201 @@
+/* V2ClaimPage: made for a phone, centred in a narrow column on anything wider. */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.inner {
+  flex: 1;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 16px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+@media (min-width: 600px) {
+  .inner {
+    padding-top: 40px;
+    flex: 0 0 auto;
+  }
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+.brand:hover {
+  color: var(--ink);
+}
+.brand > span {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.host {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.payer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.payer > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.h1 {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 500;
+}
+.h1 > :first-child {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  line-height: 36px;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.amountClip {
+  display: inline-block;
+  overflow: hidden;
+  height: 50px;
+}
+.amount {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 40px;
+  line-height: 50px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.amount > span {
+  margin-left: 10px;
+  font-size: 22px;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fieldBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fieldBlock label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.field {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+.share {
+  height: 48px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.done {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--verdigris-tint);
+}
+.done > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.next {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.next li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.stepMark {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    background-color 200ms var(--ease),
+    color 200ms var(--ease);
+}
+.markDone {
+  background: var(--verdigris);
+  color: var(--on-verdigris);
+}
+.markNow {
+  background: var(--verdigris-tint);
+  color: var(--verdigris);
+}
+.markLater {
+  background: var(--well);
+  color: var(--ink-2);
+}
+.next li > span:last-child {
+  padding-top: 1px;
+  transition: color 200ms var(--ease);
+}
+.later {
+  color: var(--ink-2);
+}
+.fine {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--ink-2);
+}
+.fine + .fine {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

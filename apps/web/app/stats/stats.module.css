@@ -1,0 +1,67 @@
+/* Stats, in the v2 look: one card of counts, figures in mono on the right. */
+
+.main {
+  padding: 40px 24px 48px;
+}
+.inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+@media (max-width: 480px) {
+  .main {
+    padding: 28px 20px 40px;
+  }
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.counts {
+  padding: 6px 24px;
+  border-radius: var(--radius-md);
+  background: var(--elevated);
+  box-shadow: var(--sh1);
+  display: flex;
+  flex-direction: column;
+}
+.counts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+}
+.counts > div + div {
+  border-top: 1px solid var(--hairline);
+}
+.counts dt {
+  color: var(--ink);
+}
+.counts dd {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 28px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.na {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+@media (max-width: 480px) {
+  .counts {
+    padding: 4px 18px;
+  }
+}

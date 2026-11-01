@@ -1,0 +1,197 @@
+/* V2ApproveWallet, and every other owner action signed with your own NEAR wallet. */
+
+.main {
+  padding: 40px 24px 48px;
+}
+.inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+@media (max-width: 480px) {
+  .main {
+    padding: 28px 20px 40px;
+  }
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.intro > span:first-child {
+  align-self: flex-start;
+}
+.facts {
+  margin: 0;
+  padding: 6px 24px;
+  border-radius: var(--radius-md);
+  background: var(--elevated);
+  box-shadow: var(--sh1);
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+.facts dt {
+  padding: 14px 0;
+  font-size: 13px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  padding: 14px 0;
+  line-height: 22px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.facts dt:not(:first-of-type),
+.facts dd:not(:first-of-type) {
+  border-top: 1px solid var(--hairline);
+}
+.amountLabel {
+  padding-top: 16px !important;
+  line-height: 40px !important;
+}
+.amount {
+  padding: 16px 0 !important;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.amount > :first-child {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  line-height: 40px;
+  letter-spacing: -0.03em;
+}
+.amount > :last-child {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--ink-2);
+}
+.person {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.heard {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 24px !important;
+}
+@media (max-width: 480px) {
+  .facts {
+    padding: 4px 18px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .facts dt {
+    padding: 12px 0 0;
+    line-height: 18px;
+  }
+  .facts dd {
+    padding: 2px 0 12px;
+  }
+  .facts dd:not(:first-of-type) {
+    border-top: 0;
+  }
+  .amountLabel {
+    padding-top: 12px !important;
+    line-height: 18px !important;
+  }
+  .amount {
+    padding: 2px 0 12px !important;
+  }
+}
+
+.signSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wallets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wallet {
+  height: 44px;
+  padding: 0 14px 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--ink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.wallet:hover:not(:disabled) {
+  background: var(--elevated);
+}
+.wallet:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.walletBusy,
+.walletBusy:disabled {
+  opacity: 1;
+  background: var(--verdigris-tint);
+  box-shadow: inset 0 0 0 1px var(--verdigris);
+}
+.mark {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--well);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+.walletNote {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--ink-2);
+}
+.problem {
+  color: var(--caution);
+  overflow-wrap: anywhere;
+}
+.done {
+  display: flex;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  background: var(--verdigris-tint);
+}
+.done > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hairline);
+}
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
