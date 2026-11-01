@@ -184,7 +184,12 @@ export function Toaster() {
   return createPortal(
     <>
       <Announcer item={latest} />
-      <section aria-label="Notifications" className="pointer-events-none fixed inset-x-0 bottom-6 z-[90] flex flex-col items-center gap-2 px-6">
+      {/* --toast-lift: room for something else at the bottom, as the live pill while recording. */}
+      <section
+        aria-label="Notifications"
+        className="pointer-events-none fixed inset-x-0 z-[90] flex flex-col items-center gap-2 px-6"
+        style={{ bottom: "calc(24px + var(--toast-lift, 0px))" }}
+      >
         <LayoutMotion>
           <AnimatePresence initial={false}>
             {shown.map((t) => (
