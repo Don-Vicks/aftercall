@@ -1,16 +1,30 @@
-import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Copy, ExternalLink, Info, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { NOT_PROVEN, WHISPER_NOTE, encodePublicProof, groupChecks, verifyProof, type Check as ProofCheck, type TeeCheck } from "@aftercall/core";
+import { NOT_PROVEN, WHISPER_NOTE, encodePublicProof, groupChecks, verifyProof, type Check as ProofCheck, type CheckGroup, type TeeCheck } from "@aftercall/core";
 import { VERIFY_URL, explorerTx, near } from "./near";
 import type { SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
-import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
+import { Button, Dialog, IconButton, Spinner, cx } from "./ui";
+
+/** What each group's TEE did for this meeting, after its name. */
+const ROLE: Record<CheckGroup["key"], string> = {
+  gateway: "routes the request",
+  whisper: "made the transcript",
+  summary: "wrote the notes",
+  response: "the signed reply",
+};
+
+/** Rows shown per group until "Show all"; failures always show. */
+const FIRST = 4;
+
+/** The board's sequence: each row lands 70 ms after the one before. */
+const at = (ms: number): CSSProperties => ({ animation: `ac-in 280ms ${ms}ms var(--ease) both` });
 
 /**
- * The Verified panel: every attestation and signature check this Mac ran when the
- * meeting was processed, grouped by TEE, then the proof's checks re-run now
- * against NEAR.
+ * The Verified sheet: the checks this Mac ran when the meeting was processed,
+ * grouped by TEE with real counts, then the proof re-checked now from the saved
+ * bundle (and NEAR, once the proof is there), then what it doesn't prove.
  */
 export function VerifySheet({
   recordingId,
@@ -30,30 +44,34 @@ export function VerifySheet({
   const [canRecord, setCanRecord] = useState(false);
   const [recording, setRecording] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [all, setAll] = useState(false);
+  // Focus starts on the result, not the close button, so it's read first and no tooltip pops up.
+  const heading = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const yours = { text: saved.meeting.yourNotes ?? "", salt: saved.yourNotesSalt };
     (async () => {
       setChecks(null);
       setError(null);
       try {
         const onChain = saved.onChain ? await near.getProof(saved.onChain.owner, saved.proof.meetingId) : null;
-        if (!cancelled) setChecks(verifyProof(saved.proof, onChain, saved.notes));
+        if (!cancelled) setChecks(verifyProof(saved.proof, onChain, saved.notes, yours));
       } catch (e) {
         if (!cancelled) {
           setError(`Couldn't read NEAR: ${String(e)}`);
-          setChecks(verifyProof(saved.proof, null, saved.notes));
+          setChecks(verifyProof(saved.proof, null, saved.notes, yours));
         }
       }
-      if (!saved.onChain) setCanRecord(await nearReady());
+      if (!saved.onChain) {
+        const ready = await nearReady();
+        if (!cancelled) setCanRecord(ready);
+      }
     })();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
     return () => {
       cancelled = true;
-      window.removeEventListener("keydown", onKey);
     };
-  }, [saved, onClose]);
+  }, [saved]);
 
   const record = async () => {
     setRecording(true);
@@ -80,117 +98,247 @@ export function VerifySheet({
 
   const recorded: TeeCheck[] | null = saved.proof.version === 2 ? saved.proof.checks : null;
   const groups = recorded ? groupChecks(recorded, saved.proof) : [];
-  const failing = (checks?.filter((c) => !c.ok).length ?? 0) + (recorded?.filter((c) => !c.ok).length ?? 0);
-  const checkedAt = saved.proof.version === 2 ? new Date(saved.proof.checkedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  // Before the proof is on NEAR, "recorded on NEAR" and "matches" can't pass yet; the footer says so instead.
+  const again = checks?.filter((c) => saved.onChain || (c.id !== "on-chain" && c.id !== "matches")) ?? null;
+  const passed = recorded?.filter((c) => c.ok).length ?? 0;
+  const failing = (recorded?.length ?? 0) - passed + (again?.filter((c) => !c.ok).length ?? 0);
+  const verified = saved.meeting.verified && (again === null || again.every((c) => c.ok || c.id === "e2ee"));
+  const checkedOn = saved.proof.version === 2 ? new Date(saved.proof.checkedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const longest = Math.max(0, ...groups.map((g) => g.checks.length));
+
+  // Row delays follow the board: groups at 120 ms + 40 each, rows from 260 ms, 70 apart.
+  let row = 0;
+  const nextRow = () => 260 + Math.min(row++, 24) * 70;
+  const groupRows = groups.map((g) => {
+    const ordered = [...g.checks.filter((c) => !c.ok), ...g.checks.filter((c) => c.ok)];
+    return { g, shown: (all ? ordered : ordered.slice(0, Math.max(FIRST, g.checks.filter((c) => !c.ok).length))).map((c) => ({ c, delay: nextRow() })) };
+  });
+  const lastRow = 260 + Math.min(row, 24) * 70;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6 pt-14" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-label="Verify"
-        onClick={(e) => e.stopPropagation()}
-        className="flex w-[640px] flex-col gap-6 rounded-lg bg-elevated p-7 shadow-float"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="t-label text-muted">Verify</span>
-            <h2 className="m-0 font-serif text-[28px] leading-[34px] font-medium tracking-[-0.015em]">{saved.meeting.title}</h2>
-          </div>
-          <div className="flex items-center gap-3">
-            {checks && (failing === 0 ? <Pill tone="verdigris">All checks pass</Pill> : <Pill tone="caution">{failing} to look at</Pill>)}
-            <button onClick={onClose} aria-label="Close" className="text-muted hover:text-ink">
-              <X size={18} />
-            </button>
-          </div>
+    <Dialog onClose={onClose} aria-label={`Verify: ${saved.meeting.title}`} width={680} initialFocus={heading} className="gap-6!">
+      <header className="flex items-center gap-5">
+        <Seal ok={verified} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="t-eyebrow truncate text-muted">
+            {saved.meeting.title} · {saved.meeting.project} · {saved.meeting.startedAt}
+          </span>
+          <h2 ref={heading} tabIndex={-1} className="m-0 font-serif text-[34px] leading-10 font-medium tracking-[-0.02em] text-ink outline-none">{verified ? "Verified" : "Not verified"}</h2>
+          <span className="text-[13px] leading-[18px] text-muted">
+            {recorded ? (
+              <>
+                <span className="font-semibold text-ink">
+                  {passed === recorded.length ? `${passed} checks passed` : `${passed} of ${recorded.length} checks passed`}
+                </span>
+                {checkedOn && ` · checked on this Mac on ${checkedOn}`}
+              </>
+            ) : (
+              "Made before full attestation checks"
+            )}
+          </span>
         </div>
+        <IconButton aria-label="Close" onClick={onClose} className="-mt-1 -mr-1.5 self-start">
+          <X size={18} />
+        </IconButton>
+      </header>
 
-        {recorded ? (
-          <section aria-labelledby="verified" className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <SectionLabel id="verified">Verified</SectionLabel>
-              <span className="text-muted">
-                Checked on this Mac{checkedAt ? ` on ${checkedAt}` : ""}, against Intel and NVIDIA, with a fresh nonce for each attestation.
-              </span>
-            </div>
-            {groups.map((g) => (
-              <div key={g.key} className="flex flex-col">
-                <h3 className="t-title m-0 pb-1">{g.title}</h3>
-                <CheckList checks={g.checks} />
-                {g.key === "whisper" && <p className="m-0 pt-2 text-muted">{WHISPER_NOTE}</p>}
-              </div>
-            ))}
-          </section>
-        ) : (
-          <p className="m-0 text-muted">
-            These notes were made before full attestation checks. This Mac checked the summary's signature and that attestation evidence came back with a fresh nonce; it didn't verify the quotes with Intel and NVIDIA.
-          </p>
-        )}
-
-        <section aria-labelledby="proof" className="flex flex-col gap-2">
-          <SectionLabel id="proof">Proof, checked again now</SectionLabel>
-          {checks === null ? (
-            <p className="m-0 flex items-center gap-3 py-2 text-muted">
-              <Spinner /> Reading the proof from NEAR…
-            </p>
-          ) : (
-            <CheckList checks={checks} />
-          )}
-        </section>
-
-        {error && <p className="selectable m-0 break-words text-record">{error}</p>}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {saved.onChain ? (
-            <>
-              <button
-                onClick={() => openUrl(explorerTx(saved.onChain!.network, saved.onChain!.txHash))}
-                className="inline-flex items-center gap-1.5 font-semibold text-verdigris hover:text-verdigris-hover"
-              >
-                <ExternalLink size={13} aria-hidden="true" />
-                View on NEAR
-              </button>
-              <Button variant="primary" onClick={copyLink}>
-                <Copy size={13} aria-hidden="true" />
-                {copied ? "Link copied" : "Copy public link"}
-              </Button>
-            </>
-          ) : canRecord ? (
-            <Button variant="primary" onClick={record} disabled={recording}>
-              {recording && <Spinner size={12} />}
-              Record proof on NEAR
+      {recorded ? (
+        <section aria-label="Checks made on this Mac when the notes were made" className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+            {groupRows.map(({ g, shown }, gi) => {
+              const ok = g.checks.filter((c) => c.ok).length;
+              return (
+                <div key={g.key} className="flex min-w-0 flex-col" style={at(120 + gi * 40)}>
+                  <h3 className="t-section m-0 mb-3 text-ink">
+                    {g.title}{" "}
+                    <span className="font-medium text-muted">
+                      {ROLE[g.key]} · {ok} of {g.checks.length}
+                    </span>
+                  </h3>
+                  <ol className="m-0 flex list-none flex-col gap-2 p-0">
+                    {shown.map(({ c, delay }) => (
+                      <li key={c.id} className="grid grid-cols-[18px_minmax(0,1fr)] gap-x-2.5" style={at(delay)}>
+                        <Mark ok={c.ok} delay={delay} />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="text-[15px] leading-5 font-semibold text-ink">{c.label}</span>
+                          <span className="selectable text-[13px] leading-[18px] break-words text-ink-2">{c.detail}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                  {g.key === "whisper" && (
+                    <p className="m-0 mt-2.5 grid grid-cols-[18px_minmax(0,1fr)] gap-x-2.5 text-[13px] leading-[18px] text-ink-2" style={at(lastRow)}>
+                      <Info size={16} strokeWidth={2} aria-hidden="true" className="mt-px ml-px text-muted" />
+                      <span>{WHISPER_NOTE}</span>
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {longest > FIRST && (
+            <Button variant="quiet" size="sm" className="self-start px-0!" aria-expanded={all} onClick={() => setAll((a) => !a)}>
+              {all ? "Show fewer" : `Show all ${recorded.length} checks`}
             </Button>
-          ) : (
-            <Button onClick={onConnect}>Connect NEAR to record the proof</Button>
           )}
-        </div>
-
-        <section className="flex flex-col gap-2 rounded-sm bg-well p-4">
-          <SectionLabel>What this does not prove</SectionLabel>
-          <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-muted">
-            {NOT_PROVEN.map((n) => (
-              <li key={n}>{n}</li>
-            ))}
-          </ul>
         </section>
+      ) : (
+        <p className="m-0 text-ink-2">
+          These notes were made before full attestation checks. This Mac checked the summary's signature and that attestation evidence came back with a fresh nonce; it
+          didn't verify the quotes with Intel and NVIDIA.
+        </p>
+      )}
+
+      <section aria-labelledby="verify-again" className="flex flex-col gap-3 border-t border-hairline pt-4" style={at(lastRow + 80)}>
+        <h3 id="verify-again" className="t-section m-0 text-ink">
+          Proof, checked again now <span className="font-medium text-muted">{saved.onChain ? "against NEAR" : "from the saved bundle"}</span>
+        </h3>
+        {again === null ? (
+          <p className="m-0 flex items-center gap-3 py-1 text-ink-2">
+            <Spinner /> {saved.onChain ? "Reading the proof from NEAR…" : "Checking the saved bundle…"}
+          </p>
+        ) : (
+          <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
+            {again.map((c, i) => {
+              const delay = lastRow + 160 + i * 70;
+              return (
+                <li key={c.id} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 sm:grid-cols-[18px_286px_minmax(0,1fr)]" style={at(delay)}>
+                  <Mark ok={c.ok} delay={delay} />
+                  <span className="text-[15px] leading-5 font-semibold text-ink">{c.label}</span>
+                  <span className="selectable col-start-2 text-[13px] leading-[18px] break-words text-ink-2 sm:col-start-3">{c.detail}</span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+
+      <section aria-labelledby="verify-not" className="flex flex-col gap-2.5 border-t border-hairline pt-4" style={at(lastRow + 240)}>
+        <h3 id="verify-not" className="t-section m-0 text-ink">
+          What this doesn't prove
+        </h3>
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {NOT_PROVEN.map((n) => (
+            <li key={n} className="grid grid-cols-[18px_minmax(0,1fr)] gap-x-2.5 text-[13px] leading-[19px] text-ink-2">
+              <span aria-hidden="true" className="text-center text-muted">
+                –
+              </span>
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {error && <p className="selectable m-0 break-words text-record">{error}</p>}
+      {failing > 0 && again !== null && (
+        <p className="m-0 text-[13px] text-caution" style={at(lastRow + 280)}>
+          {failing === 1 ? "One check needs a look." : `${failing} checks need a look.`} Each says what it compared.
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2.5" style={at(lastRow + 280)}>
+        {saved.onChain ? (
+          <>
+            <Button
+              variant="quiet"
+              className="mr-auto px-0!"
+              icon={<ExternalLink size={13} aria-hidden="true" />}
+              onClick={() => openUrl(explorerTx(saved.onChain!.network, saved.onChain!.txHash))}
+            >
+              View on NEAR
+            </Button>
+            <Button variant="primary" icon={<Copy size={14} aria-hidden="true" />} onClick={copyLink}>
+              {copied ? "Link copied" : "Copy proof link"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="flex-1 text-[13px] leading-[18px] text-ink-2">Only a hash goes on NEAR. The link works once it's there.</span>
+            <Button disabled title="Record the proof on NEAR first" icon={<Copy size={14} aria-hidden="true" />}>
+              Copy proof link
+            </Button>
+            {canRecord ? (
+              <Button variant="primary" onClick={record} loading={recording}>
+                Record proof on NEAR
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={onConnect}>
+                Connect NEAR to record it
+              </Button>
+            )}
+          </>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
-function CheckList({ checks }: { checks: (ProofCheck | TeeCheck)[] }) {
+/** A check's mark: a tinted circle that fills and a check that draws, or a caution cross. */
+function Mark({ ok, delay }: { ok: boolean; delay: number }) {
+  if (!ok) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Failed" className="mt-px">
+        <circle cx="9" cy="9" r="9" fill="var(--caution-tint)" />
+        <path d="M6 6l6 6M12 6l-6 6" stroke="var(--caution)" strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    );
+  }
   return (
-    <ol className="m-0 flex list-none flex-col p-0">
-      {checks.map((c, i) => (
-        <li key={c.id} className={cx("grid grid-cols-[28px_minmax(0,1fr)] gap-3 border-t border-hairline py-3", i === checks.length - 1 && "border-b")}>
-          <span className="pt-0.5">
-            {c.ok ? <Check size={16} strokeWidth={1.75} className="text-verdigris" aria-label="Pass" /> : <X size={16} strokeWidth={1.75} className="text-caution" aria-label="Fail" />}
-          </span>
-          <div className="flex flex-col gap-0.5">
-            <span className="t-title">{c.label}</span>
-            <span className="selectable break-words text-muted">{c.detail}</span>
-          </div>
-        </li>
-      ))}
-    </ol>
+    <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Passed" className="mt-px">
+      <circle
+        cx="9"
+        cy="9"
+        r="9"
+        fill="var(--verdigris-tint)"
+        style={{ transformBox: "fill-box", transformOrigin: "center", animation: `ac-fill 320ms ${delay}ms cubic-bezier(.3,1.5,.5,1) both` }}
+      />
+      <path
+        d="M5.2 9.3l2.5 2.5 5-5.3"
+        fill="none"
+        stroke="var(--verdigris)"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray="14"
+        style={{ animation: `ac-draw 240ms ${delay + 160}ms var(--ease) both` }}
+      />
+    </svg>
+  );
+}
+
+/** The 72px seal: it pops, fills and draws its check when everything passed. */
+function Seal({ ok }: { ok: boolean }) {
+  return (
+    <span aria-hidden="true" className={cx("inline-flex size-[72px] shrink-0")} style={{ animation: "ac-pop 420ms var(--ease) both" }}>
+      <svg width="72" height="72" viewBox="0 0 72 72">
+        <circle cx="36" cy="36" r="36" fill={ok ? "var(--verdigris-tint)" : "var(--caution-tint)"} />
+        <circle cx="36" cy="36" r="30" fill="none" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="0.5 5" stroke={ok ? "var(--verdigris)" : "var(--caution)"} />
+        {ok ? (
+          <>
+            <circle
+              cx="36"
+              cy="36"
+              r="22"
+              fill="var(--verdigris)"
+              style={{ transformBox: "fill-box", transformOrigin: "center", animation: "ac-fill 420ms 120ms cubic-bezier(.3,1.5,.5,1) both" }}
+            />
+            <g transform="translate(14 14) scale(2)">
+              <path
+                d="M6.5 11.5l3 3 6-6.5"
+                fill="none"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="14"
+                stroke="var(--on-verdigris)"
+                style={{ animation: "ac-draw 300ms 320ms var(--ease) both" }}
+              />
+            </g>
+          </>
+        ) : (
+          <path d="M36 24v14M36 46v.5" stroke="var(--caution)" strokeWidth="3.5" strokeLinecap="round" />
+        )}
+      </svg>
+    </span>
   );
 }

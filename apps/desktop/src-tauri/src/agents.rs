@@ -16,6 +16,7 @@
 //!
 //! What a request can do is fixed here: read processed meetings and projects, and
 //! claim or complete one action item. Nothing else in notes.json can be changed.
+//! Your notes (what you typed during the call) and their salt are never sent.
 //!
 //! Limits: the token sits in the agent's own config (e.g. ~/.claude.json), which other
 //! software running as the user could read. This keeps meetings away from apps that
@@ -208,7 +209,7 @@ fn meetings(data_dir: &Path) -> Vec<Value> {
         .filter_map(|e| {
             let id = e.file_name().into_string().ok().filter(|id| valid_id(id))?;
             let notes = at_rest::read_json(&e.path().join("notes.json")).filter(|n| n["meeting"].is_object())?;
-            Some((id.parse().ok()?, json!({ "id": id, "notes": notes })))
+            Some((id.parse().ok()?, json!({ "id": id, "notes": for_agents(notes) })))
         })
         .collect();
     out.sort_by_key(|(id, _)| std::cmp::Reverse(*id));
@@ -217,7 +218,20 @@ fn meetings(data_dir: &Path) -> Vec<Value> {
 
 fn notes(data_dir: &Path, id: &str) -> Result<Value, String> {
     let file = notes_path(data_dir, id)?;
-    notes_file::read(&file).map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))
+    notes_file::read(&file)
+        .map(for_agents)
+        .map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))
+}
+
+/// notes.json without your notes and the salt behind their hash: those stay in the app.
+fn for_agents(mut notes: Value) -> Value {
+    if let Some(m) = notes.get_mut("meeting").and_then(Value::as_object_mut) {
+        m.remove("yourNotes");
+    }
+    if let Some(n) = notes.as_object_mut() {
+        n.remove("yourNotesSalt");
+    }
+    notes
 }
 
 fn check_agent(agent: &str) -> Result<String, String> {
@@ -303,7 +317,8 @@ mod tests {
             { "id": "a1", "text": "Send Ada the pilot plan", "owner": "You", "done": false },
             { "id": "a2", "text": "Share the term sheet", "owner": "Ada", "done": false },
             { "id": "a3", "text": "Book the call", "owner": "You", "done": true }
-        ], "followUps": [{ "id": "f2", "amount": { "$bigint": "12500000" } }] }, "proof": { "notesHash": "abc" } });
+        ], "followUps": [{ "id": "f2", "amount": { "$bigint": "12500000" } }], "yourNotes": "Push for the pilot" },
+            "proof": { "notesHash": "abc" }, "yourNotesSalt": "5a5a" });
         at_rest::write_json(&rec.join("notes.json"), &notes).unwrap();
         // Recorded, not processed: no notes.
         std::fs::create_dir_all(dir.join("recordings/1761200000")).unwrap();
@@ -330,6 +345,24 @@ mod tests {
         assert!(dispatch(&dir, &json!({ "op": "notes", "id": "1761200000" }), &now).unwrap_err().contains("No processed meeting"));
         assert!(dispatch(&dir, &json!({ "op": "notes", "id": "../../etc" }), &now).unwrap_err().contains("No processed meeting"));
         assert!(dispatch(&dir, &json!({ "op": "delete" }), &now).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn your_notes_and_their_salt_never_reach_agents() {
+        let dir = data_dir("yours");
+        let now = at("2026-10-26T12:00:00.000Z");
+        let list = dispatch(&dir, &json!({ "op": "meetings" }), &now).unwrap();
+        let one = dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), &now).unwrap();
+        let done = dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), &now).unwrap();
+        for v in [&list, &one, &done] {
+            let text = v.to_string();
+            assert!(!text.contains("Push for the pilot") && !text.contains("yourNotes") && !text.contains("5a5a"), "{text}");
+        }
+        // Still on disk, untouched by the agent's write.
+        let saved = read_notes(&dir);
+        assert_eq!(saved["meeting"]["yourNotes"], "Push for the pilot");
+        assert_eq!(saved["yourNotesSalt"], "5a5a");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

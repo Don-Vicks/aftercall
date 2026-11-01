@@ -39,7 +39,7 @@ Reduced motion: nothing moves, things fade. The `ac-*` keyframes that move becom
 
 <Card interactive tone="default|caution|record" pad="none|sm|md|lg" as="button" onClick>…</Card>   // radius 14, shadow-1, lifts when interactive
 <Toggle checked onChange={setOn} label="Connected agents" description="On. Agents can read meetings." />   // or aria-label without label
-<Tick checked={done} onChange={setDone} aria-labelledby={textId} />  <Strike on={done}>Send Ada the recap</Strike>
+<Tick checked={done} onChange={setDone} aria-labelledby={textId} working={claimedByAgent} />  <Strike on={done}>Send Ada the recap</Strike>   // working: an arc turns round the empty circle
 <Pill tone="verdigris|caution|record|muted" icon={<Check size={12} />} live>Paid 14:06</Pill>
 <SectionTitle count={3}>Follow-ups</SectionTitle>
 
@@ -83,6 +83,7 @@ if (!(await confirm({ title: "Delete “Fundraise”?", body: "Its 3 meetings mo
 ```tsx
 toast({ text: "Recap to Ada dismissed", undo: () => restore(), tone: "neutral|verdigris|caution|record", action: { label: "Open", onClick }, duration: 6000, id });
 deferred({ id: `pay:${fu.id}`, text: (s) => `Paying in ${s}…`, ms: 5000, run: () => pay(), undo: () => setRow(back) });
+deferred({ id, quiet: true, … });  const p = useDeferred(id);   // quiet: no toast, the row draws the countdown from p.startedAt/p.endsAt and Undo calls p.cancel; ⌘Z and the announcement still work
 ```
 
 - `toast` shows a pill at the bottom centre; it holds while hovered or focused. `record` tone is read out at once; others politely. ⌘Z takes back the newest undoable toast (not while typing).

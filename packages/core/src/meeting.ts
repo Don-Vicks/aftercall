@@ -57,6 +57,8 @@ interface FollowUpBase {
   error?: string;
   /** Set when autopilot will run it at this time (ms since epoch), unless undone. */
   autopilotAt?: number;
+  /** Set when autopilot sent or paid it, rather than a person approving it. */
+  byAutopilot?: boolean;
 }
 
 export interface EmailFollowUp extends FollowUpBase {
@@ -65,6 +67,8 @@ export interface EmailFollowUp extends FollowUpBase {
   to: string;
   toName: string;
   subject: string;
+  /** When the recap was last opened as a draft in your own mail app ("14:06"). Aftercall can't tell whether you sent it. */
+  draftedAt?: string;
 }
 
 export interface PaymentFollowUp extends FollowUpBase {
@@ -112,7 +116,15 @@ export interface Meeting {
   actionItems: ActionItem[];
   followUps: FollowUp[];
   transcript: TranscriptLine[];
-  /** People invited in the calendar event, when the recording matched one. */
+  /**
+   * What YOU typed during the call (cleaned as `cleanYourNotes` does), shown above the
+   * AI notes. The model saw them as context only; the proof holds a salted hash of
+   * them. Never in a recap and never sent to connected agents.
+   */
+  yourNotes?: string;
+  /** Everyone the calendar event invited except you, with or without an email. */
+  attendees?: Attendee[];
+  /** The invited people who have an email address: where a recap can go. */
   invited?: Attendee[];
 }
 

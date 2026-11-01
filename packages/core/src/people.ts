@@ -1,3 +1,6 @@
+import type { Attendee } from "./calendar.ts";
+import type { Meeting, Speaker } from "./meeting.ts";
+
 /** People colours: avatar grounds `--p1`..`--p6` in the design system. */
 export const PERSON_HUES = 6;
 
@@ -61,4 +64,24 @@ export function isYou(owner: string, me: string | readonly string[] = []): boole
   if (names.length === 0 || !plain) return false;
   const firstNames = names.map((n) => n.split(" ")[0]);
   return names.includes(plain) || firstNames.includes(plain) || inParens.some((p) => names.includes(p) || firstNames.includes(p));
+}
+
+/**
+ * Everyone else a meeting's calendar event invited. Notes saved before `attendees`
+ * existed only kept the people with an email (`invited`), so they fall back to that.
+ */
+export function othersOn(meeting: Pick<Meeting, "attendees" | "invited">): Attendee[] {
+  return meeting.attendees ?? meeting.invited ?? [];
+}
+
+/**
+ * The name a transcript line is shown under. Your microphone is "You". The call's
+ * audio is "Others", unless the calendar invited exactly one other person: then it
+ * is their name (or email). Aftercall never identifies voices, so with two or more
+ * people on the other side it can't say who spoke, and doesn't guess.
+ */
+export function speakerLabel(speaker: Speaker, attendees: readonly Attendee[] = []): string {
+  if (speaker === "you") return "You";
+  if (attendees.length !== 1) return "Others";
+  return attendees[0].name.trim() || attendees[0].email.trim() || "Others";
 }

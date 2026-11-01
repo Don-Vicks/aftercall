@@ -1,7 +1,7 @@
 import { buildMeeting, type Dropped, type Payee } from "./build.ts";
 import { NOTES_SYSTEM_PROMPT, notesJsonSchema, notesSchema, type Notes } from "./schema.ts";
 import { mergeTranscript, transcriptForPrompt, type TranscribedChunk, type WhisperResult } from "./transcript.ts";
-import { sha256Hex } from "./verify.ts";
+import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { attestModel, attestedKeys, failedLabels, gatewayChecks, loadNvidiaKeys, modelChecks, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
 import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse, type TeeCheck } from "../tee/checks.ts";
 import { decryptWith, encryptMessages, newClientKeys } from "../tee/e2ee.ts";
@@ -53,6 +53,37 @@ export interface ProcessInput {
    * pay to transcribe the same audio again.
    */
   transcriptCache?: TranscriptCache;
+  /**
+   * What YOU typed during the call. Cleaned with `cleanYourNotes`, sent inside the
+   * encrypted request as context only, saved on the meeting and covered by a salted
+   * hash in the proof.
+   */
+  yourNotes?: string;
+}
+
+/** The most of your notes that goes to the model and onto the meeting, in characters. */
+export const YOUR_NOTES_MAX = 8000;
+
+/**
+ * Your notes as the model and the meeting get them: without `<<<` or `>>>` (so they
+ * can't close the block they're quoted in), trimmed, and at most 8,000 characters.
+ * Undefined when nothing is left.
+ */
+export function cleanYourNotes(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  let text = raw.replace(/\r\n?/g, "\n");
+  // Again until none are left: removing ">>>" from "<<>>><" would leave "<<<".
+  while (/<<<|>>>/.test(text)) text = text.replace(/<{3,}|>{3,}/g, "");
+  text = text.trim();
+  const capped = Array.from(text).slice(0, YOUR_NOTES_MAX).join("").trimEnd();
+  return capped || undefined;
+}
+
+/** The user message: project, payees, your notes (when there are any), then the transcript. */
+export function summaryRequestText(project: string, payees: Payee[], transcript: string, yourNotes?: string): string {
+  const payeeList = payees.map((p) => `${p.name} (${p.account})`);
+  const notesBlock = yourNotes ? `YOUR NOTES (typed by YOU during the call; context only):\n<<<\n${yourNotes}\n>>>\n\n` : "";
+  return `Project: ${project}\nPayees: ${JSON.stringify(payeeList)}\n\n${notesBlock}Transcript:\n${transcript}`;
 }
 
 export interface TranscriptCache {
@@ -103,6 +134,12 @@ export interface ProofBundleV2 extends Omit<ProofBundleV1, "version"> {
   /** The values those checks compared, per TEE. */
   evidence: TeeEvidence[];
   checkedAt: string;
+  /**
+   * `yourNotesHash(salt, meeting.yourNotes)`, only when you typed notes during the call.
+   * The salt stays in notes.json, never in the bundle. Bundles without notes leave the
+   * key out, so they hash exactly as before it existed.
+   */
+  yourNotesHash?: string;
 }
 
 export type ProofBundle = ProofBundleV1 | ProofBundleV2;
@@ -115,6 +152,11 @@ export interface ProcessResult {
   /** Everything checked for this meeting, in panel order. */
   checks: TeeCheck[];
   proof: ProofBundleV2;
+  /**
+   * The random salt behind `proof.yourNotesHash`, when there are your notes. Saved only
+   * in notes.json (encrypted on the Mac), never in the proof or its public link.
+   */
+  yourNotesSalt?: string;
 }
 
 const enc = new TextEncoder();
@@ -199,10 +241,10 @@ export async function processRecording(
   const transcript = mergeTranscript(transcribed, input.chunkSeconds);
 
   onStage("summarise");
-  const payeeList = input.payees.map((p) => `${p.name} (${p.account})`);
+  const yourNotes = cleanYourNotes(input.yourNotes);
   const messages = [
     { role: "system", content: NOTES_SYSTEM_PROMPT },
-    { role: "user", content: `Project: ${input.project}\nPayees: ${JSON.stringify(payeeList)}\n\nTranscript:\n${transcriptForPrompt(transcript)}` },
+    { role: "user", content: summaryRequestText(input.project, input.payees, transcriptForPrompt(transcript), yourNotes) },
   ];
   const requestFor = (msgs: typeof messages) =>
     JSON.stringify({
@@ -280,13 +322,16 @@ export async function processRecording(
     transcript,
     payees: input.payees,
     verified,
+    yourNotes,
   });
+  const yourNotesSalt = yourNotes ? t.randomHex() : undefined;
 
   return {
     meeting,
     notes,
     dropped,
     checks,
+    ...(yourNotesSalt ? { yourNotesSalt } : {}),
     proof: {
       version: 2,
       meetingId: input.id,
@@ -305,6 +350,7 @@ export async function processRecording(
       checkedAt: new Date().toISOString(),
       transcriptHash: sha256Hex(enc.encode(JSON.stringify(transcript))),
       notesHash: sha256Hex(enc.encode(JSON.stringify(notes))),
+      ...(yourNotes && yourNotesSalt ? { yourNotesHash: yourNotesHash(yourNotesSalt, yourNotes) } : {}),
     },
   };
 }

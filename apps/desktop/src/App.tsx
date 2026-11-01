@@ -322,7 +322,12 @@ export default function App() {
       agentsApi
         .setItemDone(meetingId, itemId, done)
         .then((notes) => applyDiskNotes(meetingId, notes))
-        .catch(() => recorder.list().then((list) => list.forEach((r) => r.id === meetingId && r.notes && applyDiskNotes(r.id, r.notes))));
+        .catch((e) => {
+          // Not saved: the tick goes back, says why, and the meeting re-reads what is on disk.
+          update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? item : a)) }));
+          toast({ text: `Couldn't save “${item.text}”: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+          recorder.list().then((list) => list.forEach((r) => r.id === meetingId && r.notes && applyDiskNotes(r.id, r.notes)));
+        });
     }
   };
 
@@ -361,12 +366,17 @@ export default function App() {
       routeFor: (f: FollowUp) => (sample || f.kind !== "payment" ? null : (destinations[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
       onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
+      onRestore: (id: string, status: FollowUp["status"]) => apply(id)({ status }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
       onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, error: undefined }),
       onReviewBlocked: () => setView({ name: "wallet" }),
       onDraft: (id: string) => {
         const f = find(id);
-        if (f.kind === "email") draftInMail(meeting, f, saved[meeting.id]);
+        if (f.kind !== "email") return;
+        if (!isDesktop) return void toast({ text: "In the Mac app this opens the recap as a draft in Mail. The browser preview can't." });
+        draftInMail(meeting, f, saved[meeting.id])
+          .then(() => apply(id)({ draftedAt: nowHHMM(), autopilotAt: undefined }))
+          .catch((e) => toast({ text: `Couldn't open Mail: ${e instanceof Error ? e.message : String(e)}`, tone: "record" }));
       },
       onSetEmail: (id: string, email: string) => apply(id)({ to: email, error: undefined }),
       onClaimLink: (id: string) => {
@@ -405,7 +415,8 @@ export default function App() {
           // Re-check every rule at the moment it runs: limits may have changed.
           if (!autopilotDecision(f, loadRules(), limits).run) continue;
           if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
-          const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch);
+          // Marked as autopilot's only once it went out, so a later manual approval isn't credited to it.
+          const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch.status === "sent" || patch.status === "paid" ? { ...patch, byAutopilot: true } : patch);
           if (f.kind === "email") sendRecap(m, f, apply, saved[m.id]);
           else pay(m, f, apply).then(refreshWallet);
         }
@@ -463,6 +474,8 @@ export default function App() {
   // Everything on screen leaves out meetings that are waiting out their delete Undo.
   const shownMeetings = meetingList.filter((m) => !hidden[m.id]);
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
+  const rules = loadRules();
+  const autopilotOn = rules.payments || rules.recapDomains.length > 0;
   /** One key per screen, so switching screens fades between them. */
   const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "project" ? `${view.name}:${view.id}` : view.name;
   const openProject = view.name === "project" ? projects.find((p) => p.id === view.id) : undefined;
@@ -516,6 +529,10 @@ export default function App() {
                 key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
                 openAt={view.name === "meeting" ? view.at : undefined}
                 meeting={meeting}
+                me={account ? [account] : []}
+                autopilotOn={autopilotOn}
+                onOpenAgents={() => setView({ name: "agents" })}
+                onOpenAutopilot={() => setView({ name: "settings" })}
                 leftToday={meeting.id === syncWithAda.id ? null : leftToday}
                 onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
                 handlers={handlersFor(meeting)}
@@ -603,21 +620,24 @@ export default function App() {
             )}
           </m.div>
         </AnimatePresence>
-        {verifyId && saved[verifyId] && (
-          <VerifySheet
-            recordingId={verifyId}
-            saved={saved[verifyId]}
-            onClose={() => setVerifyId(null)}
-            onUpdated={(updated) => {
-              setSaved((all) => ({ ...all, [verifyId]: updated }));
-              setRecordings((all) => all.map((r) => (r.id === verifyId ? { ...r, notes: serializeNotes(updated) } : r)));
-            }}
-            onConnect={() => {
-              setVerifyId(null);
-              setView({ name: "settings" });
-            }}
-          />
-        )}
+        <AnimatePresence>
+          {verifyId && saved[verifyId] && (
+            <VerifySheet
+              key={verifyId}
+              recordingId={verifyId}
+              saved={saved[verifyId]}
+              onClose={() => setVerifyId(null)}
+              onUpdated={(updated) => {
+                setSaved((all) => ({ ...all, [verifyId]: updated }));
+                setRecordings((all) => all.map((r) => (r.id === verifyId ? { ...r, notes: serializeNotes(updated) } : r)));
+              }}
+              onConnect={() => {
+                setVerifyId(null);
+                setView({ name: "settings" });
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {onboarding && (
           <Onboarding

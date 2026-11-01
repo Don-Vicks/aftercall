@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PERSON_HUES, initials, isYou, personHue } from "./people.ts";
+import { PERSON_HUES, initials, isYou, othersOn, personHue, speakerLabel } from "./people.ts";
 
 test("personHue is stable and ignores case, spacing and a company suffix", () => {
   const hue = personHue("Ines Rocha");
@@ -54,4 +54,22 @@ test("isYou: the user's own name, first name or NEAR account", () => {
   assert.equal(isYou("Victor", "victor@example.com"), true);
   assert.equal(isYou("Ada", ["Victor", "victor.near"]), false);
   assert.equal(isYou("Victor"), false);
+});
+
+test("speakerLabel names the other side only when exactly one other person was invited", () => {
+  const ada = { name: "Ada Lovelace", email: "ada@example.com" };
+  assert.equal(speakerLabel("you", [ada]), "You");
+  assert.equal(speakerLabel("others", [ada]), "Ada Lovelace");
+  assert.equal(speakerLabel("others", [{ name: "", email: "charles@example.com" }]), "charles@example.com");
+  assert.equal(speakerLabel("others", []), "Others");
+  assert.equal(speakerLabel("others"), "Others");
+  assert.equal(speakerLabel("others", [ada, { name: "Theo Moss", email: "" }]), "Others", "two or more: never guess who spoke");
+});
+
+test("othersOn falls back to invited for notes saved before attendees existed", () => {
+  const ada = { name: "Ada", email: "ada@example.com" };
+  const theo = { name: "Theo", email: "" };
+  assert.deepEqual(othersOn({ attendees: [ada, theo], invited: [ada] }), [ada, theo]);
+  assert.deepEqual(othersOn({ invited: [ada] }), [ada]);
+  assert.deepEqual(othersOn({}), []);
 });

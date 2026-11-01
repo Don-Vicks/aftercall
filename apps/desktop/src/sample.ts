@@ -36,6 +36,13 @@ export const walletBalance = 180_000_000n; // 180.00 USDC
 export const dailyCap = 200_000_000n; // 200.00 USDC
 export const spentToday = 50_000_000n;
 
+/** Today at hh:mm, as an ISO time (when the sample's agent claimed its item). */
+function todayAt(h: number, m: number): string {
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toISOString();
+}
+
 export const syncWithAda: Meeting = {
   id: "sync-ada",
   project: "Fundraise",
@@ -45,17 +52,20 @@ export const syncWithAda: Meeting = {
   verified: true,
   summary:
     "Ada and Victor agreed the API fix ships before Friday's demo. Victor sends Ada a recap today and pays the designer a 50 USDC deposit to refresh the deck.",
+  yourNotes: "Fix before demo, no exceptions.\nDeck: refresh with the designer, deposit now, rest when it's done.",
+  attendees: [{ name: "Ada", email: "ada@example.com" }],
+  invited: [{ name: "Ada", email: "ada@example.com" }],
   decisions: [
     "Ship the API fix before Friday's demo.",
     "Refresh the deck with the designer, with a 50 USDC deposit now.",
   ],
   actionItems: [
-    { id: "a1", text: "Send Ada the recap", owner: "Victor", due: "today", done: false },
-    { id: "a2", text: "Ship the API fix", owner: "Victor", due: "by Friday", done: false },
+    { id: "a1", text: "Send Ada the recap", owner: "You", due: "today", done: false },
+    { id: "a2", text: "Ship the API fix", owner: "You", due: "by Friday", done: false, claimed: { agent: "Claude Code", at: todayAt(14, 20) } },
     {
       id: "a3",
       text: "Get deck feedback from Ada",
-      owner: "Victor",
+      owner: "You",
       done: true,
       closedNote: "Closed here · opened in Deck review, 3 Nov",
     },

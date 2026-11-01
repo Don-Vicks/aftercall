@@ -7,7 +7,7 @@ import { canonicalJson, decodePublicProof, encodePublicProof, groupChecks, proof
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
 import { expectedMrConfig, expectedReportData } from "../tee/checks.ts";
 import { fakeNras, teeKey } from "../tee/testkit.ts";
-import { sha256Hex } from "./verify.ts";
+import { sha256Hex, yourNotesHash } from "./verify.ts";
 
 function signed(): { bundle: ProofBundle; notes: object } {
   const priv = secp256k1.utils.randomPrivateKey();
@@ -171,4 +171,35 @@ test("the panel groups checks as Gateway, Whisper TEE, Qwen TEE, Response", () =
     { whisperModel: "openai/whisper-large-v3", summaryModel: "Qwen/Qwen3.8-27B" },
   );
   assert.deepEqual(groups.map((g) => [g.title, g.checks.map((x) => x.id)]), [["Gateway", ["gateway-tdx"]], ["Whisper TEE", ["w"]], ["Qwen TEE", ["q"]], ["Response", ["response-signer"]]]);
+});
+
+// ---------- your notes ----------
+
+test("old proofs hash exactly as before and get no your-notes check", async () => {
+  // A bundle's hash from before your notes existed (same value on the commit before them); it must never move.
+  const fixed = { version: 2, meetingId: "1793006441", summaryModel: "Qwen/Qwen3.8-27B", whisperModel: "openai/whisper-large-v3", requestHash: "aa", responseHash: "bb", transcriptHash: "cc", notesHash: "dd", checkedAt: "2026-11-02T10:00:00.000Z" };
+  assert.equal(proofHash(fixed as never), "11bb23c4d909137da92a6a38a17c3691d93c002c2d8494275bacd37d297a33e5");
+  assert.equal(proofHash({ ...fixed, yourNotesHash: undefined } as never), proofHash(fixed as never), "an absent key and an undefined one hash the same");
+  const { bundle, notes } = signed();
+  assert.equal(verifyProof(bundle, onChainFor(bundle), notes, { text: "" }).some((c) => c.id === "your-notes"), false);
+  const v2 = (await signedV2()).bundle;
+  assert.equal("yourNotesHash" in v2, false);
+  assert.equal(verifyProof(v2, null, undefined, { text: "", salt: undefined }).some((c) => c.id === "your-notes"), false);
+});
+
+test("your notes check: matches with the salt, fails if changed, added or the salt is lost", async () => {
+  const { bundle: base, notes } = await signedV2();
+  const salt = "ab".repeat(32);
+  const typed = "Fix before demo, no exceptions.";
+  const bundle = { ...base, yourNotesHash: yourNotesHash(salt, typed) };
+  const check = (b: ProofBundleV2, text: string, s?: string) => verifyProof(b, onChainFor(b as never), notes, { text, salt: s }).find((c) => c.id === "your-notes");
+
+  assert.deepEqual(check(bundle, typed, salt), { id: "your-notes", label: "Your notes unchanged since signing", ok: true, detail: "What you typed is what the model was given, by a salted hash" });
+  assert.equal(check(bundle, "Fix before demo, no exceptions!", salt)?.detail, "Your notes were changed after signing");
+  assert.equal(check(bundle, typed, "cd".repeat(32))?.ok, false, "another salt gives another hash");
+  assert.equal(check(bundle, typed)?.detail, "The salt for your notes is missing from this Mac's copy");
+  assert.equal(check(base, typed, salt)?.detail, "Your notes aren't in the signed proof; they were added afterwards");
+  assert.equal(yourNotesHash(salt, typed), sha256Hex(new Uint8Array([...Buffer.from(salt, "hex"), ...utf8ToBytes(typed)])), "sha256(salt bytes ‖ UTF-8 notes)");
+  // The public page passes no notes: nothing to check, and the hash alone says nothing about the words.
+  assert.equal(verifyProof(bundle, null).some((c) => c.id === "your-notes"), false);
 });

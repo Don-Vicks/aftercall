@@ -15,7 +15,7 @@ export { TabPanel, Tabs, type TabItem } from "./Tabs";
 export { Avatar, AvatarStack, MeProvider, useIsYou, type Surface } from "./Avatar";
 export { Pill, SectionTitle, type PillTone } from "./Pill";
 export { ConfirmDialog, Dialog, DialogHost, confirm, useConfirm, type ConfirmOptions, type DialogPlacement, type DialogProps } from "./Dialog";
-export { Toaster, deferred, dismissToast, toast, type DeferredHandle, type ToastOptions, type ToastTone } from "./Toaster";
+export { Toaster, deferred, dismissToast, toast, useDeferred, type DeferredHandle, type PendingDeferred, type ToastOptions, type ToastTone } from "./Toaster";
 export { RollingNumber } from "./RollingNumber";
 export { Meter, rmsToLevel } from "./Meter";
 export { StageList, type Stage, type StageState } from "./StageList";

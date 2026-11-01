@@ -1,7 +1,7 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
 import { isNetwork, type Network } from "../network.ts";
-import { recoverPersonalSign, sha256Hex } from "./verify.ts";
+import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
 import { expectedMrConfig, expectedReportData, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
 import { verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
 
@@ -38,24 +38,32 @@ export interface OnChainProof {
 export const CONFIDENTIAL_MODELS = ["Qwen/Qwen3.8-27B", "Qwen/Qwen3.6-35B-A3B-FP8"];
 
 export interface Check {
-  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged";
+  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes";
   label: string;
   ok: boolean;
   detail: string;
+}
+
+/** Your notes as the app shows them, with the salt from notes.json. */
+export interface ShownYourNotes {
+  /** Empty when the meeting shows none. */
+  text: string;
+  salt?: string;
 }
 
 /**
  * The checks behind "Verified" that anyone can re-run from the bundle and NEAR:
  * the public Verify page runs them in the browser, the app runs them when the
  * Verify sheet opens. The app also passes the notes it shows, to prove they are
- * the ones that were signed.
+ * the ones that were signed, and your notes with their salt, to prove they are the
+ * ones the model was given. Without the salt (the public page) your notes aren't checked.
  *
  * For a v2 bundle this re-checks the signature and that the signer is bound in
  * the report data recorded from a verified quote. It can't re-verify the quotes
  * (they aren't in the bundle, and Intel's collateral service doesn't allow
  * browser requests); the app's own checks are in `bundle.checks`.
  */
-export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, shownNotes?: unknown): Check[] {
+export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, shownNotes?: unknown, yourNotes?: ShownYourNotes): Check[] {
   const hash = proofHash(bundle);
   const checks: Check[] = [
     {
@@ -90,7 +98,29 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
       detail: same ? "The notes shown are the ones the model returned" : "The notes were changed after signing",
     });
   }
+  const yours = yourNotes ? yourNotesCheck(bundle, yourNotes) : null;
+  if (yours) checks.push(yours);
   return checks;
+}
+
+/**
+ * "Your notes unchanged since signing": the notes shown hash, with the saved salt, to
+ * the bundle's `yourNotesHash`. No check when neither the proof nor the meeting has any.
+ */
+function yourNotesCheck(bundle: ProofBundle, shown: ShownYourNotes): Check | null {
+  const recorded = bundle.version === 2 ? bundle.yourNotesHash : undefined;
+  const label = "Your notes unchanged since signing";
+  if (!recorded) {
+    return shown.text ? { id: "your-notes", label, ok: false, detail: "Your notes aren't in the signed proof; they were added afterwards" } : null;
+  }
+  if (!shown.salt) return { id: "your-notes", label, ok: false, detail: "The salt for your notes is missing from this Mac's copy" };
+  const same = yourNotesHash(shown.salt, shown.text) === recorded;
+  return {
+    id: "your-notes",
+    label,
+    ok: same,
+    detail: same ? "What you typed is what the model was given, by a salted hash" : shown.text ? "Your notes were changed after signing" : "Your notes were removed after signing",
+  };
 }
 
 function signatureChecksV1(bundle: Exclude<ProofBundle, ProofBundleV2>): Check[] {
@@ -232,7 +262,8 @@ export const NOT_PROVEN = [
   "That the transcript is accurate: Whisper can mishear names and numbers.",
   "That this transcription came from the attested Whisper TEE: NEAR AI signs chat responses, not transcriptions.",
   "That everyone on the call agreed to be recorded: Aftercall asks you to confirm it, and can't check it.",
-  "Who said what: “You” is your microphone and “Others” is the call's audio.",
+  "Who said what: “You” is your microphone and the rest is the call's audio. A name on the call's side comes from your calendar, not the voice.",
+  "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
 ];
 
 /** Public link payload: everything the Verify page needs, base64url in the URL fragment. */

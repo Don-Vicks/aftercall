@@ -1,29 +1,41 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, Copy, Link2, Mail, Wallet } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
+import { Copy, Link2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   CHAIN_NAME,
+  UNDO_SECONDS,
   formatClock,
   formatUsdc,
-  type Attendee,
   routeLabel,
+  type Attendee,
   type EmailFollowUp,
   type FollowUp,
+  type FollowUpStatus,
   type PayeeDestination,
   type PaymentFollowUp,
   type PayoutPreview,
 } from "@aftercall/core";
-import { Button, Pill, SectionLabel, Spinner } from "./ui";
+import { useChanged } from "./primitives/Check";
+import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, deferred, ease, enter, exit, springs, toast, useDeferred } from "./ui";
 import { parseUsdcInput } from "./WalletScreen";
+import { explorerTx, near } from "./near";
+import { isDesktop } from "./recorder";
 
 /** Everything a follow-up row can ask the app to do. */
 export interface FollowUpHandlers {
+  /** Runs the follow-up now. The rows wait out a 5-second Undo before calling it. */
   onApprove: (id: string) => void;
   onDismiss: (id: string) => void;
+  /** Takes a dismiss back (the toast's Undo): the row returns in the state it had. */
+  onRestore: (id: string, status: FollowUpStatus) => void;
   onJumpTo: (at: number, quote: string) => void;
   onReviewBlocked: (id: string) => void;
   onDraft: (id: string) => void;
   onSetEmail: (id: string, email: string) => void;
   onClaimLink: (id: string) => void;
+  /** Opens the wallet to add the shared account. The rows wait out a 5-second Undo before calling it. */
   onConfirmClaim: (id: string) => void;
   onUndoAutopilot: (id: string) => void;
   /** The person corrects the amount; heard words stay as evidence. */
@@ -34,260 +46,407 @@ export interface FollowUpHandlers {
   previewRoute?: (f: PaymentFollowUp, dest: PayeeDestination) => Promise<PayoutPreview>;
 }
 
+/** The grace period before an approved payment, send or wallet confirmation runs. */
+const GRACE_MS = 5000;
+
+/** "Recap to Ada", "Pay Designer 50.00": how a follow-up is named in chips and toasts. */
+export function followUpTitle(f: FollowUp): string {
+  if (f.kind === "email") return `Recap to ${f.toName || "someone"}`;
+  return `Pay ${f.payeeName}${f.amount === null ? "" : ` ${formatUsdc(f.amount)}`}`;
+}
+
+const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+const shortHash = (h: string) => (h.length > 12 ? `${h.slice(0, 4)}…${h.slice(-4)}` : h);
+const shortAddress = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
+
+/** The meeting's follow-ups as cards that animate between their states. */
 export function FollowUps({
+  meetingId,
   followUps,
   leftToday,
   invited = [],
+  autopilotOn = false,
+  onOpenAutopilot,
   ...h
-}: { followUps: FollowUp[]; leftToday: bigint | null; invited?: Attendee[] } & FollowUpHandlers) {
+}: {
+  meetingId: string;
+  followUps: FollowUp[];
+  leftToday: bigint | null;
+  /** Invited people with an email: offered as recap addresses. */
+  invited?: Attendee[];
+  /** Whether any autopilot rule is on (Settings). */
+  autopilotOn?: boolean;
+  onOpenAutopilot?: () => void;
+} & FollowUpHandlers) {
+  const network = useNetwork();
   const visible = followUps.filter((f) => f.status !== "dismissed");
-  if (visible.length === 0) return null;
+  // Kept while every row is dismissed, so the last one can collapse and its Undo still has a place to return to.
+  if (followUps.length === 0) return null;
+  const anyAutopilot = autopilotOn || followUps.some((f) => f.autopilotAt || f.byAutopilot);
+
+  const dismiss = (f: FollowUp) => {
+    const before = f.status;
+    h.onDismiss(f.id);
+    toast({
+      id: `dismiss:${meetingId}:${f.id}`,
+      text: f.kind === "email" ? `Recap to ${f.toName || "someone"} dismissed` : `Payment to ${f.payeeName} dismissed`,
+      undo: () => h.onRestore(f.id, before),
+    });
+  };
+  const ctx: RowContext = { meetingId, h, leftToday, invited, network, dismiss };
+
   return (
-    <section aria-labelledby="fu" className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <SectionLabel id="fu">Follow-ups</SectionLabel>
-        <span className="text-muted">Nothing runs until you approve it</span>
+    <section aria-labelledby="followups" className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <SectionTitle id="followups" count={anyAutopilot ? "autopilot on" : "nothing runs until you approve"}>
+          Follow-ups
+        </SectionTitle>
+        {anyAutopilot && onOpenAutopilot && (
+          <button type="button" onClick={onOpenAutopilot} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+            Autopilot rules
+          </button>
+        )}
       </div>
-      <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
-        {visible.map((f, i) => {
-          const last = i === visible.length - 1;
-          if (f.kind === "email") return <EmailRow key={f.id} f={f} last={last} h={h} invited={invited} />;
-          if (f.status === "blocked") return <BlockedRow key={f.id} f={f} last={last} onReview={h.onReviewBlocked} />;
-          return <PaymentRow key={f.id} f={f} last={last} h={h} leftToday={leftToday} />;
-        })}
-      </div>
+      <LayoutMotion>
+        <div className="relative flex flex-col gap-3">
+          <AnimatePresence initial={false} mode="popLayout">
+            {visible.map((f) => (
+              <m.div
+                key={f.id}
+                id={`followup-${f.id}`}
+                layout="position"
+                transition={springs.gentle}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0, transition: enter }}
+                exit={{ opacity: 0, scale: 0.98, transition: exit }}
+                className="scroll-mt-16"
+              >
+                {f.kind === "email" ? <EmailRow f={f} c={ctx} /> : <PaymentRow f={f} c={ctx} />}
+              </m.div>
+            ))}
+          </AnimatePresence>
+          {visible.length === 0 && <p className="m-0 text-[13px] text-ink-2">Every follow-up was dismissed.</p>}
+        </div>
+      </LayoutMotion>
     </section>
   );
 }
 
-function Row({ children, last, active }: { children: ReactNode; last: boolean; active?: boolean }) {
-  return <div className={`flex flex-col gap-3.5 px-5 py-4 ${last ? "" : "border-b border-hairline"} ${active ? "bg-elevated py-[18px]" : ""}`}>{children}</div>;
+interface RowContext {
+  meetingId: string;
+  h: FollowUpHandlers;
+  leftToday: bigint | null;
+  invited: Attendee[];
+  network: "testnet" | "mainnet" | null;
+  dismiss: (f: FollowUp) => void;
 }
 
-/** "Sending by autopilot in 0:52 · Undo", counting down live. */
-function AutopilotBar({ at, verb, onUndo }: { at: number; verb: string; onUndo: () => void }) {
-  const [now, setNow] = useState(Date.now());
+/** The NEAR network, for transaction links (desktop only). */
+function useNetwork(): RowContext["network"] {
+  const [network, setNetwork] = useState<RowContext["network"]>(null);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
+    if (!isDesktop) return;
+    let live = true;
+    near
+      .getConfig()
+      .then((c) => live && setNetwork(c?.network ?? null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, []);
-  const left = Math.max(0, Math.ceil((at - now) / 1000));
+  return network;
+}
+
+/** The id of a follow-up's pending deferred action, per kind. */
+const graceId = (kind: "pay" | "send" | "claim", meetingId: string, fuId: string) => `${kind}:${meetingId}:${fuId}`;
+
+/** The time, refreshed every 250 ms, for countdowns. */
+function useNow(): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(t);
+  }, []);
+  return now;
+}
+
+/** A card's lower part; it opens and closes in height as the card changes state. */
+function Body({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <div className="ml-8 flex items-center justify-between gap-3 rounded-sm bg-verdigris-tint px-3 py-2.5">
-      <span>
-        {verb} by autopilot in <span className="font-mono text-xs">{formatClock(left).replace(/^0/, "")}</span>
-        <span className="text-muted"> · every rule passed</span>
+    <m.div
+      initial={{ height: 0, opacity: 0 }}
+      animate={{ height: "auto", opacity: 1, transition: { height: springs.gentle, opacity: { duration: 0.2, ease, delay: 0.04 } } }}
+      exit={{ height: 0, opacity: 0, transition: exit }}
+      className="overflow-hidden"
+    >
+      <div className={cx("flex flex-col gap-3.5 pt-3.5 pl-12", className)}>{children}</div>
+    </m.div>
+  );
+}
+
+/** A card's top line: who, what, and its state or main figure on the right. `clip` cuts a long sub line (an address and subject) to one line. */
+function Head({ name, title, sub, clip, children }: { name: string; title: ReactNode; sub?: ReactNode; clip?: boolean; children?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3.5">
+      <Avatar name={name} size={34} decorative />
+      <span className="flex min-w-0 flex-1 flex-col gap-px">
+        <span className="font-semibold text-ink">{title}</span>
+        {sub && <span className={cx("text-[13px] leading-[18px] text-ink-2", clip && "truncate")}>{sub}</span>}
       </span>
-      <Button onClick={onUndo}>Undo</Button>
+      {children}
     </div>
   );
 }
 
+/** The quote the follow-up came from, and a link to it in the transcript. */
 function EvidenceQuote({ quote, at, onJumpTo }: { quote: string; at: number; onJumpTo: (at: number, quote: string) => void }) {
   return (
-    <p className="t-quote selectable m-0 pl-8 text-muted">
+    <p className="t-quote selectable m-0 text-ink-2">
       “{quote}”{" "}
-      <button onClick={() => onJumpTo(at, quote)} className="font-sans text-xs font-semibold not-italic text-verdigris hover:text-verdigris-hover">
-        at {formatClock(at)}
+      <button
+        type="button"
+        onClick={() => onJumpTo(at, quote)}
+        aria-label={`Show ${formatClock(at)} in the transcript`}
+        className="font-mono text-[12px] not-italic text-verdigris hover:text-verdigris-hover"
+      >
+        {formatClock(at)}
       </button>
     </p>
   );
 }
 
-function EmailRow({ f, last, h, invited }: { f: EmailFollowUp; last: boolean; h: FollowUpHandlers; invited: Attendee[] }) {
-  const proposed = f.status === "proposed" || f.status === "failed";
+/** "Paying in 4… you can still take it back." with Undo and a bar that empties. */
+function Countdown({ verb, startedAt, endsAt, onUndo }: { verb: string; startedAt: number; endsAt: number; onUndo: () => void }) {
+  const now = useNow();
+  const left = Math.max(1, Math.ceil((endsAt - now) / 1000));
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-ink-2">
+          {verb} in <span className="font-mono text-ink">{left}</span>… you can still take it back.
+        </span>
+        <button type="button" autoFocus onClick={onUndo} className="press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm bg-well px-3 font-semibold text-ink">
+          Undo <span className="font-mono text-[11px] font-normal text-muted">⌘Z</span>
+        </button>
+      </div>
+      <Bar startedAt={startedAt} total={Math.max(1, endsAt - startedAt)} />
+    </div>
+  );
+}
+
+/** A 3px bar emptying over `total` ms from `startedAt`; coming back to it mid-way picks up where it is. */
+function Bar({ startedAt, total }: { startedAt: number; total: number }) {
+  const [elapsed] = useState(() => Math.min(total, Math.max(0, Date.now() - startedAt)));
+  return (
+    <div aria-hidden="true" className="h-[3px] overflow-hidden rounded-full bg-hairline">
+      <div className="h-[3px] origin-left bg-verdigris" style={{ animation: `ac-countdown ${total}ms linear ${-elapsed}ms both` }} />
+    </div>
+  );
+}
+
+/** "Sending by autopilot in 0:52 · your team's domain", counting down live, with Undo. */
+function AutopilotLine({ at, verb, why, onUndo }: { at: number; verb: string; why: string; onUndo: () => void }) {
+  const now = useNow();
+  const left = Math.max(0, Math.ceil((at - now) / 1000));
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] text-ink-2">
+          {verb} by autopilot in <span className="font-mono text-ink">{formatClock(left).replace(/^0/, "")}</span> · {why}
+        </span>
+        <button type="button" onClick={onUndo} className="press inline-flex h-8 shrink-0 items-center rounded-sm bg-well px-3 font-semibold text-ink">
+          Undo
+        </button>
+      </div>
+      <Bar startedAt={at - UNDO_SECONDS * 1000} total={UNDO_SECONDS * 1000} />
+    </div>
+  );
+}
+
+/**
+ * The "done" pill. It pops in, and its check draws, when the state changed on screen.
+ * `upper` is the status-pill style (SENT 14:06); a payment's pill reads "50.00 USDC paid 14:21".
+ */
+function DonePill({ play, upper, children }: { play: boolean; upper?: boolean; children: ReactNode }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full bg-verdigris-tint whitespace-nowrap text-verdigris",
+        upper ? "t-label h-6 px-2.5" : "h-[26px] px-[11px] text-[12px] font-semibold",
+      )}
+      style={play ? { animation: "ac-pop 420ms var(--ease) both" } : undefined}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5" strokeDasharray="24" style={play ? { animation: "ac-draw 260ms 120ms var(--ease) both" } : undefined} />
+      </svg>
+      {children}
+    </span>
+  );
+}
+
+/** A transaction hash; it opens the NEAR explorer once the network is known. */
+function TxLink({ hash, network }: { hash: string; network: RowContext["network"] }) {
+  if (!network) return <span className="font-mono text-[12px] text-ink-2">{shortHash(hash)}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => openUrl(explorerTx(network, hash))}
+      aria-label={`Open transaction ${shortHash(hash)} on NEAR`}
+      className="font-mono text-[12px] text-verdigris hover:text-verdigris-hover"
+    >
+      {shortHash(hash)}
+    </button>
+  );
+}
+
+function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
+  const { h } = c;
+  const pending = useDeferred(graceId("send", c.meetingId, f.id));
+  const sentNow = useChanged(f.status);
+  const draftedNow = useChanged(f.draftedAt);
+  const [held, setHeld] = useState(false);
   const [email, setEmail] = useState("");
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  return (
-    <Row last={last} active={proposed}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Mail size={16} strokeWidth={1.5} className="text-faint" aria-hidden="true" />
-        <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
-          <span className="t-title">Recap to {f.toName || "someone"}</span>
-          <span className="text-muted">
-            {f.to || <span className="text-caution">No address yet</span>} · “{f.subject}”
-          </span>
-        </div>
-        {f.status === "sent" && <Pill tone="verdigris">Sent {f.doneAt}</Pill>}
-        {f.status === "sending" && <Pill tone="muted" icon={<Spinner size={10} />}>Sending</Pill>}
-      </div>
-      {proposed && (
-        <>
-          <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
-          {f.autopilotAt && <AutopilotBar at={f.autopilotAt} verb="Sending" onUndo={() => h.onUndoAutopilot(f.id)} />}
-          {!f.to && (
-            <div className="ml-8 flex gap-2">
-              <label htmlFor={`email-${f.id}`} className="sr-only">
-                Email address for {f.toName}
-              </label>
-              <input
-                id={`email-${f.id}`}
-                value={email}
-                onChange={(e) => setEmail(e.target.value.trim())}
-                placeholder={`${(f.toName || "their").toLowerCase()}@example.com`}
-                className="selectable h-8 flex-1 rounded-sm border border-border bg-well px-2.5 text-ink outline-none placeholder:text-muted"
-              />
-              <Button disabled={!valid} onClick={() => h.onSetEmail(f.id, email)}>Use address</Button>
-            </div>
-          )}
-          {!f.to && invited.length > 0 && (
-            <div className="ml-8 flex flex-wrap items-center gap-2">
-              <span className="text-muted">Invited:</span>
-              {invited.map((a) => (
-                <Button key={a.email} variant="ghost" title={a.email} onClick={() => h.onSetEmail(f.id, a.email)}>
-                  {a.name || a.email}
-                </Button>
-              ))}
-            </div>
-          )}
-          {f.error && <p className="m-0 pl-8 text-record">{f.error}</p>}
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button variant="ghost" onClick={() => h.onDismiss(f.id)}>Dismiss</Button>
-            <Button onClick={() => h.onApprove(f.id)} disabled={!f.to}>
-              Send through Aftercall
-            </Button>
-            {/* The private default: the recap opens in your own mail app and no Aftercall server sees it. */}
-            <Button variant="primary" onClick={() => h.onDraft(f.id)}>
-              Draft in Mail
-            </Button>
-          </div>
-          <p className="m-0 pl-8 text-muted">
-            Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it. Send through Aftercall passes it through
-            Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy.
-          </p>
-        </>
-      )}
-    </Row>
-  );
-}
+  const name = f.toName || "someone";
+  const fromCalendar = !!f.to && c.invited.some((a) => a.email.toLowerCase() === f.to.toLowerCase());
+  const open = f.status === "proposed" || f.status === "failed";
 
-const payVerb: Partial<Record<PaymentFollowUp["status"], string>> = { sending: "Paying", paid: "Paid" };
+  const send = () =>
+    deferred({
+      id: graceId("send", c.meetingId, f.id),
+      quiet: true,
+      ms: GRACE_MS,
+      text: (s) => `Sending the recap to ${name} in ${s}…`,
+      run: () => h.onApprove(f.id),
+    });
 
-function PaymentRow({ f, last, h, leftToday }: { f: PaymentFollowUp; last: boolean; h: FollowUpHandlers; leftToday: bigint | null }) {
-  const proposed = f.status === "proposed" || f.status === "failed";
-  const [copied, setCopied] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [amountText, setAmountText] = useState(f.amount === null ? "" : formatUsdc(f.amount).replace(/,/g, ""));
-  const parsed = parseUsdcInput(amountText);
-  const route = f.payeeListed ? (h.routeFor?.(f) ?? null) : null;
+  const state = pending
+    ? "countdown"
+    : f.status === "sending"
+      ? "sending"
+      : f.status === "sent"
+        ? "sent"
+        : f.autopilotAt
+          ? "autopilot"
+          : open && f.draftedAt
+            ? "drafted"
+            : "open";
+
+  let sub: ReactNode;
+  if (state === "sent") sub = f.byAutopilot ? "Sent by autopilot · every rule passed" : `Sent through Aftercall · ${f.to}`;
+  else if (state === "sending") sub = `To ${f.to}`;
+  else if (state === "drafted") sub = `Opened as a draft in your Mail · “${f.subject}”`;
+  else if (!f.to)
+    sub = (
+      <>
+        <span className="text-caution">No address yet</span> · “{f.subject}”
+      </>
+    );
+  else sub = fromCalendar ? `${f.to} · from your calendar` : `${f.to} · “${f.subject}”`;
+
   return (
-    <Row last={last} active={proposed}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <Wallet size={16} strokeWidth={1.5} className="text-muted" aria-hidden="true" />
-        <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
-          <span className="t-title">
-            {payVerb[f.status] ?? "Pay"} {f.payeeName}
-          </span>
-          {f.payeeListed ? (
-            <span className="t-mono text-muted">
-              {route ? `${CHAIN_NAME[route.chain]} ${shortAddress(route.address)}` : f.payeeAccount}
-              {proposed && leftToday !== null && ` · ${formatUsdc(leftToday)} left today`}
-            </span>
-          ) : (
-            <span className="text-caution">{f.payeeName} isn't on your payee list yet, so Aftercall won't guess an account.</span>
-          )}
-        </div>
-        {f.status === "sending" && <Pill tone="muted" icon={<Spinner size={10} />}>Sending</Pill>}
-        {f.status === "paid" && <Pill tone="verdigris" icon={<Check size={11} strokeWidth={2.5} />}>Paid {f.doneAt}</Pill>}
-        {f.status === "failed" && <Pill tone="record">Failed · refunded</Pill>}
-        {f.crossChain && f.status === "sending" && <Pill tone="muted">{swapWords[f.crossChain.swapStatus] ?? f.crossChain.swapStatus}</Pill>}
-        {proposed && (
-          <span className="font-mono text-xl leading-6 tracking-[-0.01em]">
-            {f.amount === null ? <span className="text-caution">?</span> : formatUsdc(f.amount)} <span className="text-xs text-muted">USDC</span>
-          </span>
+    <Card pad="none" className={cx("lift px-5", state === "sent" || state === "drafted" ? "py-3.5" : "py-4")}>
+      <Head name={name} title={`Recap to ${name}`} sub={sub} clip>
+        {state === "sent" && <DonePill play={sentNow} upper>
+            Sent {f.doneAt}
+          </DonePill>}
+        {state === "drafted" && (
+          <>
+            <Button variant="quiet" size="sm" onClick={() => h.onDraft(f.id)}>
+              Draft again
+            </Button>
+            <DonePill play={draftedNow} upper>
+              Drafted {f.draftedAt}
+            </DonePill>
+          </>
         )}
-      </div>
-      {f.crossChain && !proposed && <CrossChainTrail c={f.crossChain} />}
-      {proposed && (
-        <>
-          <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
-          {route && f.amount !== null && h.previewRoute && <RoutePreview f={f} dest={route} preview={h.previewRoute} />}
-          <div className="ml-8 flex flex-wrap gap-x-4 gap-y-1.5 rounded-sm bg-well px-3 py-2.5">
-            <span className="t-label leading-[19px] text-muted">Check before you approve</span>
-            <span>
-              Heard <span className="font-serif italic">“{f.heard}”</span> →{" "}
-              {f.amount === null ? <span className="text-caution">amount unclear, edit before approving</span> : <span className="t-mono">{formatUsdc(f.amount)} USDC</span>}
-            </span>
-            <span>
-              Payee <span className="font-semibold">{f.payeeName}</span>{" "}
-              {f.payeeListed ? <span className="text-verdigris">· on your list</span> : <span className="text-caution">· not on your list</span>}
-            </span>
-          </div>
-          {editing && (
-            <div className="ml-8 flex items-center gap-2">
-              <label htmlFor={`amount-${f.id}`} className="text-muted">Amount</label>
-              <input
-                id={`amount-${f.id}`}
-                autoFocus
-                value={amountText}
-                onChange={(e) => setAmountText(e.target.value)}
-                className="selectable h-8 w-32 rounded-sm border border-border bg-well px-2.5 font-mono text-xs text-ink outline-none"
-              />
-              <span className="text-muted">USDC</span>
-              <Button
-                disabled={!parsed}
-                onClick={() => {
-                  if (parsed) h.onSetAmount(f.id, parsed);
-                  setEditing(false);
-                }}
-              >
-                Use amount
-              </Button>
-            </div>
-          )}
-          {f.autopilotAt && <AutopilotBar at={f.autopilotAt} verb="Paying" onUndo={() => h.onUndoAutopilot(f.id)} />}
-          {f.error && <p className="m-0 pl-8 text-record">{f.error}</p>}
-
-          {!f.payeeListed && f.claim && (
-            <div className="ml-8 flex flex-wrap items-center gap-3 rounded-sm px-3 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
-              {f.claim.account ? (
-                <>
-                  <span className="flex-1">
-                    {f.payeeName} shared <span className="t-mono text-ink">{f.claim.account}</span>. Only confirm if you trust this account.
-                  </span>
-                  <Button className="border-caution text-caution" onClick={() => h.onConfirmClaim(f.id)}>Confirm in wallet</Button>
-                </>
-              ) : (
-                <>
-                  <Spinner size={12} />
-                  <span className="flex-1 text-muted">Waiting for {f.payeeName} to share where to be paid · link works once, 7 days</span>
-                  <button
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(f.claim!.link);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 1600);
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-verdigris"
-                  >
-                    <Copy size={12} aria-hidden="true" /> {copied ? "Copied" : "Copy link"}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" onClick={() => h.onDismiss(f.id)}>Dismiss</Button>
-            <Button onClick={() => setEditing((e) => !e)}>Edit amount</Button>
-            {f.payeeListed ? (
-              <Button variant="primary" onClick={() => h.onApprove(f.id)} disabled={f.amount === null}>
-                {f.status === "failed" ? "Try again" : "Approve payment"}
-              </Button>
-            ) : (
-              !f.claim && (
-                <Button variant="primary" onClick={() => h.onClaimLink(f.id)} disabled={f.amount === null}>
-                  <Link2 size={13} aria-hidden="true" /> Send claim link
-                </Button>
-              )
+        {state === "open" && <span className="t-eyebrow shrink-0 text-muted">Proposed</span>}
+      </Head>
+      <AnimatePresence initial={false} mode="wait">
+        {state === "countdown" && pending && (
+          <Body key="countdown">
+            <Countdown verb="Sending" startedAt={pending.startedAt} endsAt={pending.endsAt} onUndo={pending.cancel} />
+          </Body>
+        )}
+        {state === "sending" && (
+          <Body key="sending" className="flex-row items-center gap-2.5 text-ink-2">
+            <Spinner size={14} /> Sending through Aftercall…
+          </Body>
+        )}
+        {state === "autopilot" && f.autopilotAt && (
+          <Body key="autopilot">
+            <AutopilotLine
+              at={f.autopilotAt}
+              verb="Sending"
+              why="your team's domain"
+              onUndo={() => {
+                setHeld(true);
+                h.onUndoAutopilot(f.id);
+              }}
+            />
+          </Body>
+        )}
+        {state === "open" && (
+          <Body key="open">
+            {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This recap waits for you.</span>}
+            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
+            {!f.to && (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Input
+                    aria-label={`Email address for ${name}`}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value.trim())}
+                    placeholder={`${(f.toName || "their").toLowerCase().split(" ")[0]}@example.com`}
+                    className="flex-1"
+                  />
+                  <Button disabled={!valid} onClick={() => h.onSetEmail(f.id, email)}>
+                    Use address
+                  </Button>
+                </div>
+                {c.invited.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[13px] text-ink-2">Invited:</span>
+                    {c.invited.map((a) => (
+                      <Button key={a.email} variant="ghost" size="sm" title={a.email} onClick={() => h.onSetEmail(f.id, a.email)}>
+                        {a.name || a.email}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
-          </div>
-        </>
-      )}
-    </Row>
+            {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <details className="text-[13px] text-ink-2">
+                <summary className="cursor-pointer">
+                  Draft in Mail keeps it on this Mac. <span className="font-semibold hover:text-ink">Why?</span>
+                </summary>
+                <p className="m-0 mt-1.5 max-w-[440px]">
+                  Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it. Send through Aftercall passes it through
+                  Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy.
+                </p>
+              </details>
+              <span className="ml-auto flex flex-wrap justify-end gap-2">
+                <Button variant="quiet" onClick={() => c.dismiss(f)}>
+                  Dismiss
+                </Button>
+                <Button variant="quiet" onClick={send} disabled={!f.to}>
+                  Send through Aftercall
+                </Button>
+                {/* The private default: the recap opens in your own mail app and no Aftercall server sees it. */}
+                <Button variant="primary" onClick={() => h.onDraft(f.id)}>
+                  Draft in Mail
+                </Button>
+              </span>
+            </div>
+          </Body>
+        )}
+      </AnimatePresence>
+    </Card>
   );
 }
-
-const shortAddress = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 /** 1Click's statuses in plain words. */
 const swapWords: Record<string, string> = {
@@ -299,6 +458,256 @@ const swapWords: Record<string, string> = {
   REFUNDED: "Refunded",
   FAILED: "Failed",
 };
+
+function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
+  const { h } = c;
+  const paying = useDeferred(graceId("pay", c.meetingId, f.id));
+  const confirming = useDeferred(graceId("claim", c.meetingId, f.id));
+  const pending = paying ?? confirming;
+  const paidNow = useChanged(f.status);
+  const [held, setHeld] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [amountText, setAmountText] = useState(f.amount === null ? "" : formatUsdc(f.amount).replace(/,/g, ""));
+  const parsed = parseUsdcInput(amountText);
+  const route = f.payeeListed ? (h.routeFor?.(f) ?? null) : null;
+  const first = firstName(f.payeeName);
+  const amount = f.amount === null ? null : formatUsdc(f.amount);
+  const amountId = `amount-${c.meetingId}-${f.id}`;
+
+  const pay = () =>
+    deferred({
+      id: graceId("pay", c.meetingId, f.id),
+      quiet: true,
+      ms: GRACE_MS,
+      text: (s) => `Paying ${f.payeeName}${amount ? ` ${amount} USDC` : ""} in ${s}…`,
+      run: () => h.onApprove(f.id),
+    });
+  const confirmClaim = () =>
+    deferred({
+      id: graceId("claim", c.meetingId, f.id),
+      quiet: true,
+      ms: GRACE_MS,
+      text: (s) => `Opening your wallet to add ${f.claim?.account ?? f.payeeName} in ${s}…`,
+      run: () => h.onConfirmClaim(f.id),
+    });
+
+  if (f.status === "blocked") {
+    return (
+      <Card pad="none" tone="caution" className="px-5 py-3.5">
+        <Head
+          name={f.payeeName}
+          title={
+            <>
+              Pay {f.payeeName} <span className="font-mono font-medium">{amount ?? "?"} USDC</span>
+            </>
+          }
+          sub={<span className="text-caution">Over your limits. Only your wallet can approve it.</span>}
+        >
+          <Button className="border-caution text-caution hover:bg-transparent" onClick={() => h.onReviewBlocked(f.id)}>
+            Review
+          </Button>
+        </Head>
+      </Card>
+    );
+  }
+
+  if (f.status === "failed" && !pending) {
+    return (
+      <Card pad="none" tone="record" className="px-5 py-3.5">
+        <Head name={f.payeeName} title={`Payment to ${f.payeeName} didn't land`} sub={<span className="text-record">{f.error ?? "The transfer didn't go through."}</span>}>
+          <Button variant="quiet" onClick={() => c.dismiss(f)}>
+            Dismiss
+          </Button>
+          <Button className="border-record text-record hover:bg-transparent" onClick={pay} disabled={f.amount === null}>
+            Try again
+          </Button>
+        </Head>
+        {f.crossChain && (
+          <div className="pt-2 pl-12">
+            <CrossChainTrail c={f.crossChain} />
+          </div>
+        )}
+      </Card>
+    );
+  }
+
+  const paid = f.status === "paid";
+  const shared = !f.payeeListed && !!f.claim?.account;
+  const waitingClaim = !f.payeeListed && !!f.claim && !f.claim.account;
+  const state = pending ? "countdown" : f.status === "sending" ? "sending" : paid ? "paid" : f.autopilotAt ? "autopilot" : "open";
+
+  const title = paid ? (
+    `Paid ${f.payeeName}`
+  ) : shared && state === "open" ? (
+    <>
+      {first} shared <span className="font-mono font-medium">{f.claim!.account}</span>
+    </>
+  ) : (
+    `${state === "open" || state === "autopilot" ? "Pay" : "Paying"} ${f.payeeName}`
+  );
+
+  let sub: ReactNode;
+  if (paid && f.byAutopilot) sub = "By autopilot · every rule passed";
+  else if (paid && f.crossChain) sub = `Paid on ${CHAIN_NAME[f.crossChain.chain]} · ${shortAddress(f.crossChain.address)}`;
+  else if (shared) sub = `Confirm in your wallet that this account is ${first}’s, then the payment can go.`;
+  else if (!f.payeeListed) sub = <span className="text-caution">Not on your payee list yet. A claim link lets {first} tell you where to be paid.</span>;
+  else if (route && !paid) sub = <span className="font-mono">{`To ${CHAIN_NAME[route.chain]} · ${shortAddress(route.address)}`}</span>;
+  else sub = <span className="font-mono">{f.payeeAccount}</span>;
+
+  return (
+    <Card pad="none" className={cx("lift px-5", paid ? "py-3.5" : "py-[18px]")}>
+      <Head name={f.payeeName} title={title} sub={sub}>
+        {paid ? (
+          <DonePill play={paidNow}>
+            {amount && (
+              <m.span layoutId={amountId} transition={springs.bouncy} className="font-mono font-medium">
+                {amount} USDC
+              </m.span>
+            )}
+            paid {f.doneAt}
+          </DonePill>
+        ) : (
+          <span className="inline-flex shrink-0 items-baseline gap-1.5">
+            <m.span layoutId={amountId} transition={springs.bouncy} className={cx("t-figure", amount === null && "text-caution")}>
+              {amount ?? "?"}
+            </m.span>
+            <span className="text-[12px] text-muted">USDC</span>
+          </span>
+        )}
+      </Head>
+      <AnimatePresence initial={false} mode="wait">
+        {state === "countdown" && pending && (
+          <Body key="countdown">
+            <Countdown verb={confirming ? "Opening your wallet" : "Paying"} startedAt={pending.startedAt} endsAt={pending.endsAt} onUndo={pending.cancel} />
+          </Body>
+        )}
+        {state === "sending" && (
+          <Body key="sending" className="flex-row items-center gap-2.5 text-ink-2">
+            <Spinner size={14} />
+            {f.crossChain ? `${swapWords[f.crossChain.swapStatus] ?? f.crossChain.swapStatus} · ${routeLabel(f.crossChain.chain)}` : "Sending through your agent wallet on NEAR…"}
+          </Body>
+        )}
+        {state === "paid" && (
+          <Body key="paid" className="gap-1.5 pt-2 text-[13px] text-ink-2">
+            <span className="flex flex-wrap items-center gap-x-1.5">
+              <span>From your agent wallet</span>
+              {c.leftToday !== null && !f.crossChain && <span>· {formatUsdc(c.leftToday)} left today</span>}
+              {f.ref && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <TxLink hash={f.ref} network={c.network} />
+                </>
+              )}
+            </span>
+            {f.crossChain && <CrossChainTrail c={f.crossChain} />}
+          </Body>
+        )}
+        {state === "autopilot" && f.autopilotAt && (
+          <Body key="autopilot">
+            <AutopilotLine
+              at={f.autopilotAt}
+              verb="Paying"
+              why="every rule passed"
+              onUndo={() => {
+                setHeld(true);
+                h.onUndoAutopilot(f.id);
+              }}
+            />
+          </Body>
+        )}
+        {state === "open" && (
+          <Body key="open">
+            {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This payment waits for you.</span>}
+            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
+            <dl className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-well px-3.5 py-3">
+              <div className="flex items-baseline gap-2.5">
+                <dt className="w-14 shrink-0 text-[12px] text-muted">Heard</dt>
+                <dd className="m-0">
+                  <span className="font-serif italic">“{f.heard}”</span> <span className="text-muted">→</span>{" "}
+                  {amount === null ? <span className="text-caution">amount unclear, edit before approving</span> : <span className="t-mono">{amount} USDC</span>}
+                </dd>
+              </div>
+              <div className="flex items-baseline gap-2.5">
+                <dt className="w-14 shrink-0 text-[12px] text-muted">Payee</dt>
+                <dd className="m-0">
+                  {f.payeeName} {f.payeeListed ? <span className="text-verdigris">· on your list</span> : <span className="text-caution">· not on your list</span>}
+                </dd>
+              </div>
+              {f.payeeListed && c.leftToday !== null && (
+                <div className="flex items-baseline gap-2.5">
+                  <dt className="w-14 shrink-0 text-[12px] text-muted">Today</dt>
+                  <dd className="m-0">
+                    <span className="t-mono">{formatUsdc(c.leftToday)}</span> <span className="text-ink-2">left to pay today</span>
+                  </dd>
+                </div>
+              )}
+            </dl>
+            {route && f.amount !== null && h.previewRoute && <RoutePreview f={f} dest={route} preview={h.previewRoute} />}
+            {editing && (
+              <div className="flex items-center gap-2">
+                <label htmlFor={`amount-${f.id}`} className="text-ink-2">
+                  Amount
+                </label>
+                <Input id={`amount-${f.id}`} mono autoFocus value={amountText} onChange={(e) => setAmountText(e.target.value)} className="w-32" />
+                <span className="text-muted">USDC</span>
+                <Button
+                  disabled={!parsed}
+                  onClick={() => {
+                    if (parsed) h.onSetAmount(f.id, parsed);
+                    setEditing(false);
+                  }}
+                >
+                  Use amount
+                </Button>
+              </div>
+            )}
+            {waitingClaim && (
+              <div className="flex flex-wrap items-center gap-3 rounded-[10px] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
+                <Spinner size={12} />
+                <span className="flex-1 text-ink-2">Waiting for {first} to share where to be paid · the link works once, for 7 days</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Copy size={12} aria-hidden="true" />}
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(f.claim!.link);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1600);
+                  }}
+                >
+                  {copied ? "Copied" : "Copy link"}
+                </Button>
+              </div>
+            )}
+            {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="quiet" onClick={() => c.dismiss(f)}>
+                Dismiss
+              </Button>
+              {!shared && <Button onClick={() => setEditing((e) => !e)}>Edit amount</Button>}
+              {f.payeeListed ? (
+                <Button variant="primary" onClick={pay} disabled={f.amount === null}>
+                  Approve payment
+                </Button>
+              ) : shared ? (
+                <Button variant="primary" onClick={confirmClaim}>
+                  Confirm in wallet
+                </Button>
+              ) : (
+                !f.claim && (
+                  <Button onClick={() => h.onClaimLink(f.id)} disabled={f.amount === null} icon={<Link2 size={13} aria-hidden="true" />}>
+                    Send claim link
+                  </Button>
+                )
+              )}
+            </div>
+          </Body>
+        )}
+      </AnimatePresence>
+    </Card>
+  );
+}
 
 /** The route and a dry quote, so the person sees what the payee gets before approving. */
 function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDestination; preview: (f: PaymentFollowUp, d: PayeeDestination) => Promise<PayoutPreview> }) {
@@ -318,60 +727,45 @@ function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.amount, dest.chain, dest.address]);
   return (
-    <div className="ml-8 flex flex-col gap-1.5 rounded-sm px-3 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
-      <span className="t-label text-muted">Route</span>
-      <span>{routeLabel(dest.chain)}</span>
-      <span className="t-mono text-muted">To {dest.address}</span>
-      {quote ? (
-        <span>
-          They get about <span className="t-mono">{formatUsdc(quote.amountOut)} USDC</span>
-          <span className="text-muted">
-            {" "}· fees <span className="t-mono">{formatUsdc(quote.fee)}</span> · about {quote.seconds} s · quote from NEAR Intents, not checked on chain
-          </span>
+    <div className="flex flex-col gap-1 rounded-[10px] bg-well px-3 py-2.5 text-[13px]">
+      <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className="text-ink-2">USDC on NEAR</span>
+        <span aria-hidden="true" className="text-faint">
+          →
         </span>
-      ) : error ? (
-        <span className="text-caution">{error}</span>
-      ) : (
-        <span className="flex items-center gap-2 text-muted">
-          <Spinner size={10} /> Asking NEAR Intents for a quote…
+        <span className="text-ink-2">USDC on {CHAIN_NAME[dest.chain]}, via NEAR Intents</span>
+        <span className="ml-auto text-ink-2">
+          {quote ? (
+            <>
+              {firstName(f.payeeName)} gets <span className="font-mono text-ink">{formatUsdc(quote.amountOut)}</span> · fee{" "}
+              <span className="font-mono text-ink">{formatUsdc(quote.fee)}</span> · about {quote.seconds} s
+            </>
+          ) : error ? (
+            <span className="text-caution">{error}</span>
+          ) : (
+            <span className="inline-flex items-center gap-2">
+              <Spinner size={10} /> Asking NEAR Intents for a quote…
+            </span>
+          )}
         </span>
-      )}
+      </span>
+      <span className="selectable font-mono text-[12px] break-all text-muted">To {dest.address} · quote from NEAR Intents, not checked on chain</span>
     </div>
   );
 }
 
 function CrossChainTrail({ c }: { c: NonNullable<PaymentFollowUp["crossChain"]> }) {
   return (
-    <p className="m-0 pl-8 text-muted">
+    <p className="m-0 text-[13px] text-ink-2">
       {routeLabel(c.chain)} · {swapWords[c.swapStatus] ?? c.swapStatus}
       {c.payoutTxUrl && (
         <>
           {" · "}
-          <a href={c.payoutTxUrl} target="_blank" rel="noreferrer" className="font-semibold text-verdigris hover:text-verdigris-hover">
+          <button type="button" onClick={() => openUrl(c.payoutTxUrl!)} className="font-semibold text-verdigris hover:text-verdigris-hover">
             {CHAIN_NAME[c.chain]} transaction
-          </a>
+          </button>
         </>
       )}
     </p>
-  );
-}
-
-function BlockedRow({ f, last, onReview }: { f: PaymentFollowUp; last: boolean; onReview: (id: string) => void }) {
-  return (
-    <Row last={last}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <AlertTriangle size={16} strokeWidth={1.5} className="text-caution" aria-hidden="true" />
-        <div className="flex min-w-[260px] flex-1 flex-col gap-0.5">
-          <span className="t-title">
-            Pay {f.payeeName} <span className="font-mono text-[13px] font-normal">{f.amount === null ? "?" : formatUsdc(f.amount)} USDC</span>
-          </span>
-          <span className="text-caution">Over your limits. Your agent wallet refused it; only you can approve it, in your wallet.</span>
-        </div>
-        <Pill tone="caution">Blocked</Pill>
-        <button onClick={() => onReview(f.id)} className="font-semibold text-verdigris hover:text-verdigris-hover">
-          Review
-        </button>
-      </div>
-    </Row>
   );
 }

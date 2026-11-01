@@ -29,6 +29,10 @@ interface Item extends ToastOptions {
   id: string;
   /** When a deferred action runs (ms since epoch); drives "in 4…". */
   endsAt?: number;
+  /** When the deferred action was queued, for a countdown bar. */
+  startedAt?: number;
+  /** A deferred action whose row shows its own countdown: no pill, but ⌘Z and the announcement still work. */
+  quiet?: boolean;
 }
 
 // The toasts on screen, oldest first, outside React so toast() works from anywhere.
@@ -121,6 +125,7 @@ export function deferred({
   run,
   undo,
   tone,
+  quiet,
 }: {
   id?: string;
   text: ToastOptions["text"];
@@ -128,19 +133,36 @@ export function deferred({
   run: () => void | Promise<void>;
   undo?: () => void;
   tone?: ToastTone;
+  /** No toast: the row on screen shows the countdown itself (read it with `useDeferred`). ⌘Z still takes it back. */
+  quiet?: boolean;
 }): DeferredHandle {
   const key = id ?? `deferred-${seq++}`;
   if (pending.has(key)) return handleFor(key);
   pending.set(key, { run, undo, timer: window.setTimeout(() => settle(key, true), ms) });
-  items = [...items.filter((t) => t.id !== key), { id: key, text, tone, endsAt: Date.now() + ms, undo: () => settle(key, false) }];
+  const now = Date.now();
+  items = [...items.filter((t) => t.id !== key), { id: key, text, tone, quiet, startedAt: now, endsAt: now + ms, undo: () => settle(key, false) }];
   emit();
   return handleFor(key);
+}
+
+/** A deferred action that is still waiting, for a row that shows its own countdown. */
+export interface PendingDeferred extends DeferredHandle {
+  startedAt: number;
+  endsAt: number;
+}
+
+/** The deferred action with this id while it waits; null once it ran or was undone. */
+export function useDeferred(id: string): PendingDeferred | null {
+  const list = useSyncExternalStore(subscribe, () => items);
+  const item = list.find((t) => t.id === id);
+  if (!item?.endsAt || !pending.has(id)) return null;
+  return { ...handleFor(id), startedAt: item.startedAt ?? item.endsAt, endsAt: item.endsAt };
 }
 
 /** The toast stack: bottom-centre pills, newest at the bottom. Mount once, at the app root. */
 export function Toaster() {
   const list = useSyncExternalStore(subscribe, () => items);
-  const shown = list.slice(-3);
+  const shown = list.filter((t) => !t.quiet).slice(-3);
   const latest = list[list.length - 1];
 
   // ⌘Z takes back the newest undoable toast, unless the key is for a text field.
