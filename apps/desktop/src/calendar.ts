@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { bestEvent, type CalendarEvent } from "@aftercall/core";
+import { bestEvent, upcomingEvents, type CalendarEvent } from "@aftercall/core";
 import { isDesktop, type SavedRecording } from "./recorder";
 
 export type CalendarStatus = "not-asked" | "denied" | "granted";
@@ -19,6 +19,19 @@ export const calendar = {
     const end = r.startedAt + Math.max(r.seconds, 60);
     const events = await invoke<CalendarEvent[]>("calendar_events_between", { start: r.startedAt, end }).catch(() => []);
     return bestEvent(events, r.startedAt, end);
+  },
+  /**
+   * Timed events from now to the end of today, soonest first, for "Coming up" on
+   * Home. The same read-only range query as above. Empty without access or in the
+   * browser preview. Never throws.
+   */
+  upcoming: async (limit = 3): Promise<CalendarEvent[]> => {
+    if (!isDesktop) return [];
+    const now = Math.floor(Date.now() / 1000);
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const events = await invoke<CalendarEvent[]>("calendar_events_between", { start: now, end: Math.floor(midnight.getTime() / 1000) }).catch(() => []);
+    return upcomingEvents(events, now, limit);
   },
 };
 
