@@ -92,7 +92,7 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
               <span className="t-mono selectable text-ink-2 [overflow-wrap:anywhere]">{dataDir || "…"}</span>
               <span className="mt-1.5 inline-flex items-center gap-1.5 text-[13px] leading-[19px] text-ink">
                 <Check size={14} strokeWidth={2} className="text-verdigris" aria-hidden="true" />
-                Audio is deleted after transcription
+                Audio is deleted once the notes are saved
               </span>
             </span>
             <Pill tone="verdigris" icon={<Lock size={11} strokeWidth={2.2} />}>

@@ -727,7 +727,7 @@ function Private() {
             </div>
             <div>
               <dt>Encrypted on your Mac</dt>
-              <dd>Audio is sealed as it records and deleted after transcription. Notes are sealed with a key in your Keychain.</dd>
+              <dd>Audio is sealed as it records and deleted once the notes are saved. Notes are sealed with a key in your Keychain.</dd>
             </div>
             <div>
               <dt>Our servers keep nothing</dt>

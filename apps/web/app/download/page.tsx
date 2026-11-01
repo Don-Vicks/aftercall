@@ -34,8 +34,8 @@ const OPTIONAL = { pill: "Off by default", tone: "outline" as const };
 
 /** What macOS will ask for, in the words of the app's own permission prompts. */
 const PERMS: { icon: IconName; name: string; where: string; lead?: string; why: string; pill: string; tone: "muted" | "outline" }[] = [
-  { icon: "mic", name: "Microphone", where: "Privacy & Security › Microphone", why: "Aftercall records your side of the call to make private meeting notes. The audio is deleted after transcription.", ...NEEDED },
-  { icon: "speaker", name: "Screen & System Audio Recording", where: "Privacy & Security › Screen & System Audio Recording", lead: "The call's audio, not your screen.", why: "Aftercall records the call's audio to make private meeting notes. The audio is deleted after transcription.", ...NEEDED },
+  { icon: "mic", name: "Microphone", where: "Privacy & Security › Microphone", why: "Aftercall records your side of the call to make private meeting notes. The audio is deleted once the notes are saved.", ...NEEDED },
+  { icon: "speaker", name: "Screen & System Audio Recording", where: "Privacy & Security › Screen & System Audio Recording", lead: "The call's audio, not your screen.", why: "Aftercall records the call's audio to make private meeting notes. The audio is deleted once the notes are saved.", ...NEEDED },
   { icon: "calendar", name: "Calendar", where: "Privacy & Security › Calendars", lead: "Only if you choose Connect calendar in Settings.", why: "Aftercall reads the meeting you're recording from your calendar to name the notes and suggest who gets the recap. It never changes your calendar.", ...OPTIONAL },
   { icon: "bell", name: "Notifications", where: "System Settings › Notifications", why: "Tells you when a meeting’s notes are ready to review.", ...OPTIONAL },
   { icon: "key", name: "Keychain", where: "Your login keychain, on this Mac", why: "Holds the key that seals your recordings and notes, your NEAR AI key, and the app's limited NEAR key.", ...NEEDED },
