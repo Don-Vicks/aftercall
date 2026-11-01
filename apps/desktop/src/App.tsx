@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, originalItem, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -255,15 +255,22 @@ export default function App() {
     refreshWallet();
   }, [refreshWallet]);
 
-  // Recordings that have notes open as meetings.
+  /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
+  const queuedHere = useRef(new Set<string>());
+
+  // Recordings that have notes open as meetings. Autopilot queued before this launch
+  // (Aftercall closed during the undo window) is held for you and saved that way.
   const addProcessed = (list: SavedRecording[]) => {
     const processed: Record<string, Meeting> = {};
     const notes: Record<string, SavedNotes> = {};
     for (const r of list) {
       if (!r.notes) continue;
       try {
-        notes[r.id] = parseNotes(r.notes);
+        const parsed = parseNotes(r.notes);
+        const held = holdInterruptedAutopilot(parsed.meeting, (fuId) => queuedHere.current.has(`${r.id}:${fuId}`));
+        notes[r.id] = held ? { ...parsed, meeting: held } : parsed;
         processed[r.id] = notes[r.id].meeting;
+        if (held && isDesktop) recordingFiles.saveNotes(r.id, serializeNotes(notes[r.id])).catch(() => {});
       } catch {
         // A damaged notes.json leaves the recording on its status page.
       }
@@ -435,10 +442,10 @@ export default function App() {
       },
       routeFor: (f: FollowUp) => (sample || f.kind !== "payment" ? null : (destinations[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
-      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
+      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined, autopilotHeld: undefined }),
       onRestore: (id: string, status: FollowUp["status"]) => apply(id)({ status }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
-      onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, error: undefined }),
+      onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, autopilotHeld: undefined, error: undefined }),
       onReviewBlocked: () => setView({ name: "wallet" }),
       onDraft: (id: string) => {
         const f = find(id);
@@ -447,7 +454,7 @@ export default function App() {
         // The sample never went to NEAR AI, so a footer about checks and deleted audio would be untrue.
         if (sample) return void toast({ text: "The sample meeting is made up, so it has no recap to draft. Record a call to draft one in Mail." });
         draftInMail(meeting, f, saved[meeting.id])
-          .then(() => apply(id)({ draftedAt: nowHHMM(), autopilotAt: undefined }))
+          .then(() => apply(id)({ draftedAt: nowHHMM(), autopilotAt: undefined, autopilotHeld: undefined }))
           .catch((e) => toast({ text: `Couldn't open Mail: ${e instanceof Error ? e.message : String(e)}`, tone: "record" }));
       },
       onSetEmail: (id: string, email: string) => apply(id)({ to: email, error: undefined }),
@@ -469,7 +476,9 @@ export default function App() {
     for (const f of m.followUps) {
       // A payment on another chain needs a fresh quote the person has seen: never autopilot.
       if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
-      if (autopilotDecision(f, rules, limits).run) patchFollowUp(m.id, f.id, { autopilotAt: at });
+      if (!autopilotDecision(f, rules, limits).run) continue;
+      queuedHere.current.add(`${m.id}:${f.id}`);
+      patchFollowUp(m.id, f.id, { autopilotAt: at });
     }
   };
 

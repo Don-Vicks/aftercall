@@ -268,6 +268,19 @@ mod tests {
         assert!(!lock_path(&file).exists());
     }
 
+    #[test]
+    fn follow_ups_are_saved_as_the_app_sent_them_and_ticks_keep_them() {
+        let file = temp_notes(&notes(json!([{ "id": "a1", "done": false }])));
+        let mut app = notes(json!([{ "id": "a1", "done": false }]));
+        // Held at launch: the queued time is gone and the flag says why it waits.
+        app["meeting"]["followUps"] = json!([{ "id": "f1", "status": "proposed", "autopilotHeld": true }]);
+        save(&file, &app.to_string()).unwrap();
+        set_item_done(&file, "a1", true).unwrap();
+        let saved = read(&file).unwrap();
+        assert_eq!(saved["meeting"]["followUps"][0]["autopilotHeld"], true);
+        assert!(saved["meeting"]["followUps"][0].get("autopilotAt").is_none());
+    }
+
     fn signed(items: Value, signed_items: Value) -> Value {
         let mut v = notes(items);
         v["notes"] = json!({ "action_items": signed_items });

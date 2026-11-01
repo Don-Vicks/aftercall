@@ -1,4 +1,4 @@
-import type { AmountProblemKind, FollowUp } from "../meeting.ts";
+import type { AmountProblemKind, FollowUp, Meeting } from "../meeting.ts";
 
 /** What the person allows to happen without a tap. Off unless they turn it on. */
 export interface AutopilotRules {
@@ -33,6 +33,28 @@ export const AMOUNT_PROBLEM_REASONS: Record<AmountProblemKind, string> = {
 /** Seconds a person has to undo an autopilot follow-up before it runs. */
 export const UNDO_SECONDS = 60;
 
+/** Why a held follow-up waits for you, in plain words. */
+export const AUTOPILOT_HELD = "Autopilot held this: Aftercall closed during its undo window.";
+
+/**
+ * A meeting as read from disk, with every follow-up autopilot queued in an earlier run
+ * of the app taken off the queue and marked held: an undo window that was running when
+ * Aftercall closed never runs out unseen on the next launch. `queuedHere` names the
+ * follow-ups this run queued, which keep their countdown. Null when nothing changes.
+ */
+export function holdInterruptedAutopilot(m: Meeting, queuedHere: (followUpId: string) => boolean = () => false): Meeting | null {
+  const interrupted = (f: FollowUp) => !!f.autopilotAt && !queuedHere(f.id);
+  if (!m.followUps.some(interrupted)) return null;
+  return {
+    ...m,
+    followUps: m.followUps.map((f) => {
+      if (!interrupted(f)) return f;
+      const { autopilotAt: _queued, ...rest } = f;
+      return { ...rest, autopilotHeld: true } as FollowUp;
+    }),
+  };
+}
+
 /**
  * Whether a follow-up may run by itself. Every rule must pass; anything unclear
  * waits for a person. The contract enforces the money limits again on chain.
@@ -40,6 +62,7 @@ export const UNDO_SECONDS = 60;
 export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: WalletLimits | null): Decision {
   const reasons: string[] = [];
   if (f.status !== "proposed") return { run: false, reasons: ["Not waiting"] };
+  if (f.autopilotHeld) return { run: false, reasons: [AUTOPILOT_HELD] };
   if (f.kind === "email") {
     const domain = f.to.split("@")[1]?.toLowerCase();
     if (!f.to) reasons.push("No email address");

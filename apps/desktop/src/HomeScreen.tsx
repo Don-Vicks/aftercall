@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { ArrowRight, Check, KeyRound, Link2, Mic, ShieldCheck } from "lucide-react";
-import { formatClock, formatUsdc, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
+import { AUTOPILOT_HELD, formatClock, formatUsdc, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { isDesktop } from "./recorder";
@@ -492,6 +492,10 @@ function FollowUpRow({
     <span className="text-record">{f.error}</span>
   ) : f.autopilotAt ? (
     <span className="text-ink-2">Autopilot runs this soon · {where}</span>
+  ) : f.autopilotHeld && f.status === "proposed" ? (
+    <span className="text-ink-2">
+      {AUTOPILOT_HELD} · {where}
+    </span>
   ) : (
     <span className="t-quote text-[14px] text-ink-2">
       “{f.evidence.quote}” <span className="font-sans not-italic">· {where}</span>

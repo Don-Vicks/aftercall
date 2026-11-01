@@ -73,6 +73,7 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | --- | --- |
 | The app's limited key records proofs and pays, and can't change a rule or move funds outside the caps | `app_signer_records_proofs_and_pays_over_rpc`, `limited_key_cannot_change_rules`, `one_yocto_rule_holds_even_if_key_lists_owner_methods` (sandbox, local NEAR node) |
 | Over-cap payments are parked; only the owner approves or declines; a bounced transfer is refunded | `over_cap_is_blocked_then_owner_approves`, `owner_can_decline_a_blocked_payment`, `failed_transfer_refunds_everything` |
+| Autopilot never runs a follow-up after a restart: one queued when Aftercall closed is held for your approval, says why, and fails every autopilot rule from then on; items queued since launch keep their countdown, and notes.json keeps the hold | `autopilot.test.ts`: "a queued follow-up read from disk at launch is held for you, never run"; `follow_ups_are_saved_as_the_app_sent_them_and_ticks_keep_them` (`notes_file.rs`) |
 | The model can't invent a follow-up: anything without an exact transcript quote is dropped | `packages/core/src/notes/build.test.ts`, `pipeline.test.ts` |
 | A quote must match whole words: "50 per user" isn't found in "$1.50 per user" | `transcript.test.ts`: "a quote must start and end on whole words…"; `build.test.ts`: "a quote that starts or ends inside a number isn't in the transcript" |
 | Quotes work in any language: matched after Unicode NFKC and case folding, accents still count; in Chinese, Japanese, Thai, Lao, Khmer and Myanmar (no spaces) any letter is a word edge, never before a combining mark; a quote needs 3 words, or 6 letters in those scripts | `transcript.test.ts`: "English quotes match exactly as before", "Japanese, written without spaces…", "Chinese and Thai: any letter is a word edge…", "full-width letters and digits match their plain forms…", "Russian and Arabic…", "Hindi…", "French and Spanish: accents count, case doesn't"; `build.test.ts`: "a Japanese meeting keeps its notes…", "Hindi, French and Spanish meetings keep quotes…"; `ask.test.ts`: "checkAnswer keeps quotes copied in the excerpt's language and drops translations" |
@@ -222,7 +223,7 @@ Disclosed per the hackathon FAQ (Q-005).
 - [x] Capped payment after one tap; payment states (sending, paid, failed with refund), sent with this Mac's limited key (pay is proven on a local NEAR node)
 - [x] Over-cap $5,000 blocked; approve-in-wallet web page (`/sign`, any NEAR wallet via NEAR Connect); app updates when the wallet signs (polls NEAR; first live check waits on a testnet account)
 - [x] Claim link: single-use link (7 days), stored in Postgres with only a hash of the token, phone claim page, owner confirms the payee in their wallet. Tested end to end against the backend; emailing the link waits on Resend
-- [x] Autopilot rules (team-domain recaps, listed payees within the per-payment cap and today's allowance), with a 60-second undo
+- [x] Autopilot rules (team-domain recaps, listed payees within the per-payment cap and today's allowance), with a 60-second undo. If Aftercall closes during the undo window, the item doesn't run on the next launch: it waits for your approval and says why
 - [ ] Gate 2: the full demo works end to end on testnet
 - [ ] 5 Nov: public rough build and a video reply in the teaser thread to Illia
 
