@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { formatClock, formatDuration, othersOn, speakerLabel, type ActionItem, type Attendee, type FollowUp, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { AnimatePresence, useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
+import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
+import { formatClock, formatDuration, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type FollowUp, type Meeting, type TranscriptLine } from "@aftercall/core";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
-import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, useIsYou } from "./ui";
+import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
+import { grow } from "./SettingsParts";
 
 type Tab = "notes" | "transcript";
 
@@ -11,6 +14,7 @@ const rise = (i: number, ms = 320): CSSProperties => ({ animation: `ac-in ${ms}m
 
 export function MeetingScreen({
   meeting,
+  dropped = [],
   me = [],
   leftToday,
   onToggleItem,
@@ -23,6 +27,8 @@ export function MeetingScreen({
   onOpenAutopilot,
 }: {
   meeting: Meeting;
+  /** What the model proposed that the app dropped for lack of an exact quote (notes.json). */
+  dropped?: Dropped[];
   /** Your names (NEAR account, name): action items owned by these show as "You". */
   me?: readonly string[];
   /** What the agent wallet can still pay today, when connected. */
@@ -97,6 +103,7 @@ export function MeetingScreen({
             {tab === "notes" ? (
               <Notes
                 meeting={meeting}
+                dropped={dropped}
                 leftToday={leftToday}
                 onToggleItem={onToggleItem}
                 handlers={{ ...handlers, onJumpTo: jumpTo }}
@@ -149,6 +156,7 @@ function People({ others }: { others: Attendee[] }) {
 
 function Notes({
   meeting,
+  dropped,
   leftToday,
   onToggleItem,
   handlers,
@@ -158,6 +166,7 @@ function Notes({
   onOpenAutopilot,
 }: {
   meeting: Meeting;
+  dropped: Dropped[];
   leftToday: bigint | null;
   onToggleItem: (id: string) => void;
   handlers: FollowUpHandlers;
@@ -235,7 +244,70 @@ function Notes({
           {...handlers}
         />
       </div>
+
+      {dropped.length > 0 && (
+        <div style={rise(6)}>
+          <DroppedItems items={dropped} />
+        </div>
+      )}
     </>
+  );
+}
+
+const KIND: Record<Dropped["kind"], string> = { decision: "Decision", "action item": "Action item", "follow-up": "Follow-up" };
+
+/**
+ * What the model proposed but the app dropped because its quote wasn't word for word
+ * in the transcript. Closed by default; nothing here was sent, paid or added.
+ */
+function DroppedItems({ items }: { items: Dropped[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const still = useReducedMotion();
+  return (
+    <section aria-label="Dropped items" className="flex flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        onClick={() => setOpen(!open)}
+        className="press inline-flex w-fit items-center gap-1.5 rounded-sm text-[13px] leading-[19px] text-ink-2 hover:text-ink"
+      >
+        <ChevronRight size={14} strokeWidth={2} aria-hidden="true" className={cx("text-muted transition-transform duration-(--dur-2) ease-calm", open && "rotate-90")} />
+        <span>
+          <span className="font-semibold">{items.length === 1 ? "1 item dropped" : `${items.length} items dropped`}</span> · no exact quote in the transcript
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <m.div
+            key="dropped"
+            id={id}
+            initial={still ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto", transition: still ? enter : grow }}
+            exit={still ? { opacity: 0, transition: exit } : { opacity: 0, height: 0, transition: exit }}
+            className="overflow-hidden"
+          >
+            <ul className="m-0 mt-2.5 flex list-none flex-col border-t border-hairline p-0">
+              {items.map((d, i) => (
+                <li key={`${i}-${d.text}`} className="flex items-start gap-3 border-b border-hairline py-2.5 pl-5">
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-[12px] leading-4 text-muted">{KIND[d.kind]}</span>
+                    <span className="selectable text-[14px] leading-5 text-ink-2">{d.text}</span>
+                  </span>
+                  <Pill tone="muted">Not acted on</Pill>
+                </li>
+              ))}
+            </ul>
+            <p className="m-0 mt-2 pl-5 text-[13px] leading-[19px] text-ink-2">
+              {items.length === 1
+                ? "The model proposed this, but its quote wasn't word for word in the transcript, so Aftercall left it out."
+                : "The model proposed these, but their quotes weren't word for word in the transcript, so Aftercall left them out."}
+            </p>
+          </m.div>
+        )}
+      </AnimatePresence>
+    </section>
   );
 }
 

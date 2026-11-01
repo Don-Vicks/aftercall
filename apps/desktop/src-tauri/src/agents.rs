@@ -224,12 +224,19 @@ fn notes(data_dir: &Path, id: &str) -> Result<Value, String> {
 }
 
 /// notes.json without your notes and the salt behind their hash: those stay in the app.
+/// The proof's notice (your statement that you told everyone) stays out too: agents
+/// don't need it.
 fn for_agents(mut notes: Value) -> Value {
     if let Some(m) = notes.get_mut("meeting").and_then(Value::as_object_mut) {
         m.remove("yourNotes");
     }
+    if let Some(p) = notes.get_mut("proof").and_then(Value::as_object_mut) {
+        p.remove("notice");
+    }
     if let Some(n) = notes.as_object_mut() {
         n.remove("yourNotesSalt");
+        // What the run cost is about your NEAR AI account, not the meeting.
+        n.remove("cost");
     }
     notes
 }
@@ -318,7 +325,8 @@ mod tests {
             { "id": "a2", "text": "Share the term sheet", "owner": "Ada", "done": false },
             { "id": "a3", "text": "Book the call", "owner": "You", "done": true }
         ], "followUps": [{ "id": "f2", "amount": { "$bigint": "12500000" } }], "yourNotes": "Push for the pilot" },
-            "proof": { "notesHash": "abc" }, "yourNotesSalt": "5a5a" });
+            "proof": { "notesHash": "abc", "notice": { "by": "you", "at": "2026-10-26T11:58:00.000Z", "how": "chat" } }, "yourNotesSalt": "5a5a",
+            "cost": { "usd": 0.0042, "whisperSeconds": 384, "whisperUsd": 0.00000384, "pricesAsOf": "2026-11-01" } });
         at_rest::write_json(&rec.join("notes.json"), &notes).unwrap();
         // Recorded, not processed: no notes.
         std::fs::create_dir_all(dir.join("recordings/1761200000")).unwrap();
@@ -358,11 +366,15 @@ mod tests {
         for v in [&list, &one, &done] {
             let text = v.to_string();
             assert!(!text.contains("Push for the pilot") && !text.contains("yourNotes") && !text.contains("5a5a"), "{text}");
+            assert!(!text.contains("\"notice\""), "the proof's notice stays in the app: {text}");
+            assert!(!text.contains("pricesAsOf"), "the estimated cost stays in the app: {text}");
         }
         // Still on disk, untouched by the agent's write.
         let saved = read_notes(&dir);
         assert_eq!(saved["meeting"]["yourNotes"], "Push for the pilot");
         assert_eq!(saved["yourNotesSalt"], "5a5a");
+        assert_eq!(saved["proof"]["notice"]["how"], "chat");
+        assert_eq!(saved["cost"]["pricesAsOf"], "2026-11-01");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

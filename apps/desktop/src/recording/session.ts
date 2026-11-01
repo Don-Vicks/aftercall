@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import type { CalendarEvent } from "@aftercall/core";
+import type { CalendarEvent, NoticeLog } from "@aftercall/core";
 import { rmsToLevel } from "../primitives";
 import { calendar } from "../calendar";
 import { isDesktop, recorder, type RecorderStatus, type SavedRecording } from "../recorder";
@@ -259,8 +259,11 @@ export const forgetAutoProcess = (id: string) => void autoProcess.delete(id);
 
 // ---------- actions ----------
 
-/** Starts recording `project`. Consent is the sheet's job: it never calls this unticked. */
-export async function startRecording(project: string, event: CalendarEvent | null, eventIsSample = false): Promise<void> {
+/**
+ * Starts recording `project`. Consent is the sheet's job: it never calls this unticked,
+ * and passes the tick as `notice`, which the recorder keeps with the recording.
+ */
+export async function startRecording(project: string, event: CalendarEvent | null, eventIsSample = false, notice?: NoticeLog): Promise<void> {
   if (state.phase !== "idle") throw new Error("Already recording");
   set({ ...reset(), phase: "starting", project, event, eventIsSample });
   if (!isDesktop) {
@@ -269,7 +272,7 @@ export async function startRecording(project: string, event: CalendarEvent | nul
     return;
   }
   try {
-    applyStatus(await recorder.start(project));
+    applyStatus(await recorder.start(project, notice));
   } catch (e) {
     set(reset());
     throw e;

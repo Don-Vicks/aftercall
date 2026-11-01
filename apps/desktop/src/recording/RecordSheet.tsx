@@ -1,15 +1,15 @@
 import { useEffect, useId, useState } from "react";
 import { Copy, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { CalendarEvent } from "@aftercall/core";
+import type { CalendarEvent, NoticeLog } from "@aftercall/core";
 import { calendar } from "../calendar";
 import type { Project } from "../projects";
 import { isDesktop } from "../recorder";
 import { sampleScripts } from "../sampleRecordings";
-import { Avatar, Button, Dialog, IconButton, Menu, Select, Tick, toast } from "../ui";
+import { Avatar, Button, Dialog, IconButton, Menu, Select, Tick, cx, toast } from "../ui";
 import { startRecording } from "./session";
 
-const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted after transcription.";
+const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted once the notes are made.";
 
 /** Within this long before it starts, an event counts as the call you're about to record. */
 const SOON_SECONDS = 15 * 60;
@@ -34,6 +34,13 @@ function previewEvent(now = Math.floor(Date.now() / 1000)): CalendarEvent {
     attendees: [{ name: "Ines Rocha", email: "ines@example.com" }],
   };
 }
+
+/** The optional "How?" after the tick, in the words the sheet shows. */
+const HOW: { value: NonNullable<NoticeLog["how"]>; label: string }[] = [
+  { value: "aloud", label: "Said it" },
+  { value: "chat", label: "In chat" },
+  { value: "invite", label: "In the invite" },
+];
 
 const hhmm = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -80,7 +87,15 @@ export function RecordSheet({
     if (isDesktop) currentEvent().then(setEvent);
   }, []);
 
-  const [consent, setConsent] = useState(false);
+  const [consent, setConsentState] = useState(false);
+  /** When the box was ticked: the notice records when you said you'd told them, not when you pressed Start. */
+  const [tickedAt, setTickedAt] = useState<string | null>(null);
+  const [how, setHow] = useState<NoticeLog["how"]>(undefined);
+  const setConsent = (on: boolean) => {
+    setConsentState(on);
+    setTickedAt(on ? new Date().toISOString() : null);
+    if (!on) setHow(undefined);
+  };
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +117,8 @@ export function RecordSheet({
     setError(null);
     setStarting(true);
     try {
-      await startRecording(project, event, !isDesktop);
+      const notice: NoticeLog = { by: "you", at: tickedAt ?? new Date().toISOString(), ...(how ? { how } : {}) };
+      await startRecording(project, event, !isDesktop, notice);
       onStarted();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -175,22 +191,25 @@ export function RecordSheet({
         </div>
       )}
 
-      <div className="flex items-center gap-3 border-y border-hairline py-3.5" style={{ animation: "ac-in 280ms 120ms var(--ease) both" }}>
-        <span className="flex min-w-0 flex-1 items-center gap-3">
-          <Tick checked={consent} onChange={setConsent} aria-labelledby={consentId} />
-          <span id={consentId} onClick={() => setConsent(!consent)} className="cursor-pointer text-[15px] leading-[22px] text-ink">
-            I've told everyone on the call
+      <div className="flex flex-col gap-2.5 border-y border-hairline py-3.5" style={{ animation: "ac-in 280ms 120ms var(--ease) both" }}>
+        <div className="flex items-center gap-3">
+          <span className="flex min-w-0 flex-1 items-center gap-3">
+            <Tick checked={consent} onChange={setConsent} aria-labelledby={consentId} />
+            <span id={consentId} onClick={() => setConsent(!consent)} className="cursor-pointer text-[15px] leading-[22px] text-ink">
+              I've told everyone on the call
+            </span>
           </span>
-        </span>
-        <button
-          type="button"
-          onClick={copyNotice}
-          title={NOTICE}
-          className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] px-1 text-[13px] font-semibold text-verdigris hover:text-verdigris-hover"
-        >
-          <Copy size={13} strokeWidth={2} aria-hidden="true" />
-          {copied ? "Copied" : "Copy notice"}
-        </button>
+          <button
+            type="button"
+            onClick={copyNotice}
+            title={NOTICE}
+            className="press inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] px-1 text-[13px] font-semibold text-verdigris hover:text-verdigris-hover"
+          >
+            <Copy size={13} strokeWidth={2} aria-hidden="true" />
+            {copied ? "Copied" : "Copy notice"}
+          </button>
+        </div>
+        {consent && <HowPicker value={how} onChange={setHow} />}
       </div>
 
       <div className="flex flex-col gap-2.5" style={{ animation: "ac-in 280ms 160ms var(--ease) both" }}>
@@ -229,5 +248,37 @@ export function RecordSheet({
         </p>
       )}
     </Dialog>
+  );
+}
+
+/**
+ * How you told them, if you want to say: one tap picks, a second clears it. Optional,
+ * so Start stays one tap away. It goes into the proof as part of your statement.
+ */
+function HowPicker({ value, onChange }: { value: NoticeLog["how"]; onChange: (how: NoticeLog["how"]) => void }) {
+  const labelId = useId();
+  return (
+    <div role="group" aria-labelledby={labelId} className="flex flex-wrap items-center gap-1.5 pl-[34px]" style={{ animation: "ac-in 240ms var(--ease) both" }}>
+      <span id={labelId} className="mr-1 text-[13px] leading-[18px] text-ink-2">
+        How? <span className="text-muted">optional</span>
+      </span>
+      {HOW.map((h) => {
+        const on = value === h.value;
+        return (
+          <button
+            key={h.value}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? undefined : h.value)}
+            className={cx(
+              "press inline-flex h-7 items-center rounded-full px-2.5 text-[13px] font-medium transition-colors duration-(--dur-1)",
+              on ? "bg-verdigris-tint text-verdigris" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--hairline)] hover:text-ink",
+            )}
+          >
+            {h.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

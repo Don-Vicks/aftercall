@@ -1,7 +1,20 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Copy, ExternalLink, Info, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { NOT_PROVEN, WHISPER_NOTE, encodePublicProof, groupChecks, verifyProof, type Check as ProofCheck, type CheckGroup, type TeeCheck } from "@aftercall/core";
+import {
+  NOT_PROVEN,
+  WHISPER_NOTE,
+  droppedLine,
+  encodePublicProof,
+  groupChecks,
+  hasStatements,
+  noticeLine,
+  verifyProof,
+  type Check as ProofCheck,
+  type CheckGroup,
+  type TeeCheck,
+} from "@aftercall/core";
+import { aboutCost, pricesDay } from "./costs";
 import { VERIFY_URL, explorerTx, near } from "./near";
 import type { SavedNotes } from "./nearai";
 import { nearReady, recordProof } from "./proofs";
@@ -189,6 +202,8 @@ export function VerifySheet({
         </p>
       )}
 
+      <Statements saved={saved} delay={lastRow + 40} />
+
       <section aria-labelledby="verify-again" className="flex flex-col gap-3 border-t border-hairline pt-4" style={at(lastRow + 80)}>
         <h3 id="verify-again" className="t-section m-0 text-ink">
           Proof, checked again now <span className="font-medium text-muted">{saved.onChain ? "against NEAR" : "from the saved bundle"}</span>
@@ -270,6 +285,47 @@ export function VerifySheet({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * What was recorded with the notes but isn't a check: your notice, what the app
+ * dropped, and the estimated cost. Label and words, no tick, so none reads as passed.
+ */
+function Statements({ saved, delay }: { saved: SavedNotes; delay: number }) {
+  const proof = saved.proof;
+  const dropped = droppedLine(proof);
+  const rows: { label: string; text: string }[] = [
+    {
+      label: "Notice",
+      // Notes made before the notice was kept had it ticked but not saved: say that, not "none".
+      text: hasStatements(proof) ? noticeLine(proof.notice) : "Not recorded: these notes were made before Aftercall kept the notice",
+    },
+    ...(dropped ? [{ label: "Dropped", text: dropped }] : []),
+  ];
+  if (saved.cost) {
+    const about = aboutCost(saved.cost);
+    rows.push({
+      label: "Processing cost",
+      text: about
+        ? `${about} · estimated from token counts and NEAR AI's public prices on ${pricesDay(saved.cost.pricesAsOf)}`
+        : "Cost not reported · NEAR AI didn't say how many tokens the reply used",
+    });
+  }
+  return (
+    <section aria-labelledby="verify-stated" className="flex flex-col gap-2.5 border-t border-hairline pt-4" style={at(delay)}>
+      <h3 id="verify-stated" className="t-section m-0 text-ink">
+        Recorded with the notes <span className="font-medium text-muted">statements, not checks</span>
+      </h3>
+      <dl className="m-0 grid grid-cols-[118px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+        {rows.map((r) => (
+          <div key={r.label} className="contents">
+            <dt className="text-[13px] leading-[19px] text-muted">{r.label}</dt>
+            <dd className="selectable m-0 text-[13px] leading-[19px] text-ink-2">{r.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

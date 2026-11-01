@@ -5,6 +5,7 @@ import {
   applyCalendarEvent,
   formatClock,
   formatDuration,
+  plainNearAiError,
   processRecording,
   type CalendarEvent,
   type Stage as PipelineStage,
@@ -110,6 +111,8 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         transcriptCache: transcriptCache(id),
         // What you typed during the call: context for the model, covered by the proof's salted hash.
         yourNotes: recording.yourNotes,
+        // Your "I've told everyone" tick goes into the proof as your statement. A sample is a made-up call: none.
+        notice: recording.label ? undefined : recording.notice,
       },
       (stage: PipelineStage, detail?: string) => moveTo(stage, stage === "transcribe" ? detail : undefined),
     );
@@ -120,13 +123,15 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     const meeting = event ? applyCalendarEvent(result.meeting, event) : result.meeting;
     let saved: SavedNotes = { ...result, meeting, processedAt: new Date().toISOString() };
     await recordingFiles.saveNotes(id, serializeNotes(saved));
+    // The notes are saved, so the audio goes now, before the proof's NEAR transaction:
+    // quitting during that step mustn't leave it behind (the app also sweeps at launch).
+    await recordingFiles.deleteAudio(id);
 
     moveTo("proof");
     // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
     if (await nearReady()) saved = await recordProof(id, saved).catch(() => saved);
 
     moveTo("deleted");
-    await recordingFiles.deleteAudio(id);
     times[STEP_IDS.length - 1] = (performance.now() - since) / 1000;
 
     const notes = serializeNotes(saved);
@@ -144,7 +149,7 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     // The seal shows for a moment, then the meeting opens (Open notes skips the wait).
     window.setTimeout(finish, SEAL_MS);
   } catch (e) {
-    report(id, { state: "failed", at, error: e instanceof Error ? e.message : String(e), times: [...times] });
+    report(id, { state: "failed", at, error: plainNearAiError(e), times: [...times] });
   }
 }
 

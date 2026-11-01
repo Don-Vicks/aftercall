@@ -5,6 +5,7 @@ import { AutopilotSettings } from "./AutopilotSettings";
 import { CalendarSettings } from "./CalendarSettings";
 import type { CalendarStatus } from "./calendar";
 import { NearAiSettings } from "./NearAiSettings";
+import type { Spend } from "./costs";
 import { useNearSetup, type NearSetup } from "./nearSetup";
 import { isDesktop } from "./recorder";
 import { RecoverySettings } from "./RecoveryPhrase";
@@ -18,7 +19,7 @@ import { Button, Card, Pill, SectionTitle, Spinner, cx } from "./ui";
  * The index at the top ticks what's done and says what still needs a signature.
  * `onOpenPrivacy` shows the "Privacy and your data" row; without it the row is hidden.
  */
-export function ConnectNear({ onOpenPrivacy }: { onOpenPrivacy?: () => void } = {}) {
+export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPrivacy?: () => void; spend?: Spend | null; spendIsSample?: boolean } = {}) {
   const n = useNearSetup();
   const [nearAi, setNearAi] = useState(false);
   const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
@@ -90,7 +91,7 @@ export function ConnectNear({ onOpenPrivacy }: { onOpenPrivacy?: () => void } = 
           </nav>
 
           <div id="settings-near-ai" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(2)}>
-            <NearAiSettings onChange={setNearAi} />
+            <NearAiSettings onChange={setNearAi} spend={spend} sample={spendIsSample} />
           </div>
 
           <div id="settings-key" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(3)}>

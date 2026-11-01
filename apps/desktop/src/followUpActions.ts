@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   buildRecap,
   CHAIN_NAME,
+  recapFactsFrom,
   claimLink,
   encodePublicProof,
   formatUsdc,
@@ -33,9 +34,18 @@ function verifyLink(saved?: SavedNotes): string | undefined {
   return `${VERIFY_URL}#${encodePublicProof({ network, contract, owner, bundle: saved.proof })}`;
 }
 
+/** The public page on what is and isn't checked; the recap footer links it when there's no proof link. */
+export const HANDLING_URL = `${WEB_URL}/handling`;
+
+/** What the recap's footer may say about this meeting, from its saved proof. No proof, no claim of checks. */
+export function recapFacts(meeting: Meeting, saved?: SavedNotes) {
+  const facts = recapFactsFrom(meeting, saved?.proof, HANDLING_URL, verifyLink(saved));
+  return { ...facts, verified: facts.verified && !!saved?.proof };
+}
+
 /** Opens the recap as a draft in the person's own mail app. Nothing leaves the Mac. */
 export async function draftInMail(meeting: Meeting, f: EmailFollowUp, saved?: SavedNotes): Promise<void> {
-  await openUrl(mailtoLink(buildRecap(meeting, f, { verifyUrl: verifyLink(saved) })));
+  await openUrl(mailtoLink(buildRecap(meeting, f, { facts: recapFacts(meeting, saved) })));
 }
 
 /** Sends the recap through the Aftercall backend (Resend), signed in with this Mac's key. */
@@ -43,7 +53,7 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
   apply({ status: "sending", error: undefined });
   try {
     const config = await near.getConfig();
-    const recap = buildRecap(meeting, f, { verifyUrl: verifyLink(saved) });
+    const recap = buildRecap(meeting, f, { facts: recapFacts(meeting, saved) });
     const { id } = await backend.sendRecap({ ...recap, senderName: config?.account });
     apply({ status: "sent", doneAt: hhmm(), ref: id });
   } catch (e) {

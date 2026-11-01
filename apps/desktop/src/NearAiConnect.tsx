@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { NEAR_AI_KEY_MESSAGE, plainNearAiError } from "@aftercall/core";
 import { nearAiKey } from "./nearai";
 import { isDesktop } from "./recorder";
 import { CheckCircle } from "./primitives/Check";
@@ -39,7 +40,7 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
     try {
       const v = await nearAiKey.check(key);
       if (v === "invalid") {
-        setError("NEAR AI says this key is invalid or expired. Copy it again from cloud.near.ai, or make a new one.");
+        setError(NEAR_AI_KEY_MESSAGE);
         return;
       }
       setState("saving");
@@ -50,7 +51,7 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
       await refresh();
       onConnected?.();
     } catch (e) {
-      setError(errorText(e));
+      setError(plainNearAiError(errorText(e)));
     } finally {
       setState("idle");
     }

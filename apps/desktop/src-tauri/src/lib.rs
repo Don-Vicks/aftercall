@@ -106,6 +106,46 @@ struct MeetingMeta {
     /// interface; never written into meeting.json.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     your_notes: Option<String>,
+    /// That you told everyone before recording, as you logged it on the record sheet.
+    /// Kept here so notes made after a restart still put it in the proof.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    notice: Option<NoticeLog>,
+}
+
+/// The record sheet's consent tick: your own statement, with when you ticked it and,
+/// if you said, how you told them. Mirrors NoticeLog in packages/core/src/meeting.ts.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+struct NoticeLog {
+    by: NoticeBy,
+    /// ISO time the box was ticked.
+    at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    how: Option<NoticeHow>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum NoticeBy {
+    You,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum NoticeHow {
+    Aloud,
+    Chat,
+    Invite,
+    Email,
+}
+
+impl NoticeLog {
+    /// An ISO time is under 40 characters; anything longer isn't one.
+    fn check(self) -> Result<Self, String> {
+        if self.at.is_empty() || self.at.len() > 40 {
+            return Err("Bad notice time".into());
+        }
+        Ok(self)
+    }
 }
 
 fn recordings_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -204,7 +244,8 @@ fn emit_state(app: &AppHandle, status: Option<RecorderStatus>) {
 }
 
 #[tauri::command]
-fn start_recording(project: String, app: AppHandle, state: State<RecorderState>) -> Result<RecorderStatus, String> {
+fn start_recording(project: String, notice: Option<NoticeLog>, app: AppHandle, state: State<RecorderState>) -> Result<RecorderStatus, String> {
+    let notice = notice.map(NoticeLog::check).transpose()?;
     let mut slot = state.0.lock().map_err(|e| e.to_string())?;
     if slot.is_some() {
         return Err("Already recording".into());
@@ -222,6 +263,7 @@ fn start_recording(project: String, app: AppHandle, state: State<RecorderState>)
         label: None,
         title: None,
         your_notes: None,
+        notice,
     };
     let key = at_rest::data_key()?;
     let clock = Arc::new(Clock::default());
@@ -498,16 +540,32 @@ fn write_chunk_transcript(app: AppHandle, id: String, chunk: String, raw: String
 /// Deletes the audio and the cached chunk transcriptions once the notes are saved.
 #[tauri::command]
 fn delete_audio(app: AppHandle, id: String) -> Result<usize, String> {
-    let dir = recording_dir(&app, &id)?;
+    delete_audio_in(&recording_dir(&app, &id)?)
+}
+
+/// Removes a recording folder's .wav chunks and transcripts/ cache; returns how many
+/// chunks went. A chunk already gone (the launch sweep got there first) is fine.
+fn delete_audio_in(dir: &std::path::Path) -> Result<usize, String> {
     let _ = std::fs::remove_dir_all(dir.join("transcripts"));
     let mut deleted = 0;
-    for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+    for e in std::fs::read_dir(dir).map_err(|e| e.to_string())?.flatten() {
         if e.path().extension().and_then(|x| x.to_str()) == Some("wav") {
-            std::fs::remove_file(e.path()).map_err(|e| e.to_string())?;
-            deleted += 1;
+            match std::fs::remove_file(e.path()) {
+                Ok(()) => deleted += 1,
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err.to_string()),
+            }
         }
     }
     Ok(deleted)
+}
+
+/// Audio still beside saved notes: the app quit, or a delete failed, after the notes
+/// were saved. The recap says the audio is deleted once the notes are saved, so it goes
+/// now. Recordings without notes keep theirs, to be processed or retried.
+fn sweep_audio(recordings: &std::path::Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(recordings) else { return 0 };
+    entries.flatten().filter(|e| e.path().join("notes.json").is_file()).map(|e| delete_audio_in(&e.path()).unwrap_or(0)).sum()
 }
 
 #[tauri::command]
@@ -853,6 +911,12 @@ pub fn run() {
                     Ok(n) => eprintln!("at rest: encrypted {n} files left by an earlier version"),
                     Err(e) => eprintln!("at rest: {e}"),
                 });
+                // Audio left beside saved notes by an earlier run goes now.
+                let recordings = dir.join("recordings");
+                std::thread::spawn(move || match sweep_audio(&recordings) {
+                    0 => {}
+                    n => eprintln!("audio: deleted {n} chunks left beside saved notes"),
+                });
                 // Connected agents stays on across restarts, with the same token.
                 if agents::load_settings(&dir).enabled
                     && let Err(e) = agents_start(&dir, &app.state::<AgentsState>(), false)
@@ -952,6 +1016,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn audio_left_beside_saved_notes_is_swept_and_unprocessed_audio_stays() {
+        let root = std::env::temp_dir().join(format!("aftercall-sweep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let done = root.join("1700000000");
+        let pending = root.join("1700000100");
+        for d in [&done, &pending] {
+            std::fs::create_dir_all(d.join("transcripts")).unwrap();
+            std::fs::write(d.join("mic-000.wav"), b"a").unwrap();
+            std::fs::write(d.join("system-000.wav"), b"b").unwrap();
+            std::fs::write(d.join("meeting.json"), b"{}").unwrap();
+        }
+        std::fs::write(done.join("notes.json"), b"{}").unwrap();
+
+        assert_eq!(sweep_audio(&root), 2);
+        assert!(!done.join("mic-000.wav").exists() && !done.join("transcripts").exists());
+        assert!(done.join("notes.json").exists() && done.join("meeting.json").exists(), "only the audio goes");
+        assert!(pending.join("mic-000.wav").exists() && pending.join("transcripts").exists(), "no notes yet: the audio is still needed");
+        assert_eq!(sweep_audio(&root), 0, "nothing left to sweep");
+        assert_eq!(delete_audio_in(&done).unwrap(), 0, "deleting again is fine");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn the_menu_bar_clock_reads_like_a_timer() {
         assert_eq!(clock_text(0), "00:00");
         assert_eq!(clock_text(754), "12:34");
@@ -974,10 +1061,38 @@ mod tests {
             label: None,
             title: None,
             your_notes: None,
+            notice: None,
         };
         let json = serde_json::to_string(&meta).unwrap();
         assert!(!json.contains("yourNotes"));
         let with = MeetingMeta { your_notes: Some("Deposit 40".into()), ..meta };
         assert!(serde_json::to_string(&with).unwrap().contains(r#""yourNotes":"Deposit 40""#), "the interface gets them as yourNotes");
+    }
+
+    #[test]
+    fn the_notice_round_trips_through_meeting_json() {
+        // Older meeting.json files have no notice, and samples never get one.
+        let old: MeetingMeta = serde_json::from_str(r#"{"id":"1700000000","project":"General","startedAt":1700000000,"seconds":60,"chunks":1,"dir":"/x"}"#).unwrap();
+        assert_eq!(old.notice, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("notice"));
+
+        let notice: NoticeLog = serde_json::from_str(r#"{"by":"you","at":"2026-11-01T14:02:00.000Z","how":"chat"}"#).unwrap();
+        let meta = MeetingMeta { notice: Some(notice.clone()), ..old };
+        let back: MeetingMeta = serde_json::from_str(&serde_json::to_string(&meta).unwrap()).unwrap();
+        assert_eq!(back.notice, Some(notice));
+
+        let no_how: NoticeLog = serde_json::from_str(r#"{"by":"you","at":"2026-11-01T14:02:00.000Z"}"#).unwrap();
+        assert_eq!(no_how.how, None);
+        assert!(!serde_json::to_string(&no_how).unwrap().contains("how"));
+    }
+
+    #[test]
+    fn a_notice_must_be_yours_and_say_how_in_known_words() {
+        assert!(serde_json::from_str::<NoticeLog>(r#"{"by":"ada","at":"2026-11-01T14:02:00Z"}"#).is_err());
+        assert!(serde_json::from_str::<NoticeLog>(r#"{"by":"you","at":"2026-11-01T14:02:00Z","how":"telepathy"}"#).is_err());
+        let long = NoticeLog { by: NoticeBy::You, at: "x".repeat(41), how: None };
+        assert!(long.check().is_err());
+        let empty = NoticeLog { by: NoticeBy::You, at: String::new(), how: None };
+        assert!(empty.check().is_err());
     }
 }

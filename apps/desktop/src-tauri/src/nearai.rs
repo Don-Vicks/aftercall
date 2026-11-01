@@ -27,6 +27,12 @@ fn entry() -> Result<keyring::Entry, String> {
 
 /// The key from the Keychain, or `NEARAI_API_KEY` from the environment during development.
 fn api_key() -> Result<String, String> {
+    // A debug build pointed at another server (the local fake in tests) uses the
+    // environment's key, never the real one from the Keychain.
+    #[cfg(debug_assertions)]
+    if std::env::var("NEARAI_BASE_URL").is_ok() {
+        return std::env::var("NEARAI_API_KEY").map_err(|_| "NO_NEARAI_KEY".to_string());
+    }
     match entry()?.get_password() {
         Ok(k) => Ok(k),
         Err(keyring::Error::NoEntry) => std::env::var("NEARAI_API_KEY").map_err(|_| "NO_NEARAI_KEY".to_string()),

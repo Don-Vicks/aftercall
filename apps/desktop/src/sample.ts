@@ -1,4 +1,4 @@
-import type { Meeting } from "@aftercall/core";
+import { estimateCost, type Dropped, type Meeting } from "@aftercall/core";
 
 /**
  * Sample data for building the interface before the capture and summary pipeline
@@ -117,3 +117,17 @@ export const syncWithAda: Meeting = {
     { at: 160, speaker: "others", text: "Great. I'll look out for the recap. Talk Friday." },
   ],
 };
+
+/**
+ * What the model proposed for the sample that the app dropped: its quote isn't in the
+ * transcript, so nothing was done with it. Shows the disclosure in the browser preview.
+ */
+export const syncWithAdaDropped: Dropped[] = [
+  { kind: "action item", text: "Book the launch venue for the demo", reason: "QUOTE_NOT_IN_TRANSCRIPT" },
+];
+
+/**
+ * An estimated cost for the sample, so the browser preview can show the spend row.
+ * The token counts are made up but typical: about $0.0042.
+ */
+export const syncWithAdaCost = estimateCost({ whisperSeconds: 384, chat: { model: "Qwen/Qwen3.8-27B", usage: { prompt_tokens: 20_000, completion_tokens: 2_500 } } });

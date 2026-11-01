@@ -10,7 +10,8 @@ import { RecordSheet } from "./recording/RecordSheet";
 import { LivePill } from "./recording/LivePill";
 import { LiveScreen } from "./recording/LiveScreen";
 import { getSession, openNotes, useRecordingEvents, useRecordingSession } from "./recording/session";
-import { syncWithAda } from "./sample";
+import { syncWithAda, syncWithAdaCost, syncWithAdaDropped } from "./sample";
+import { spendOf } from "./costs";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
 import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
@@ -102,8 +103,12 @@ export default function App() {
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
   const [verifyId, setVerifyId] = useState<string | null>(null);
-  /** From the agent-wallet contract once NEAR is connected; sample payees until then. */
-  const [payees, setPayees] = useState<Payee[]>(samplePayees);
+  /**
+   * From the agent-wallet contract once NEAR is connected; none until then, so a real
+   * call's transcription and notes never hear the sample's names. Samples (and the
+   * browser preview) use the sample payees instead.
+   */
+  const [payees, setPayees] = useState<Payee[]>(isDesktop ? [] : samplePayees);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
   /** Payees the owner opted in to payment on Solana or Base, by NEAR account. */
   const [destinations, setDestinations] = useState<Record<string, PayeeDestination>>({});
@@ -404,6 +409,8 @@ export default function App() {
         const f = find(id);
         if (f.kind !== "email") return;
         if (!isDesktop) return void toast({ text: "In the Mac app this opens the recap as a draft in Mail. The browser preview can't." });
+        // The sample never went to NEAR AI, so a footer about checks and deleted audio would be untrue.
+        if (sample) return void toast({ text: "The sample meeting is made up, so it has no recap to draft. Record a call to draft one in Mail." });
         draftInMail(meeting, f, saved[meeting.id])
           .then(() => apply(id)({ draftedAt: nowHHMM(), autopilotAt: undefined }))
           .catch((e) => toast({ text: `Couldn't open Mail: ${e instanceof Error ? e.message : String(e)}`, tone: "record" }));
@@ -589,6 +596,7 @@ export default function App() {
                 key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
                 openAt={view.name === "meeting" ? view.at : undefined}
                 meeting={meeting}
+                dropped={saved[meeting.id]?.dropped ?? (meeting.id === syncWithAda.id ? syncWithAdaDropped : undefined)}
                 me={account ? [account] : []}
                 autopilotOn={autopilotOn}
                 onOpenAgents={() => setView({ name: "agents" })}
@@ -608,7 +616,7 @@ export default function App() {
               <RecordingScreen
                 key={openRecording.id}
                 recording={openRecording}
-                payees={payees}
+                payees={openRecording.label ? samplePayees : payees}
                 onDelete={() => removeRecording(openRecording.id)}
                 onProcessed={(id, notes) => onProcessedRef.current(id, notes)}
               />
@@ -654,7 +662,14 @@ export default function App() {
                 onChanged={refreshWallet}
               />
             )}
-            {view.name === "settings" && <ConnectNear onOpenPrivacy={go.privacy} />}
+            {view.name === "settings" && (
+              <ConnectNear
+                onOpenPrivacy={go.privacy}
+                // Real meetings on this Mac; the browser preview has none, so it shows the sample's figure, labelled.
+                spend={isDesktop ? spendOf(Object.entries(saved).filter(([id]) => !hidden[id]).map(([, s]) => s.cost)) : spendOf([syncWithAdaCost])}
+                spendIsSample={!isDesktop}
+              />
+            )}
             {view.name === "people" && <PeopleScreen meetings={library} me={me} sampleIds={sampleIds} onOpenPerson={go.person} />}
             {view.name === "person" && (
               <PersonScreen

@@ -1,6 +1,21 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, Check, ShieldAlert, ShieldCheck } from "lucide-react";
-import { askMeetings, buildPeople, firstName, formatClock, formatUsdc, meetingTime, openCount, pickExcerpts, type AskAnswer, type AskResult, type Excerpt, type Meeting } from "@aftercall/core";
+import {
+  askMeetings,
+  buildPeople,
+  firstName,
+  formatClock,
+  formatUsdc,
+  meetingTime,
+  openCount,
+  pickExcerpts,
+  plainNearAiError,
+  type AskAnswer,
+  type AskResult,
+  type Excerpt,
+  type Meeting,
+} from "@aftercall/core";
+import { aboutCost } from "./costs";
 import { isDesktop } from "./recorder";
 import { nearAiKey, nearAiTransport } from "./nearai";
 import { Avatar, Button, Pill, Spinner, Tooltip, cx } from "./ui";
@@ -102,7 +117,7 @@ export function AskScreen({
       patch(id, { phase: "done", result, answer: result });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      patch(id, message.includes("NO_NEARAI_KEY") ? { phase: "nokey" } : { phase: "error", error: message });
+      patch(id, message.includes("NO_NEARAI_KEY") ? { phase: "nokey" } : { phase: "error", error: plainNearAiError(e) });
     } finally {
       running.current = false;
     }
@@ -327,7 +342,8 @@ function TurnView({
               ))}
             </div>
           )}
-          {revealed && <AnswerFooter result={t.result} sent={t.answer.sent} dropped={t.answer.dropped} delay={t.answer.quotes.length * 90 + 80} />}
+          {revealed && <AnswerFooter result={t.result} sent={t.answer.sent} delay={t.answer.quotes.length * 90 + 80} />}
+          {revealed && <AnswerMeta quotes={t.answer.quotes.length} dropped={t.answer.dropped} result={t.result} delay={t.answer.quotes.length * 90 + 120} />}
         </>
       )}
     </div>
@@ -376,7 +392,25 @@ function QuoteCard({ excerpt: e, quote, index, meeting, onOpen }: { excerpt: Exc
   );
 }
 
-function AnswerFooter({ result, sent, dropped, delay }: { result?: AskResult; sent: number; dropped: number; delay: number }) {
+/**
+ * "4 quotes checked, 1 dropped · about $0.0012, estimated": every quote the model gave
+ * was looked for word for word; the ones not found aren't shown. No cost line when
+ * NEAR AI didn't report the tokens.
+ */
+function AnswerMeta({ quotes, dropped, result, delay }: { quotes: number; dropped: number; result?: AskResult; delay: number }) {
+  const checked = quotes + dropped;
+  const cost = result ? aboutCost(result.cost) : null;
+  if (checked === 0 && !cost) return null;
+  return (
+    <p className="m-0 -mt-1.5 pl-6 text-[12px] leading-4 text-muted" style={{ animation: `ac-in 280ms ${delay}ms var(--ease) both` }}>
+      {checked > 0 && `${plural(checked, "quote")} checked, ${dropped === 0 ? "none" : dropped} dropped`}
+      {checked > 0 && cost && " · "}
+      {cost && `${cost}, estimated`}
+    </p>
+  );
+}
+
+function AnswerFooter({ result, sent, delay }: { result?: AskResult; sent: number; delay: number }) {
   const failed = result?.checks.filter((c) => !c.ok) ?? [];
   const details = result?.verified
     ? `${result.checks.length} checks passed: gateway and Qwen TEE attested, excerpts encrypted to that TEE, answer signed by it.`
@@ -386,7 +420,6 @@ function AnswerFooter({ result, sent, dropped, delay }: { result?: AskResult; se
       <LockIcon />
       <span>
         Answered in NEAR AI secure hardware · {plural(sent, "excerpt")} sent, encrypted to the attested model
-        {dropped > 0 && ` · ${plural(dropped, "quote")} not in your meetings left out`}
       </span>
       {!result ? (
         <Pill tone="muted" icon={<Spinner size={10} tone="current" />}>

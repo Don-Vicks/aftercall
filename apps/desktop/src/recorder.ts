@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { NoticeLog } from "@aftercall/core";
 
 /** True inside the Tauri app; false when the interface runs in a plain browser (pnpm dev:ui). */
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -39,6 +40,8 @@ export interface SavedRecording {
   eventTitle?: string;
   /** What you typed during the call (your-notes.json), if anything. Read-only once notes exist. */
   yourNotes?: string;
+  /** The record sheet's "I've told everyone" tick, kept in meeting.json for the proof. Samples have none. */
+  notice?: NoticeLog;
 }
 
 export interface Levels {
@@ -53,7 +56,7 @@ export interface SilenceEvent {
 }
 
 export const recorder = {
-  start: (project: string) => invoke<RecorderStatus>("start_recording", { project }),
+  start: (project: string, notice?: NoticeLog) => invoke<RecorderStatus>("start_recording", { project, notice: notice ?? null }),
   pause: (paused: boolean) => invoke<void>("pause_recording", { paused }),
   stop: () => invoke<SavedRecording>("stop_recording"),
   /** The recording in progress, or null: how a reloaded window picks it up again. */

@@ -6,9 +6,13 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   CHAIN_NAME,
   UNDO_SECONDS,
+  amountNote,
+  amountProblem as whyNoAmount,
+  currencyIn,
   formatClock,
   formatUsdc,
   routeLabel,
+  type AmountProblemKind,
   type Attendee,
   type EmailFollowUp,
   type FollowUp,
@@ -448,6 +452,22 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
   );
 }
 
+/**
+ * Why a payment has no amount, short enough for the Heard row. Meetings made before
+ * amounts were checked against the quote have no reason: they read as unclear.
+ */
+function missingAmount(f: PaymentFollowUp): string {
+  const p = whyNoAmount(f.heard);
+  // As amountNote reads it: heard words in another currency say so even without a reason.
+  const kind: AmountProblemKind = f.amountProblem ?? (p?.kind === "not-usdc" ? "not-usdc" : "unclear");
+  if (kind === "not-in-quote") return "Amount not in the quote: enter it";
+  if (kind === "not-usdc") {
+    const currency = p?.kind === "not-usdc" ? p.currency : currencyIn(f.evidence.quote);
+    return currency ? `Not in USDC (${currency}): enter the USDC amount` : "Not in USDC: enter the USDC amount";
+  }
+  return "Amount unclear: enter it";
+}
+
 /** 1Click's statuses in plain words. */
 const swapWords: Record<string, string> = {
   PENDING_DEPOSIT: "Waiting for deposit",
@@ -625,7 +645,8 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
                 <dt className="w-14 shrink-0 text-[12px] text-muted">Heard</dt>
                 <dd className="m-0">
                   <span className="font-serif italic">“{f.heard}”</span> <span className="text-muted">→</span>{" "}
-                  {amount === null ? <span className="text-caution">amount unclear, edit before approving</span> : <span className="t-mono">{amount} USDC</span>}
+                  {amount === null ? <span className="text-caution">{missingAmount(f)}</span> : <span className="t-mono">{amount} USDC</span>}
+                  {amount === null && amountNote(f) && <span className="mt-0.5 block text-[13px] leading-[19px] text-ink-2">{amountNote(f)}</span>}
                 </dd>
               </div>
               <div className="flex items-baseline gap-2.5">
@@ -685,7 +706,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
               <Button variant="quiet" onClick={() => c.dismiss(f)}>
                 Dismiss
               </Button>
-              {!shared && <Button onClick={() => setEditing((e) => !e)}>Edit amount</Button>}
+              {!shared && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
               {f.payeeListed ? (
                 <Button variant="primary" onClick={pay} disabled={f.amount === null}>
                   Approve payment

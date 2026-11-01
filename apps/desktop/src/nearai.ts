@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AudioChunk, Meeting, NearAiTransport, ProcessResult, ProofBundle, QuoteReport, TeeCheck, TranscriptCache } from "@aftercall/core";
+import type { AudioChunk, CostEstimate, Meeting, NearAiTransport, ProcessResult, ProofBundle, QuoteReport, TeeCheck, TranscriptCache } from "@aftercall/core";
 import type { ProofOnChain } from "./near";
 
 /**
@@ -44,12 +44,14 @@ export const recordingFiles = {
 /**
  * What `notes.json` holds: the meeting plus everything the Verify page and NEAR
  * proof need. Notes made before full attestation checks have a version 1 proof
- * and no `checks`.
+ * and no `checks`; notes made before costs were estimated have no `cost`.
  */
-export type SavedNotes = Omit<ProcessResult, "meeting" | "proof" | "checks"> & {
+export type SavedNotes = Omit<ProcessResult, "meeting" | "proof" | "checks" | "cost"> & {
   meeting: Meeting;
   proof: ProofBundle;
   checks?: TeeCheck[];
+  /** What making these notes probably cost in NEAR AI credit. Not in the proof. */
+  cost?: CostEstimate;
   processedAt: string;
   /** Set once the proof is recorded on NEAR. */
   onChain?: ProofOnChain;
