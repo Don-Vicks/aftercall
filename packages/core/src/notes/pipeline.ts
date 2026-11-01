@@ -7,7 +7,7 @@ import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse
 import { decryptWith, encryptMessages, newClientKeys } from "../tee/e2ee.ts";
 import type { Meeting, NoticeLog, Speaker } from "../meeting.ts";
 import { estimateCost, type CostEstimate, type Usage } from "../cost.ts";
-import { isNearAiAccountError } from "../errors.ts";
+import { e2eeRefusal, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
 
 export const WHISPER_MODEL = "openai/whisper-large-v3";
 export const SUMMARY_MODEL = "Qwen/Qwen3.8-27B";
@@ -208,11 +208,6 @@ export function e2eeNode(summary: ModelAttestation): VerifiedTee | undefined {
   });
 }
 
-/** NEAR AI answered 4xx to the encrypted request for a reason other than the key, credit or rate. */
-function e2eeRefused(e: unknown): string | null {
-  const m = /NEAR AI (4\d\d)/.exec(e instanceof Error ? e.message : String(e));
-  return m && !isNearAiAccountError(e) ? `NEAR AI refused the encrypted request (${m[1]})` : null;
-}
 
 /** An OpenAI-style chat completion: the parts the app reads. Under E2EE only `content` is encrypted. */
 export interface Completion {
@@ -342,7 +337,13 @@ export async function processRecording(
       content = decryptWith(reply.choices?.[0]?.message?.content ?? "", client.x25519Secret);
       e2ee = { used: true, modelKey };
     } catch (e) {
-      const refused = e2eeRefused(e);
+      // Only NEAR AI saying no to encryption itself may lead to TLS. Any other 4xx is
+      // about the request: stop, and never send the transcript again.
+      const refused = e2eeRefusal(e);
+      const status = nearAiStatus(e);
+      if (!refused && status !== null && status >= 400 && status < 500 && !isNearAiAccountError(e)) {
+        throw new Error(`NEAR AI turned down the encrypted summary request (${status}: ${nearAiErrorText(e) || "no reason given"}). The transcript wasn't sent again.`);
+      }
       if (!refused) throw e;
       e2ee = { used: false, reason: refused };
     }

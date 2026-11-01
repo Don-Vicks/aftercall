@@ -43,3 +43,44 @@ export function plainNearAiError(e: unknown): string {
   if (status === 429) return NEAR_AI_RATE_MESSAGE;
   return message;
 }
+
+/*
+ * NEAR AI's own refusals of end-to-end encryption, as its gateway words them
+ * (github.com/nearai/cloud-api, read 1 Nov 2026): 400 naming an encryption header it
+ * didn't accept (validate_encryption_headers), 421 "The encryption key is no longer
+ * valid…" when no node serves the pinned model key, and 400 "End-to-end encryption
+ * is not supported on …". Any other 4xx is about the request itself.
+ */
+const E2EE_HEADER = /\bX-(?:Encryption-Version|Signing-Algo|Client-Pub-Key|Model-Pub-Key)\b/i;
+const E2EE_STALE_KEY = /\bencryption key\b[^.]*\b(?:no longer valid|not valid|invalid)\b/i;
+const E2EE_UNSUPPORTED = /\b(?:end[- ]to[- ]end encryption|E2EE)\b[^.]*\bnot supported\b/i;
+
+/**
+ * Why NEAR AI turned down end-to-end encryption, in plain words, when its answer
+ * clearly says so (status and message); null for anything else, account errors included.
+ */
+export function e2eeRefusal(e: unknown): string | null {
+  const status = nearAiStatus(e);
+  if (status === null || isNearAiAccountError(e)) return null;
+  const message = e instanceof Error ? e.message : String(e);
+  if (status === 421 && E2EE_STALE_KEY.test(message)) return "NEAR AI refused end-to-end encryption (421: the attested model key is no longer one it serves)";
+  if (status === 400 && E2EE_HEADER.test(message)) return "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)";
+  if ((status === 400 || status === 421) && E2EE_UNSUPPORTED.test(message)) return `NEAR AI refused end-to-end encryption (${status}: not supported for this request)`;
+  return null;
+}
+
+/** The message in a NEAR AI error body ({"error":{"message":…}} or plain text), cut to 200 characters. */
+export function nearAiErrorText(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  const body = message.replace(/^NEAR AI \d{3}[^:]*:\s*/, "");
+  let text = body;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown } | string; message?: unknown; detail?: unknown };
+    const inner = typeof parsed.error === "string" ? parsed.error : (parsed.error?.message ?? parsed.message ?? parsed.detail);
+    if (typeof inner === "string") text = inner;
+  } catch {
+    // Not JSON: the body as it came.
+  }
+  text = text.trim();
+  return text.length > 200 ? `${text.slice(0, 199)}…` : text;
+}

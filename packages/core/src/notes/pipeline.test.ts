@@ -14,8 +14,8 @@ interface FakeOpts {
   tamper?: boolean;
   /** The summary is signed by a key that wasn't attested. */
   rogueSigner?: boolean;
-  /** NEAR AI refuses encrypted requests. */
-  e2eeRefused?: boolean;
+  /** NEAR AI answers the encrypted request with this error (true: its gateway's stale-key refusal). */
+  e2eeRefused?: boolean | string;
   /** Quotes for this model (or "gateway") don't verify. */
   badQuote?: string;
   /** Summary TEE nodes; node 2 onward can be made to fail. */
@@ -88,7 +88,7 @@ async function fakeNearAi(opts: FakeOpts) {
       let content = JSON.stringify(opts.notes);
       let signer = summaryNodes[0];
       if (e2ee) {
-        if (opts.e2eeRefused) throw new Error("NEAR AI 400 Bad Request: encryption not supported for this model");
+        if (opts.e2eeRefused) throw new Error(opts.e2eeRefused === true ? STALE_KEY : opts.e2eeRefused);
         // Routed to the node whose key was pinned; it decrypts inside the TEE.
         signer = summaryNodes.find((k) => k.address === e2ee.modelPubKey)!;
         const secret = edwardsToMontgomeryPriv(signer.seed!);
@@ -112,6 +112,9 @@ async function fakeNearAi(opts: FakeOpts) {
   };
   return { transport, calls, seenByGateway, seenByTee, summaryNodes, gateway };
 }
+
+/** cloud-api's answer when no node serves the pinned model key (NoPubKeyProvider → 421), through the Rust transport. */
+const STALE_KEY = 'NEAR AI 421 Misdirected Request: {"error":{"message":"The encryption key is no longer valid. Please refresh your attestation report and retry.","type":"provider_error"}}';
 
 const notes = {
   title: "Sync with Ada",
@@ -216,9 +219,9 @@ test("if NEAR AI refuses E2EE the summary falls back to TLS and says so", async 
   const result = await processRecording(ai.transport, input, undefined, noWait);
   assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee", "chat"]);
   assert.deepEqual(failed(result.checks), ["response-e2ee"]);
-  assert.match(result.checks.find((c) => c.id === "response-e2ee")!.detail, /Not end to end: NEAR AI refused the encrypted request \(400\)/);
+  assert.match(result.checks.find((c) => c.id === "response-e2ee")!.detail, /^Not end to end: NEAR AI refused end-to-end encryption \(421: the attested model key is no longer one it serves\)\. It went over TLS/);
   assert.equal(result.meeting.verified, true, "attested and signed; the E2EE line is shown on its own");
-  assert.deepEqual(result.proof.e2ee, { used: false, reason: "NEAR AI refused the encrypted request (400)" });
+  assert.deepEqual(result.proof.e2ee, { used: false, reason: "NEAR AI refused end-to-end encryption (421: the attested model key is no longer one it serves)" });
   assert.deepEqual(failed(verifyProof(result.proof, null)), ["on-chain", "matches", "e2ee"]);
 });
 
@@ -226,6 +229,41 @@ test("no plaintext fallback when E2EE is refused and a summary node failed", asy
   const ai = await fakeNearAi({ notes, e2eeRefused: true, summaryNodes: 2, badSecondNode: true });
   await assert.rejects(processRecording(ai.transport, input, undefined, noWait), /isn't available and not every summary TEE passed/);
   assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"]);
+});
+
+test("only a refusal of encryption itself falls back to TLS; any other 4xx stops with nothing resent", async () => {
+  // NEAR AI's own refusals: an encryption header it didn't accept, or encryption not supported.
+  for (const refusal of [
+    `NEAR AI 400 Bad Request: {"error":{"message":"Invalid X-Encryption-Version: '9'. Must be '1', '2' or '3'","type":"invalid_parameter"}}`,
+    "NEAR AI 400: End-to-end encryption is not supported on /v1/completions; use /v1/chat/completions",
+  ]) {
+    const ai = await fakeNearAi({ notes, e2eeRefused: refusal });
+    const result = await processRecording(ai.transport, input, undefined, noWait);
+    assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee", "chat"], refusal);
+    assert.match(result.proof.e2ee.reason!, /^NEAR AI refused end-to-end encryption \(400: /);
+  }
+  const unrelated = [
+    'NEAR AI 400 Bad Request: {"error":{"message":"messages: too many tokens for this model","type":"invalid_request_error"}}',
+    "NEAR AI 413 Payload Too Large: request body too large",
+    'NEAR AI 422: {"detail":"response_format is not valid"}',
+    "NEAR AI 421 Misdirected Request: wrong host",
+  ];
+  for (const err of unrelated) {
+    const ai = await fakeNearAi({ notes, e2eeRefused: err });
+    await assert.rejects(processRecording(ai.transport, input, undefined, noWait), /^Error: NEAR AI turned down the encrypted summary request \(4\d\d: .+\)\. The transcript wasn't sent again\.$/);
+    assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"], `${err}: nothing more is sent`);
+    assert.equal(ai.seenByGateway.length, 1);
+  }
+  const ai = await fakeNearAi({ notes, e2eeRefused: unrelated[0] });
+  await assert.rejects(processRecording(ai.transport, input, undefined, noWait), { message: "NEAR AI turned down the encrypted summary request (400: messages: too many tokens for this model). The transcript wasn't sent again." });
+});
+
+test("key, credit and rate errors on the encrypted request keep their own message and resend nothing", async () => {
+  for (const err of ["NEAR AI 401 Unauthorized: invalid api key", "NEAR AI 402: payment required", 'NEAR AI 400: {"error":{"message":"Insufficient credits"}}', "NEAR AI 429 Too Many Requests: slow down"]) {
+    const ai = await fakeNearAi({ notes, e2eeRefused: err });
+    await assert.rejects(processRecording(ai.transport, input, undefined, noWait), { message: err });
+    assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"], err);
+  }
 });
 
 test("a model reply outside the schema stops processing", async () => {

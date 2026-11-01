@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NEAR_AI_CREDIT_MESSAGE, NEAR_AI_KEY_MESSAGE, NEAR_AI_RATE_MESSAGE, isNearAiAccountError, nearAiStatus, plainNearAiError } from "./errors.ts";
+import { NEAR_AI_CREDIT_MESSAGE, NEAR_AI_KEY_MESSAGE, NEAR_AI_RATE_MESSAGE, e2eeRefusal, isNearAiAccountError, nearAiErrorText, nearAiStatus, plainNearAiError } from "./errors.ts";
 
 // The two transports' formats: Node "NEAR AI 402: body", Rust "NEAR AI 402 Payment Required: body".
 const node = (status: number, body: string) => new Error(`NEAR AI ${status}: ${body}`);
@@ -42,4 +42,27 @@ test("account errors are told apart from a refused request", () => {
   assert.equal(plainNearAiError(node(400, "encryption not supported for this model")), "NEAR AI 400: encryption not supported for this model", "a plain E2EE refusal stays a refusal");
   assert.equal(isNearAiAccountError(node(400, "insufficient credit")), true);
   assert.equal(isNearAiAccountError(node(429, "")), true);
+});
+
+test("e2eeRefusal: only NEAR AI's own words about encryption, with the status they come with", () => {
+  assert.match(e2eeRefusal(rust("421 Misdirected Request", '{"error":{"message":"The encryption key is no longer valid. Please refresh your attestation report and retry."}}'))!, /\(421: /);
+  assert.match(e2eeRefusal(node(400, '{"error":{"message":"X-Client-Pub-Key must be a valid hex string","type":"invalid_parameter"}}'))!, /\(400: it didn't accept the encryption headers\)/);
+  assert.match(e2eeRefusal(node(400, "End-to-end encryption is not supported on /v1/completions"))!, /\(400: not supported/);
+  for (const other of [
+    node(400, '{"error":{"message":"Invalid model"}}'),
+    node(400, "encryption not supported"),
+    node(413, "X-Client-Pub-Key too large"),
+    node(422, "E2EE is not supported"),
+    node(500, "End-to-end encryption is not supported"),
+    node(421, "wrong host"),
+    node(403, "X-Model-Pub-Key not allowed for this key"),
+    new Error("fetch failed"),
+  ]) assert.equal(e2eeRefusal(other), null, String(other));
+});
+
+test("nearAiErrorText: the message inside the body, short", () => {
+  assert.equal(nearAiErrorText(rust("400 Bad Request", '{"error":{"message":"bad format","type":"x"}}')), "bad format");
+  assert.equal(nearAiErrorText(node(422, '{"detail":"no"}')), "no");
+  assert.equal(nearAiErrorText(node(413, "too large")), "too large");
+  assert.equal(nearAiErrorText(node(400, "x".repeat(300))).length, 200);
 });
