@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   buildPeople,
@@ -14,9 +14,11 @@ import {
   type ActionItem,
   type AgentMark,
   type DueGroup,
+  type ItemFields,
   type Meeting,
 } from "@aftercall/core";
-import { Avatar, Menu, Strike, TabPanel, Tabs, Tick, cx } from "./ui";
+import { Avatar, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from "./ui";
+import { EditItemButton, EditedMark, ItemEditor, useItemEditing, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
 import { plural } from "./library";
 
@@ -69,18 +71,22 @@ function agentLine(a: ActionItem, now: number): { lead: string; rest: string } |
 
 /**
  * Every action item across meetings: yours, what others owe you, and what connected
- * agents took on. Ticking one here ticks it in its meeting (saved in its notes.json).
+ * agents took on. Ticking or editing one here changes it in its meeting (saved in its notes.json).
  */
 export function ActionItemsScreen({
   meetings,
   me,
   onToggleItem,
+  onEditItem,
+  originalOf,
   onOpenMeeting,
   onOpenAgents,
 }: {
   meetings: Meeting[];
   me: readonly string[];
   onToggleItem: (meetingId: string, itemId: string) => void;
+  onEditItem?: EditItem;
+  originalOf?: OriginalOf;
   onOpenMeeting: (id: string) => void;
   onOpenAgents: () => void;
 }) {
@@ -117,6 +123,26 @@ export function ActionItemsScreen({
   const toggle = (r: Row) => {
     setTouched((s) => new Set(s).add(r.key));
     onToggleItem(r.meeting.id, r.item.id);
+  };
+
+  /** The tab an edited item moved to, so focus can go there when its row has left this one. */
+  const movedTo = useRef<Tab | null>(null);
+
+  /** Saves an edit; when the new owner moves the item to the other tab, says where it went. */
+  const edit = (r: Row, fields: ItemFields | null) => {
+    if (!onEditItem) return;
+    onEditItem(r.meeting.id, r.item.id, fields);
+    const now = fields ?? originalOf?.(r.meeting.id, r.item.id);
+    const owner = now?.owner ?? r.item.owner;
+    const wasMine = mine(r);
+    const nowMine = isYou(owner, me) || owner === "Unassigned";
+    movedTo.current = tab !== "agents" && wasMine !== nowMine ? (nowMine ? "mine" : "others") : null;
+    if (movedTo.current) toast({ text: `“${now?.text ?? r.item.text}” moved to ${nowMine ? "Mine" : "Others owe me"}` });
+  };
+
+  /** The row left this tab: focus the tab that now holds it. */
+  const focusMoved = () => {
+    if (movedTo.current) document.getElementById(`actions-tab-${movedTo.current}`)?.focus();
   };
 
   const list = byTab[tab];
@@ -200,7 +226,18 @@ export function ActionItemsScreen({
                 {s.title} <span className="font-medium text-muted">{s.rows.length}</span>
               </h2>
               {s.rows.map((r) => (
-                <ItemRow key={r.key} row={r} tab={tab} now={now} index={Math.min(n++, 10)} onToggle={() => toggle(r)} onOpenMeeting={() => onOpenMeeting(r.meeting.id)} />
+                <ItemRow
+                  key={r.key}
+                  row={r}
+                  tab={tab}
+                  now={now}
+                  index={Math.min(n++, 10)}
+                  onToggle={() => toggle(r)}
+                  onEdit={onEditItem && ((fields) => edit(r, fields))}
+                  onEditGone={focusMoved}
+                  original={originalOf?.(r.meeting.id, r.item.id) ?? null}
+                  onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
+                />
               ))}
             </section>
           ),
@@ -220,7 +257,18 @@ export function ActionItemsScreen({
             {showDone && (
               <section aria-label="Done" className="mt-2 flex flex-col border-t border-hairline">
                 {done.map((r, i) => (
-                  <ItemRow key={r.key} row={r} tab={tab} now={now} index={Math.min(i, 10)} onToggle={() => toggle(r)} onOpenMeeting={() => onOpenMeeting(r.meeting.id)} />
+                  <ItemRow
+                    key={r.key}
+                    row={r}
+                    tab={tab}
+                    now={now}
+                    index={Math.min(i, 10)}
+                    onToggle={() => toggle(r)}
+                    onEdit={onEditItem && ((fields) => edit(r, fields))}
+                    onEditGone={focusMoved}
+                    original={originalOf?.(r.meeting.id, r.item.id) ?? null}
+                    onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
+                  />
                 ))}
               </section>
             )}
@@ -237,7 +285,7 @@ export function ActionItemsScreen({
                 </button>
               </>
             ) : (
-              "Ticking an item here ticks it in its meeting too."
+              "Ticking or editing an item here changes it in its meeting too."
             )}
           </p>
         )}
@@ -261,8 +309,30 @@ function AgentBadge({ name }: { name: string }) {
   );
 }
 
-function ItemRow({ row: r, tab, now, index, onToggle, onOpenMeeting }: { row: Row; tab: Tab; now: number; index: number; onToggle: () => void; onOpenMeeting: () => void }) {
+function ItemRow({
+  row: r,
+  tab,
+  now,
+  index,
+  onToggle,
+  onEdit,
+  onEditGone,
+  original,
+  onOpenMeeting,
+}: {
+  row: Row;
+  tab: Tab;
+  now: number;
+  index: number;
+  onToggle: () => void;
+  onEdit?: (fields: ItemFields | null) => void;
+  /** After an edit moved the row off this tab. */
+  onEditGone?: () => void;
+  original: ItemFields | null;
+  onOpenMeeting: () => void;
+}) {
   const textId = useId();
+  const editing = useItemEditing(r.key, onEditGone);
   const a = r.item;
   const agent = a.completed?.agent ?? a.claimed?.agent;
   const line = agentLine(a, now);
@@ -273,12 +343,35 @@ function ItemRow({ row: r, tab, now, index, onToggle, onOpenMeeting }: { row: Ro
   const unassigned = a.owner === "Unassigned";
   const quote = a.completed?.note;
 
+  if (editing.editing && onEdit) {
+    return (
+      <div className="flex border-b border-hairline py-3 pl-[34px]">
+        <ItemEditor
+          item={a}
+          original={original}
+          onSave={(fields) => {
+            onEdit(fields);
+            editing.close();
+          }}
+          onRestore={() => {
+            onEdit(null);
+            editing.close();
+          }}
+          onCancel={editing.close}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-3 border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }}>
+    <div className="group flex items-center gap-3 border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }}>
       <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span id={textId} className="selectable max-w-full self-start text-[15px] leading-[21px] text-ink">
-          <Strike on={a.done}>{a.text}</Strike>
+      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+        <span className="max-w-full self-start text-[15px] leading-[21px] text-ink">
+          <span id={textId} className="selectable">
+            <Strike on={a.done}>{a.text}</Strike>
+          </span>
+          <EditedMark item={a} />
         </span>
         <span className="truncate text-[13px] leading-[19px]">
           {tab === "others" && (
@@ -302,7 +395,10 @@ function ItemRow({ row: r, tab, now, index, onToggle, onOpenMeeting }: { row: Ro
         {tab === "agents" && a.done && quote && <span className="selectable font-serif text-[15px] leading-[22px] text-ink-2 italic">“{quote}”</span>}
       </span>
       <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
-        {label}
+        <span className="relative">
+          {onEdit && <EditItemButton id={editing.buttonId} text={a.text} onClick={editing.open} />}
+          {label}
+        </span>
       </span>
       <span
         className="flex w-[52px] shrink-0 justify-end"

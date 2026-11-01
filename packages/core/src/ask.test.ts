@@ -350,3 +350,57 @@ test("Ask passes credit and key errors through so they can be said plainly", asy
   const broke = { ...ai.transport, chat: async () => { throw new Error("NEAR AI 400: insufficient credits"); } };
   await assert.rejects(askMeetings(broke, { question, excerpts, now: NOW }, {}, noWait), /insufficient credits/, "not mistaken for a refused encrypted request");
 });
+
+// ---------- questions and quotes in other languages ----------
+
+const tokyo: Meeting = {
+  ...base,
+  id: idAt(11, 3, 9),
+  title: "デザイン定例",
+  startedAt: "3 Nov 09:00",
+  transcript: [
+    line(20, "others", "ロゴの案は金曜日までに三つ送ります。"),
+    line(95, "you", "デザイナーへの支払いは来週の月曜日にします。"),
+  ],
+};
+const moscow: Meeting = {
+  ...base,
+  id: idAt(11, 2, 9),
+  title: "Созвон по дизайну",
+  startedAt: "2 Nov 09:00",
+  transcript: [line(40, "others", "Мы заплатим дизайнеру 500 долларов в понедельник.")],
+};
+
+test("questionTerms finds words in languages written without spaces, and leaves English as it was", () => {
+  assert.deepEqual(questionTerms("デザイナーへの支払いはいつ？"), ["デザイナー", "支払い"]);
+  assert.deepEqual(questionTerms("设计师的付款是多少"), ["设计", "付款", "多少"]);
+  assert.deepEqual(questionTerms("Когда заплатим дизайнеру?"), ["когда", "заплатим", "дизайнеру"]);
+  assert.deepEqual(questionTerms("What did Ines promise this week?"), ["ines", "promise"]);
+});
+
+test("excerpts: a Japanese or Russian question finds the lines that answer it", () => {
+  const ja = pickExcerpts([tokyo, moscow], "デザイナーへの支払いはいつ？", { now: NOW }).excerpts;
+  assert.deepEqual(ja.map((e) => e.text), ["デザイナーへの支払いは来週の月曜日にします。"]);
+  const ru = pickExcerpts([tokyo, moscow], "Сколько заплатим дизайнеру?", { now: NOW }).excerpts;
+  assert.deepEqual(ru.map((e) => e.text), ["Мы заплатим дизайнеру 500 долларов в понедельник."]);
+});
+
+test("checkAnswer keeps quotes copied in the excerpt's language and drops translations", () => {
+  const ex = pickExcerpts([tokyo, moscow], "デザイナー 支払い ロゴ дизайнеру", { now: NOW }).excerpts;
+  const n = (text: string) => ex.find((e) => e.text.startsWith(text))!.n;
+  const r = checkAnswer(
+    {
+      found: true,
+      answer: "The designer is paid next Monday.",
+      quotes: [
+        { excerpt: n("デザイナー"), quote: "「デザイナーへの支払いは来週の月曜日」" },
+        { excerpt: n("デザイナー"), quote: "payment to the designer is next Monday" },
+        { excerpt: n("Мы"), quote: "ЗАПЛАТИМ ДИЗАЙНЕРУ 500 ДОЛЛАРОВ" },
+        { excerpt: n("ロゴ"), quote: "つ送ります" },
+      ],
+    },
+    ex,
+  );
+  assert.deepEqual(r.quotes.map((q) => q.quote), ["デザイナーへの支払いは来週の月曜日", "заплатим дизайнеру 500 долларов"]);
+  assert.equal(r.dropped, 2, "the translation and the five-letter quote");
+});

@@ -33,10 +33,17 @@ export function startOfWeek(ms: number): number {
 }
 
 /**
- * When a meeting started, in ms. Recordings are named after their start time in Unix
- * seconds; the built-in sample says "Today 14:02". Null when neither applies.
+ * When a meeting started, in ms. New meetings store an ISO time in `startedAt`.
+ * Older ones stored a label written on the day ("Today 14:02"), which goes stale, so
+ * the time comes from the recording id instead: recordings are named after their
+ * start time in Unix seconds. The built-in sample says "Today 14:02" and means today.
+ * Null when none of these applies.
  */
 export function meetingTime(m: Pick<Meeting, "id" | "startedAt">, now = Date.now()): number | null {
+  if (/^\d{4}-\d{2}-\d{2}T/.test(m.startedAt)) {
+    const t = Date.parse(m.startedAt);
+    if (!Number.isNaN(t)) return t;
+  }
   if (/^\d{9,11}$/.test(m.id)) return Number(m.id) * 1000;
   const today = /^Today (\d{1,2}):(\d{2})$/.exec(m.startedAt.trim());
   if (today) {
@@ -45,6 +52,12 @@ export function meetingTime(m: Pick<Meeting, "id" | "startedAt">, now = Date.now
     return d.getTime();
   }
   return null;
+}
+
+/** The meeting's start as an ISO time for machines (the MCP server), or null when it has none. */
+export function meetingIso(m: Pick<Meeting, "id" | "startedAt">, now = Date.now()): string | null {
+  const t = meetingTime(m, now);
+  return t === null ? null : new Date(t).toISOString();
 }
 
 /** "29 Oct", with the year when it isn't this year's. */
@@ -63,15 +76,23 @@ export function relativeDay(ms: number, now = Date.now()): string {
 }
 
 /**
- * When a meeting started, for people and prompts: "Today 14:02", "Yesterday 09:30" or
- * "28 Oct 17:00". Worked out from the recording time, since the stored label was
- * written on the day the notes were made. The stored label when there is no time.
+ * When a meeting started, for people and prompts: "Today 14:02", "Yesterday 09:30",
+ * "Monday 10:15" within the last week, then "28 Oct 17:00". Worked out at display time
+ * from the real time, never the stored label. The stored text only when there is no time.
  */
 export function meetingLabel(m: Pick<Meeting, "id" | "startedAt">, now = Date.now()): string {
   const t = meetingTime(m, now);
   if (t === null) return m.startedAt;
-  const day = relativeDay(t, now);
-  return `${day === "today" ? "Today" : day === "yesterday" ? "Yesterday" : day} ${clockTime(t)}`;
+  return `${dayWord(t, now)} ${clockTime(t)}`;
+}
+
+/** "Today", "Yesterday", "Monday" within the last week, then "28 Oct". */
+export function dayWord(ms: number, now = Date.now()): string {
+  const days = Math.round((startOfDay(now) - startOfDay(ms)) / DAY);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) return WEEKDAY_NAMES[new Date(ms).getDay()];
+  return shortDate(ms, now);
 }
 
 /** "Sunday 1 Nov 2026" */

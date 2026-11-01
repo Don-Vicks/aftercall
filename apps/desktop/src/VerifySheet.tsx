@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Copy, ExternalLink, Info, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  FIELD_WORDS,
   NOT_PROVEN,
   WHISPER_NOTE,
   droppedLine,
   encodePublicProof,
+  editsLine,
   groupChecks,
   hasStatements,
+  itemEdits,
+  meetingLabel,
   noticeLine,
   verifyProof,
   type Check as ProofCheck,
@@ -112,7 +116,12 @@ export function VerifySheet({
   const recorded: TeeCheck[] | null = saved.proof.version === 2 ? saved.proof.checks : null;
   const groups = recorded ? groupChecks(recorded, saved.proof) : [];
   // Before the proof is on NEAR, "recorded on NEAR" and "matches" can't pass yet; the footer says so instead.
-  const again = checks?.filter((c) => saved.onChain || (c.id !== "on-chain" && c.id !== "matches")) ?? null;
+  const edited = itemEdits(saved.meeting, saved.notes).length > 0;
+  const again =
+    checks
+      ?.filter((c) => saved.onChain || (c.id !== "on-chain" && c.id !== "matches"))
+      // The signed notes are unchanged; the meeting shows your edits on top, listed under "Your edits after signing".
+      .map((c) => (c.id === "unchanged" && c.ok && edited ? { ...c, detail: "The model's notes are as it returned them. Your edits to action items since are listed above" } : c)) ?? null;
   const passed = recorded?.filter((c) => c.ok).length ?? 0;
   const failing = (recorded?.length ?? 0) - passed + (again?.filter((c) => !c.ok).length ?? 0);
   const verified = saved.meeting.verified && (again === null || again.every((c) => c.ok || c.id === "e2ee"));
@@ -134,7 +143,7 @@ export function VerifySheet({
         <Seal ok={verified} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="t-eyebrow truncate text-muted">
-            {saved.meeting.title} · {saved.meeting.project} · {saved.meeting.startedAt}
+            {saved.meeting.title} · {saved.meeting.project} · {meetingLabel(saved.meeting)}
           </span>
           <h2 ref={heading} tabIndex={-1} className="m-0 font-serif text-[34px] leading-10 font-medium tracking-[-0.02em] text-ink outline-none">{verified ? "Verified" : "Not verified"}</h2>
           <span className="text-[13px] leading-[18px] text-muted">
@@ -290,18 +299,29 @@ export function VerifySheet({
 
 /**
  * What was recorded with the notes but isn't a check: your notice, what the app
- * dropped, and the estimated cost. Label and words, no tick, so none reads as passed.
+ * dropped, your edits to action items since, and the estimated cost. Label and words,
+ * no tick, so none reads as passed.
  */
 function Statements({ saved, delay }: { saved: SavedNotes; delay: number }) {
   const proof = saved.proof;
   const dropped = droppedLine(proof);
-  const rows: { label: string; text: string }[] = [
+  // Compared with what the model signed, which these edits never change.
+  const edits = itemEdits(saved.meeting, saved.notes);
+  const rows: { label: string; text: string; list?: string[] }[] = [
     {
       label: "Notice",
       // Notes made before the notice was kept had it ticked but not saved: say that, not "none".
       text: hasStatements(proof) ? noticeLine(proof.notice) : "Not recorded: these notes were made before Aftercall kept the notice",
     },
     ...(dropped ? [{ label: "Dropped", text: dropped }] : []),
+    {
+      label: "Your edits after signing",
+      text: editsLine(edits),
+      list: edits.map((e) => {
+        const was = e.fields.includes("text") ? ` (was “${e.original.text}”)` : "";
+        return `“${e.text}”${was} · ${e.fields.map((f) => FIELD_WORDS[f]).join(", ")}`;
+      }),
+    },
   ];
   if (saved.cost) {
     const about = aboutCost(saved.cost);
@@ -315,13 +335,24 @@ function Statements({ saved, delay }: { saved: SavedNotes; delay: number }) {
   return (
     <section aria-labelledby="verify-stated" className="flex flex-col gap-2.5 border-t border-hairline pt-4" style={at(delay)}>
       <h3 id="verify-stated" className="t-section m-0 text-ink">
-        Recorded with the notes <span className="font-medium text-muted">statements, not checks</span>
+        Recorded with the notes, and your edits since <span className="font-medium text-muted">statements, not checks</span>
       </h3>
-      <dl className="m-0 grid grid-cols-[118px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+      <dl className="m-0 grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         {rows.map((r) => (
           <div key={r.label} className="contents">
             <dt className="text-[13px] leading-[19px] text-muted">{r.label}</dt>
-            <dd className="selectable m-0 text-[13px] leading-[19px] text-ink-2">{r.text}</dd>
+            <dd className="selectable m-0 text-[13px] leading-[19px] text-ink-2">
+              {r.text}
+              {r.list && r.list.length > 0 && (
+                <ul className="m-0 mt-1 flex list-none flex-col gap-0.5 p-0">
+                  {r.list.map((line) => (
+                    <li key={line} className="break-words">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </dd>
           </div>
         ))}
       </dl>

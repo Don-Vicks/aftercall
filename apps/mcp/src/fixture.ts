@@ -40,7 +40,8 @@ function fixtureMeetings(): Map<string, NotesFile> {
     decisions: ["Run a two-week pilot with Ada's team"],
     actionItems: [
       { id: "a1", text: "Send Ada the pilot plan", owner: "You", due: "Friday", done: false },
-      { id: "a2", text: "Share the term sheet", owner: "Ada", done: false },
+      // Edited by you after signing: the model wrote "Share the term sheet".
+      { id: "a2", text: "Share the signed term sheet", owner: "Ada", done: false, edited: { at: "2026-10-21T11:00:00.000Z", fields: ["text"] } },
       { id: "a3", text: "Book the follow-up call", owner: "You", done: true },
     ],
     followUps: [
@@ -68,7 +69,8 @@ function fixtureMeetings(): Map<string, NotesFile> {
     id: "1761100000",
     project: "General",
     title: "Team standup",
-    startedAt: "2026-10-22T09:00:00.000Z",
+    // Saved before meetings kept an ISO time: the label went stale, the id is the real time.
+    startedAt: "Today 09:00",
     summary: "Release on Thursday.",
     decisions: ["Ship the release on Thursday"],
     actionItems: [

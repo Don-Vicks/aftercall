@@ -33,6 +33,19 @@ export interface ActionItem {
   claimed?: AgentMark;
   /** Set when a connected agent marked the item done. */
   completed?: AgentMark & { note?: string };
+  /**
+   * Set when you changed the item after the notes were signed: when, and which fields
+   * differ from the model's signed item (notes.action_items). Absent once it matches again.
+   */
+  edited?: ItemEdit;
+}
+
+export type EditedField = "text" | "owner" | "due";
+
+export interface ItemEdit {
+  /** ISO 8601 time of the last edit. */
+  at: string;
+  fields: EditedField[];
 }
 
 /** Who did something to an action item through the MCP server, and when. */

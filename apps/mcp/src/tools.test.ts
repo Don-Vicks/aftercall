@@ -31,6 +31,26 @@ test("list_meetings: processed meetings only, newest first, with counts", async 
   assert.equal(ada.duration, "12:34");
 });
 
+test("list_meetings and get_meeting: the start as an ISO time, from the recording id when an older meeting saved a label", async () => {
+  const r = await listMeetings(app);
+  assert.deepEqual(
+    r.meetings.map((m) => [m.id, m.startedAt]),
+    [
+      ["1761100000", new Date(1761100000_000).toISOString()],
+      ["1761000000", "2026-10-21T10:00:00.000Z"],
+    ],
+  );
+  assert.equal((await getMeeting(app, { id: "1761100000" })).startedAt, new Date(1761100000_000).toISOString());
+});
+
+test("get_meeting: action items as you edited them, marked as edited", async () => {
+  const m = await getMeeting(app, { id: "1761000000" });
+  const a2 = m.actionItems.find((a) => a.itemId === "a2");
+  assert.equal(a2?.text, "Share the signed term sheet");
+  assert.deepEqual(a2?.edited, { at: "2026-10-21T11:00:00.000Z", fields: ["text"] });
+  assert.equal(m.actionItems.find((a) => a.itemId === "a1")?.edited, undefined);
+});
+
 test("list_meetings: filters by project name or id", async () => {
   assert.deepEqual((await listMeetings(app, { project: "fundraise" })).meetings.map((m) => m.id), ["1761000000"]);
   assert.deepEqual((await listMeetings(app, { project: "fundraise-k3x" })).meetings.map((m) => m.id), ["1761000000"]);
@@ -71,7 +91,7 @@ test("list_action_items: open, unclaimed items; filter by owner and project", as
     "Write the release notes",
     "Ship the API fix",
     "Send Ada the pilot plan",
-    "Share the term sheet",
+    "Share the signed term sheet",
   ]);
   assert.deepEqual((await listActionItems(app, { owner: "you" })).items.map((i) => `${i.meetingId}/${i.itemId}`), ["1761100000/a2", "1761000000/a1"]);
   assert.equal((await listActionItems(app, { project: "General" })).total, 2);

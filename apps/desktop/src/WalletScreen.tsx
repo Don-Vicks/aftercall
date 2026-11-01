@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, ty
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, Pause, Play, Plus, RefreshCw } from "lucide-react";
-import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
+import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, meetingLabel, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast } from "./ui";
 import { isDesktop } from "./recorder";
@@ -285,7 +285,7 @@ export function WalletScreen({
                           followupId: id,
                           payee: f.payeeAccount,
                           amount: String(f.amount ?? 0n),
-                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meeting.startedAt}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}` },
+                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}` },
                         },
                         async () => (await near.paymentState(id)).paid,
                         () => `Paid ${f.payeeName} ${amount} USDC`,

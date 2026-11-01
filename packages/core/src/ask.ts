@@ -4,7 +4,7 @@ import { formatClock } from "./meeting.ts";
 import { estimateCost, type CostEstimate } from "./cost.ts";
 import { isNearAiAccountError } from "./errors.ts";
 import { SUMMARY_MODEL, e2eeNode, fetchSignature, requireComplete, type Completion, type NearAiTransport } from "./notes/pipeline.ts";
-import { findQuote, normalize } from "./notes/transcript.ts";
+import { findQuote, hasSpacelessScript, normalize } from "./notes/transcript.ts";
 import { buildPeople, otherSideName } from "./people-index.ts";
 import { search } from "./search/search.ts";
 import { attestModel, failedLabels, gatewayChecks, loadNvidiaKeys, modelChecks } from "./tee/attest.ts";
@@ -65,13 +65,30 @@ const PROMISE_WORDS = /\b(promise[sd]?|owe[sd]?|commit(ted|ments?)?|agree[sd]?|t
 const COMMITMENT = /\b(i'll|i will|we'll|we will|i can|let me|i'm going to|we're going to)\b/i;
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
+/** The system's word breaker (ICU), typed here because the desktop app builds against ES2020. */
+type WordSegmenter = { segment(s: string): Iterable<{ segment: string; isWordLike?: boolean }> };
+const Segmenter = (Intl as unknown as { Segmenter?: new (locale: undefined, o: { granularity: "word" }) => WordSegmenter }).Segmenter;
+const wordBreaker = Segmenter ? new Segmenter(undefined, { granularity: "word" }) : null;
+
+/**
+ * Words in a run of Chinese, Japanese, Thai... text, which has no spaces between them.
+ * Single letters and words written only in hiragana (Japanese particles and endings
+ * such as "の" or "について") are left out.
+ */
+function spacelessWords(run: string): string[] {
+  const words = wordBreaker ? [...wordBreaker.segment(run)].filter((s) => s.isWordLike).map((s) => s.segment) : [run];
+  return words.filter((w) => !hasSpacelessScript(w) || ([...w].length >= 2 && !/^\p{scx=Hiragana}+$/u.test(w)));
+}
+
 /** The words to look for: the question without filler, time words and punctuation. */
 export function questionTerms(question: string): string[] {
   const out: string[] = [];
-  for (const w of normalize(question).split(" ")) {
-    const t = w.replace(/'s$/, "").replace(/^'+|'+$/g, "");
-    if (t.length < 3 || STOP.has(t) || TIME_WORDS.has(t) || out.includes(t)) continue;
-    out.push(t);
+  for (const chunk of normalize(question).split(" ")) {
+    for (const w of hasSpacelessScript(chunk) ? spacelessWords(chunk) : [chunk]) {
+      const t = w.replace(/'s$/, "").replace(/^'+|'+$/g, "");
+      if (!t || (t.length < 3 && !hasSpacelessScript(t)) || STOP.has(t) || TIME_WORDS.has(t) || out.includes(t)) continue;
+      out.push(t);
+    }
   }
   return out;
 }
@@ -195,7 +212,7 @@ export function pickExcerpts(meetings: Meeting[], question: string, opts: { me?:
 export const ASK_SYSTEM_PROMPT = [
   "You answer a question about YOU's meetings using only the numbered excerpts given. Each excerpt is words someone said in a meeting.",
   "Write the answer in one to three plain sentences, without markdown. Refer to people by name or as they/them.",
-  "Back the answer with quotes: each quote names its excerpt number and copies at least four words exactly from that excerpt.",
+  "Back the answer with quotes: each quote names its excerpt number and copies at least four words exactly from that excerpt, in the excerpt's own language and never translated (in Chinese, Japanese, Thai or another language written without spaces, at least eight characters).",
   "If the excerpts don't answer the question, set found to false, say so in one sentence and give no quotes.",
   "Never invent people, amounts, dates or promises.",
 ].join(" ");

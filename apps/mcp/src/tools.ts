@@ -1,4 +1,4 @@
-import { formatClock, formatUsdc, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
+import { formatClock, formatUsdc, meetingIso, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
 import { claimItem, completeItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
 
 /**
@@ -32,7 +32,7 @@ export async function listMeetings(app: AppChannel, args: { project?: string; li
         id,
         title: m.title,
         project: m.project,
-        startedAt: m.startedAt,
+        startedAt: meetingIso({ ...m, id }) ?? m.startedAt,
         duration: formatClock(m.durationSec),
         openActionItems: m.actionItems.filter(isOpen).length,
         followUpsToApprove: m.followUps.filter((f) => f.status === "proposed").length,
@@ -70,6 +70,8 @@ function itemView(meetingId: string, m: Meeting, a: ActionItem) {
     done: a.done,
     claimed: a.claimed,
     completed: a.completed,
+    /** Set when the person changed the item after the notes were signed. */
+    edited: a.edited,
   };
 }
 
@@ -80,7 +82,7 @@ export async function getMeeting(app: AppChannel, args: { id: string; includeTra
     id: args.id,
     title: m.title,
     project: m.project,
-    startedAt: m.startedAt,
+    startedAt: meetingIso({ ...m, id: args.id }) ?? m.startedAt,
     duration: formatClock(m.durationSec),
     summary: m.summary,
     decisions: m.decisions,

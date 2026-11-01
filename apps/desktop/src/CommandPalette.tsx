@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Bot, CornerDownLeft, Flag, FolderPlus, Lock, MessageCircle, Search, Settings, ShieldCheck, Users, Wallet } from "lucide-react";
-import { formatClock, formatUsdc, search, type Hit, type Meeting } from "@aftercall/core";
+import { formatClock, formatUsdc, meetingLabel, search, type Hit, type Meeting } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { meetingPeople, shortDuration, shortWhen } from "./MeetingRow";
@@ -119,7 +119,7 @@ export function CommandPalette({
       .map((r) => ({ id: r.id, title: meetings.find((mt) => mt.id === r.id)?.title ?? recordingTitle(r), meta: `${r.project} · ${shortWhen(r.startedAt)} · ${shortDuration(r.seconds)}`, mt: meetings.find((mt) => mt.id === r.id) })),
     ...meetings
       .filter((mt) => !byRecording.has(mt.id) && (!q || holdsHit.has(mt.id) || norm(`${mt.title} ${mt.project}`).includes(q)))
-      .map((mt) => ({ id: mt.id, title: mt.title, meta: `${mt.project} · ${mt.startedAt}${mt.id === sampleId ? " · sample" : ""}`, mt })),
+      .map((mt) => ({ id: mt.id, title: mt.title, meta: `${mt.project} · ${meetingLabel(mt)}${mt.id === sampleId ? " · sample" : ""}`, mt })),
   ].slice(0, q ? 4 : 3);
   for (const row of meetingRows) {
     options.push({ id: `m-${row.id}`, group: "Meetings", run: go(() => onOpenMeeting(row.id)), render: (on) => <MeetingOption row={row} active={on} /> });

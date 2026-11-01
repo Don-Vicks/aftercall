@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { formatClock, formatDuration, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type FollowUp, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type FollowUp, type ItemFields, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { EditItemButton, EditedMark, ItemEditor, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
 import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
 import { grow } from "./SettingsParts";
@@ -18,6 +19,8 @@ export function MeetingScreen({
   me = [],
   leftToday,
   onToggleItem,
+  onEditItem,
+  originalOf,
   onOpenVerify,
   handlers,
   onDelete,
@@ -34,6 +37,10 @@ export function MeetingScreen({
   /** What the agent wallet can still pay today, when connected. */
   leftToday: bigint | null;
   onToggleItem: (id: string) => void;
+  /** Saves your edit of an item's text, owner and due date; null restores what the model signed. */
+  onEditItem?: (id: string, fields: ItemFields | null) => void;
+  /** The signed item behind an action item. */
+  originalOf?: (id: string) => ItemFields | null;
   onOpenVerify: () => void;
   handlers: Omit<FollowUpHandlers, "onJumpTo">;
   /** Real meetings can be deleted from this Mac. */
@@ -67,7 +74,7 @@ export function MeetingScreen({
           <header className="flex flex-col gap-3" style={rise(0)}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="t-eyebrow text-muted">
-                {meeting.project} · {meeting.startedAt} · {formatDuration(meeting.durationSec)}
+                {meeting.project} · {meetingLabel(meeting)} · {formatDuration(meeting.durationSec)}
               </span>
               <button
                 type="button"
@@ -106,6 +113,8 @@ export function MeetingScreen({
                 dropped={dropped}
                 leftToday={leftToday}
                 onToggleItem={onToggleItem}
+                onEditItem={onEditItem}
+                originalOf={originalOf}
                 handlers={{ ...handlers, onJumpTo: jumpTo }}
                 show={showFollowUp}
                 autopilotOn={autopilotOn}
@@ -159,6 +168,8 @@ function Notes({
   dropped,
   leftToday,
   onToggleItem,
+  onEditItem,
+  originalOf,
   handlers,
   show,
   autopilotOn,
@@ -169,6 +180,8 @@ function Notes({
   dropped: Dropped[];
   leftToday: bigint | null;
   onToggleItem: (id: string) => void;
+  onEditItem?: (id: string, fields: ItemFields | null) => void;
+  originalOf?: (id: string) => ItemFields | null;
   handlers: FollowUpHandlers;
   /** A follow-up to scroll to, from a chip in the transcript. */
   show: string | null;
@@ -226,7 +239,14 @@ function Notes({
           </div>
           <ul className="m-0 flex list-none flex-col border-t border-hairline p-0">
             {meeting.actionItems.map((item) => (
-              <ActionRow key={item.id} item={item} onToggle={() => onToggleItem(item.id)} />
+              <ActionRow
+                key={item.id}
+                rowKey={`${meeting.id}:${item.id}`}
+                item={item}
+                onToggle={() => onToggleItem(item.id)}
+                onEdit={onEditItem && ((fields) => onEditItem(item.id, fields))}
+                original={originalOf?.(item.id) ?? null}
+              />
             ))}
           </ul>
           {agents && <p className="m-0 mt-1.5 text-[13px] text-ink-2">Agents can claim and finish action items. They can't send, pay or change your rules.</p>}
@@ -320,12 +340,45 @@ function when(iso: string): string {
     : d.toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
-/** One action item: the tick, the words, who and when, and what an agent did with it. */
-function ActionRow({ item, onToggle }: { item: ActionItem; onToggle: () => void }) {
+/** One action item: the tick, the words, who and when, and what an agent did with it. Editable in place. */
+function ActionRow({
+  rowKey,
+  item,
+  onToggle,
+  onEdit,
+  original,
+}: {
+  rowKey: string;
+  item: ActionItem;
+  onToggle: () => void;
+  onEdit?: (fields: ItemFields | null) => void;
+  original: ItemFields | null;
+}) {
   const textId = useId();
   const you = useIsYou();
+  const edit = useItemEditing(rowKey);
   const working = !item.done && !!item.claimed;
   const owner = item.owner && item.owner !== "Unassigned" ? item.owner : null;
+
+  if (edit.editing && onEdit) {
+    return (
+      <li className="flex border-b border-hairline py-[13px] pl-[34px]">
+        <ItemEditor
+          item={item}
+          original={original}
+          onSave={(fields) => {
+            onEdit(fields);
+            edit.close();
+          }}
+          onRestore={() => {
+            onEdit(null);
+            edit.close();
+          }}
+          onCancel={edit.close}
+        />
+      </li>
+    );
+  }
 
   let sub: ReactNode = null;
   if (item.done && item.completed) {
@@ -349,15 +402,19 @@ function ActionRow({ item, onToggle }: { item: ActionItem; onToggle: () => void 
   }
 
   return (
-    <li className="flex items-center gap-3 border-b border-hairline py-[13px]">
+    <li className="group flex items-center gap-3 border-b border-hairline py-[13px]">
       <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span id={textId} className="selectable self-start text-[15px] leading-[21px] text-ink">
-          <Strike on={item.done}>{item.text}</Strike>
+      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+        <span className="self-start text-[15px] leading-[21px] text-ink">
+          <span id={textId} className="selectable">
+            <Strike on={item.done}>{item.text}</Strike>
+          </span>
+          <EditedMark item={item} />
         </span>
         {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+      <span className="relative inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+        {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
         {owner && <Avatar name={owner} size={20} />}
         {item.due}
       </span>

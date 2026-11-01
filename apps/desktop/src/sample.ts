@@ -1,4 +1,4 @@
-import { estimateCost, type Dropped, type Meeting } from "@aftercall/core";
+import { estimateCost, type Dropped, type Meeting, type Notes } from "@aftercall/core";
 
 /**
  * Sample data for building the interface before the capture and summary pipeline
@@ -116,6 +116,14 @@ export const syncWithAda: Meeting = {
     { at: 150, speaker: "you", text: "And the full five thousand when the deck is done." },
     { at: 160, speaker: "others", text: "Great. I'll look out for the recap. Talk Friday." },
   ],
+};
+
+/**
+ * The sample's action items as "signed", so the browser preview can edit them and
+ * restore the original in memory. A real meeting reads these from notes.json.
+ */
+export const syncWithAdaSigned: Pick<Notes, "action_items"> = {
+  action_items: syncWithAda.actionItems.map((a) => ({ text: a.text, owner: a.owner, due: a.due ?? null, evidence: "" })),
 };
 
 /**

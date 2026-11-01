@@ -30,6 +30,25 @@ test("the recap carries the summary, decisions, open action items and the footer
   assert.ok(r.text.includes(`${RECAP_FOOTER_MARK} https://aftercall.app/verify#x`));
 });
 
+test("action items the sender edited are marked, and the footer says the app didn't check those changes", () => {
+  const edited = { at: "2026-11-01T15:00:00.000Z", fields: ["text" as const, "owner" as const] };
+  const one = { ...meeting, actionItems: [{ ...meeting.actionItems[0], text: "Ada sends the signed term sheet", owner: "Ada", edited }, meeting.actionItems[1]] };
+  const r = buildRecap(one, f, { facts });
+  assert.match(r.text, /- Ada sends the signed term sheet · Ada · by Friday \(edited by the sender\)/);
+  assert.match(r.text, /The sender changed 1 action item after the notes were made, marked \(edited by the sender\)\. Aftercall didn't check that change\./);
+  assert.ok(r.text.endsWith(recapFooter({ ...facts, editedItems: 1 })));
+  assert.ok(r.text.includes(`${RECAP_FOOTER_MARK} https://aftercall.app/verify#x`));
+
+  const two = { ...one, actionItems: [...one.actionItems, { id: "a3", text: "Book the venue", owner: "You", done: false, edited: { at: edited.at, fields: ["due" as const] } }] };
+  assert.match(buildRecap(two, f, { facts }).text, /The sender changed 2 action items after the notes were made, marked \(edited by the sender\)\. Aftercall didn't check those changes\./);
+
+  // An edited item that's done isn't in the recap, so it isn't counted.
+  const doneEdited = { ...meeting, actionItems: [meeting.actionItems[0], { ...meeting.actionItems[1], edited }] };
+  const plain = buildRecap(doneEdited, f, { facts }).text;
+  assert.doesNotMatch(plain, /edited|changed/);
+  assert.ok(plain.endsWith(`--\n${recapFooter(facts)}`));
+});
+
 test("the footer claims only what the app can check", () => {
   for (const fx of [facts, { ...facts, notice }, { ...facts, verified: false }, { ...facts, e2ee: null }]) {
     const text = recapFooter(fx);
