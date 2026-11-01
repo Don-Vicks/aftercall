@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
@@ -28,6 +28,13 @@ import { AgentsScreen } from "./AgentsScreen";
 import { agentsApi } from "./agents";
 import { openSample } from "./sampleRecordings";
 import { DialogHost, MotionProvider, Toaster, deferred, toast, useConfirm, view as viewMotion } from "./ui";
+import { PeopleScreen } from "./PeopleScreen";
+import { PersonScreen } from "./PersonScreen";
+import { AskScreen } from "./AskScreen";
+import { MeetingsScreen } from "./MeetingsScreen";
+import { ActionItemsScreen } from "./ActionItemsScreen";
+import { PrivacyScreen } from "./PrivacyScreen";
+import { libraryMeetings } from "./library";
 
 type View =
   | { name: "home" }
@@ -38,6 +45,12 @@ type View =
   | { name: "settings" }
   | { name: "agents" }
   | { name: "wallet" }
+  | { name: "people" }
+  | { name: "person"; id: string }
+  | { name: "ask"; question?: string }
+  | { name: "meetings" }
+  | { name: "actions" }
+  | { name: "privacy" }
   | { name: "placeholder"; title: string; milestone: string };
 
 function nowHHMM() {
@@ -60,6 +73,19 @@ export default function App() {
   useSystemTheme();
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
   const [view, setView] = useState<View>({ name: "home" });
+  /**
+   * Opens the library screens. The sidebar's onOpenPeople, onOpenAsk, onOpenMeetings and
+   * onOpenActions call go.people, go.ask, go.meetings and go.actions.
+   */
+  const go = {
+    people: () => setView({ name: "people" }),
+    person: (id: string) => setView({ name: "person", id }),
+    /** With a question, Ask asks it at once (from "Ask about Ada"). */
+    ask: (question?: unknown) => setView({ name: "ask", question: typeof question === "string" ? question : undefined }),
+    meetings: () => setView({ name: "meetings" }),
+    actions: () => setView({ name: "actions" }),
+    privacy: () => setView({ name: "privacy" }),
+  };
   const [recordOpen, setRecordOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
@@ -283,6 +309,10 @@ export default function App() {
         e.preventDefault();
         setView({ name: "search" });
       }
+      if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        setView((v) => (v.name === "ask" ? v : { name: "ask" }));
+      }
     };
     window.addEventListener("keydown", onKey);
     // "New recording…" in the menu bar item opens the panel.
@@ -447,7 +477,13 @@ export default function App() {
   const shownMeetings = meetingList.filter((m) => !hidden[m.id]);
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
   /** One key per screen, so switching screens fades between them. */
-  const viewKey = view.name === "meeting" || view.name === "recording" ? `${view.name}:${view.id}` : view.name;
+  const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "person" ? `${view.name}:${view.id}` : view.name;
+  /** Names that mean "you" in the notes: your NEAR account, once connected ("You" and "Me" always do). */
+  const me = useMemo(() => (account ? [account] : []), [account]);
+  /** What People, Ask, All meetings and Action items read: every meeting not waiting out a delete. */
+  const library = useMemo(() => libraryMeetings(Object.values(meetings).filter((m) => !hidden[m.id]), syncWithAda.id), [meetings, hidden]);
+  const sampleIds = new Set([syncWithAda.id, ...recordings.filter((r) => r.label === "Sample").map((r) => r.id)]);
+  const openMeeting = (id: string, at?: number) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id });
 
   return (
     <MotionProvider>
@@ -533,7 +569,28 @@ export default function App() {
                 }}
               />
             )}
-            {view.name === "settings" && <ConnectNear />}
+            {view.name === "settings" && <ConnectNear onOpenPrivacy={go.privacy} />}
+            {view.name === "people" && <PeopleScreen meetings={library} me={me} sampleIds={sampleIds} onOpenPerson={go.person} />}
+            {view.name === "person" && (
+              <PersonScreen
+                personId={view.id}
+                meetings={library}
+                me={me}
+                sampleIds={sampleIds}
+                onBack={go.people}
+                onOpenMeeting={openMeeting}
+                onToggleItem={toggleItem}
+                onAsk={go.ask}
+              />
+            )}
+            {view.name === "ask" && (
+              <AskScreen meetings={library} me={me} initialQuestion={view.question} onOpenMeeting={openMeeting} onOpenSettings={() => setView({ name: "settings" })} />
+            )}
+            {view.name === "meetings" && <MeetingsScreen meetings={library} recordings={shownRecordings} me={me} sampleIds={sampleIds} onOpen={(id) => openMeeting(id)} />}
+            {view.name === "actions" && (
+              <ActionItemsScreen meetings={library} me={me} onToggleItem={toggleItem} onOpenMeeting={(id) => openMeeting(id)} onOpenAgents={() => setView({ name: "agents" })} />
+            )}
+            {view.name === "privacy" && <PrivacyScreen onBack={() => setView({ name: "settings" })} onOpenSettings={() => setView({ name: "settings" })} />}
             {view.name === "agents" && (
               <AgentsScreen meetings={shownMeetings.filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
             )}

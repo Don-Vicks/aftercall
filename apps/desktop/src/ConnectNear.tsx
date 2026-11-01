@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { accountFitsNetwork, exampleAccount } from "@aftercall/core";
-import { Check, Copy } from "lucide-react";
+import { Check, ChevronRight, Copy } from "lucide-react";
 import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
 import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
 import { AutopilotSettings } from "./AutopilotSettings";
@@ -25,7 +25,7 @@ const SECTIONS = [
   ["settings-autopilot", "Autopilot"],
 ] as const;
 
-export function ConnectNear() {
+export function ConnectNear({ onOpenPrivacy }: { onOpenPrivacy?: () => void } = {}) {
   const [config, setConfig] = useState<NearConfig>({ network: "testnet", account: "", contract: "" });
   const [publicKey, setPublicKey] = useState("");
   const [status, setStatus] = useState<NearStatus | null>(null);
@@ -205,6 +205,16 @@ export function ConnectNear() {
         <div id="settings-autopilot" className="scroll-mt-12">
           <AutopilotSettings />
         </div>
+
+        {onOpenPrivacy && (
+          <button type="button" onClick={onOpenPrivacy} className="press flex items-center gap-4 rounded-md px-5 py-4 text-left shadow-[inset_0_0_0_1px_var(--hairline)] hover:bg-elevated">
+            <span className="flex flex-1 flex-col gap-0.5">
+              <span className="t-title text-ink">Privacy and your data</span>
+              <span className="text-ink-2">Where your data lives, what leaves this Mac, backups, and deleting everything.</span>
+            </span>
+            <ChevronRight size={16} className="text-faint" aria-hidden="true" />
+          </button>
+        )}
       </div>
     </main>
   );

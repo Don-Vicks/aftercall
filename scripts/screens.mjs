@@ -61,6 +61,15 @@ const SHOTS = [
   { name: "wallet", go: (p) => click(p, "button", "Agent wallet") },
   { name: "settings", go: (p) => click(p, "button", "Settings") },
   { name: "agents", go: (p) => click(p, "button", "Connected agents") },
+  { name: "ask", wait: "text=Ask your meetings", go: (p) => p.keyboard.press("Meta+j") },
+  {
+    name: "privacy",
+    wait: "text=Privacy and your data",
+    go: async (p) => {
+      await click(p, "button", "Settings");
+      await click(p, "button", /^Privacy and your data/);
+    },
+  },
   { name: "record", go: (p) => click(p, "button", /^New recording/) },
   { name: "new-project", go: (p) => click(p, "button", "New project") },
   { name: "onboarding", onboarding: true, go: async () => {} },
