@@ -9,3 +9,6 @@ target/
 *.log
 contracts/target/
 *.tsbuildinfo
+
+# Screenshots from scripts/screens.mjs
+artifacts/
