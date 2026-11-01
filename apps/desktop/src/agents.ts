@@ -71,11 +71,12 @@ export interface AgentActivity {
   at: string;
   /** What the agent calls itself. */
   agent: string;
-  op: "meetings" | "notes" | "claim" | "complete" | "other";
+  /** "projects" and "access" are listed only when refused. */
+  op: "meetings" | "notes" | "claim" | "complete" | "projects" | "access" | "other";
   meetingId?: string;
   itemId?: string;
   allowed: boolean;
-  refused?: "token" | "read-only" | "rules";
+  refused?: "token" | "read-only" | "unknown" | "rules";
 }
 
 export interface ActivityView {
@@ -91,7 +92,8 @@ export interface ActivityView {
 const REFUSED: Record<NonNullable<AgentActivity["refused"]>, string> = {
   "read-only": "Agents are read-only",
   token: "Old or wrong token",
-  rules: "Taken, done or not found",
+  unknown: "Not a request Aftercall knows",
+  rules: "Refused by Aftercall's rules",
 };
 
 /** How one activity entry reads on the screen. */
@@ -105,7 +107,11 @@ export function describeActivity(a: AgentActivity, meetings: Meeting[]): Activit
         ? "Read your meetings"
         : a.op === "notes"
           ? "Read a meeting"
-          : "Unknown request";
+          : a.op === "projects"
+            ? "Read your projects"
+            : a.op === "access"
+              ? "Check what agents may do"
+              : "Unknown request";
   const status = !a.allowed ? "refused" : a.op === "claim" ? "claimed" : a.op === "complete" ? "done" : "read";
   return { what, meeting, detail: a.refused ? REFUSED[a.refused] : undefined, status };
 }

@@ -20,9 +20,12 @@
 //! when agents are turned off. Nothing else in notes.json can be changed. Your notes
 //! (what you typed during the call) and their salt are never sent.
 //!
-//! Each request is added to a short activity list, `agents-activity.json` (sealed like
-//! every other file): when, which agent by its own name, which request, the meeting and
-//! item ids, and whether it was allowed. Never meeting content. The newest 200 are kept.
+//! Each read, claim and completion, and every refused request, is added to a short
+//! activity list, `agents-activity.json` (sealed like every other file): when, which agent
+//! by its own name, which request, the meeting and item ids, and whether it was allowed.
+//! Never meeting content. The newest 200 are kept. Allowed lookups of project names and
+//! of the write switch come with other requests and aren't listed; nor are lines that
+//! aren't JSON.
 //!
 //! Limits: the token sits in the agent's own config (e.g. ~/.claude.json), which other
 //! software running as the user could read. This keeps meetings away from apps that
@@ -133,8 +136,10 @@ impl Server {
                 while !flag.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (root, token, can_write) = (root.clone(), token.clone(), can_write.clone());
-                            let _ = std::thread::Builder::new().name("agents-conn".into()).spawn(move || serve(stream, &root, &token, &can_write));
+                            let (root, token, can_write, closed) = (root.clone(), token.clone(), can_write.clone(), flag.clone());
+                            let _ = std::thread::Builder::new()
+                                .name("agents-conn".into())
+                                .spawn(move || serve(stream, &root, &token, &can_write, &closed));
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(50)),
                         Err(_) => std::thread::sleep(Duration::from_millis(200)),
@@ -151,8 +156,11 @@ impl Server {
     }
 }
 
+/// Turning agents off or making a new token drops the server. Connections that are
+/// still open end before their next request, and nothing more is written.
 impl Drop for Server {
     fn drop(&mut self) {
+        self.writes.store(false, Ordering::Relaxed);
         self.stop.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
@@ -161,8 +169,8 @@ impl Drop for Server {
     }
 }
 
-/// Answers each request line on one connection.
-fn serve(stream: UnixStream, data_dir: &Path, token: &str, writes: &AtomicBool) {
+/// Answers each request line on one connection, until the server stops.
+fn serve(stream: UnixStream, data_dir: &Path, token: &str, writes: &AtomicBool, stop: &AtomicBool) {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let Ok(mut out) = stream.try_clone() else { return };
@@ -172,6 +180,9 @@ fn serve(stream: UnixStream, data_dir: &Path, token: &str, writes: &AtomicBool) 
         match reader.read_line(&mut line) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
+        }
+        if stop.load(Ordering::Relaxed) {
+            return;
         }
         let reply = match answer(data_dir, token, writes.load(Ordering::Relaxed), &line, &now_iso) {
             Ok(result) => json!({ "ok": true, "result": result }),
@@ -360,25 +371,29 @@ pub struct Activity {
     /// What the agent calls itself: the name it gave a claim or completion, else its
     /// MCP client name (e.g. "claude-code"). Neither is checked.
     pub agent: String,
-    /// "meetings", "notes", "claim", "complete" or "other".
+    /// "meetings", "notes", "claim", "complete", "projects" or "access" (only when refused),
+    /// or "other" for a request Aftercall doesn't know.
     pub op: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meeting_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
     pub allowed: bool,
-    /// Why it was refused: "token", "read-only", or "rules" (unknown id, done, claimed by another agent).
+    /// Why it was refused: "token", "read-only", "unknown" (a request Aftercall doesn't
+    /// know), or "rules" (anything else: an unknown id, done, claimed by another agent, no
+    /// agent name, or the notes couldn't be read).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
 }
 
 impl Activity {
-    /// The entry for one request, or None for the lookups that come with other requests
-    /// (project names, the write switch), which would only crowd the list.
+    /// The entry for one request, or None for allowed lookups that come with other
+    /// requests (project names, the write switch), which would only crowd the list.
+    /// Refused ones are listed, so a wrong or old token always leaves a trace.
     fn of(req: &Value, result: &Result<Value, String>, now: &dyn Fn() -> String) -> Option<Self> {
         let op = match req["op"].as_str().unwrap_or_default() {
-            "projects" | "access" => return None,
-            op @ ("meetings" | "notes" | "claim" | "complete") => op,
+            "projects" | "access" if result.is_ok() => return None,
+            op @ ("meetings" | "notes" | "claim" | "complete" | "projects" | "access") => op,
             _ => "other",
         };
         let short = |v: &Value| v.as_str().map(|s| s.trim().chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>()).filter(|s| !s.is_empty());
@@ -387,6 +402,7 @@ impl Activity {
         let refused = result.as_ref().err().map(|e| match e.as_str() {
             TOKEN_REFUSED => "token",
             WRITES_OFF => "read-only",
+            _ if op == "other" => "unknown",
             _ => "rules",
         });
         Some(Self {
@@ -611,6 +627,28 @@ mod tests {
     }
 
     #[test]
+    fn turning_agents_off_ends_connections_that_are_still_open() {
+        let dir = data_dir("open");
+        let token = new_token().unwrap();
+        let server = Server::start(&dir, token.clone(), true).unwrap();
+        let mut s = UnixStream::connect(socket_path(&dir)).unwrap();
+        let mut reader = BufReader::new(s.try_clone().unwrap());
+        writeln!(s, "{}", json!({ "token": token, "op": "meetings" })).unwrap();
+        let mut reply = String::new();
+        reader.read_line(&mut reply).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&reply).unwrap()["ok"], true);
+
+        // The user turns agents off while the connection stays open.
+        drop(server);
+        let claim = json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" });
+        let _ = writeln!(s, "{claim}");
+        let mut after = String::new();
+        assert_eq!(reader.read_line(&mut after).unwrap_or(0), 0, "no answer, the connection is closed: {after}");
+        assert!(read_notes(&dir)["meeting"]["actionItems"][0].get("claimed").is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn settings_are_saved_encrypted() {
         let dir = data_dir("settings");
         assert!(!load_settings(&dir).enabled);
@@ -667,6 +705,8 @@ mod tests {
         send(json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), true);
         send(json!({ "token": "wrong", "op": "notes", "id": "1761000000", "client": "stale" }), true);
         send(json!({ "token": token, "op": "notes", "id": "../../etc", "itemId": "<script>" }), true);
+        send(json!({ "token": "old", "op": "access", "client": "stale" }), true);
+        send(json!({ "token": token, "op": "delete", "meetingId": "1761000000" }), true);
 
         let list = read_activity(&dir, 20);
         fn row(a: &Activity) -> (&str, &str, bool, Option<&str>) {
@@ -675,6 +715,8 @@ mod tests {
         assert_eq!(
             list.iter().map(row).collect::<Vec<_>>(),
             [
+                ("other", "Unnamed agent", false, Some("unknown")),
+                ("access", "stale", false, Some("token")),
                 ("notes", "Unnamed agent", false, Some("rules")),
                 ("notes", "stale", false, Some("token")),
                 ("claim", "Codex", false, Some("rules")),
@@ -683,12 +725,12 @@ mod tests {
                 ("claim", "Claude Code", false, Some("read-only")),
                 ("meetings", "claude-code", true, None),
             ],
-            "newest first; project and switch lookups aren't listed"
+            "newest first; allowed project and switch lookups aren't listed, refused ones are"
         );
-        assert_eq!(list[3].meeting_id.as_deref(), Some("1761000000"));
-        assert_eq!(list[3].item_id.as_deref(), Some("a1"));
-        assert_eq!(list[3].at, "2026-10-26T12:00:00.000Z");
-        assert_eq!((list[0].meeting_id.as_deref(), list[0].item_id.as_deref()), (None, None), "only well-formed ids are kept");
+        assert_eq!(list[5].meeting_id.as_deref(), Some("1761000000"));
+        assert_eq!(list[5].item_id.as_deref(), Some("a1"));
+        assert_eq!(list[5].at, "2026-10-26T12:00:00.000Z");
+        assert_eq!((list[2].meeting_id.as_deref(), list[2].item_id.as_deref()), (None, None), "only well-formed ids are kept");
 
         let bytes = std::fs::read(dir.join("agents-activity.json")).unwrap();
         assert!(at_rest::is_sealed(&bytes));

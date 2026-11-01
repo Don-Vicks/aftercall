@@ -128,6 +128,15 @@ test("read-only by default: reads work, claim and complete are refused by name, 
   assert.equal(fake.notes("1761100000").meeting.actionItems[1].done, false);
 });
 
+test("an app from before the write switch still lists action items", async () => {
+  // Such an app answers "Unknown request" to the access lookup.
+  const older: AppChannel = (op, args) => (op === "access" ? Promise.reject(new Error("Unknown request")) : app(op, args));
+  const list = await listActionItems(older);
+  assert.ok(list.total > 0);
+  assert.equal(list.canClaim, null);
+  assert.match(list.note ?? "", /didn't say/);
+});
+
 test("bad input: unknown item, missing agent name, unprocessed meeting", async () => {
   await assert.rejects(claimActionItem(app, { meetingId: "1761000000", itemId: "zz", agent: "Codex" }), /No action item "zz"/);
   await assert.rejects(claimActionItem(app, { meetingId: "1761000000", itemId: "a1", agent: "  " }), /agent name/);

@@ -112,9 +112,16 @@ export async function readNotes(app: AppChannel, id: string): Promise<NotesFile>
   return (await app("notes", { id })) as NotesFile;
 }
 
-/** Whether the user lets agents claim and complete action items right now. */
-export async function readAccess(app: AppChannel): Promise<{ allowWrites: boolean }> {
-  return (await app("access")) as { allowWrites: boolean };
+/**
+ * Whether the user lets agents claim and complete action items right now. null when
+ * the app can't say, for example a version from before the switch, so reads still work.
+ */
+export async function readAccess(app: AppChannel): Promise<{ allowWrites: boolean | null }> {
+  try {
+    return (await app("access")) as { allowWrites: boolean };
+  } catch {
+    return { allowWrites: null };
+  }
 }
 
 /** Claims one action item for `agent`; the app stamps the time. */

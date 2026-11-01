@@ -123,7 +123,11 @@ export async function listActionItems(
     items,
     total: items.length,
     canClaim: allowWrites,
-    ...(allowWrites ? {} : { note: "Aftercall lets agents read only right now. The user can allow claiming and completing in Settings → Connected agents." }),
+    ...(allowWrites === true
+      ? {}
+      : allowWrites === false
+        ? { note: "Aftercall lets agents read only right now. The user can allow claiming and completing in Settings → Connected agents." }
+        : { note: "Aftercall didn't say whether agents may claim and complete. A claim says so if it is refused." }),
   };
 }
 

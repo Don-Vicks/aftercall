@@ -138,6 +138,6 @@ This part was not recorded; it is the same server and setup, pointed at the Mac 
    ```
 
    or start `claude` and ask in your own words.
-6. Each request shows under "Recent agent activity" on the same screen, allowed or refused. A claim shows on the meeting's action item.
+6. Each read, claim and completion, and every refused request, shows under "Recent agent activity" on the same screen. Allowed lookups of project names and of the write switch come with other requests and aren't listed. A claim shows on the meeting's action item.
 
 Turning agents off closes the local channel and forgets the token; turning them on again needs the new setup command, and agents start read-only again. A new token, or moving Aftercall to another folder, also needs the command run again.

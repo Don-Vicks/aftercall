@@ -236,7 +236,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                 Recent agent activity
               </SectionTitle>
               <p className="m-0 text-[13px] leading-[19px] text-ink-2">
-                Each request, newest first, under the name the agent gives itself. The list holds times, names and ids, never meeting content.
+                Each read, claim and completion, and every refused request, newest first, under the name the agent gives itself. The list holds times,
+                names and ids, never meeting content.
               </p>
             </div>
             {log.length === 0 ? (
