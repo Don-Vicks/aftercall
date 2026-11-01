@@ -16,7 +16,7 @@ test("merges both stems and all chunks into one timeline", () => {
     { at: 31, speaker: "others", text: "The API fix ships first." },
     { at: 314, speaker: "you", text: "Pay the designer fifty dollars." },
   ]);
-  assert.equal(transcriptForPrompt(lines).split("\n")[2], "[05:14] YOU: Pay the designer fifty dollars.");
+  assert.equal(transcriptForPrompt(lines).split("\n")[2], "[05:14] You: Pay the designer fifty dollars.");
 });
 
 test("drops segments Whisper marks as probably not speech", () => {

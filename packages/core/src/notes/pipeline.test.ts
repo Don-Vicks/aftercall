@@ -332,7 +332,7 @@ test("a retry after the summary fails reuses the transcription instead of paying
 // ---------- your notes ----------
 
 const typed = "Fix before demo, no exceptions.\nPay Ines 300 for the logo.";
-/** The model also proposes a payment it only read in YOUR NOTES; the build must drop it. */
+/** The model also proposes a payment it only read in your notes; the build must drop it. */
 const notesWithInvented = {
   ...notes,
   followups: [...notes.followups, { type: "payment", payee_name: "Ines", amount_words: "300", memo: null, evidence: "Pay Ines 300 for the logo" }],
@@ -343,9 +343,11 @@ test("your notes go to the model inside the encrypted request, as context only, 
   const result = await processRecording(ai.transport, { ...input, yourNotes: `  ${typed}\n\n` }, undefined, noWait);
 
   const sent = ai.seenByTee[0];
-  assert.match(sent, /YOUR NOTES \(typed by YOU during the call; context only\):\n<<<\nFix before demo, no exceptions\.\nPay Ines 300 for the logo\.\n>>>\n\nTranscript:\n/);
+  assert.match(sent, /Your notes \(typed by you during the call; context only\):\n<<<\nFix before demo, no exceptions\.\nPay Ines 300 for the logo\.\n>>>\n\nTranscript:\n/);
   assert.ok(!ai.seenByGateway.join().includes("Fix before demo"), "the gateway only sees ciphertext");
-  assert.match(NOTES_SYSTEM_PROMPT, /Evidence must still come from the transcript, never from YOUR NOTES/);
+  assert.match(NOTES_SYSTEM_PROMPT, /Evidence must still come from the transcript, never from your notes/);
+  // The person recording reads "you" in their notes, not the transcript's label in capitals.
+  assert.match(NOTES_SYSTEM_PROMPT, /never \"YOU\"/);
 
   assert.equal(result.meeting.yourNotes, typed, "trimmed and kept on the meeting");
   assert.deepEqual(
@@ -379,7 +381,7 @@ test("without your notes nothing changes: no block, no salt, no hash key", async
   for (const yourNotes of [undefined, "", "   \n ", "<<< >>>"]) {
     const ai = await fakeNearAi({ notes });
     const result = await processRecording(ai.transport, { ...input, yourNotes }, undefined, noWait);
-    assert.ok(!ai.seenByTee[0].includes("YOUR NOTES"));
+    assert.ok(!ai.seenByTee[0].includes("Your notes (typed by you"));
     assert.equal(result.meeting.yourNotes, undefined);
     assert.equal("yourNotes" in result.meeting, false);
     assert.equal("yourNotesSalt" in result, false);

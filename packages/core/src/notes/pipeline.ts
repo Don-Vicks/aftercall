@@ -93,7 +93,7 @@ export function cleanYourNotes(raw: string | undefined): string | undefined {
 /** The user message: project, payees, your notes (when there are any), then the transcript. */
 export function summaryRequestText(project: string, payees: Payee[], transcript: string, yourNotes?: string): string {
   const payeeList = payees.map((p) => `${p.name} (${p.account})`);
-  const notesBlock = yourNotes ? `YOUR NOTES (typed by YOU during the call; context only):\n<<<\n${yourNotes}\n>>>\n\n` : "";
+  const notesBlock = yourNotes ? `Your notes (typed by you during the call; context only):\n<<<\n${yourNotes}\n>>>\n\n` : "";
   return `Project: ${project}\nPayees: ${JSON.stringify(payeeList)}\n\n${notesBlock}Transcript:\n${transcript}`;
 }
 

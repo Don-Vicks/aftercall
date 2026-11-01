@@ -46,9 +46,9 @@ export function mergeTranscript(chunks: TranscribedChunk[], chunkSeconds: number
   return turns;
 }
 
-/** The transcript as the summary model reads it: "[02:14] YOU: ...". */
+/** The transcript as the summary model reads it: "[02:14] You: ...". */
 export function transcriptForPrompt(lines: TranscriptLine[]): string {
-  return lines.map((l) => `[${formatClock(l.at)}] ${l.speaker === "you" ? "YOU" : "OTHERS"}: ${l.text}`).join("\n");
+  return lines.map((l) => `[${formatClock(l.at)}] ${l.speaker === "you" ? "You" : "Others"}: ${l.text}`).join("\n");
 }
 
 /**

@@ -210,8 +210,8 @@ export function pickExcerpts(meetings: Meeting[], question: string, opts: { me?:
 }
 
 export const ASK_SYSTEM_PROMPT = [
-  "You answer a question about YOU's meetings using only the numbered excerpts given. Each excerpt is words someone said in a meeting.",
-  "Write the answer in one to three plain sentences, without markdown. Refer to people by name or as they/them.",
+  "You answer a question about the user's meetings using only the numbered excerpts given. Each excerpt is words someone said in a meeting; \"You\" is the user.",
+  "Write the answer in one to three plain sentences, without markdown, to the user as \"you\" in ordinary sentence case. Refer to other people by name or as they/them.",
   "Back the answer with quotes: each quote names its excerpt number and copies at least four words exactly from that excerpt, in the excerpt's own language and never translated (in Chinese, Japanese, Thai or another language written without spaces, at least eight characters).",
   "If the excerpts don't answer the question, set found to false, say so in one sentence and give no quotes.",
   "Never invent people, amounts, dates or promises.",
