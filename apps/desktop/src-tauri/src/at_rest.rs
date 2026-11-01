@@ -108,6 +108,14 @@ pub fn data_key() -> Result<Key, String> {
     Ok(Zeroizing::new([7u8; 32]))
 }
 
+/// Forgets the cached data key ("Delete everything" removed it from the Keychain),
+/// so the next file written gets a new key instead of one nobody can find again.
+pub fn forget_data_key() {
+    if let Ok(mut slot) = KEY.lock() {
+        *slot = None;
+    }
+}
+
 pub fn new_key() -> Result<Key, String> {
     let mut key = Key::default();
     getrandom::getrandom(key.as_mut()).map_err(|e| e.to_string())?;

@@ -9,6 +9,7 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 | Meeting audio (two WAV stems) | NEAR AI Cloud, Whisper in a TEE | NEAR AI's policy; Aftercall deletes its copy on the Mac once notes are saved |
 | Transcript text, project and payee names | NEAR AI Cloud, Qwen in a TEE | NEAR AI's policy |
 | Your notes (what you type during the call) | NEAR AI Cloud, Qwen in a TEE, in the same end-to-end encrypted request as the transcript | NEAR AI's policy. Never in a recap, never sent to connected agents; the proof holds only a salted hash |
+| A question you ask your meetings, with at most 8 matching transcript lines | NEAR AI Cloud, Qwen in a TEE, end-to-end encrypted | NEAR AI's policy |
 | Notes, transcript, your notes, settings | Nowhere. They stay in the app's folder on the Mac | Until you delete the meeting |
 | Proof of a meeting | NEAR blockchain (`record_proof`) | Forever, publicly: the recording id (its start time), a sha256 hash and the model name. No content |
 | A payment | NEAR blockchain (`pay`) | Forever, publicly: payee account, amount, a memo and a follow-up id (see the note on memos below) |
@@ -25,12 +26,14 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 - Only files inside that folder can be uploaded, and only `.wav`: `apps/desktop/src-tauri/src/nearai.rs:105` (`check_audio_path`).
 - After the notes are saved, the audio and the cached chunk transcripts are deleted: `apps/desktop/src/RecordingScreen.tsx:106` calls `delete_audio`, `apps/desktop/src-tauri/src/lib.rs:221`.
 - The NEAR AI key lives in the macOS Keychain and never reaches the web view: `apps/desktop/src-tauri/src/nearai.rs:29`.
-- Calendar lookups (EventKit), search, the MCP server for agents and backups are all local.
+- Calendar lookups (EventKit), search, the People list, the MCP server for agents and backups are all local.
+- **Delete everything on this Mac** (Settings → Privacy and your data) removes the app's data folder and its four Keychain items (`data-key`, `near-app-key`, `nearai-api-key`, `backup-key` under `dev.aftercall.app`), after you type "delete": `apps/desktop/src-tauri/src/wipe.rs`, called by `delete_all_data` in `lib.rs`. The folder goes first and the keys only once it's gone. Proofs and payments on NEAR, this Mac's access key on your NEAR account, the agent wallet's balance and backups you exported stay.
 
 ## NEAR AI Cloud
 
 - The only AI endpoint is `https://cloud-api.near.ai/v1` (`apps/desktop/src-tauri/src/nearai.rs:11`), and only the Confidential TEE models in `packages/core/src/notes/pipeline.ts:10`.
 - What is sent: each audio chunk (with project and payee names as Whisper's spelling prompt), then the merged transcript with the project name, the payee list and your notes if you typed any (`summaryRequestText`, `packages/core/src/notes/pipeline.ts:83`).
+- **Ask your meetings** (`packages/core/src/ask.ts`): the question is searched on the Mac first. Only the transcript lines that match (at most 8, each cut to 400 characters, each labelled with its meeting's title, time and speaker: "You", the one person the calendar invited, or "Others"), today's date and the question go to the Qwen TEE, end-to-end encrypted to a model key that passed the attestation checks moments before. If no line matches, or the gateway or model check fails, nothing is sent; there is no unencrypted fallback. Quotes in the answer that aren't in those lines are dropped.
 - The app may also read the attestation report and the response signature, and nothing else: `apps/desktop/src-tauri/src/nearai.rs:156` (`check_get_path`).
 - What NEAR AI keeps is set by NEAR AI, not by Aftercall. The attestation proves the models ran in TEEs; it does not prove what NEAR AI's gateway logs.
 - `pnpm sample:notes` uses a Node transport with the same three calls and the same path rule: `packages/core/src/node/nearai.ts`.

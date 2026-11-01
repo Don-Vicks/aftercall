@@ -174,7 +174,7 @@ function requireAttested(summary: ModelAttestation, whisper: ModelAttestation): 
 }
 
 /** A verified summary node whose E2EE key is the key bound in its quote. */
-function e2eeNode(summary: ModelAttestation): VerifiedTee | undefined {
+export function e2eeNode(summary: ModelAttestation): VerifiedTee | undefined {
   return summary.nodes.find((n) => {
     const key = strip0x(n.att.signing_public_key ?? "");
     return n.verified && /^[0-9a-f]{64}$/.test(key) && key === signingIdentity(n.att);
@@ -188,7 +188,7 @@ function e2eeRefused(e: unknown): string | null {
 }
 
 /** Waits for the signature, which NEAR AI publishes a moment after the response. */
-async function fetchSignature(t: NearAiTransport, chatId: string, model: string, wait: (ms: number) => Promise<void>): Promise<SignatureResponse> {
+export async function fetchSignature(t: NearAiTransport, chatId: string, model: string, wait: (ms: number) => Promise<void>): Promise<SignatureResponse> {
   const q = new URLSearchParams({ model, signing_algo: "ed25519" });
   for (let attempt = 0; ; attempt++) {
     try {

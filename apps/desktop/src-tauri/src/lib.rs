@@ -9,6 +9,7 @@ mod notes_file;
 mod recorder;
 mod recovery;
 mod samples;
+mod wipe;
 
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
@@ -539,6 +540,23 @@ fn delete_recording(app: AppHandle, id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Deletes everything Aftercall keeps on this Mac: the data folder (meetings, notes,
+/// transcripts, audio, projects, settings) and its Keychain items. The folder goes
+/// first; the keys go only once it's gone, so nothing is left that can't be read.
+/// Refused while a recording is running. Proofs and payments on NEAR stay.
+#[tauri::command]
+fn delete_all_data(app: AppHandle, recorder: State<RecorderState>, agents: State<AgentsState>) -> Result<wipe::Wiped, String> {
+    if recorder.0.lock().map_err(|e| e.to_string())?.is_some() {
+        return Err("Stop the recording first.".into());
+    }
+    // Close the agents socket, which lives in the data folder.
+    agents.0.lock().map_err(|e| e.to_string())?.take();
+    let folder_removed = wipe::remove_data_dir(&data_dir(&app)?, &app.config().identifier)?;
+    at_rest::forget_data_key();
+    let (keychain_removed, keychain_failed) = wipe::delete_keychain_items();
+    Ok(wipe::Wiped { folder_removed, keychain_removed, keychain_failed })
+}
+
 fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -602,7 +620,8 @@ pub fn run() {
             recovery_new_phrase,
             recovery_use_phrase,
             backup_export,
-            backup_import
+            backup_import,
+            delete_all_data
         ])
         .setup(|app| {
             if let Ok(dir) = data_dir(app.handle()) {

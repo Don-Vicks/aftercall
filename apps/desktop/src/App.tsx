@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
@@ -30,22 +30,31 @@ import { openSample } from "./sampleRecordings";
 import { CommandPalette } from "./CommandPalette";
 import { ProjectScreen } from "./ProjectScreen";
 import { DialogHost, MotionProvider, Toaster, anyLayerOpen, deferred, toast, useConfirm, view as viewMotion } from "./ui";
+import { PeopleScreen } from "./PeopleScreen";
+import { PersonScreen } from "./PersonScreen";
+import { AskScreen } from "./AskScreen";
+import { MeetingsScreen } from "./MeetingsScreen";
+import { ActionItemsScreen } from "./ActionItemsScreen";
+import { PrivacyScreen } from "./PrivacyScreen";
+import { libraryMeetings } from "./library";
 
 type View =
   | { name: "home" }
   | { name: "search"; query?: string }
   | { name: "project"; id: string }
   // Screens built on another branch; until they land, a placeholder says so.
-  | { name: "ask" }
-  | { name: "actions" }
-  | { name: "people" }
-  | { name: "meetings" }
   | { name: "meeting"; id: string; at?: number }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
   | { name: "settings" }
   | { name: "agents" }
   | { name: "wallet" }
+  | { name: "people" }
+  | { name: "person"; id: string }
+  | { name: "ask"; question?: string }
+  | { name: "meetings" }
+  | { name: "actions" }
+  | { name: "privacy" }
   | { name: "placeholder"; title: string; milestone: string };
 
 function nowHHMM() {
@@ -68,6 +77,19 @@ export default function App() {
   useSystemTheme();
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
   const [view, setView] = useState<View>({ name: "home" });
+  /**
+   * Opens the library screens. The sidebar's onOpenPeople, onOpenAsk, onOpenMeetings and
+   * onOpenActions call go.people, go.ask, go.meetings and go.actions.
+   */
+  const go = {
+    people: () => setView({ name: "people" }),
+    person: (id: string) => setView({ name: "person", id }),
+    /** With a question, Ask asks it at once (from "Ask about Ada"). */
+    ask: (question?: unknown) => setView({ name: "ask", question: typeof question === "string" ? question : undefined }),
+    meetings: () => setView({ name: "meetings" }),
+    actions: () => setView({ name: "actions" }),
+    privacy: () => setView({ name: "privacy" }),
+  };
   const [recordOpen, setRecordOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
@@ -477,12 +499,15 @@ export default function App() {
   const rules = loadRules();
   const autopilotOn = rules.payments || rules.recapDomains.length > 0;
   /** One key per screen, so switching screens fades between them. */
-  const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "project" ? `${view.name}:${view.id}` : view.name;
+  const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "project" || view.name === "person" ? `${view.name}:${view.id}` : view.name;
   const openProject = view.name === "project" ? projects.find((p) => p.id === view.id) : undefined;
   const openActions = shownMeetings.reduce((n, m) => n + m.actionItems.filter((a) => !a.done).length, 0);
+  /** Names that mean "you" in the notes: your NEAR account, once connected ("You" and "Me" always do). */
+  const me = useMemo(() => (account ? [account] : []), [account]);
+  /** What People, Ask, All meetings and Action items read: every meeting not waiting out a delete. */
+  const library = useMemo(() => libraryMeetings(Object.values(meetings).filter((m) => !hidden[m.id]), syncWithAda.id), [meetings, hidden]);
+  const sampleIds = new Set([syncWithAda.id, ...recordings.filter((r) => r.label === "Sample").map((r) => r.id)]);
   const openMeeting = (id: string, at?: number) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id });
-  /** Screens another branch builds: until they land, the sidebar and ⌘J open this. */
-  const comingSoon: Partial<Record<View["name"], string>> = { ask: "Ask your meetings", actions: "Action items", people: "People", meetings: "All meetings" };
 
   return (
     <MotionProvider>
@@ -502,10 +527,10 @@ export default function App() {
           onOpenAgents={() => setView({ name: "agents" })}
           onOpenHome={() => setView({ name: "home" })}
           onOpenSearch={() => setPaletteOpen(true)}
-          onOpenAsk={() => setView({ name: "ask" })}
-          onOpenActions={() => setView({ name: "actions" })}
-          onOpenPeople={() => setView({ name: "people" })}
-          onOpenMeetings={() => setView({ name: "meetings" })}
+          onOpenAsk={() => go.ask()}
+          onOpenActions={go.actions}
+          onOpenPeople={go.people}
+          onOpenMeetings={go.meetings}
           onOpenProject={(id) => setView({ name: "project", id })}
           onNewProject={() => setNewProjectOpen(true)}
           onRenameProject={(id) => setRenaming(projects.find((p) => p.id === id) ?? null)}
@@ -592,7 +617,28 @@ export default function App() {
                 onChanged={refreshWallet}
               />
             )}
-            {view.name === "settings" && <ConnectNear />}
+            {view.name === "settings" && <ConnectNear onOpenPrivacy={go.privacy} />}
+            {view.name === "people" && <PeopleScreen meetings={library} me={me} sampleIds={sampleIds} onOpenPerson={go.person} />}
+            {view.name === "person" && (
+              <PersonScreen
+                personId={view.id}
+                meetings={library}
+                me={me}
+                sampleIds={sampleIds}
+                onBack={go.people}
+                onOpenMeeting={openMeeting}
+                onToggleItem={toggleItem}
+                onAsk={go.ask}
+              />
+            )}
+            {view.name === "ask" && (
+              <AskScreen meetings={library} me={me} initialQuestion={view.question} onOpenMeeting={openMeeting} onOpenSettings={() => setView({ name: "settings" })} />
+            )}
+            {view.name === "meetings" && <MeetingsScreen meetings={library} recordings={shownRecordings} me={me} sampleIds={sampleIds} onOpen={(id) => openMeeting(id)} />}
+            {view.name === "actions" && (
+              <ActionItemsScreen meetings={library} me={me} onToggleItem={toggleItem} onOpenMeeting={(id) => openMeeting(id)} onOpenAgents={() => setView({ name: "agents" })} />
+            )}
+            {view.name === "privacy" && <PrivacyScreen onBack={() => setView({ name: "settings" })} onOpenSettings={() => setView({ name: "settings" })} />}
             {view.name === "agents" && (
               <AgentsScreen meetings={shownMeetings.filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
             )}
@@ -600,15 +646,6 @@ export default function App() {
               <SearchScreen key={view.query ?? ""} meetings={shownMeetings} initialQuery={view.query} onOpen={openMeeting} />
             )}
             {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
-            {comingSoon[view.name] && (
-              <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
-                <div data-tauri-drag-region className="h-9" />
-                <div className="mx-auto flex max-w-[680px] flex-1 flex-col justify-center gap-3 px-12 pb-24">
-                  <h1 className="t-display m-0">{comingSoon[view.name]}</h1>
-                  <p className="m-0 text-ink-2">This screen isn’t in this build yet.</p>
-                </div>
-              </main>
-            )}
             {view.name === "placeholder" && (
               <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
                 <div data-tauri-drag-region className="h-9" />
@@ -682,8 +719,8 @@ export default function App() {
               onOpenWallet={() => setView({ name: "wallet" })}
               onOpenSettings={() => setView({ name: "settings" })}
               onOpenAgents={() => setView({ name: "agents" })}
-              onOpenAsk={() => setView({ name: "ask" })}
-              onOpenPeople={() => setView({ name: "people" })}
+              onOpenAsk={() => go.ask()}
+              onOpenPeople={go.people}
               onOpenMeeting={openMeeting}
               onOpenSearch={(query) => setView({ name: "search", query })}
             />
