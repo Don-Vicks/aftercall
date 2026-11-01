@@ -223,8 +223,9 @@ fn set_tray_recording(app: &AppHandle, recording: Option<(u64, bool)>) {
     }
 }
 
-/// ⌘⇧R: new recording, or your notes while recording. Registered system-wide, so it
-/// works from the call's own app; the menu bar items show it too.
+/// ⌘⇧R: new recording, or your notes while recording. Registered system-wide unless you
+/// turned that off in Settings, so it works from the call's own app; the menu bar items
+/// show it too.
 const RECORD_SHORTCUT: &str = "CmdOrCtrl+Shift+R";
 
 /// Two triggers closer than this are one press.
@@ -246,15 +247,93 @@ impl PressGate {
     }
 }
 
-/// Whether ⌘⇧R was registered system-wide. False when another app already holds it:
-/// then it works only inside Aftercall, and the app's copy says so.
+/// ⌘⇧R as applied now: what you chose in Settings (`wanted`), and whether Aftercall holds
+/// it system-wide (`registered`; false when you turned it off or another app already
+/// had it, and then it works only inside Aftercall's window, which the copy says).
+/// Kept in memory so Settings shows what is in force, not what a file says later.
 #[derive(Default)]
-struct RecordShortcut(AtomicBool);
+struct RecordShortcut {
+    wanted: AtomicBool,
+    registered: AtomicBool,
+}
 
 /// True when ⌘⇧R works from any app; false when it works only inside Aftercall.
 #[tauri::command]
 fn record_shortcut_everywhere(state: State<RecordShortcut>) -> bool {
-    state.0.load(Ordering::Relaxed)
+    state.registered.load(Ordering::Relaxed)
+}
+
+/// Your choice in Settings: ⌘⇧R from any app (the default), or only inside Aftercall,
+/// so other apps keep it (Safari's Reader, for example). Saved as plain `shortcut.json`,
+/// like near.json: it holds no secret, so launch never waits on the Keychain for it and a
+/// failed Keychain read can't turn an "off" back on.
+#[derive(Serialize, Deserialize)]
+struct ShortcutPrefs {
+    everywhere: bool,
+}
+
+impl Default for ShortcutPrefs {
+    fn default() -> Self {
+        Self { everywhere: true }
+    }
+}
+
+fn shortcut_prefs_path(dir: &std::path::Path) -> PathBuf {
+    dir.join("shortcut.json")
+}
+
+fn load_shortcut_prefs(dir: &std::path::Path) -> ShortcutPrefs {
+    std::fs::read_to_string(shortcut_prefs_path(dir)).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn save_shortcut_prefs(dir: &std::path::Path, prefs: &ShortcutPrefs) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    std::fs::write(shortcut_prefs_path(dir), serde_json::to_string(prefs).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShortcutStatus {
+    /// Your choice in Settings.
+    wanted: bool,
+    /// Whether Aftercall holds ⌘⇧R system-wide now: false when you turned it off or
+    /// another app already had it.
+    registered: bool,
+}
+
+#[tauri::command]
+fn record_shortcut_status(state: State<RecordShortcut>) -> ShortcutStatus {
+    shortcut_status(&state)
+}
+
+fn shortcut_status(state: &RecordShortcut) -> ShortcutStatus {
+    ShortcutStatus { wanted: state.wanted.load(Ordering::Relaxed), registered: state.registered.load(Ordering::Relaxed) }
+}
+
+/// Settings → Shortcut: saves the choice and takes or releases ⌘⇧R at once.
+#[tauri::command]
+fn set_record_shortcut_everywhere(on: bool, app: AppHandle, state: State<RecordShortcut>) -> Result<ShortcutStatus, String> {
+    save_shortcut_prefs(&data_dir(&app)?, &ShortcutPrefs { everywhere: on })?;
+    apply_record_shortcut(&app, on);
+    Ok(shortcut_status(&state))
+}
+
+/// Takes ⌘⇧R system-wide, or gives it back, and records whether Aftercall holds it.
+/// A clash with another app is logged, not fatal: ⌘⇧R then works only inside Aftercall.
+fn apply_record_shortcut(app: &AppHandle, on: bool) {
+    let shortcuts = app.global_shortcut();
+    if on && !shortcuts.is_registered(RECORD_SHORTCUT) {
+        if let Err(e) = shortcuts.register(RECORD_SHORTCUT) {
+            eprintln!("shortcut: ⌘⇧R works only inside Aftercall: {e}");
+        }
+    } else if !on && shortcuts.is_registered(RECORD_SHORTCUT) {
+        if let Err(e) = shortcuts.unregister(RECORD_SHORTCUT) {
+            eprintln!("shortcut: couldn't give ⌘⇧R back: {e}");
+        }
+    }
+    let state = app.state::<RecordShortcut>();
+    state.wanted.store(on, Ordering::Relaxed);
+    state.registered.store(shortcuts.is_registered(RECORD_SHORTCUT), Ordering::Relaxed);
 }
 
 /// ⌘⇧R pressed in any app. Aftercall comes to the front and the main window does what
@@ -945,6 +1024,8 @@ fn delete_all_data(app: AppHandle, recorder: State<RecorderState>, agents: State
     let folder_removed = wipe::remove_data_dir(&data_dir(&app)?, &app.config().identifier)?;
     at_rest::forget_data_key();
     let (keychain_removed, keychain_failed) = wipe::delete_keychain_items();
+    // shortcut.json went with the folder, so ⌘⇧R is back to the default now, not at the next launch.
+    apply_record_shortcut(&app, ShortcutPrefs::default().everywhere);
     Ok(wipe::Wiped { folder_removed, keychain_removed, keychain_failed })
 }
 
@@ -960,8 +1041,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        // ⌘⇧R from any app. Registered in setup, where a clash is logged instead of
-        // stopping the app; it is then handled only inside Aftercall (App.tsx).
+        // ⌘⇧R from any app, unless you turned that off in Settings. Registered in setup,
+        // where a clash is logged instead of stopping the app; it is then handled only
+        // inside Aftercall (App.tsx).
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -984,6 +1066,8 @@ pub fn run() {
             save_your_notes,
             open_audio_settings,
             record_shortcut_everywhere,
+            record_shortcut_status,
+            set_record_shortcut_everywhere,
             live_open_notes,
             show_main_window,
             list_recordings,
@@ -1061,10 +1145,9 @@ pub fn run() {
                     eprintln!("agents: {e}");
                 }
             }
-            match app.global_shortcut().register(RECORD_SHORTCUT) {
-                Ok(()) => app.state::<RecordShortcut>().0.store(true, Ordering::Relaxed),
-                Err(e) => eprintln!("shortcut: ⌘⇧R works only inside Aftercall: {e}"),
-            }
+            // ⌘⇧R from any app unless you turned that off in Settings.
+            let everywhere = data_dir(app.handle()).map(|d| load_shortcut_prefs(&d).everywhere).unwrap_or(true);
+            apply_record_shortcut(app.handle(), everywhere);
             // Menu bar item: start a recording or open the app from anywhere. While
             // recording it shows the time and offers Add a note, Pause and Stop.
             let menu = tray_menu(app.handle(), None)?;
@@ -1156,6 +1239,20 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_shortcut_works_from_any_app_until_you_turn_it_off() {
+        let dir = std::env::temp_dir().join(format!("aftercall-shortcut-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(load_shortcut_prefs(&dir).everywhere, "on by default, before anything is saved");
+        save_shortcut_prefs(&dir, &ShortcutPrefs { everywhere: false }).unwrap();
+        assert!(!load_shortcut_prefs(&dir).everywhere, "off stays off after a restart");
+        save_shortcut_prefs(&dir, &ShortcutPrefs { everywhere: true }).unwrap();
+        assert!(load_shortcut_prefs(&dir).everywhere);
+        std::fs::write(shortcut_prefs_path(&dir), b"not json").unwrap();
+        assert!(load_shortcut_prefs(&dir).everywhere, "an unreadable file falls back to the default");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn audio_left_beside_saved_notes_is_swept_and_unprocessed_audio_stays() {

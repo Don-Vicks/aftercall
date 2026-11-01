@@ -98,6 +98,8 @@ mod tests {
         std::fs::write(dir.join("agents.json"), b"sealed").unwrap();
         std::fs::write(dir.join("agents-activity.json"), b"sealed").unwrap();
         std::fs::create_dir_all(dir.join("agents")).unwrap();
+        // The ⌘⇧R choice from Settings.
+        std::fs::write(dir.join("shortcut.json"), br#"{"everywhere":false}"#).unwrap();
 
         assert_eq!(remove_data_dir(&dir, ID), Ok(true));
         assert!(!dir.exists());

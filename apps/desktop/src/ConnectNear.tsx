@@ -3,6 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { Check, ChevronRight, ShieldCheck } from "lucide-react";
 import { AutopilotSettings } from "./AutopilotSettings";
 import { CalendarSettings } from "./CalendarSettings";
+import { ShortcutSettings } from "./ShortcutSettings";
 import type { CalendarStatus } from "./calendar";
 import { NearAiSettings } from "./NearAiSettings";
 import type { Spend } from "./costs";
@@ -33,6 +34,7 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
     { id: "settings-account", label: "NEAR account", done: n.accountDone },
     { id: "settings-authorise", label: "Authorise", done: n.connected, pill: toSign ? `${toSign} to sign` : undefined },
     { id: "settings-calendar", label: "Calendar", done: calendar === "granted" },
+    { id: "settings-shortcut", label: "Shortcut" },
     { id: "settings-autopilot", label: "Autopilot" },
   ];
 
@@ -138,12 +140,16 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
             <CalendarSettings onChange={setCalendar} />
           </div>
 
-          <div id="settings-autopilot" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(7)}>
+          <div id="settings-shortcut" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(7)}>
+            <ShortcutSettings />
+          </div>
+
+          <div id="settings-autopilot" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>
             <AutopilotSettings />
           </div>
 
           {onOpenPrivacy && (
-            <Card as="button" interactive pad="none" onClick={onOpenPrivacy} className="w-full" style={rise(8)}>
+            <Card as="button" interactive pad="none" onClick={onOpenPrivacy} className="w-full" style={rise(9)}>
               <span className="flex items-center gap-3.5 px-5 py-4">
                 <IconDisc tone="verdigris">
                   <ShieldCheck size={16} strokeWidth={1.75} />

@@ -445,8 +445,9 @@ export function useRecordShortcut(fn: () => void) {
 }
 
 /**
- * Whether ⌘⇧R works from any app. False in the Mac app when another app already holds
- * it, so the copy can say "in Aftercall" instead. The browser preview shows the usual case.
+ * Whether ⌘⇧R works from any app. False in the Mac app when you turned that off in
+ * Settings or another app already holds it, so the copy can say "in Aftercall" instead.
+ * The browser preview shows the usual case.
  */
 export function useShortcutEverywhere(): boolean {
   const [everywhere, setEverywhere] = useState(true);

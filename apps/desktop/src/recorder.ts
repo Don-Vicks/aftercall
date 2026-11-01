@@ -50,6 +50,12 @@ export interface Levels {
   seconds: number;
 }
 
+/** ⌘⇧R: whether you want it from any app, and whether Aftercall holds it (false when off or another app has it). */
+export interface ShortcutStatus {
+  wanted: boolean;
+  registered: boolean;
+}
+
 /** A stem went silent (exact zeros for 30 s, or for the mic no audio at all for 10 s), or came back. */
 export interface SilenceEvent {
   stem: "mic" | "system";
@@ -86,8 +92,12 @@ export const recorder = {
   /** The floating recorder's "Open notes", or "Add a note…" in the menu bar. */
   onOpenLive: (fn: () => void): Promise<UnlistenFn> => listen("recorder:open-live", () => fn()),
   onMenuNewRecording: (fn: () => void): Promise<UnlistenFn> => listen("menu:new-recording", () => fn()),
-  /** True when ⌘⇧R works from any app; false when another app holds it and it works only in Aftercall. */
+  /** True when ⌘⇧R works from any app; false when you turned that off or another app holds it, and it works only in Aftercall. */
   shortcutEverywhere: () => invoke<boolean>("record_shortcut_everywhere"),
+  /** Your choice in Settings, and whether Aftercall holds ⌘⇧R system-wide now. */
+  shortcutStatus: () => invoke<ShortcutStatus>("record_shortcut_status"),
+  /** Settings → Shortcut: ⌘⇧R from any app, or only inside Aftercall. Takes effect at once. */
+  setShortcutEverywhere: (on: boolean) => invoke<ShortcutStatus>("set_record_shortcut_everywhere", { on }),
   /** ⌘⇧R pressed in any app (the global shortcut). Aftercall is already in front. */
   onShortcut: (fn: () => void): Promise<UnlistenFn> => listen("shortcut:record", () => fn()),
 };
