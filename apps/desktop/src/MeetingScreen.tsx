@@ -384,7 +384,7 @@ function Transcript({
                 const evidence = live.filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
                 const isTarget = line.at === target?.at;
                 return (
-                  <BubbleWithChips key={line.at} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
+                  <BubbleWithChips key={`${line.at}-${i}`} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
                     <p
                       ref={isTarget ? targetRef : undefined}
                       className={cx(
