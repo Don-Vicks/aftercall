@@ -24,7 +24,8 @@ step "Typecheck (core, backend, web, desktop, mcp)" pnpm -r typecheck
 step "Unit tests (core, backend, MCP server incl. a stdio tools/list run)" pnpm -r test
 step "Web build (Verify, sign, claim pages)" pnpm --filter @aftercall/web build
 step "NEAR signer (crates/near-tx)" cargo test --quiet --manifest-path crates/near-tx/Cargo.toml
-step "Desktop recorder and NEAR AI transport" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && cargo test --quiet --manifest-path apps/desktop/src-tauri/Cargo.toml"
+# The desktop build makes the MCP server bundle first; the app ships it as a resource.
+step "Desktop app (MCP server bundle, recorder, agents, NEAR AI transport)" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && test -f apps/mcp/dist/aftercall-mcp.mjs && cargo test --quiet --manifest-path apps/desktop/src-tauri/Cargo.toml"
 step "Agent-wallet contract (unit)" cargo test --quiet --manifest-path contracts/Cargo.toml -p agent-wallet --lib
 if [ "$QUICK" = 0 ]; then
   step "Agent-wallet contract on a local NEAR node (sandbox)" cargo test --quiet --manifest-path contracts/Cargo.toml -p agent-wallet --test sandbox -- --test-threads=1

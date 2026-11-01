@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "dev.aftercall.app",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm build:mcp && pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
@@ -37,6 +37,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "../../mcp/dist/aftercall-mcp.mjs": "mcp/aftercall-mcp.mjs"
+    },
     "macOS": {
       "minimumSystemVersion": "14.2"
     }

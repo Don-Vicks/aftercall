@@ -447,20 +447,49 @@ struct AgentsState(Mutex<Option<agents::Server>>);
 struct AgentsInfo {
     /// Where the app keeps meetings; the MCP server finds the socket under it.
     data_dir: String,
-    /// The MCP server's entry point in this checkout (apps/mcp/src/main.ts).
+    /// The MCP server agents run with `node` (see `mcp_server_path`).
     server_path: String,
     server_found: bool,
     /// Connected agents is on and the socket is open.
     enabled: bool,
+    /// Agents may claim and complete action items. Off by default.
+    allow_writes: bool,
+    /// Agents were on before this switch existed and are read-only now; the screen says so
+    /// until the user chooses.
+    read_only_since_update: bool,
     /// The token agents must send; only while enabled.
     token: Option<String>,
     socket_path: String,
 }
 
+/// Where the bundled MCP server sits among the app's resources (tauri.conf.json).
+const MCP_RESOURCE: &str = "mcp/aftercall-mcp.mjs";
+
+/// The MCP server agents run with `node`: one plain-JS file shipped inside the app,
+/// built from apps/mcp by `pnpm --filter @aftercall/mcp build`. Debug builds fall back
+/// to this checkout's build, then its source (Node 24 runs TypeScript directly).
+fn mcp_server_path(app: &AppHandle) -> PathBuf {
+    let bundled = app.path().resource_dir().map(|d| d.join(MCP_RESOURCE));
+    if let Ok(p) = &bundled
+        && p.exists()
+    {
+        return p.clone();
+    }
+    #[cfg(debug_assertions)]
+    {
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mcp");
+        for p in [repo.join("dist/aftercall-mcp.mjs"), repo.join("src/main.ts")] {
+            if p.exists() {
+                return p.canonicalize().unwrap_or(p);
+            }
+        }
+    }
+    bundled.unwrap_or_else(|_| PathBuf::from(MCP_RESOURCE))
+}
+
 fn agents_snapshot(app: &AppHandle, state: &AgentsState) -> Result<AgentsInfo, String> {
     let dir = data_dir(app)?;
-    let server = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../mcp/src/main.ts");
-    let server = server.canonicalize().unwrap_or(server);
+    let server = mcp_server_path(app);
     let running = state.0.lock().map_err(|e| e.to_string())?.is_some();
     let settings = agents::load_settings(&dir);
     Ok(AgentsInfo {
@@ -469,6 +498,8 @@ fn agents_snapshot(app: &AppHandle, state: &AgentsState) -> Result<AgentsInfo, S
         server_found: server.exists(),
         server_path: server.display().to_string(),
         enabled: running,
+        allow_writes: running && settings.writes_allowed(),
+        read_only_since_update: running && settings.allow_writes.is_none(),
         token: if running { settings.token } else { None },
     })
 }
@@ -489,21 +520,48 @@ fn agents_start(dir: &std::path::Path, state: &AgentsState, fresh_token: bool) -
     }
     settings.enabled = true;
     agents::save_settings(dir, &settings)?;
-    *slot = Some(agents::Server::start(dir, settings.token.clone().unwrap_or_default())?);
+    *slot = Some(agents::Server::start(dir, settings.token.clone().unwrap_or_default(), settings.writes_allowed())?);
     Ok(())
 }
 
-/// Turns Connected agents on or off. Off closes the socket and forgets the token.
+/// Turns Connected agents on or off. Off closes the socket, forgets the token and puts
+/// agents back to read-only; on starts read-only unless the user allowed writes since.
 #[tauri::command]
 fn agents_set_enabled(app: AppHandle, state: State<AgentsState>, enabled: bool) -> Result<AgentsInfo, String> {
     let dir = data_dir(&app)?;
     if enabled {
+        let mut settings = agents::load_settings(&dir);
+        if settings.allow_writes.is_none() {
+            settings.allow_writes = Some(false);
+            agents::save_settings(&dir, &settings)?;
+        }
         agents_start(&dir, &state, false)?;
     } else {
         state.0.lock().map_err(|e| e.to_string())?.take();
-        agents::save_settings(&dir, &agents::Settings::default())?;
+        agents::save_settings(&dir, &agents::Settings { allow_writes: Some(false), ..Default::default() })?;
     }
     agents_snapshot(&app, &state)
+}
+
+/// "Let agents claim and complete action items". Applies to the next request; the token stays.
+#[tauri::command]
+fn agents_set_allow_writes(app: AppHandle, state: State<AgentsState>, allow: bool) -> Result<AgentsInfo, String> {
+    let dir = data_dir(&app)?;
+    {
+        let slot = state.0.lock().map_err(|e| e.to_string())?;
+        let Some(server) = slot.as_ref() else { return Err("Turn on Connected agents first".into()) };
+        let mut settings = agents::load_settings(&dir);
+        settings.allow_writes = Some(allow);
+        agents::save_settings(&dir, &settings)?;
+        server.set_allow_writes(allow);
+    }
+    agents_snapshot(&app, &state)
+}
+
+/// The newest agent requests, newest first, for "Recent agent activity".
+#[tauri::command]
+fn agents_activity(app: AppHandle) -> Result<Vec<agents::Activity>, String> {
+    Ok(agents::read_activity(&data_dir(&app)?, 20))
 }
 
 /// Replaces the token; agents set up with the old one stop working.
@@ -860,6 +918,8 @@ pub fn run() {
             agents_info,
             agents_set_enabled,
             agents_new_token,
+            agents_set_allow_writes,
+            agents_activity,
             delete_audio,
             nearai_set_key,
             nearai_has_key,

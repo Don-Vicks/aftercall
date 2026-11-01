@@ -1,6 +1,7 @@
 //! "Delete everything on this Mac": the app's data folder (meetings, notes,
-//! transcripts, audio, projects, NEAR settings, the agents socket) and the
-//! Keychain items Aftercall keeps under the service `dev.aftercall.app`.
+//! transcripts, audio, projects, NEAR settings, the agents socket, settings and
+//! activity list) and the Keychain items Aftercall keeps under the service
+//! `dev.aftercall.app`.
 //!
 //! What it can't touch is said in the interface: proofs and payments on NEAR,
 //! this Mac's key on the user's NEAR account, the agent wallet's balance, and
@@ -93,6 +94,10 @@ mod tests {
         std::fs::write(dir.join("recordings/1793006441/mic-000.wav"), b"sealed").unwrap();
         std::fs::write(dir.join("projects.json"), b"sealed").unwrap();
         std::fs::write(dir.join("near.json"), b"{}").unwrap();
+        // Connected agents: settings, the activity list and the socket's folder.
+        std::fs::write(dir.join("agents.json"), b"sealed").unwrap();
+        std::fs::write(dir.join("agents-activity.json"), b"sealed").unwrap();
+        std::fs::create_dir_all(dir.join("agents")).unwrap();
 
         assert_eq!(remove_data_dir(&dir, ID), Ok(true));
         assert!(!dir.exists());
