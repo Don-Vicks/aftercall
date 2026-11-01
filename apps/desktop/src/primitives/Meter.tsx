@@ -4,7 +4,8 @@ import { cx } from "./cx";
 /** Speech RMS from the recorder sits around 0.02–0.3; this maps it to 0..1 for a Meter. */
 export const rmsToLevel = (rms: number) => Math.min(1, Math.sqrt(Math.max(0, rms) / 0.3));
 
-const colours = { verdigris: "var(--verdigris)", ink: "var(--ink-2)", record: "var(--record)" };
+/** caution: a stem that has gone silent (the call with no audio permission). */
+const colours = { verdigris: "var(--verdigris)", ink: "var(--ink-2)", record: "var(--record)", caution: "var(--caution)" };
 
 /** Taller in the middle, like a voice. */
 function profile(bars: number): number[] {

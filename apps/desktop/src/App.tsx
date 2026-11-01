@@ -6,7 +6,10 @@ import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
 import { ProcessingScreen } from "./ProcessingScreen";
-import { RecordPanel } from "./RecordPanel";
+import { RecordSheet } from "./recording/RecordSheet";
+import { LivePill } from "./recording/LivePill";
+import { LiveScreen } from "./recording/LiveScreen";
+import { getSession, openNotes, useRecordingEvents } from "./recording/session";
 import { syncWithAda } from "./sample";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
@@ -35,6 +38,7 @@ type View =
   | { name: "meeting"; id: string; at?: number }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
+  | { name: "live" }
   | { name: "settings" }
   | { name: "agents" }
   | { name: "wallet" }
@@ -61,6 +65,8 @@ export default function App() {
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
   const [view, setView] = useState<View>({ name: "home" });
   const [recordOpen, setRecordOpen] = useState(false);
+  /** New recording: the sheet, or the recording's own page while one is running. */
+  const newRecording = () => (getSession().phase === "idle" ? setRecordOpen(true) : setView({ name: "live" }));
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
@@ -277,7 +283,9 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
-        setRecordOpen(true);
+        // While recording, ⌘⇧R opens your notes instead.
+        if (getSession().phase === "idle") setRecordOpen(true);
+        else openNotes();
       }
       if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -286,7 +294,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     // "New recording…" in the menu bar item opens the panel.
-    const offMenu = isDesktop ? recorder.onMenuNewRecording(() => setRecordOpen(true)) : null;
+    const offMenu = isDesktop ? recorder.onMenuNewRecording(newRecording) : null;
     return () => {
       window.removeEventListener("keydown", onKey);
       offMenu?.then((f) => f());
@@ -440,6 +448,24 @@ export default function App() {
     setTimeout(() => scheduleAutopilot(processed), 0);
   };
 
+  // However a recording stops (pill, floating recorder, menu bar), its page opens.
+  useRecordingEvents({
+    onStopped: ({ saved, project, seconds }) => {
+      setRecordOpen(false);
+      if (saved) {
+        // A real recording: show it as its own meeting, with its true status.
+        setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
+        nameFromCalendar([saved]);
+        setView({ name: "recording", id: saved.id });
+      } else {
+        // Browser preview: walk through the simulated pipeline on sample data.
+        setView({ name: "processing", project, seconds });
+      }
+    },
+    onOpenLive: () => setView({ name: "live" }),
+    onOpenMeeting: (id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id }),
+  });
+
   const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;
   const meetingTitles = Object.fromEntries(Object.values(meetings).map((m) => [m.id, m.title]));
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
@@ -479,11 +505,12 @@ export default function App() {
                 ? setView({ name: "recording", id })
                 : setView({ name: "placeholder", title: "This meeting", milestone: "Real meetings appear here once recording and processing land (M1–M3)." })
           }
-          onNewRecording={() => setRecordOpen(true)}
+          onNewRecording={newRecording}
           onOpenWallet={() => setView({ name: "wallet" })}
           onOpenSettings={() => setView({ name: "settings" })}
         />
 
+        <div className="relative flex min-w-0 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           <m.div key={viewKey} {...viewMotion} className="flex min-w-0 flex-1">
             {view.name === "meeting" && meeting && (
@@ -516,7 +543,7 @@ export default function App() {
                 meetings={shownMeetings}
                 recordings={shownRecordings}
                 sampleId={syncWithAda.id}
-                onNewRecording={() => setRecordOpen(true)}
+                onNewRecording={newRecording}
                 onOpenSample={(sampleId) => openSampleRecording(sampleId)}
                 onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
                 onOpenSettings={() => setView({ name: "settings" })}
@@ -543,6 +570,7 @@ export default function App() {
                 onOpen={(id, at) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id })}
               />
             )}
+            {view.name === "live" && <LiveScreen />}
             {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
             {view.name === "placeholder" && (
               <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
@@ -555,6 +583,8 @@ export default function App() {
             )}
           </m.div>
         </AnimatePresence>
+        <LivePill onOpenLive={() => setView({ name: "live" })} />
+        </div>
         {verifyId && saved[verifyId] && (
           <VerifySheet
             recordingId={verifyId}
@@ -579,27 +609,22 @@ export default function App() {
             }}
           />
         )}
-        {recordOpen && (
-          <RecordPanel
-            projects={projects}
-            selectProject={createdProject}
-            onNewProject={() => setNewProjectOpen(true)}
-            onClose={() => setRecordOpen(false)}
-            onOpenSample={openSampleRecording}
-            onStop={(project, seconds, saved) => {
-              setRecordOpen(false);
-              if (saved) {
-                // A real recording: show it as its own meeting, with its true status.
-                setRecordings((all) => [saved, ...all.filter((r) => r.id !== saved.id)]);
-                nameFromCalendar([saved]);
-                setView({ name: "recording", id: saved.id });
-              } else {
-                // Browser preview: walk through the simulated pipeline on sample data.
-                setView({ name: "processing", project, seconds });
-              }
-            }}
-          />
-        )}
+        <AnimatePresence>
+          {recordOpen && (
+            <RecordSheet
+              key="record"
+              projects={projects}
+              selectProject={createdProject}
+              onNewProject={() => setNewProjectOpen(true)}
+              onClose={() => setRecordOpen(false)}
+              onOpenSample={openSampleRecording}
+              onStarted={() => {
+                setRecordOpen(false);
+                setView({ name: "live" });
+              }}
+            />
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {newProjectOpen && <NewProjectSheet key="new-project" existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
           {renaming && (

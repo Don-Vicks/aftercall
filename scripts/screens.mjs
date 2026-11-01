@@ -42,6 +42,14 @@ async function projectMenu(page, project) {
   await button.click();
 }
 
+/** Starts a (simulated) recording from the record sheet, consent ticked. */
+async function startRecording(page) {
+  await click(page, "button", /^New recording/);
+  await page.getByRole("checkbox", { name: /told everyone/ }).click();
+  await click(page, "button", /^Start recording/);
+  await page.locator("[aria-label='Recording controls']").waitFor();
+}
+
 /**
  * Each view: how to reach it from a fresh load. `onboarding: true` leaves the
  * first-run flag unset. `wait` names something that only exists in v2; when it
@@ -62,6 +70,29 @@ const SHOTS = [
   { name: "settings", go: (p) => click(p, "button", "Settings") },
   { name: "agents", go: (p) => click(p, "button", "Connected agents") },
   { name: "record", go: (p) => click(p, "button", /^New recording/) },
+  // A simulated recording (the browser preview has no recorder): the live page, the
+  // pill elsewhere with your notes open, and processing.
+  { name: "live", wait: "[aria-label='Recording controls']", go: (p) => startRecording(p) },
+  {
+    name: "live-notes",
+    wait: "[aria-label='Recording controls']",
+    go: async (p) => {
+      await startRecording(p);
+      await click(p, "button", "Home");
+      await click(p, "button", /^Note/);
+      await p.keyboard.type("Deposit 40 today, rest on sign-off.");
+      await p.waitForTimeout(800);
+    },
+  },
+  {
+    name: "processing",
+    wait: "text=Secure hardware checked",
+    go: async (p) => {
+      await startRecording(p);
+      await click(p, "button", /^Stop and make notes/);
+      await p.waitForTimeout(3500);
+    },
+  },
   { name: "new-project", go: (p) => click(p, "button", "New project") },
   { name: "onboarding", onboarding: true, go: async () => {} },
   {
