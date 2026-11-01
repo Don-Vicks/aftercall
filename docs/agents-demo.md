@@ -2,6 +2,8 @@
 
 Run on 1 November 2026 (16:46 and 16:47 UTC) with Claude Code 2.1.314, headless, against Aftercall's MCP server as the app ships it (`apps/mcp/dist/aftercall-mcp.mjs`). The other end of the socket was the server's test stand-in for the app (`apps/mcp/src/fixture.ts`), not the Mac app and not a real meeting library. The stand-in speaks the same line protocol and applies the same rules: the token check, read-only until the user allows writes, and the claim rules. The app's own version of those rules, with encryption, locking and the activity list, is tested in Rust (`cargo test agents` in `apps/desktop/src-tauri`). The two meetings in it are sample data.
 
+The stand-in has changed since this run: Sync with Ada's second item is now one the user edited, so a run today lists "Share the signed term sheet" with an `edited` field where the output below says "Share the term sheet".
+
 Below are the exact commands and Claude Code's text output, unedited.
 
 ## Setup
@@ -17,11 +19,11 @@ node apps/mcp/scripts/demo.ts           # starts the stand-in, read-only
 ```text
 Stand-in for the Aftercall app, read-only (press Enter to let agents claim and complete)
 socket: /var/folders/rc/2_0y02ys3739xj2dswtrwh800000gn/T/ac-mcp-8tA7Va/agents.sock
-token:  41312bd6777207fafd178ca724da1ffb043ef115d3ca440ddf86f94519b6e898
+token:  <64 hex characters, redacted here>
 MCP config for Claude Code: /var/folders/rc/2_0y02ys3739xj2dswtrwh800000gn/T/ac-mcp-8tA7Va/mcp-config.json
 ```
 
-The token belongs to that throwaway stand-in, which is gone. The MCP config it wrote runs the bundled server with that socket and token:
+The token belonged to that throwaway stand-in, which is gone; it is redacted so secret scanners don't flag it. The MCP config it wrote runs the bundled server with that socket and token:
 
 ```json
 {
