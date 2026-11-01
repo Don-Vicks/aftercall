@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "live",
+  "description": "Floating recorder: hears the recorder's events and can be dragged. Its buttons call the app's own recorder commands.",
+  "windows": [
+    "live"
+  ],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging"
+  ]
+}

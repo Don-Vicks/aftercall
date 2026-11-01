@@ -3,12 +3,14 @@ mod at_rest;
 mod attest;
 mod calendar;
 mod capture;
+mod live_window;
 mod near;
 mod nearai;
 mod notes_file;
 mod recorder;
 mod recovery;
 mod samples;
+mod your_notes;
 
 /// The NEAR AI transport, exposed for the integration tests in tests/.
 #[doc(hidden)]
@@ -18,7 +20,8 @@ pub mod test_api {
 }
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -27,9 +30,56 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-/// The recording in progress, with the project and start time it was started for.
+/// The recording in progress: the recorder, what it was started for, and its clock.
+struct Live {
+    recording: Recording,
+    meta: MeetingMeta,
+    info: RecordingInfo,
+    clock: Arc<Clock>,
+}
+
+/// Seconds recorded and whether it's paused, shared with the recorder's event sink.
 #[derive(Default)]
-struct RecorderState(Mutex<Option<(Recording, MeetingMeta)>>);
+struct Clock {
+    seconds: AtomicU64,
+    paused: AtomicBool,
+}
+
+#[derive(Default)]
+struct RecorderState(Mutex<Option<Live>>);
+
+/// What the interface needs to show a recording in progress, or to pick it up
+/// again after a reload (`recorder_status`, and the `recorder:state` event).
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RecorderStatus {
+    id: String,
+    project: String,
+    /// Unix seconds.
+    started_at: u64,
+    /// Seconds recorded, not counting pauses.
+    seconds: u64,
+    paused: bool,
+    microphone: String,
+    system_audio: bool,
+    /// What you've typed so far (your-notes.json), if anything.
+    your_notes: Option<String>,
+}
+
+impl Live {
+    fn status(&self) -> RecorderStatus {
+        RecorderStatus {
+            id: self.meta.id.clone(),
+            project: self.meta.project.clone(),
+            started_at: self.meta.started_at,
+            seconds: self.clock.seconds.load(Ordering::Relaxed),
+            paused: self.clock.paused.load(Ordering::Relaxed),
+            microphone: self.info.microphone.clone(),
+            system_audio: self.info.system_audio,
+            your_notes: your_notes::read(&PathBuf::from(&self.meta.dir)),
+        }
+    }
+}
 
 /// Saved next to the audio as `meeting.json` so recordings survive a restart.
 #[derive(Serialize, Deserialize, Clone)]
@@ -51,64 +101,226 @@ struct MeetingMeta {
     /// A name for recordings that come with one (samples); real ones are named from the calendar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     title: Option<String>,
+    /// What you typed during the call (`your-notes.json`). Read from its own file for the
+    /// interface; never written into meeting.json.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    your_notes: Option<String>,
 }
 
 fn recordings_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("recordings"))
 }
 
-/// Forwards recorder updates to the interface as Tauri events.
-struct AppEvents(AppHandle);
+fn now_secs() -> Result<u64, String> {
+    Ok(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs())
+}
+
+/// Forwards recorder updates to the interface as Tauri events, and keeps the
+/// menu bar clock in step (once a second, not on every 50 ms level update).
+struct AppEvents {
+    app: AppHandle,
+    clock: Arc<Clock>,
+}
 
 impl Events for AppEvents {
     fn levels(&self, levels: Levels) {
-        let _ = self.0.emit("recorder:levels", levels);
+        let before = self.clock.seconds.swap(levels.seconds, Ordering::Relaxed);
+        if before != levels.seconds {
+            // Queued, not called: tray calls wait for the main thread, which may itself be
+            // waiting for this thread to stop (finish_recording). Queuing can't deadlock.
+            let (app, seconds, paused) = (self.app.clone(), levels.seconds, self.clock.paused.load(Ordering::Relaxed));
+            let _ = self.app.run_on_main_thread(move || {
+                if app.state::<RecorderState>().0.lock().is_ok_and(|s| s.is_some()) {
+                    set_tray_clock(&app, seconds, paused);
+                }
+            });
+        }
+        let _ = self.app.emit("recorder:levels", levels);
     }
     fn silence(&self, event: SilenceEvent) {
-        let _ = self.0.emit("recorder:silence", event);
+        let _ = self.app.emit("recorder:silence", event);
     }
 }
 
-fn set_tray_recording(app: &AppHandle, recording: bool) {
+/// "12:34", or "1:02:03" past an hour.
+fn clock_text(seconds: u64) -> String {
+    let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m:02}:{s:02}") }
+}
+
+/// The menu bar title while recording: "● 12:34", or "Paused 12:34".
+fn tray_title(seconds: u64, paused: bool) -> String {
+    if paused { format!("Paused {}", clock_text(seconds)) } else { format!("● {}", clock_text(seconds)) }
+}
+
+fn set_tray_clock(app: &AppHandle, seconds: u64, paused: bool) {
     if let Some(tray) = app.tray_by_id("main") {
-        let _ = tray.set_title(Some(if recording { "● Rec" } else { "" }));
-        let _ = tray.set_tooltip(Some(if recording { "Aftercall · recording" } else { "Aftercall" }));
+        let _ = tray.set_title(Some(tray_title(seconds, paused)));
     }
+}
+
+/// The menu bar item for idle (`None`) or a recording (`Some(paused)`): its title, tooltip and menu.
+fn set_tray_recording(app: &AppHandle, recording: Option<(u64, bool)>) {
+    let Some(tray) = app.tray_by_id("main") else { return };
+    match recording {
+        Some((seconds, paused)) => {
+            let _ = tray.set_title(Some(tray_title(seconds, paused)));
+            let _ = tray.set_tooltip(Some(if paused { "Aftercall · paused" } else { "Aftercall · recording" }));
+        }
+        None => {
+            let _ = tray.set_title(Some(""));
+            let _ = tray.set_tooltip(Some("Aftercall"));
+        }
+    }
+    if let Ok(menu) = tray_menu(app, recording.map(|(_, paused)| paused)) {
+        let _ = tray.set_menu(Some(menu));
+    }
+}
+
+/// Idle: New recording, Open, Quit. Recording: Add a note, Pause or Resume, Stop, Open, Quit.
+fn tray_menu(app: &AppHandle, recording: Option<bool>) -> tauri::Result<Menu<tauri::Wry>> {
+    let open = MenuItem::with_id(app, "open", "Open Aftercall", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Aftercall", true, Some("CmdOrCtrl+Q"))?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    match recording {
+        None => {
+            let record = MenuItem::with_id(app, "record", "New recording…", true, Some("CmdOrCtrl+Shift+R"))?;
+            Menu::with_items(app, &[&record, &open, &separator, &quit])
+        }
+        Some(paused) => {
+            let note = MenuItem::with_id(app, "note", "Add a note…", true, Some("CmdOrCtrl+Shift+R"))?;
+            let pause = MenuItem::with_id(app, "pause", if paused { "Resume" } else { "Pause" }, true, None::<&str>)?;
+            let stop = MenuItem::with_id(app, "stop", "Stop and make notes", true, None::<&str>)?;
+            let separator2 = PredefinedMenuItem::separator(app)?;
+            Menu::with_items(app, &[&note, &pause, &stop, &separator, &open, &separator2, &quit])
+        }
+    }
+}
+
+/// Tells every window what the recorder is doing (null when idle).
+fn emit_state(app: &AppHandle, status: Option<RecorderStatus>) {
+    let _ = app.emit("recorder:state", status);
 }
 
 #[tauri::command]
-fn start_recording(project: String, app: AppHandle, state: State<RecorderState>) -> Result<RecordingInfo, String> {
+fn start_recording(project: String, app: AppHandle, state: State<RecorderState>) -> Result<RecorderStatus, String> {
     let mut slot = state.0.lock().map_err(|e| e.to_string())?;
     if slot.is_some() {
         return Err("Already recording".into());
     }
-    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+    let stamp = now_secs()?;
     let dir = recordings_dir(&app)?.join(stamp.to_string());
-    let meta = MeetingMeta { id: stamp.to_string(), project, started_at: stamp, seconds: 0, chunks: 0, dir: dir.display().to_string(), notes: None, label: None, title: None };
+    let meta = MeetingMeta {
+        id: stamp.to_string(),
+        project,
+        started_at: stamp,
+        seconds: 0,
+        chunks: 0,
+        dir: dir.display().to_string(),
+        notes: None,
+        label: None,
+        title: None,
+        your_notes: None,
+    };
     let key = at_rest::data_key()?;
-    let (recording, info) = Recording::start(dir, key, AppEvents(app.clone())).map_err(|e| format!("{e:#}"))?;
-    *slot = Some((recording, meta));
-    set_tray_recording(&app, true);
-    Ok(info)
+    let clock = Arc::new(Clock::default());
+    let (recording, info) = Recording::start(dir, key, AppEvents { app: app.clone(), clock: clock.clone() }).map_err(|e| format!("{e:#}"))?;
+    let live = Live { recording, meta, info, clock };
+    let status = live.status();
+    *slot = Some(live);
+    drop(slot);
+    set_tray_recording(&app, Some((0, false)));
+    emit_state(&app, Some(status.clone()));
+    Ok(status)
 }
 
+/// The recording in progress, or null. The interface calls this on load, so a
+/// reload (or the floating window) picks the recording up where it is.
 #[tauri::command]
-fn pause_recording(paused: bool, state: State<RecorderState>) -> Result<(), String> {
-    let slot = state.0.lock().map_err(|e| e.to_string())?;
-    slot.as_ref().ok_or("Not recording")?.0.pause(paused);
+fn recorder_status(state: State<RecorderState>) -> Result<Option<RecorderStatus>, String> {
+    Ok(state.0.lock().map_err(|e| e.to_string())?.as_ref().map(Live::status))
+}
+
+fn set_paused(app: &AppHandle, paused: bool) -> Result<(), String> {
+    let state = app.state::<RecorderState>();
+    let status = {
+        let slot = state.0.lock().map_err(|e| e.to_string())?;
+        let live = slot.as_ref().ok_or("Not recording")?;
+        live.recording.pause(paused);
+        live.clock.paused.store(paused, Ordering::Relaxed);
+        live.status()
+    };
+    set_tray_recording(app, Some((status.seconds, paused)));
+    emit_state(app, Some(status));
     Ok(())
 }
 
-#[tauri::command]
-fn stop_recording(app: AppHandle, state: State<RecorderState>) -> Result<MeetingMeta, String> {
-    let (recording, mut meta) = state.0.lock().map_err(|e| e.to_string())?.take().ok_or("Not recording")?;
-    set_tray_recording(&app, false);
+/// Stops the recording in progress and saves meeting.json. Every way of stopping
+/// comes here: the Stop buttons, the menu bar, and quitting the app.
+fn finish_recording(app: &AppHandle) -> Result<MeetingMeta, String> {
+    let state = app.state::<RecorderState>();
+    let live = state.0.lock().map_err(|e| e.to_string())?.take().ok_or("Not recording")?;
+    set_tray_recording(app, None);
+    live_window::hide(app);
+    emit_state(app, None);
+    let Live { recording, mut meta, .. } = live;
     let result: RecordingResult = recording.stop().map_err(|e| format!("{e:#}"))?;
     meta.seconds = result.seconds;
     meta.chunks = result.chunks;
     let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
-    at_rest::write_string(&PathBuf::from(&meta.dir).join("meeting.json"), &json)?;
+    let dir = PathBuf::from(&meta.dir);
+    at_rest::write_string(&dir.join("meeting.json"), &json)?;
+    meta.your_notes = your_notes::read(&dir);
+    let _ = app.emit("recorder:stopped", meta.clone());
     Ok(meta)
+}
+
+/// Saves what you've typed into the recording in progress (your-notes.json).
+#[tauri::command]
+fn save_live_notes(text: String, state: State<RecorderState>) -> Result<(), String> {
+    let dir = {
+        let slot = state.0.lock().map_err(|e| e.to_string())?;
+        PathBuf::from(&slot.as_ref().ok_or("Not recording")?.meta.dir)
+    };
+    your_notes::save(&dir, &text, now_secs()?)
+}
+
+/// Saves your notes for a stopped recording, until its notes are made.
+#[tauri::command]
+fn save_your_notes(app: AppHandle, id: String, text: String) -> Result<(), String> {
+    your_notes::save(&recording_dir(&app, &id)?, &text, now_secs()?)
+}
+
+/// Opens System Settings at Screen & System Audio Recording, where the call's audio is allowed.
+#[tauri::command]
+fn open_audio_settings(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture", None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// From the floating recorder: bring the main window back, at the recording's page.
+#[tauri::command]
+fn live_open_notes(app: AppHandle) {
+    show_main(&app);
+    let _ = app.emit("recorder:open-live", ());
+}
+
+/// From the floating recorder after Stop: bring the main window back to show the notes being made.
+#[tauri::command]
+fn show_main_window(app: AppHandle) {
+    show_main(&app);
+}
+
+#[tauri::command]
+fn pause_recording(paused: bool, app: AppHandle) -> Result<(), String> {
+    set_paused(&app, paused)
+}
+
+#[tauri::command]
+fn stop_recording(app: AppHandle) -> Result<MeetingMeta, String> {
+    finish_recording(&app)
 }
 
 /// Every saved recording, newest first.
@@ -121,6 +333,7 @@ fn list_recordings(app: AppHandle) -> Result<Vec<MeetingMeta>, String> {
         .filter_map(|e| {
             let mut meta: MeetingMeta = serde_json::from_str(&at_rest::read_string(&e.path().join("meeting.json")).ok()?).ok()?;
             meta.notes = at_rest::read_string(&e.path().join("notes.json")).ok();
+            meta.your_notes = your_notes::read(&e.path());
             Some(meta)
         })
         .collect();
@@ -550,12 +763,19 @@ fn show_main(app: &AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(RecorderState::default())
         .manage(AgentsState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
             pause_recording,
             stop_recording,
+            recorder_status,
+            save_live_notes,
+            save_your_notes,
+            open_audio_settings,
+            live_open_notes,
+            show_main_window,
             list_recordings,
             open_sample,
             list_chunks,
@@ -621,11 +841,9 @@ pub fn run() {
                     eprintln!("agents: {e}");
                 }
             }
-            // Menu bar item: start a recording or open the app from anywhere.
-            let record = MenuItem::with_id(app, "record", "New recording…", true, Some("CmdOrCtrl+Shift+R"))?;
-            let open = MenuItem::with_id(app, "open", "Open Aftercall", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Aftercall", true, Some("CmdOrCtrl+Q"))?;
-            let menu = Menu::with_items(app, &[&record, &open, &PredefinedMenuItem::separator(app)?, &quit])?;
+            // Menu bar item: start a recording or open the app from anywhere. While
+            // recording it shows the time and offers Add a note, Pause and Stop.
+            let menu = tray_menu(app.handle(), None)?;
             // A black template glyph: macOS tints it for light and dark menu bars.
             let glyph = tauri::image::Image::from_bytes(include_bytes!("../icons/source/tray@2x.png"))?;
             TrayIconBuilder::with_id("main")
@@ -638,32 +856,109 @@ pub fn run() {
                         show_main(app);
                         let _ = app.emit("menu:new-recording", ());
                     }
+                    "note" => {
+                        show_main(app);
+                        let _ = app.emit("recorder:open-live", ());
+                    }
+                    "pause" => {
+                        let paused = app.state::<RecorderState>().0.lock().ok().and_then(|s| s.as_ref().map(|l| l.clock.paused.load(Ordering::Relaxed)));
+                        if let Some(paused) = paused {
+                            let _ = set_paused(app, !paused);
+                        }
+                    }
+                    "stop" => {
+                        if let Err(e) = finish_recording(app) {
+                            eprintln!("recorder: {e}");
+                        }
+                        show_main(app);
+                    }
                     "open" => show_main(app),
                     "quit" => app.exit(0),
                     _ => {}
                 })
                 .build(app)?;
+            // The floating recorder, hidden until a recording runs with the main window in the background.
+            if let Err(e) = live_window::create(app.handle()) {
+                eprintln!("live window: {e}");
+            }
             Ok(())
         })
         // Closing the window hides it: Aftercall keeps running in the menu bar so
         // ⌘⇧R and a recording in progress survive. Quit from the menu bar or ⌘Q.
+        // While recording, the floating recorder stands in for the main window
+        // whenever it is in the background, and steps aside when it comes back.
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
+            if window.label() != "main" {
+                return;
+            }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = window.hide();
                 }
+                tauri::WindowEvent::Focused(focused) => {
+                    let app = window.app_handle();
+                    let recording = app.state::<RecorderState>().0.lock().map(|s| s.is_some()).unwrap_or(false);
+                    if *focused {
+                        live_window::hide(app);
+                    } else if recording {
+                        live_window::show(app);
+                    }
+                }
+                _ => {}
             }
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
+        .run(|app, event| match event {
+            // Quitting mid-recording (⌘Q, the menu bar, the Dock) still saves the
+            // recording: the last audio is sealed and meeting.json written first.
+            // ⌘Q from the app menu ends the run loop without ExitRequested, so Exit
+            // does the same.
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                let recording = app.state::<RecorderState>().0.lock().map(|s| s.is_some()).unwrap_or(false);
+                if recording && let Err(e) = finish_recording(app) {
+                    eprintln!("recorder: couldn't save the recording on quit: {e}");
+                }
+            }
             // Clicking the Dock icon brings the hidden window back.
             #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = event {
-                show_main(app);
-            }
-            #[cfg(not(target_os = "macos"))]
-            let _ = (app, event);
+            tauri::RunEvent::Reopen { .. } => show_main(app),
+            _ => {}
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_menu_bar_clock_reads_like_a_timer() {
+        assert_eq!(clock_text(0), "00:00");
+        assert_eq!(clock_text(754), "12:34");
+        assert_eq!(clock_text(3599), "59:59");
+        assert_eq!(clock_text(3723), "1:02:03");
+        assert_eq!(tray_title(754, false), "● 12:34");
+        assert_eq!(tray_title(754, true), "Paused 12:34");
+    }
+
+    #[test]
+    fn your_notes_never_go_into_meeting_json() {
+        let meta = MeetingMeta {
+            id: "1700000000".into(),
+            project: "General".into(),
+            started_at: 1_700_000_000,
+            seconds: 60,
+            chunks: 1,
+            dir: "/tmp/x".into(),
+            notes: None,
+            label: None,
+            title: None,
+            your_notes: None,
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(!json.contains("yourNotes"));
+        let with = MeetingMeta { your_notes: Some("Deposit 40".into()), ..meta };
+        assert!(serde_json::to_string(&with).unwrap().contains(r#""yourNotes":"Deposit 40""#), "the interface gets them as yourNotes");
+    }
 }
