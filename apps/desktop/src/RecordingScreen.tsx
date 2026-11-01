@@ -20,7 +20,7 @@ import { calendar } from "./calendar";
 import { sampleScriptFor } from "./sampleRecordings";
 import { FailedPanel, ProcessHeader, ProcessingSteps, STEP_IDS, StoppedPill, VerifiedSeal, type StepId } from "./recording/processing";
 import { notesReady, showingRecording } from "./recording/notify";
-import { takeAutoProcess } from "./recording/session";
+import { forgetAutoProcess, wantsAutoProcess } from "./recording/session";
 import { NotesArea, SavedLabel } from "./recording/YourNotes";
 
 export function recordingTitle(r: SavedRecording): string {
@@ -177,8 +177,11 @@ export function RecordingScreen({
   const script = sampleScriptFor(recording);
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   // Stopped with "Stop and make notes": make them as soon as NEAR AI is there.
-  const [auto] = useState(() => takeAutoProcess(recording.id));
-  const start = () => void makeNotes(recording, payees, onProcessed);
+  const [auto] = useState(() => wantsAutoProcess(recording.id));
+  const start = () => {
+    forgetAutoProcess(recording.id);
+    void makeNotes(recording, payees, onProcessed);
+  };
 
   useEffect(() => {
     showingRecording(recording.id, true);

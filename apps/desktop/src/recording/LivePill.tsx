@@ -21,8 +21,8 @@ import {
 
 const fail = (what: string) => (e: unknown) => toast({ text: `Couldn't ${what}: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
 
-export const stop = () => stopRecording().catch(fail("stop the recording"));
-export const pause = () => togglePause().catch(fail("pause"));
+const stop = () => stopRecording().catch(fail("stop the recording"));
+const pause = () => togglePause().catch(fail("pause"));
 
 /**
  * The live pill: floats at the bottom of the window while a recording runs, on every

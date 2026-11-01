@@ -73,6 +73,8 @@ const idle = (): RecordingSession => ({
 });
 
 let state = idle();
+/** Back to idle, keeping what the screen says about itself (the live page may still be up). */
+const reset = (): RecordingSession => ({ ...idle(), onLivePage: state.onLivePage });
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<RecordingSession>) {
@@ -194,7 +196,7 @@ function applyStatus(s: RecorderStatus | null) {
     window.clearTimeout(saveTimer);
     levels.mic.clear();
     levels.call.clear();
-    set(idle());
+    set(reset());
     return;
   }
   const fresh = state.id !== s.id;
@@ -242,7 +244,7 @@ async function stopped(r: SavedRecording) {
       .then(() => (saved = { ...r, yourNotes: text.trim() ? text : undefined }))
       .catch(() => {});
   }
-  if (state.id === r.id) set(idle());
+  if (state.id === r.id) set(reset());
   autoProcess.add(r.id);
   handlers.onStopped?.({ saved, project: saved.project, seconds: saved.seconds });
 }
@@ -252,14 +254,15 @@ async function stopped(r: SavedRecording) {
  * making notes as soon as it opens (when NEAR AI is connected).
  */
 const autoProcess = new Set<string>();
-export const takeAutoProcess = (id: string) => autoProcess.delete(id);
+export const wantsAutoProcess = (id: string) => autoProcess.has(id);
+export const forgetAutoProcess = (id: string) => void autoProcess.delete(id);
 
 // ---------- actions ----------
 
 /** Starts recording `project`. Consent is the sheet's job: it never calls this unticked. */
 export async function startRecording(project: string, event: CalendarEvent | null, eventIsSample = false): Promise<void> {
   if (state.phase !== "idle") throw new Error("Already recording");
-  set({ ...idle(), phase: "starting", project, event, eventIsSample });
+  set({ ...reset(), phase: "starting", project, event, eventIsSample });
   if (!isDesktop) {
     set({ phase: "recording", id: `preview-${Date.now()}`, startedAt: Math.floor(Date.now() / 1000), microphone: "Preview", systemAudio: true });
     simulate();
@@ -268,7 +271,7 @@ export async function startRecording(project: string, event: CalendarEvent | nul
   try {
     applyStatus(await recorder.start(project));
   } catch (e) {
-    set(idle());
+    set(reset());
     throw e;
   }
 }
@@ -299,7 +302,7 @@ export async function stopRecording(): Promise<void> {
   if (!isDesktop) {
     const done: Stopped = { saved: null, project: state.project, seconds: state.seconds };
     stopSimulation();
-    set(idle());
+    set(reset());
     handlers.onStopped?.(done);
     return;
   }
