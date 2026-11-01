@@ -510,3 +510,28 @@
   border-color: var(--record);
   box-shadow: 0 0 0 1px var(--record);
 }
+
+/* Printing (Export → Print or save as PDF): only the printable page in ExportMenu.tsx, ink on
+   white in the light tokens whatever the theme. Everything else in the window stays off the page. */
+.print-only {
+  display: none;
+}
+@media print {
+  @page {
+    margin: 18mm 20mm;
+  }
+  html,
+  body,
+  #root {
+    height: auto;
+    background: #fff;
+  }
+  body > :not(.print-only) {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

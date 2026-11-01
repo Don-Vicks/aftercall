@@ -632,6 +632,8 @@ export default function App() {
                 key={`${meeting.id}-${view.name === "meeting" ? view.at ?? "" : ""}`}
                 openAt={view.name === "meeting" ? view.at : undefined}
                 meeting={meeting}
+                sample={meeting.id === syncWithAda.id ? "made-up" : recordings.some((r) => r.id === meeting.id && r.label === "Sample") ? "fictional" : undefined}
+                onNear={!!saved[meeting.id]?.onChain}
                 dropped={saved[meeting.id]?.dropped ?? (meeting.id === syncWithAda.id ? syncWithAdaDropped : undefined)}
                 me={account ? [account] : []}
                 autopilotOn={autopilotOn}

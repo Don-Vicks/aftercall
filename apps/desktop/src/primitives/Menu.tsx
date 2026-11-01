@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
+import { Check } from "lucide-react";
 import * as m from "motion/react-m";
 import { cx } from "./cx";
 import { dur, ease } from "./motion";
@@ -14,6 +15,8 @@ export interface MenuItem {
   icon?: ReactNode;
   shortcut?: string;
   disabled?: boolean;
+  /** Makes it a checkbox item: a tick when true, and choosing it leaves the menu open. */
+  checked?: boolean;
 }
 
 /** Spread onto the element that opens the menu (usually an IconButton or Button). */
@@ -30,6 +33,7 @@ export interface MenuTriggerProps {
  * A menu of actions. Arrow keys move between items (roving focus), Home and End
  * jump, typing a letter finds an item, Escape closes it and returns focus to the
  * trigger, and a click anywhere else closes it. Scales in from the trigger's corner.
+ * Items with `checked` are options: they tick and untick and the menu stays open.
  */
 export function Menu({
   label,
@@ -37,6 +41,7 @@ export function Menu({
   items,
   align = "start",
   width = 200,
+  note,
 }: {
   /** The menu's accessible name, as "Project options". */
   label: string;
@@ -46,6 +51,8 @@ export function Menu({
   /** Which edge of the trigger the menu lines up with. */
   align?: "start" | "end";
   width?: number;
+  /** A short line under the items, read with the menu: what choosing them means. */
+  note?: ReactNode;
 }) {
   const [open, setOpen] = useState<false | "first" | "last">(false);
   const triggerEl = useRef<HTMLElement | null>(null);
@@ -75,7 +82,7 @@ export function Menu({
       })}
       {createPortal(
         <AnimatePresence>
-          {open && <Panel key="menu" id={id} label={label} items={items} start={open} align={align} width={width} anchor={triggerEl.current} onClose={close} />}
+          {open && <Panel key="menu" id={id} label={label} items={items} note={note} start={open} align={align} width={width} anchor={triggerEl.current} onClose={close} />}
         </AnimatePresence>,
         document.body,
       )}
@@ -87,6 +94,7 @@ function Panel({
   id,
   label,
   items,
+  note,
   start,
   align,
   width,
@@ -96,6 +104,7 @@ function Panel({
   id: string;
   label: string;
   items: (MenuItem | null)[];
+  note?: ReactNode;
   start: "first" | "last";
   align: "start" | "end";
   width: number;
@@ -161,12 +170,14 @@ function Panel({
     e.preventDefault();
   };
 
+  const noteId = `${id}-note`;
   return (
     <m.div
       ref={panel}
       id={id}
       role="menu"
       aria-label={label}
+      aria-describedby={note ? noteId : undefined}
       onKeyDown={onKeyDown}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1, transition: { duration: 0.16, ease } }}
@@ -187,12 +198,13 @@ function Panel({
               buttons.current[i] = el;
             }}
             type="button"
-            role="menuitem"
+            role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+            aria-checked={it.checked}
             tabIndex={i === active ? 0 : -1}
             disabled={it.disabled}
             onPointerMove={() => !it.disabled && i !== active && setActive(i)}
             onClick={() => {
-              onClose(true);
+              if (it.checked === undefined) onClose(true);
               it.onSelect();
             }}
             className={cx(
@@ -200,13 +212,22 @@ function Panel({
               it.tone === "danger" ? "text-record" : "text-ink",
             )}
           >
-            {it.icon && <span className="inline-flex shrink-0 text-faint">{it.icon}</span>}
+            {it.checked !== undefined ? (
+              <Check size={14} strokeWidth={2} aria-hidden="true" className={cx("shrink-0 text-verdigris", !it.checked && "invisible")} />
+            ) : (
+              it.icon && <span className="inline-flex shrink-0 text-faint">{it.icon}</span>
+            )}
             <span className="flex-1">{it.label}</span>
             {it.shortcut && <span className="font-mono text-[11px] text-muted">{it.shortcut}</span>}
           </button>
         ) : (
           <div key={i} role="separator" className="mx-1 my-1 h-px bg-hairline" />
         ),
+      )}
+      {note && (
+        <p id={noteId} className="m-0 mt-1 border-t border-hairline px-2.5 pt-2 pb-1 text-[12px] leading-[17px] text-ink-2">
+          {note}
+        </p>
       )}
     </m.div>
   );
