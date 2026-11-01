@@ -13,7 +13,8 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | Do | See |
 | --- | --- |
 | `pnpm install && pnpm verify --quick` | Typecheck of every package, 102 core, 27 backend and 14 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs), the web build, the NEAR signer, the desktop Rust tests (recorder, encryption at rest, TDX quote verification, recovery) and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (16 more tests, about 5 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
-| `pnpm dev:ui`, open http://localhost:1420 | The Mac app's interface in a browser on a sample meeting: Home, search (sidebar), follow-ups with "check before you approve", the $5,000 payment the contract blocks, the transcript with evidence links. Recording is simulated in the browser. |
+| `pnpm dev:ui`, open http://localhost:1420 | The Mac app's interface in a browser on a sample meeting: Today, the ⌘K palette, the meeting with your notes, ticks and approve-with-undo, the transcript as a conversation, People, Ask your meetings (⌘J), Action items, the $5,000 payment the contract blocks. Recording is simulated in the browser: New recording shows the live page, the floating pill, your notes (⌘⇧R) and processing; `/live.html` shows the floating recorder, and `?simulate=silent` the silent-call warning. |
+| `pnpm --filter @aftercall/web dev`, open http://localhost:3000 | The landing page, How it works (the journey of one meeting and every check) and Download, plus `/verify`, which re-runs a proof link's checks in your browser. |
 | `pnpm sample:notes` (needs `NEAR_AI_API_KEY` in `.env`) | One of the two fictional sample calls in [`samples/`](samples) goes through the real pipeline on NEAR AI Cloud: every attestation check below, Whisper on both stems, the transcript end-to-end encrypted to the attested Qwen TEE, the strict-schema summary and the signature check. It prints the notes (including a 40 USDC deposit to the designer, with its quote) and ✓/✗ for every check, grouped Gateway / Whisper TEE / Qwen TEE / Response. `pnpm sample:notes all` runs both. Without a key it stops before sending anything. |
 | In the Mac app: Home → "Open a sample recording", then Make notes | The same sample becomes an ordinary recording labelled Sample, processed with your NEAR AI key; the Verify sheet lists every check. In `pnpm dev:ui` it opens with its script. |
 | `pnpm --filter @aftercall/web dev`, open http://localhost:3000/verify | The public Verify page. With a proof link (`/verify#…`, copied from the app's Verify sheet) it reads the proof from NEAR and re-runs every check in your browser. |
@@ -39,7 +40,7 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
  │                                                            └─ over cap → parked for the owner's wallet
  ├─ follow-ups: Draft in Mail · send via backend · pay · claim link · autopilot
  ├─ pay on Solana or Base: 1Click quote → pay(…, cross_chain) to its deposit address, same caps
- ├─ macOS calendar (EventKit) → meeting names and recap addresses
+ ├─ macOS calendar (EventKit, read-only, on this Mac) → meeting names, recap addresses, and what's coming up today
  ├─ recovery phrase → app key (SLIP-10) + encrypted backup of notes and settings
  └─ local MCP server (apps/mcp): agents read meetings, claim and complete action items,
       only through the running app (owner-only socket + token), off by default
@@ -85,6 +86,11 @@ Aftercall records a call on your Mac, transcribes and summarises it inside NEAR 
 | Audio never touches the disk unencrypted; notes and transcripts are sealed; any changed byte or wrong key fails | `audio_round_trips_as_a_wav_and_has_no_riff_on_disk`, `any_tampered_byte_fails`, `wrong_key_fails`, `plaintext_files_are_read_then_sealed_by_migration` (`at_rest.rs`) |
 | The backend keeps nothing about a recap after sending it, and nothing about a claim beyond a token hash and amount | `email.test.ts`: "a sent recap leaves only counts behind…"; `claims.test.ts` (the live Postgres table has only the allowed columns) |
 | `/stats` returns counts only | `apps/backend/src/stats/stats.test.ts` |
+| Your notes guide the model but are never evidence: they travel inside the encrypted request, and a payment only in your notes is dropped | `pipeline.test.ts`: "your notes go to the model inside the encrypted request…"; `build.test.ts`: "your notes ride along on the meeting but are never evidence" |
+| A salted hash in the proof covers your notes: a change, removal, later addition or missing salt fails "Your notes unchanged since signing"; proofs without notes hash exactly as before | `pipeline.test.ts`, `proof.test.ts` (pinned hash) |
+| Your notes never reach a recap or a connected agent | `recap.test.ts`; `your_notes_and_their_salt_never_reach_agents` (`agents.rs`); `apps/mcp/src/tools.test.ts` |
+| Ask sends nothing when attestation fails, only end-to-end encrypted excerpts otherwise, and drops quotes that aren't in them | `packages/core/src/ask.test.ts` |
+| Delete everything removes only the app's own folder (never through a symlink) and its Keychain items | `wipe.rs` tests |
 
 **Not proven yet:** a run against live NEAR AI (waits on an API key): real attestation reports through the checks above, E2EE accepted by Qwen3.8-27B, and Whisper on the sample voices, the contract on testnet and a wallet-signed change (wait on a testnet account), email through Resend (waits on a key), the silence warning firing live, the mainnet deploy and lock (waits on a mainnet account), a real 1Click payout (1Click is mainnet only), reading a real calendar, a restore in the bundled app, and an agent connected through Claude Code or Codex. Gates 1 and 2 below depend on these.
 
@@ -97,6 +103,9 @@ Meeting audio and text go only to NEAR AI Cloud's Confidential TEE models, and o
 - **Encrypted on this Mac.** Audio is sealed about once a second while recording, and deleted after transcription; transcripts and notes are sealed with a key in your Keychain. This stops other apps, backup and sync tools from reading them; it doesn't protect a compromised user account.
 - **Nothing kept server-side.** Draft in Mail, the default, opens the recap in your own mail app. Send through Aftercall holds it in memory for one request and hands it to Resend, which keeps sent mail under its own policy; the backend keeps a count. Claim links store a token hash and an amount; the payee's name and the meeting title travel in the link's `#fragment`. Payments carry a fixed memo, so no meeting title goes on chain.
 - **Agents only when you say so.** Connected agents are off by default and reach meetings through the running app over an owner-only socket with a token.
+- **Your notes stay yours.** What you type during a call is sealed in `your-notes.json` beside the recording and goes only to the Qwen TEE, inside the same end-to-end encrypted request as the transcript, marked as context. Evidence for every item must still come from the transcript, so a payment that is only in your notes is dropped. Your notes are never put in a recap and never sent to connected agents. The proof holds only `sha256(salt ‖ notes)`; the salt stays in the encrypted notes file, so the public link can't be used to guess them.
+- **Ask your meetings (⌘J).** The question is searched on your Mac first. Only the matching transcript lines go out (at most 8, each cut to 400 characters), end-to-end encrypted to a Qwen TEE whose attestation is checked first. Nothing is sent if no line matches or a check fails. Every answer shows its quotes; a quote that isn't in your meetings is dropped.
+- **People** are worked out on the Mac from calendar invites and the notes; lines are credited to someone only from calls where your calendar invited just them. **Privacy and your data** shows where everything lives and lets you delete everything on this Mac.
 
 ## Run it
 
@@ -119,7 +128,7 @@ macOS grants system-audio capture only to a bundled app, so to record, build it 
 | Web | Next.js: Verify, sign and claim pages |
 | Contract | Rust, near-sdk 5.29, cargo-near, near-workspaces sandbox tests; Circle USDC |
 
-Repo layout: `apps/desktop`, `apps/backend`, `apps/web`, `packages/core`, `contracts/agent-wallet`, `crates/near-tx`, `scripts/`, `docs/` (rules, design source).
+Repo layout: `apps/desktop`, `apps/backend`, `apps/web`, `apps/mcp`, `packages/core`, `packages/tokens` (design tokens as CSS for the web), `contracts/agent-wallet`, `crates/near-tx`, `scripts/`, `docs/` (rules, design source).
 
 Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) · [Design system](https://claude.ai/artifact/96RdBedZXsLxdXixzAdk6x) (private links for the team).
 
@@ -130,12 +139,13 @@ Disclosed per the hackathon FAQ (Q-005).
 - **AI-written code:** most of this repository was written by Claude Code (Anthropic's coding agent) under Victor's direction, from a plan and design he set. Commits carry a `Co-Authored-By: Claude` line.
 - **No templates or pre-existing project code.** Everything here was written from 26 Oct 2026. The attestation checks follow NEAR's [reference verifier](https://github.com/nearai/nearai-cloud-verifier) and the [NEAR AI Cloud agent skill](https://github.com/near/agent-skills/tree/main/skills/near-ai-cloud); the TDX test fixtures are Phala's sample quote and collateral (MIT), in `apps/desktop/src-tauri/tests/fixtures`.
 - **Libraries:**
-  - Desktop: Tauri 2, React 19, Tailwind CSS 4, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, dcap-qvl (Phala, Intel TDX quote verification), bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
+  - Desktop: Tauri 2 (with tauri-plugin-notification), React 19, Tailwind CSS 4, motion, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, dcap-qvl (Phala, Intel TDX quote verification), bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
   - Shared core: zod, @noble/curves, @noble/hashes, @noble/ciphers; `pnpm sample:notes` uses @phala/dcap-qvl-node
   - Backend: NestJS, pg, jose, @scure/base
   - Web: Next.js, @hot-labs/near-connect
   - MCP server: @modelcontextprotocol/sdk
   - Contract: near-sdk 5.29, near-workspaces (tests); signer crate: ed25519-dalek
+- **Dev tooling:** Playwright for screenshots of every screen (`scripts/screens.mjs`).
 - **Design:** made with Claude in an artifact ([Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW)); fonts Newsreader, Instrument Sans and Geist Mono.
 
 ## License

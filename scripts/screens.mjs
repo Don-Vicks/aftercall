@@ -218,7 +218,8 @@ try {
             continue;
           }
         }
-        await page.waitForTimeout(300);
+        // Long enough for staggered entrances (40 ms apart) to finish.
+        await page.waitForTimeout(1200);
         await page.screenshot({ path: file });
         console.log(`✓ ${relative(ROOT, file)}`);
       } catch (e) {

@@ -80,7 +80,8 @@ export function AvatarStack({ people, max = 3, size = 28, ring = "raised", class
   return (
     <span role="img" aria-label={label} className={cx("inline-flex items-center", className)}>
       {shown.map((p, i) => (
-        <span key={`${p}-${i}`} className="inline-flex" style={{ marginLeft: i ? -overlap : 0 }}>
+        // Earlier avatars sit on top, so the next one never covers "You" or initials.
+        <span key={`${p}-${i}`} className="relative inline-flex" style={{ marginLeft: i ? -overlap : 0, zIndex: shown.length - i }}>
           <Avatar name={p} size={size} ring={ring} decorative />
         </span>
       ))}

@@ -177,8 +177,9 @@ test("everyday words aren't read as names inside an item", () => {
 });
 
 test("attendees: a newer `attendees` list is read too, guests without an email included", () => {
-  const m = meeting({ id: idAt(11, 3), invited: [ines] }) as Meeting & { attendees: unknown };
-  m.attendees = [{ name: "Theo Moss", email: "" }, "mara@example.com", { name: "Victor", email: "victor@example.com", self: true }, { name: "Ines Rocha", email: "INES@example.com" }, 42, null];
+  const m = meeting({ id: idAt(11, 3), invited: [ines] });
+  // Junk on purpose: notes files come from disk, so attendeesOf must tolerate anything.
+  (m as unknown as { attendees: unknown }).attendees = [{ name: "Theo Moss", email: "" }, "mara@example.com", { name: "Victor", email: "victor@example.com", self: true }, { name: "Ines Rocha", email: "INES@example.com" }, 42, null];
   assert.deepEqual(attendeesOf(m, me), [
     { name: "Theo Moss", email: "" },
     { name: "", email: "mara@example.com" },
