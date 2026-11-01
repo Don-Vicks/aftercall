@@ -8,7 +8,7 @@ import type { ProofOnChain } from "./near";
  */
 export const nearAiTransport: NearAiTransport = {
   transcribe: (path, model, prompt) => invoke<string>("nearai_transcribe", { path, model, prompt }),
-  chat: (body, e2ee) => invoke<string>("nearai_chat", { body, e2ee: e2ee ?? null }),
+  chat: (body, e2ee) => invoke<string>("nearai_chat", { body, e2ee }),
   get: (path) => invoke<string>("nearai_get", { path }),
   verifyQuote: (quote) => invoke<QuoteReport>("tee_verify_quote", { quote }),
   nvidiaAttest: (payload) => invoke<string>("tee_nvidia_attest", { payload }),

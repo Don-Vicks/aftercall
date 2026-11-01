@@ -104,7 +104,7 @@ export default function HowItWorks() {
                 </span>
                 <span>
                   <span className={h.t}>The notes come back sealed to your Mac</span>
-                  <span className={h.d}>Qwen encrypts its reply to a key pair made for this one request. If end-to-end encryption isn&apos;t available, nothing is sent: the transcript never goes over TLS.</span>
+                  <span className={h.d}>Qwen encrypts its reply to a key pair made for this one request. If end-to-end encryption isn&apos;t available, the transcript isn&apos;t sent: it never goes over TLS instead.</span>
                 </span>
               </li>
             </ol>

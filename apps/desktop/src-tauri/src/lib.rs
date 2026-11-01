@@ -798,9 +798,9 @@ async fn nearai_transcribe(app: AppHandle, path: String, model: String, prompt: 
     nearai::transcribe(file, model, prompt).await
 }
 
-/// `e2ee` carries the two public keys for an end-to-end encrypted request.
+/// `e2ee` carries the two public keys the request is end-to-end encrypted to; there is no plaintext request.
 #[tauri::command]
-async fn nearai_chat(body: String, e2ee: Option<nearai::E2ee>) -> Result<String, String> {
+async fn nearai_chat(body: String, e2ee: nearai::E2ee) -> Result<String, String> {
     nearai::chat(body, e2ee).await
 }
 

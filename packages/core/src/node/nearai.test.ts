@@ -68,12 +68,17 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
     const t = nodeNearAiTransport({ apiKey: "sk-test", baseUrl: `http://127.0.0.1:${port}/v1` });
 
     const request = '{"model":"Qwen/Qwen3.8-27B","messages":[]}';
-    assert.equal(await t.chat(request), chatReply);
+    assert.equal(await t.chat(request, { clientPubKey: "A1".repeat(32), modelPubKey: "b2".repeat(32) }), chatReply);
     const chat = seen.at(-1)!;
     assert.equal(chat.body.toString(), request, "the request body is sent byte for byte");
     assert.equal(chat.headers.authorization, "Bearer sk-test");
     assert.equal(chat.headers["accept-encoding"], "identity");
     assert.equal(chat.headers["x-no-aliasing"], "true");
+    // Always end to end, with the same headers nearai.rs sends.
+    assert.equal(chat.headers["x-signing-algo"], "ed25519");
+    assert.equal(chat.headers["x-client-pub-key"], "a1".repeat(32));
+    assert.equal(chat.headers["x-model-pub-key"], "b2".repeat(32));
+    assert.equal(chat.headers["x-encryption-version"], "2");
 
     const wav = join(samples, "designer-kickoff", "mic-000.wav");
     assert.equal(await t.transcribe(wav, "openai/whisper-large-v3", "Ines, Designer"), '{"text":"hi"}');

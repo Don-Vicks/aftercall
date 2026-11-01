@@ -35,8 +35,8 @@ export interface E2eeKeys {
 export interface NearAiTransport extends TeeTransport {
   /** POST /v1/audio/transcriptions with the file at `path`; returns the raw response body. */
   transcribe(path: string, model: string, prompt: string): Promise<string>;
-  /** POST /v1/chat/completions with exactly these bytes (and E2EE headers if given); returns exactly the bytes received. */
-  chat(body: string, e2ee?: E2eeKeys): Promise<string>;
+  /** POST /v1/chat/completions with exactly these bytes and the E2EE headers; returns exactly the bytes received. */
+  chat(body: string, e2ee: E2eeKeys): Promise<string>;
 }
 
 export interface AudioChunk {

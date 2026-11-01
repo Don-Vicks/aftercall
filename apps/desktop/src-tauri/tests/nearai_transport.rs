@@ -54,7 +54,9 @@ async fn chat_sends_and_returns_exact_bytes() {
     point_at(&url);
     let body = r#"{"model":"Qwen/Qwen3.8-27B","messages":[{"role":"user","content":"naïve café"}]}"#.to_string();
 
-    let got = aftercall_desktop_lib::test_api::chat(body.clone(), None).await.unwrap();
+    let e2ee = aftercall_desktop_lib::test_api::E2ee { client_pub_key: "a1".repeat(32), model_pub_key: "b2".repeat(32) };
+
+    let got = aftercall_desktop_lib::test_api::chat(body.clone(), e2ee).await.unwrap();
     assert_eq!(got, reply, "response bytes are returned untouched");
     let (head, sent) = rx.recv().unwrap();
     assert_eq!(sent, body.as_bytes(), "request bytes are sent untouched");
@@ -62,7 +64,7 @@ async fn chat_sends_and_returns_exact_bytes() {
     assert!(head.starts_with("post /v1/chat/completions"));
     assert!(head.contains("authorization: bearer test-key-0123456789"));
     assert!(head.contains("accept-encoding: identity"));
-    assert!(!head.contains("x-encryption-version"), "no E2EE headers unless asked");
+    assert!(head.contains("x-encryption-version: 2"), "every request is end-to-end encrypted");
 }
 
 #[tokio::test]
@@ -72,13 +74,24 @@ async fn encrypted_chat_sends_the_e2ee_headers() {
     point_at(&url);
     let e2ee = aftercall_desktop_lib::test_api::E2ee { client_pub_key: "a1".repeat(32), model_pub_key: "b2".repeat(32) };
 
-    aftercall_desktop_lib::test_api::chat("{}".into(), Some(e2ee)).await.unwrap();
+    aftercall_desktop_lib::test_api::chat("{}".into(), e2ee).await.unwrap();
     let (head, _) = rx.recv().unwrap();
     let head = head.to_lowercase();
     assert!(head.contains("x-signing-algo: ed25519"));
     assert!(head.contains(&format!("x-client-pub-key: {}", "a1".repeat(32))));
     assert!(head.contains(&format!("x-model-pub-key: {}", "b2".repeat(32))));
     assert!(head.contains("x-encryption-version: 2"));
+}
+
+#[tokio::test]
+async fn malformed_e2ee_keys_send_nothing() {
+    let _g = LOCK.lock().unwrap();
+    let (url, rx) = fake_server("{}");
+    point_at(&url);
+    let e2ee = aftercall_desktop_lib::test_api::E2ee { client_pub_key: "a1".repeat(32), model_pub_key: "ab".into() };
+
+    assert!(aftercall_desktop_lib::test_api::chat("{}".into(), e2ee).await.is_err());
+    assert!(rx.recv_timeout(std::time::Duration::from_millis(300)).is_err(), "no request reached the server");
 }
 
 #[tokio::test]

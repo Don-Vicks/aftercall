@@ -266,7 +266,7 @@ export const NOT_PROVEN = [
   "Who said what: “You” is your microphone and the rest is the call's audio, and a name on the call's side comes from your calendar, not the voice.",
   "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
   "What NEAR AI keeps or trains on: that is set by NEAR AI's own policy, not shown by these checks.",
-  "That an older meeting's transcript was end-to-end encrypted: earlier versions of the app could send it over TLS when encryption wasn't available, and that meeting's proof says so.",
+  "That every older meeting's transcript was end-to-end encrypted: earlier versions of the app could send it over TLS when encryption wasn't available, and such a meeting's proof says so.",
 ];
 
 /**

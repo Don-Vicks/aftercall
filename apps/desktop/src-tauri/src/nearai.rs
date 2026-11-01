@@ -172,7 +172,9 @@ pub fn e2ee_headers(e2ee: &E2ee) -> Result<Vec<(&'static str, String)>, String> 
     ])
 }
 
-pub async fn chat(body: String, e2ee: Option<E2ee>) -> Result<String, String> {
+/// Always end-to-end encrypted: the keys are checked before anything is sent.
+pub async fn chat(body: String, e2ee: E2ee) -> Result<String, String> {
+    let headers = e2ee_headers(&e2ee)?;
     let mut req = client()?
         .post(format!("{}/chat/completions", base()))
         .bearer_auth(api_key()?)
@@ -180,10 +182,8 @@ pub async fn chat(body: String, e2ee: Option<E2ee>) -> Result<String, String> {
         // The signature covers the exact response bytes, so no compression in between.
         .header("accept-encoding", "identity")
         .header("x-no-aliasing", "true");
-    if let Some(e2ee) = &e2ee {
-        for (name, value) in e2ee_headers(e2ee)? {
-            req = req.header(name, value);
-        }
+    for (name, value) in headers {
+        req = req.header(name, value);
     }
     let res = req.body(body).send().await.map_err(|e| e.to_string())?;
     body_text(res).await

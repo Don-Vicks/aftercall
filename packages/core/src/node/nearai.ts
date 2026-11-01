@@ -85,10 +85,8 @@ export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fe
       return bodyText(await doFetch(`${base}/audio/transcriptions`, { method: "POST", headers: auth, body: form, signal: AbortSignal.timeout(180_000) }));
     },
     async chat(body, e2ee) {
-      // End-to-end encryption headers, as nearai.rs e2ee_headers sends them.
-      const encrypted: Record<string, string> = e2ee
-        ? { "x-signing-algo": "ed25519", "x-client-pub-key": e2ee.clientPubKey.toLowerCase(), "x-model-pub-key": e2ee.modelPubKey.toLowerCase(), "x-encryption-version": "2" }
-        : {};
+      // End-to-end encryption headers, as nearai.rs e2ee_headers sends them. There is no plaintext request.
+      const encrypted: Record<string, string> = { "x-signing-algo": "ed25519", "x-client-pub-key": e2ee.clientPubKey.toLowerCase(), "x-model-pub-key": e2ee.modelPubKey.toLowerCase(), "x-encryption-version": "2" };
       const res = await doFetch(`${base}/chat/completions`, {
         method: "POST",
         // The signature covers the exact response bytes, so no compression in between.

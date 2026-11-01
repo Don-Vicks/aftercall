@@ -243,7 +243,7 @@ test("nothing leaves the Mac when no verified summary node offers a key for end-
   assert.ok(!ai.calls.some((c) => c.startsWith("transcribe")), "no audio either");
 });
 
-test("a refusal of the encryption headers stops processing; the transcript never goes over TLS", async () => {
+test("a refusal of the encryption headers stops processing; the transcript never goes over TLS instead", async () => {
   for (const opts of [{}, { summaryNodes: 2, badSecondNode: true }]) {
     const ai = await fakeNearAi({ notes, e2eeRefused: true, ...opts });
     await assert.rejects(processRecording(ai.transport, input, undefined, noWait), {
@@ -276,7 +276,7 @@ test("any 4xx on the encrypted request stops with nothing resent", async () => {
   await assert.rejects(processRecording(ai.transport, input, undefined, noWait), { message: "NEAR AI turned down the encrypted summary request (400: messages: too many tokens for this model). The transcript wasn't sent again." });
 });
 
-test("a stale-key 421 attests again and retries encrypted to a key from the new quotes, never over TLS", async () => {
+test("a stale-key 421 attests again and retries encrypted to a key from the new quotes, never over TLS instead", async () => {
   const ai = await fakeNearAi({ notes, staleKey: "once" });
   const before = ai.summaryNodes[0].address;
   const result = await processRecording(ai.transport, input, undefined, noWait);
@@ -289,7 +289,7 @@ test("a stale-key 421 attests again and retries encrypted to a key from the new 
   assert.equal(result.meeting.verified, true);
 });
 
-test("a stale-key 421 stops with nothing over TLS when the retry or the fresh attestation fails", async () => {
+test("a stale-key 421 stops with nothing sent over TLS instead when the retry or the fresh attestation fails", async () => {
   const again = await fakeNearAi({ notes, staleKey: "always" });
   await assert.rejects(
     processRecording(again.transport, input, undefined, noWait),
