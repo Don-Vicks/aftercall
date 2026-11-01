@@ -108,7 +108,8 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         payees,
         vocabulary: [recording.project, ...payees.map((p) => p.name)],
         transcriptCache: transcriptCache(id),
-        // TODO(merge): pass recording.yourNotes
+        // What you typed during the call: context for the model, covered by the proof's salted hash.
+        yourNotes: recording.yourNotes,
       },
       (stage: PipelineStage, detail?: string) => moveTo(stage, stage === "transcribe" ? detail : undefined),
     );

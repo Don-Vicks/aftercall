@@ -9,7 +9,7 @@ import { ProcessingScreen } from "./ProcessingScreen";
 import { RecordSheet } from "./recording/RecordSheet";
 import { LivePill } from "./recording/LivePill";
 import { LiveScreen } from "./recording/LiveScreen";
-import { getSession, openNotes, useRecordingEvents } from "./recording/session";
+import { getSession, openNotes, useRecordingEvents, useRecordingSession } from "./recording/session";
 import { syncWithAda } from "./sample";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
@@ -32,7 +32,7 @@ import { agentsApi } from "./agents";
 import { openSample } from "./sampleRecordings";
 import { CommandPalette } from "./CommandPalette";
 import { ProjectScreen } from "./ProjectScreen";
-import { DialogHost, MotionProvider, Toaster, anyLayerOpen, deferred, toast, useConfirm, view as viewMotion } from "./ui";
+import { DialogHost, MeProvider, MotionProvider, Toaster, anyLayerOpen, deferred, toast, useConfirm, view as viewMotion } from "./ui";
 import { PeopleScreen } from "./PeopleScreen";
 import { PersonScreen } from "./PersonScreen";
 import { AskScreen } from "./AskScreen";
@@ -530,6 +530,11 @@ export default function App() {
   const openActions = shownMeetings.reduce((n, m) => n + m.actionItems.filter((a) => !a.done).length, 0);
   /** Names that mean "you" in the notes: your NEAR account, once connected ("You" and "Me" always do). */
   const me = useMemo(() => (account ? [account] : []), [account]);
+  /** The recording in progress, for the sidebar's live row and Home's live card. */
+  const session = useRecordingSession();
+  const recordingNow = session.phase === "recording" || session.phase === "paused";
+  const live = recordingNow ? { seconds: session.seconds, paused: session.phase === "paused", title: session.event?.title, project: session.project } : undefined;
+  const openLive = () => setView({ name: "live" });
   /** What People, Ask, All meetings and Action items read: every meeting not waiting out a delete. */
   const library = useMemo(() => libraryMeetings(Object.values(meetings).filter((m) => !hidden[m.id]), syncWithAda.id), [meetings, hidden]);
   const sampleIds = new Set([syncWithAda.id, ...recordings.filter((r) => r.label === "Sample").map((r) => r.id)]);
@@ -537,8 +542,11 @@ export default function App() {
 
   return (
     <MotionProvider>
+      <MeProvider me={me}>
       <div className="flex h-full">
         <Sidebar
+          live={live}
+          onOpenLive={openLive}
           projects={projects}
           sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
           account={account}
@@ -607,6 +615,8 @@ export default function App() {
             )}
             {view.name === "home" && (
               <HomeScreen
+                live={live}
+                onOpenLive={openLive}
                 meetings={shownMeetings}
                 recordings={shownRecordings}
                 sampleId={syncWithAda.id}
@@ -758,6 +768,7 @@ export default function App() {
       </div>
       <Toaster />
       <DialogHost />
+      </MeProvider>
     </MotionProvider>
   );
 }
