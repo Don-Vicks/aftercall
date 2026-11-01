@@ -71,6 +71,18 @@ test("names the meeting after the event and fills recap addresses", () => {
   assert.equal(out.title, "Sync with Ada");
   assert.deepEqual(out.followUps.map((f) => (f.kind === "email" ? f.to : "")), ["ada@example.com", "grace@other.org", ""]);
   assert.deepEqual(out.invited?.map((a) => a.email), ["ada@example.com", "grace@navy.mil", "charles.babbage@example.com"]);
+  assert.deepEqual(out.attendees?.map((a) => a.name || a.email), ["Ada Lovelace", "Grace Hopper", "charles.babbage@example.com", "Ada Byron"], "guests without an email stay");
+});
+
+test("a guest without an email still counts: an unnamed recap isn't guessed when two were invited", () => {
+  const two = event("1:1", "15:00", "15:30", { attendees: [{ name: "Ada Lovelace", email: "ada@example.com" }, { name: "Theo Moss", email: "" }] });
+  const out = applyCalendarEvent(meeting([recap("f1", "")]), two);
+  assert.equal((out.followUps[0] as EmailFollowUp).to, "");
+  assert.equal(out.attendees?.length, 2);
+  const onlyNoEmail = applyCalendarEvent(meeting([recap("f1", "")]), event("1:1", "15:00", "15:30", { attendees: [{ name: "Theo Moss", email: "" }] }));
+  assert.equal((onlyNoEmail.followUps[0] as EmailFollowUp).to, "");
+  assert.deepEqual(onlyNoEmail.attendees, [{ name: "Theo Moss", email: "" }]);
+  assert.deepEqual(onlyNoEmail.invited, []);
 });
 
 test("an unnamed recap goes to the only other person invited, and only then", () => {

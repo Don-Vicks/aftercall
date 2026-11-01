@@ -64,16 +64,18 @@ export function matchAttendee(name: string, attendees: Attendee[]): Attendee | n
 }
 
 /**
- * Names a meeting after its calendar event and fills recap addresses from the
- * invite. Addresses the person already set are kept. A recap with no name goes to
- * the only other person invited, if there is exactly one.
+ * Names a meeting after its calendar event, keeps everyone it invited (`attendees`,
+ * with or without an email) and fills recap addresses from the invite. Addresses the
+ * person already set are kept. A recap with no name goes to the only other person
+ * invited, if there is exactly one and they have an email.
  */
 export function applyCalendarEvent(meeting: Meeting, event: CalendarEvent): Meeting {
-  const invited = event.attendees.filter((a) => a.email);
+  const attendees = event.attendees.filter((a) => a.name || a.email);
+  const invited = attendees.filter((a) => a.email);
   const followUps = meeting.followUps.map((f) => {
     if (f.kind !== "email" || f.to) return f;
-    const match = f.toName ? matchAttendee(f.toName, invited) : invited.length === 1 ? invited[0] : null;
+    const match = f.toName ? matchAttendee(f.toName, invited) : attendees.length === 1 && attendees[0].email ? attendees[0] : null;
     return match ? { ...f, to: match.email, toName: f.toName || match.name } : f;
   });
-  return { ...meeting, title: event.title || meeting.title, invited, followUps };
+  return { ...meeting, title: event.title || meeting.title, attendees, invited, followUps };
 }

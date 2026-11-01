@@ -25,3 +25,17 @@ export function recoverPersonalSign(message: string, signatureHex: string): stri
 
 /** sha256 as hex, of bytes or of a string's UTF-8 bytes. */
 export const sha256Hex = (data: Uint8Array | string) => bytesToHex(sha256(typeof data === "string" ? utf8ToBytes(data) : data));
+
+/**
+ * sha256(salt ‖ your notes): the salt's bytes, then the notes' UTF-8 bytes. The salt
+ * is 32 random bytes kept only in notes.json, so the hash in a public proof link can't
+ * be used to guess short notes ("Fix before demo") by trying likely phrases.
+ */
+export function yourNotesHash(saltHex: string, notes: string): string {
+  const salt = hexToBytes(saltHex);
+  const text = utf8ToBytes(notes);
+  const both = new Uint8Array(salt.length + text.length);
+  both.set(salt);
+  both.set(text, salt.length);
+  return sha256Hex(both);
+}

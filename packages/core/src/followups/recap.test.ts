@@ -30,3 +30,9 @@ test("mailto links keep the address readable and encode the rest", () => {
   assert.ok(link.startsWith("mailto:ada@example.com?subject=Recap%3A%20API%20fix&body=Hi%20Ada"));
   assert.ok(!link.includes("\n"));
 });
+
+test("a recap never includes your notes", () => {
+  const r = buildRecap({ ...meeting, yourNotes: "Ada seemed unsure about the price. Push back on Friday." }, f, { sender: "Victor" });
+  assert.doesNotMatch(r.text, /unsure|Push back/);
+  assert.doesNotMatch(mailtoLink(r), /unsure/);
+});

@@ -32,6 +32,8 @@ function fixtureMeetings(): Map<string, NotesFile> {
     durationSec: 754,
     verified: true,
     summary: "Ada will send the term sheet; we agreed on a pilot.",
+    // Your notes are private to the app: no tool may return them (tools.test.ts).
+    yourNotes: "Ada sounded unsure about pricing. Push for the pilot.",
     decisions: ["Run a two-week pilot with Ada's team"],
     actionItems: [
       { id: "a1", text: "Send Ada the pilot plan", owner: "You", due: "Friday", done: false },
@@ -73,6 +75,7 @@ function fixtureMeetings(): Map<string, NotesFile> {
 
   const notes = new Map<string, NotesFile>();
   for (const m of [ada, standup]) notes.set(m.id, { meeting: m, processedAt: m.startedAt, notes: { summary: m.summary }, proof: { notesHash: "abc" } });
+  notes.get(ada.id)!.yourNotesSalt = "5a".repeat(32);
   return notes;
 }
 

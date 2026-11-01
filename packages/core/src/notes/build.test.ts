@@ -62,3 +62,12 @@ test("an unlisted payee is shown but marked, and can't be paid", () => {
 test("the model's reply is checked against the schema", () => {
   assert.throws(() => notesSchema.parse({ title: "x", summary: "y", decisions: [], action_items: [], followups: [{ type: "transfer" }] }));
 });
+
+test("your notes ride along on the meeting but are never evidence", () => {
+  const withNotes = { ...notes, followups: [...notes.followups, { type: "payment" as const, payee_name: "Designer", amount_words: "three hundred", memo: null, evidence: "pay the designer three hundred" }] };
+  const { meeting, dropped } = buildMeeting({ ...base, notes: withNotes, payees: [{ name: "Designer", account: "designer.near" }], yourNotes: "pay the designer three hundred" });
+  assert.equal(meeting.yourNotes, "pay the designer three hundred");
+  assert.ok(!meeting.followUps.some((f) => f.kind === "payment" && f.heard === "three hundred"), "a payment only in your notes is dropped");
+  assert.ok(dropped.some((d) => d.text === "Pay Designer three hundred"));
+  assert.equal("yourNotes" in buildMeeting({ ...base, notes, payees: [] }).meeting, false);
+});

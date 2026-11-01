@@ -18,6 +18,8 @@ export interface BuildInput {
   payees: Payee[];
   /** Whether the summary's signature and attestation checked out. */
   verified: boolean;
+  /** What YOU typed during the call, already cleaned. Shown on the meeting; never evidence. */
+  yourNotes?: string;
 }
 
 export interface Dropped {
@@ -34,7 +36,8 @@ function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
 
 /**
  * Turns the model's notes into a meeting. Anything whose evidence quote isn't in
- * the transcript is dropped and reported, so the model can't invent a payment.
+ * the transcript is dropped and reported, so the model can't invent a payment, and
+ * a payment that appears only in your notes never becomes a follow-up.
  */
 export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dropped[] } {
   const { notes, transcript } = input;
@@ -94,6 +97,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
       actionItems,
       followUps,
       transcript,
+      ...(input.yourNotes ? { yourNotes: input.yourNotes } : {}),
     },
     dropped,
   };

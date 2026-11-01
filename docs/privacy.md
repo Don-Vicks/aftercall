@@ -8,7 +8,8 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 | --- | --- | --- |
 | Meeting audio (two WAV stems) | NEAR AI Cloud, Whisper in a TEE | NEAR AI's policy; Aftercall deletes its copy on the Mac once notes are saved |
 | Transcript text, project and payee names | NEAR AI Cloud, Qwen in a TEE | NEAR AI's policy |
-| Notes, transcript, settings | Nowhere. They stay in the app's folder on the Mac | Until you delete the meeting |
+| Your notes (what you type during the call) | NEAR AI Cloud, Qwen in a TEE, in the same end-to-end encrypted request as the transcript | NEAR AI's policy. Never in a recap, never sent to connected agents; the proof holds only a salted hash |
+| Notes, transcript, your notes, settings | Nowhere. They stay in the app's folder on the Mac | Until you delete the meeting |
 | Proof of a meeting | NEAR blockchain (`record_proof`) | Forever, publicly: the recording id (its start time), a sha256 hash and the model name. No content |
 | A payment | NEAR blockchain (`pay`) | Forever, publicly: payee account, amount, a memo and a follow-up id (see the note on memos below) |
 | Recap you **Draft in Mail** | Your own mail app | Your mail provider. Aftercall's servers never see it |
@@ -28,11 +29,24 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 
 ## NEAR AI Cloud
 
-- The only AI endpoint is `https://cloud-api.near.ai/v1` (`apps/desktop/src-tauri/src/nearai.rs:11`), and only the Confidential TEE models in `packages/core/src/notes/pipeline.ts:7`.
-- What is sent: each audio chunk (with project and payee names as Whisper's spelling prompt), then the merged transcript with the project name and payee list (`packages/core/src/notes/pipeline.ts:137`).
+- The only AI endpoint is `https://cloud-api.near.ai/v1` (`apps/desktop/src-tauri/src/nearai.rs:11`), and only the Confidential TEE models in `packages/core/src/notes/pipeline.ts:10`.
+- What is sent: each audio chunk (with project and payee names as Whisper's spelling prompt), then the merged transcript with the project name, the payee list and your notes if you typed any (`summaryRequestText`, `packages/core/src/notes/pipeline.ts:83`).
 - The app may also read the attestation report and the response signature, and nothing else: `apps/desktop/src-tauri/src/nearai.rs:156` (`check_get_path`).
 - What NEAR AI keeps is set by NEAR AI, not by Aftercall. The attestation proves the models ran in TEEs; it does not prove what NEAR AI's gateway logs.
 - `pnpm sample:notes` uses a Node transport with the same three calls and the same path rule: `packages/core/src/node/nearai.ts`.
+
+## Your notes
+
+What you type during a call is yours: it guides the notes, and goes nowhere else.
+
+- Before sending, they are cleaned: `<<<` and `>>>` are removed (so the text can't close the block it is quoted in), then they are trimmed and cut to 8,000 characters (`cleanYourNotes`, `packages/core/src/notes/pipeline.ts:72`).
+- They go only to the summary model, inside the request that is end-to-end encrypted to the attested Qwen TEE, as a block headed "YOUR NOTES (typed by YOU during the call; context only)" (`pipeline.ts:83`). Whisper never gets them. If end-to-end encryption isn't available, they travel over TLS to the attested gateway like the transcript, and the Verify sheet says so.
+- The model's instructions say evidence must still come from the transcript (`packages/core/src/notes/schema.ts:98`), and `buildMeeting` drops anything whose quote isn't in the transcript, so a payment that appears only in your notes never becomes a follow-up (`build.test.ts`, `pipeline.test.ts`: "your notes go to the model inside the encrypted request…").
+- On the Mac they are kept on the meeting in `notes.json`, sealed like the rest, and shown above the AI notes.
+- The proof holds `yourNotesHash = sha256(salt ‖ your notes)` (`yourNotesHash`, `packages/core/src/notes/verify.ts:34`). The salt is 32 random bytes made per meeting (`pipeline.ts:327`) and saved only in `notes.json`, so the public proof link reveals nothing about them and short notes can't be guessed by hashing likely phrases. The Verify sheet re-checks "Your notes unchanged since signing" with the saved salt (`packages/core/src/notes/proof.ts:110`); the public page can't, and doesn't try. Proofs without your notes leave the key out and hash exactly as before (`proof.test.ts`: "old proofs hash exactly as before…").
+- Never in a recap: `buildRecap` doesn't read them (`packages/core/src/followups/recap.ts:21`; `recap.test.ts`: "a recap never includes your notes").
+- Never sent to connected agents: the app's agents socket removes `meeting.yourNotes` and the salt from everything it answers (`for_agents`, `apps/desktop/src-tauri/src/agents.rs:227`; test `your_notes_and_their_salt_never_reach_agents`), and no MCP tool returns or searches them (`apps/mcp/src/tools.test.ts`: "your notes never reach an agent…").
+- Nothing about them goes on NEAR except inside the proof hash.
 
 ## Aftercall backend (NestJS)
 

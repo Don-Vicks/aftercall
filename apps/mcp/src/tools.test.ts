@@ -137,3 +137,20 @@ test("no token configured: a clear setup error, without connecting", async () =>
   await assert.rejects(listMeetings(connectApp({ socketPath: fake.socketPath, token: undefined })), (e: Error) => e.message === NO_TOKEN);
   await assert.rejects(listMeetings(connectApp({ socketPath: fake.socketPath, token: "" })), /AFTERCALL_TOKEN/);
 });
+
+test("your notes never reach an agent, whatever the tool", async () => {
+  // The app's socket strips them too (agents.rs); this holds even if it didn't.
+  const outputs = [
+    await listMeetings(app),
+    await getMeeting(app, { id: "1761000000", includeTranscript: true }),
+    await search(app, { query: "pricing" }),
+    await search(app, { query: "pilot" }),
+    await listActionItems(app, { includeDone: true, includeClaimed: true }),
+  ];
+  for (const out of outputs) {
+    const text = JSON.stringify(out);
+    assert.doesNotMatch(text, /unsure about pricing|Push for the pilot/);
+    assert.doesNotMatch(text, /yourNotes|5a5a5a/);
+  }
+  assert.equal((await search(app, { query: "unsure about pricing" })).meetingsMatched, 0, "search doesn't look inside them either");
+});
