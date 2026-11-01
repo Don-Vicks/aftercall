@@ -1,5 +1,5 @@
 import type { ActionItem, AmountProblemKind, FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
-import { amountProblem, amountsIn, parseAmount } from "./amounts.ts";
+import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
 import type { Notes } from "./schema.ts";
 import { findQuote } from "./transcript.ts";
 
@@ -37,26 +37,32 @@ function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
 /**
  * A payment's amount, kept only when the same value is in its evidence quote as found
  * in the transcript. Values, not words: Whisper writes "$40" where the model writes
- * "forty dollars". Otherwise null, with the reason.
+ * "forty dollars". A value the quote gives in another currency or as a percentage
+ * doesn't count (see `amountsIn`). Otherwise null, with the reason.
  */
 export function checkedAmount(heard: string, quote: string): { amount: bigint | null; amountProblem?: AmountProblemKind } {
   const problem = amountProblem(heard);
   if (problem) return { amount: null, amountProblem: problem.kind };
   const amount = parseAmount(heard);
   if (amount === null) return { amount: null, amountProblem: "unclear" };
-  return amountsIn(quote).includes(amount) ? { amount } : { amount: null, amountProblem: "not-in-quote" };
+  if (amountsIn(quote).includes(amount)) return { amount };
+  // The model wrote dollars for what the quote says in naira, euros...: say so.
+  return { amount: null, amountProblem: currencyIn(quote) ? "not-usdc" : "not-in-quote" };
 }
 
 /** One sentence for the payment card on why the amount is empty; null when there is an amount. */
-export function amountNote(f: Pick<PaymentFollowUp, "amount" | "amountProblem" | "heard">): string | null {
+export function amountNote(f: Pick<PaymentFollowUp, "amount" | "amountProblem" | "heard"> & { evidence?: { quote: string } }): string | null {
   if (f.amount !== null) return null;
-  if (f.amountProblem === "not-in-quote") return `The model heard "${f.heard}", but that amount isn't in the quote from the transcript, so it wasn't filled in.`;
+  if (f.amountProblem === "not-in-quote") return `The model heard “${f.heard}”, but that amount isn't in the quote from the transcript, so it wasn't filled in.`;
   const problem = amountProblem(f.heard);
+  // The model wrote dollars, but the quote names another currency.
+  const quoted = f.amountProblem === "not-usdc" && problem?.kind !== "not-usdc" && f.evidence ? currencyIn(f.evidence.quote) : null;
+  if (quoted) return `The quote gives this amount in ${quoted}, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.`;
   if (f.amountProblem === "not-usdc" || problem?.kind === "not-usdc") {
     const currency = problem?.kind === "not-usdc" ? problem.currency : "another currency";
-    return `"${f.heard}" is in ${currency}, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.`;
+    return `“${f.heard}” is in ${currency}, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.`;
   }
-  return `"${f.heard}" doesn't read as one amount, so it wasn't filled in.`;
+  return `“${f.heard}” doesn't read as one amount, so it wasn't filled in.`;
 }
 
 /**

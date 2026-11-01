@@ -5,12 +5,22 @@ import { Logger, type LoggerService } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import request from "supertest";
 import type { Pool } from "pg";
-import { EmailService, resendMailer, type Mailer } from "./email.service";
+import { EmailService, RECAP_FOOTER_MARK, resendMailer, type Mailer } from "./email.service";
 import { EmailController } from "./email.controller";
 import { AuthService, isAccepted } from "../auth/auth.service";
 import { PgCounters } from "../stats/counters";
 
-const consent = "Hi Ada.\n--\nThis call was recorded with notice to everyone on it and processed in secure hardware.";
+// The footer as packages/core recapFooter() writes it for a verified, end-to-end encrypted meeting.
+const consent = [
+  "Hi Ada.",
+  "--",
+  "Notes made by Aftercall in secure hardware on NEAR AI Cloud, checked by the app before anything was sent. The transcript was end-to-end encrypted to that hardware.",
+  "Aftercall deletes the call's audio once the notes are saved.",
+  "What was and wasn't checked: https://aftercall.app/verify#x",
+].join("\n");
+
+/** packages/core's recap builder, loaded from source (tsx runs it; the backend's build can't import it). */
+const core = () => import("../../../../packages/core/src/followups/recap.ts") as Promise<typeof import("../../../../packages/core/src/followups/recap.ts")>;
 
 function fakeMailer() {
   const sent: Parameters<Mailer>[0][] = [];
@@ -40,12 +50,32 @@ test("refuses recaps without the consent line, bad addresses, header injection a
   const { mailer } = fakeMailer();
   let now = 0;
   const email = new EmailService(mailer, "notes@aftercall.app", () => now);
-  await assert.rejects(email.send("v", { to: "ada@example.com", subject: "x", text: "no consent here" }), /MISSING_CONSENT_LINE/);
+  await assert.rejects(email.send("v", { to: "ada@example.com", subject: "x", text: "no footer here" }), /MISSING_FOOTER/);
+  await assert.rejects(email.send("v", { to: "ada@example.com", subject: "x", text: "This call was recorded with notice to everyone on it." }), /MISSING_FOOTER/, "the old consent line isn't the footer");
   await assert.rejects(email.send("v", { to: "ada@example.com\nBcc: everyone@x.com", subject: "x", text: consent }), /BAD_ADDRESS/);
   for (let i = 0; i < 50; i++) await email.send("v", { to: "ada@example.com", subject: "x", text: consent });
   await assert.rejects(email.send("v", { to: "ada@example.com", subject: "x", text: consent }), /DAILY_LIMIT/);
   now += 86_400_000;
   await email.send("v", { to: "ada@example.com", subject: "x", text: consent });
+});
+
+test("a recap built by the app is accepted: the backend checks core's footer mark", async () => {
+  const { RECAP_FOOTER_MARK: coreMark, buildRecap, recapFooter } = await core();
+  assert.equal(RECAP_FOOTER_MARK, coreMark, "the backend's copy of the mark matches core's");
+  const meeting = { id: "m1", project: "p", title: "t", startedAt: "Today 14:02", durationSec: 60, verified: false, summary: "s", decisions: [], actionItems: [], followUps: [], transcript: [] };
+  const f = { id: "f1", kind: "email" as const, status: "proposed" as const, to: "ada@example.com", toName: "Ada", subject: "Recap", evidence: { quote: "q", at: 0 } };
+  const { mailer, sent } = fakeMailer();
+  const email = new EmailService(mailer, "notes@aftercall.app");
+  for (const facts of [
+    { verified: true, e2ee: true, verifyUrl: "https://aftercall.app/verify#x", handlingUrl: "https://aftercall.app/handling" },
+    { verified: false, e2ee: null, handlingUrl: "https://aftercall.app/handling" },
+  ]) {
+    const recap = buildRecap(meeting, f, { facts });
+    await email.send("v", { to: recap.to, subject: recap.subject, text: recap.text });
+    assert.ok(recap.text.endsWith(recapFooter(facts)));
+  }
+  assert.equal(sent.length, 2);
+  assert.ok(consent.endsWith(recapFooter({ verified: true, e2ee: true, verifyUrl: "https://aftercall.app/verify#x", handlingUrl: "h" })), "the fixture above is a real footer");
 });
 
 test("without Resend configured, sending says so instead of failing silently", async () => {

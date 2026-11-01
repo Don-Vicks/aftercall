@@ -63,13 +63,17 @@ export function normalize(s: string): string {
 
 /**
  * Finds a quote in the transcript. Returns the line it starts in and the quote
- * exactly as written there, or null if the words aren't in the transcript.
+ * exactly as written there, or null if the words aren't in the transcript. The match
+ * must start and end on whole words: "50 per user" isn't in "$1.50 per user", and
+ * the quote returned is always the transcript's text, never the model's.
  */
 export function findQuote(lines: TranscriptLine[], quote: string): { at: number; text: string } | null {
   const wanted = normalize(quote);
   if (wanted.split(" ").length < 3) return null; // too short to count as evidence
   for (const line of lines) {
-    if (normalize(line.text).includes(wanted)) return { at: line.at, text: exactSpan(line.text, wanted) ?? quote };
+    if (!normalize(line.text).includes(wanted)) continue;
+    const text = exactSpan(line.text, wanted);
+    if (text !== null) return { at: line.at, text };
   }
   return null;
 }

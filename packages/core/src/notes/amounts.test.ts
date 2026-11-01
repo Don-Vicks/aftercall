@@ -144,5 +144,32 @@ test("amountsIn takes the longest span, so parts of a number are never amounts o
   assert.ok(!amountsIn(quote).includes(usdc(50)), "50 is only part of 250");
   assert.deepEqual(amountsIn("one thousand two hundred dollars"), [usdc(1_200)]);
   assert.deepEqual(amountsIn("forty 50"), [usdc(40), usdc(50)], "two numbers side by side are two amounts, not 4,050");
-  assert.deepEqual(amountsIn("twelve fifty"), [usdc(12), usdc(50)], "ambiguous as one amount, so read as two");
+  assert.deepEqual(amountsIn("twelve fifty"), [], "ambiguous as one amount, so no part of it is one either");
+  assert.deepEqual(amountsIn("Pay Ada one fifty for the logo work."), [], "one fifty is never fifty");
+});
+
+test("amountsIn stops at commas and full stops, so two amounts never join into one", () => {
+  assert.deepEqual(amountsIn("Ada gets fifty. Two hundred goes to Ben."), [usdc(50), usdc(200)]);
+  assert.deepEqual(amountsIn("Pay Ada forty, fifty dollars"), [usdc(40), usdc(50)]);
+  assert.deepEqual(amountsIn("Pay Ada twenty, three to Ben"), [usdc(20), usdc(3)]);
+  assert.deepEqual(amountsIn("send the $5,000 deposit"), [usdc(5_000)], "a comma inside a number isn't a stop");
+  assert.deepEqual(amountsIn("It's $40."), [usdc(40)]);
+});
+
+test("amountsIn skips values in another currency or given as a percentage", () => {
+  assert.deepEqual(amountsIn("Send Ada 2,500 euros for the design work."), []);
+  assert.deepEqual(amountsIn("Send 500 naira"), []);
+  assert.deepEqual(amountsIn("Send €2,500 to Ada"), []);
+  assert.deepEqual(amountsIn("Ada gets the 50 percent deposit on 4,000 dollars."), [usdc(4_000)]);
+  assert.deepEqual(amountsIn("Ada gets 50% of 4,000 dollars"), [usdc(4_000)]);
+  assert.deepEqual(amountsIn("fifty per cent up front"), []);
+  assert.deepEqual(amountsIn("Pay Ada $500, not 500 naira"), [usdc(500)]);
+});
+
+test("two numbers in a row are two numbers: tens after tens, hundred after hundred", () => {
+  assert.equal(parseAmount("forty fifty"), null);
+  assert.equal(parseAmount("two hundred three hundred"), null);
+  assert.equal(parseAmount("two hundred and fifty"), usdc(250), "still one amount");
+  assert.equal(parseAmount("twenty three hundred"), usdc(2_300));
+  assert.equal(parseAmount("one thousand fifty"), usdc(1_050));
 });

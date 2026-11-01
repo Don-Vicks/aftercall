@@ -12,7 +12,7 @@ test("401 and 403: the key wasn't accepted", () => {
   assert.equal(plainNearAiError(rust("403 Forbidden", "insufficient permissions")), NEAR_AI_KEY_MESSAGE, "insufficient permissions is about the key, not credit");
 });
 
-test("402, or credit and spend-limit words with any status: out of credit", () => {
+test("402, or credit and spend-limit words with a 4xx status: out of credit", () => {
   assert.equal(plainNearAiError(node(402, "")), NEAR_AI_CREDIT_MESSAGE);
   assert.equal(plainNearAiError(rust("402 Payment Required", '{"detail":"payment required"}')), NEAR_AI_CREDIT_MESSAGE);
   assert.equal(plainNearAiError(node(400, '{"error":{"message":"Insufficient credits"}}')), NEAR_AI_CREDIT_MESSAGE);
@@ -31,12 +31,15 @@ test("anything else keeps its own message", () => {
   assert.equal(plainNearAiError(new Error("Secure hardware check failed for Whisper (TDX). Nothing was sent.")), "Secure hardware check failed for Whisper (TDX). Nothing was sent.");
   assert.equal(plainNearAiError("NVIDIA NRAS 429: slow down"), "NVIDIA NRAS 429: slow down", "only NEAR AI's own errors are mapped");
   assert.equal(plainNearAiError(new Error("We used up our credit card limit")), "We used up our credit card limit");
+  assert.equal(plainNearAiError(node(500, "Internal error: credit service unavailable")), "NEAR AI 500: Internal error: credit service unavailable", "a 5xx is NEAR AI's failure, not your credit");
+  assert.equal(isNearAiAccountError(node(503, "credit service unavailable")), false);
 });
 
 test("account errors are told apart from a refused request", () => {
   assert.equal(nearAiStatus(rust("402 Payment Required", "")), 402);
   assert.equal(nearAiStatus("timeout"), null);
   assert.equal(isNearAiAccountError(node(400, "encryption not supported for this model")), false);
+  assert.equal(plainNearAiError(node(400, "encryption not supported for this model")), "NEAR AI 400: encryption not supported for this model", "a plain E2EE refusal stays a refusal");
   assert.equal(isNearAiAccountError(node(400, "insufficient credit")), true);
   assert.equal(isNearAiAccountError(node(429, "")), true);
 });

@@ -129,7 +129,7 @@ test("naira is not USDC: no amount, the reason names the currency, autopilot wai
   const f = pay("Pay the designer fifty thousand naira for the deck.", "fifty thousand naira", "Pay the designer fifty thousand naira for the deck");
   assert.equal(f.amount, null, "never 50,000.00 USDC");
   assert.equal(f.amountProblem, "not-usdc");
-  assert.equal(amountNote(f), '"fifty thousand naira" is in naira, not US dollars. Aftercall doesn\'t convert currencies, so the amount wasn\'t filled in.');
+  assert.equal(amountNote(f), "“fifty thousand naira” is in naira, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.");
   assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, ["Amount isn't in US dollars"]);
 });
 
@@ -137,11 +137,48 @@ test("unclear words give no amount and say so", () => {
   const f = pay("Pay the designer twelve fifty for the icons.", "twelve fifty", "Pay the designer twelve fifty for the icons");
   assert.equal(f.amount, null);
   assert.equal(f.amountProblem, "unclear");
-  assert.equal(amountNote(f), '"twelve fifty" doesn\'t read as one amount, so it wasn\'t filled in.');
+  assert.equal(amountNote(f), "“twelve fifty” doesn't read as one amount, so it wasn't filled in.");
 });
 
 test("checkedAmount: cents and digits in the quote", () => {
   assert.deepEqual(checkedAmount("fifty cents", "it's fifty cents a page"), { amount: usdc(0.5) });
   assert.deepEqual(checkedAmount("fifty dollars", "it's fifty cents a page"), { amount: null, amountProblem: "not-in-quote" });
   assert.deepEqual(checkedAmount("five thousand", "send the $5,000 deposit"), { amount: usdc(5_000) });
+});
+
+/** One payment, with its quote cut by the model, against one transcript line. */
+function payFrom(line: string, amountWords: string, evidence: string) {
+  const n = notesSchema.parse({
+    title: "t",
+    summary: "s",
+    decisions: [],
+    action_items: [],
+    followups: [{ type: "payment", payee_name: "Designer", amount_words: amountWords, memo: null, evidence }],
+  });
+  return buildMeeting({ ...base, notes: n, payees: [], transcript: [{ at: 60, speaker: "you", text: line }] });
+}
+
+test("a quote that starts or ends inside a number isn't in the transcript", () => {
+  const a = payFrom("It's $1.50 per user, okay with you Ada?", "fifty dollars", "50 per user, okay with you");
+  assert.deepEqual(a.meeting.followUps, [], "never $50 from $1.50");
+  assert.equal(a.dropped[0]?.reason, "QUOTE_NOT_IN_TRANSCRIPT");
+  const b = payFrom("We owe Ada 15,000 dollars total for the build.", "five thousand dollars", "5,000 dollars total for the build");
+  assert.deepEqual(b.meeting.followUps, [], "never $5,000 from 15,000");
+});
+
+test("a value the quote gives in another currency or as a percentage is not a dollar amount", () => {
+  const euros = payFrom("Send Ada 2,500 euros for the design work.", "2,500 dollars", "Send Ada 2,500 euros for the design work");
+  assert.deepEqual(euros.meeting.followUps.map((f) => f.kind === "payment" && [f.amount, f.amountProblem]), [[null, "not-usdc"]]);
+  const card = euros.meeting.followUps[0];
+  assert.equal(card?.kind === "payment" && amountNote(card), "The quote gives this amount in euros, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.");
+  const pct = payFrom("Ada gets the 50 percent deposit on 4,000 dollars.", "fifty dollars", "Ada gets the 50 percent deposit on 4,000 dollars");
+  assert.deepEqual(pct.meeting.followUps.map((f) => f.kind === "payment" && [f.amount, f.amountProblem]), [[null, "not-in-quote"]]);
+  assert.deepEqual(checkedAmount("$500", "Send 500 naira"), { amount: null, amountProblem: "not-usdc" });
+});
+
+test("one fifty is not fifty, and two amounts aren't joined into one", () => {
+  const f = payFrom("Pay Ada one fifty for the logo work.", "fifty dollars", "Pay Ada one fifty for the logo work");
+  assert.deepEqual(f.meeting.followUps.map((p) => p.kind === "payment" && [p.amount, p.amountProblem]), [[null, "not-in-quote"]]);
+  assert.deepEqual(checkedAmount("fifty dollars", "Ada gets fifty. Two hundred goes to Ben."), { amount: usdc(50) });
+  assert.deepEqual(checkedAmount("ninety dollars", "Pay Ada forty, fifty dollars for it"), { amount: null, amountProblem: "not-in-quote" });
 });

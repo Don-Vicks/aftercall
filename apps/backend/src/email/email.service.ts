@@ -44,6 +44,12 @@ export function resendMailer(apiKey: string, fetchImpl: typeof fetch = fetch): M
 }
 
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+/**
+ * Every recap the app builds ends with a footer holding this line. Mirrors
+ * RECAP_FOOTER_MARK in packages/core/src/followups/recap.ts (the backend builds to
+ * CommonJS and can't import core's sources); email.test.ts checks the two match.
+ */
+export const RECAP_FOOTER_MARK = "What was and wasn't checked:";
 const DAILY_LIMIT = 50;
 
 @Injectable()
@@ -68,7 +74,7 @@ export class EmailService {
     if (!this.mailer) throw new HttpException("EMAIL_NOT_CONFIGURED", HttpStatus.SERVICE_UNAVAILABLE);
     if (!EMAIL.test(req.to) || (req.replyTo && !EMAIL.test(req.replyTo))) throw new HttpException("BAD_ADDRESS", HttpStatus.BAD_REQUEST);
     if (!req.subject?.trim() || req.subject.length > 200 || !req.text?.trim() || req.text.length > 20_000) throw new HttpException("BAD_MESSAGE", HttpStatus.BAD_REQUEST);
-    if (!req.text.includes("recorded with notice to everyone")) throw new HttpException("MISSING_CONSENT_LINE", HttpStatus.BAD_REQUEST);
+    if (!req.text.includes(RECAP_FOOTER_MARK)) throw new HttpException("MISSING_FOOTER", HttpStatus.BAD_REQUEST);
 
     const day = Math.floor(this.now() / 86_400_000);
     const [d, count] = this.sentTodayCount.get(accountId) ?? [day, 0];

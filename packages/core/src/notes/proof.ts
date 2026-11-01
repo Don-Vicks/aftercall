@@ -265,8 +265,8 @@ export const NOT_PROVEN = [
   "That everyone on the call agreed to be recorded: Aftercall asks you to confirm it, and can't check it.",
   "Who said what: “You” is your microphone and the rest is the call's audio, and a name on the call's side comes from your calendar, not the voice.",
   "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
-  "That NEAR AI keeps no copy of the audio or transcript and doesn't train on them: that is NEAR AI's stated policy, not something these checks show.",
-  "That every transcript was end-to-end encrypted: when NEAR AI refuses encryption, the app sends it over TLS to the attested hardware only if every summary node passed, and that meeting's proof says so.",
+  "What NEAR AI keeps or trains on: that is set by NEAR AI's own policy, not shown by these checks.",
+  "That every transcript was end-to-end encrypted: when end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI rejects the encrypted request), the app sends it over TLS to the attested hardware only if every summary node passed, and that meeting's proof says so.",
 ];
 
 /**
@@ -299,8 +299,9 @@ const HOW: Record<NonNullable<NoticeLog["how"]>, string> = {
 
 /**
  * The notice the person who recorded logged, as the Verify sheet and /verify show it:
- * "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't
- * check this." Times are 24-hour, in `timeZone` (the viewer's own by default).
+ * "Stated by the person who recorded at 14:02: they told everyone in chat. Aftercall
+ * can't check this." The time is when they ticked the box, not when they told people
+ * (an invite went out earlier). 24-hour, in `timeZone` (the viewer's own by default).
  */
 export function noticeLine(notice: NoticeLog | undefined, opts: { timeZone?: string } = {}): string {
   if (!notice) return "No notice logged";
@@ -309,7 +310,16 @@ export function noticeLine(notice: NoticeLog | undefined, opts: { timeZone?: str
     ? ""
     : ` at ${new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: opts.timeZone }).format(at)}`;
   const how = notice.how ? ` ${HOW[notice.how]}` : "";
-  return `Stated by the person who recorded: told everyone${how}${time}. Aftercall can't check this.`;
+  return `Stated by the person who recorded${time}: they told everyone${how}. Aftercall can't check this.`;
+}
+
+/**
+ * Whether the proof carries the app's statements (the dropped count, and the notice
+ * when one was logged). Proofs made before Aftercall recorded them have neither, so
+ * their missing notice means "not kept then", not "nobody was told".
+ */
+export function hasStatements(bundle: ProofBundle): bundle is ProofBundleV2 {
+  return bundle.version === 2 && (bundle.dropped !== undefined || bundle.notice !== undefined);
 }
 
 /** Public link payload: everything the Verify page needs, base64url in the URL fragment. */

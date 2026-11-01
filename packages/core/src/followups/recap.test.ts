@@ -44,7 +44,7 @@ test("verified and end-to-end encrypted", () => {
     recapFooter(facts),
     [
       "Notes made by Aftercall in secure hardware on NEAR AI Cloud, checked by the app before anything was sent. The transcript was end-to-end encrypted to that hardware.",
-      "Aftercall deletes the audio after transcribing it.",
+      "Aftercall deletes the call's audio once the notes are saved.",
       "What was and wasn't checked: https://aftercall.app/verify#x",
     ].join("\n"),
   );

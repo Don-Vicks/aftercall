@@ -406,7 +406,7 @@ test("a logged notice goes into the proof as your statement; without one the key
   const ai = await fakeNearAi({ notes });
   const r = await processRecording(ai.transport, { ...input, notice: { ...notice, extra: "not hashed" } as never }, undefined, noWait);
   assert.deepEqual(r.proof.notice, notice, "only the notice's own fields");
-  assert.equal(noticeLine(r.proof.notice, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't check this.");
+  assert.equal(noticeLine(r.proof.notice, { timeZone: "UTC" }), "Stated by the person who recorded at 14:02: they told everyone in chat. Aftercall can't check this.");
 
   const none = await processRecording((await fakeNearAi({ notes })).transport, input, undefined, noWait);
   assert.equal("notice" in none.proof, false);

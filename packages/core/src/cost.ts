@@ -118,8 +118,11 @@ export function sumCosts(list: CostEstimate[]): CostEstimate {
 export function formatCost(usd: number): string {
   if (!Number.isFinite(usd) || usd <= 0) return "$0.00";
   if (usd < 0.0001) return "less than $0.0001";
-  if (usd >= 0.01) return `about $${usd.toFixed(2)}`;
-  return `about $${Number(usd.toPrecision(2)).toFixed(Math.max(4, 1 - Math.floor(Math.log10(usd))))}`;
+  // Round first, so 0.00995 becomes a cent ("about $0.01"), not "about $0.0100".
+  const rounded = Number(usd.toPrecision(2));
+  if (rounded >= 0.01) return `about $${usd.toFixed(2)}`;
+  const text = rounded.toFixed(1 - Math.floor(Math.log10(rounded))).replace(/0+$/, "");
+  return `about $${text}`;
 }
 
 /** One line for a meeting or an answer: "Estimated cost: about $0.0042 (NEAR AI prices as of 2026-11-01)". */

@@ -44,3 +44,10 @@ test("refuses quotes that aren't in the transcript, or are too short to be evide
   assert.equal(findQuote(lines, "pay the designer five thousand"), null);
   assert.equal(findQuote(lines, "Friday"), null);
 });
+
+test("a quote must start and end on whole words, and the text returned is the transcript's", () => {
+  const lines = [{ at: 5, speaker: "others" as const, text: "It's $1.50 per user, okay with you Ada? Let's spend the rest on ads." }];
+  assert.equal(findQuote(lines, "50 per user, okay with you"), null, "50 is the end of $1.50");
+  assert.equal(findQuote(lines, "end the rest on ads"), null, "end is the end of spend");
+  assert.deepEqual(findQuote(lines, "$1.50 per user, okay with you"), { at: 5, text: "$1.50 per user, okay with you" });
+});

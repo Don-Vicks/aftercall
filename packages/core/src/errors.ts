@@ -18,11 +18,19 @@ export function nearAiStatus(e: unknown): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * A 4xx whose body talks about credit or a spend limit. Only 4xx: a 500 that mentions
+ * a "credit service" is NEAR AI's own failure, not your credit running out.
+ */
+function creditRefusal(status: number, message: string): boolean {
+  return status >= 400 && status < 500 && CREDIT.test(message);
+}
+
 /** A NEAR AI answer about the key, its credit or its rate, rather than about the request. */
 export function isNearAiAccountError(e: unknown): boolean {
   const status = nearAiStatus(e);
   if (status === null) return false;
-  return [401, 402, 403, 429].includes(status) || CREDIT.test(e instanceof Error ? e.message : String(e));
+  return [401, 402, 403, 429].includes(status) || creditRefusal(status, e instanceof Error ? e.message : String(e));
 }
 
 /** What to tell the person when a NEAR AI call fails. Anything else keeps its own message. */
@@ -30,7 +38,7 @@ export function plainNearAiError(e: unknown): string {
   const message = e instanceof Error ? e.message : String(e);
   const status = nearAiStatus(e);
   if (status === null) return message;
-  if (status === 402 || CREDIT.test(message)) return NEAR_AI_CREDIT_MESSAGE;
+  if (status === 402 || creditRefusal(status, message)) return NEAR_AI_CREDIT_MESSAGE;
   if (status === 401 || status === 403) return NEAR_AI_KEY_MESSAGE;
   if (status === 429) return NEAR_AI_RATE_MESSAGE;
   return message;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import { NOT_PROVEN, canonicalJson, decodePublicProof, droppedLine, encodePublicProof, groupChecks, noticeLine, proofHash, verifyProof, verifyProofGpu, type OnChainProof } from "./proof.ts";
+import { NOT_PROVEN, canonicalJson, decodePublicProof, droppedLine, encodePublicProof, groupChecks, hasStatements, noticeLine, proofHash, verifyProof, verifyProofGpu, type OnChainProof } from "./proof.ts";
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
 import { expectedMrConfig, expectedReportData } from "../tee/checks.ts";
 import { fakeNras, teeKey } from "../tee/testkit.ts";
@@ -225,20 +225,30 @@ test("droppedLine: counts in words, none for old bundles, never a check", async 
   assert.deepEqual(verifyProof(withCount, null).map((c) => c.id), verifyProof(bundle, null).map((c) => c.id), "no new check: the transcript isn't public, so it can't be re-run");
 });
 
-test("noticeLine: who said it, how, when, and that the app can't check it", () => {
+test("noticeLine: who said it, when they said it, how, and that the app can't check it", () => {
   const at = "2026-11-01T14:02:45.000Z";
-  assert.equal(noticeLine({ by: "you", at, how: "chat" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't check this.");
-  assert.equal(noticeLine({ by: "you", at, how: "aloud" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone aloud at 14:02. Aftercall can't check this.");
-  assert.equal(noticeLine({ by: "you", at, how: "invite" }, { timeZone: "Africa/Lagos" }), "Stated by the person who recorded: told everyone in the invite at 15:02. Aftercall can't check this.");
-  assert.equal(noticeLine({ by: "you", at, how: "email" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone by email at 14:02. Aftercall can't check this.");
-  assert.equal(noticeLine({ by: "you", at }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone at 14:02. Aftercall can't check this.");
-  assert.equal(noticeLine({ by: "you", at: "not a time" }), "Stated by the person who recorded: told everyone. Aftercall can't check this.");
+  // The time is when the statement was made (the tick), not when people were told.
+  assert.equal(noticeLine({ by: "you", at, how: "chat" }, { timeZone: "UTC" }), "Stated by the person who recorded at 14:02: they told everyone in chat. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "aloud" }, { timeZone: "UTC" }), "Stated by the person who recorded at 14:02: they told everyone aloud. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "invite" }, { timeZone: "Africa/Lagos" }), "Stated by the person who recorded at 15:02: they told everyone in the invite. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "email" }, { timeZone: "UTC" }), "Stated by the person who recorded at 14:02: they told everyone by email. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at }, { timeZone: "UTC" }), "Stated by the person who recorded at 14:02: they told everyone. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at: "not a time" }), "Stated by the person who recorded: they told everyone. Aftercall can't check this.");
   assert.equal(noticeLine(undefined), "No notice logged");
 });
 
+test("hasStatements tells a proof made before notices were kept from one with no notice", async () => {
+  const { bundle } = await signedV2();
+  assert.equal(hasStatements(signed().bundle), false, "v1");
+  assert.equal(hasStatements(bundle), false, "an older v2 proof: no dropped count, no notice");
+  assert.equal(hasStatements({ ...bundle, dropped: { decisions: 0, actionItems: 0, followUps: 0 } }), true, "a new proof without a notice");
+  assert.equal(hasStatements({ ...bundle, notice: { by: "you", at: "2026-11-01T14:02:45.000Z" } }), true);
+});
+
 test("what the proof doesn't show includes NEAR AI's data policy and the TLS fallback", () => {
-  assert.ok(NOT_PROVEN.some((l) => /keeps no copy/.test(l) && /policy/.test(l)));
-  assert.ok(NOT_PROVEN.some((l) => /over TLS/.test(l) && /every summary node passed/.test(l)));
+  assert.ok(NOT_PROVEN.some((l) => /What NEAR AI keeps or trains on/.test(l) && /NEAR AI's own policy/.test(l)));
+  assert.ok(!NOT_PROVEN.some((l) => /stated policy/.test(l)), "no claim about what NEAR AI's policy says");
+  assert.ok(NOT_PROVEN.some((l) => /over TLS/.test(l) && /every summary node passed/.test(l) && /no verified node offers an attested key/.test(l)));
   assert.ok(NOT_PROVEN.some((l) => /Whisper can mishear/.test(l)), "the existing items stay");
   for (const l of NOT_PROVEN) assert.equal(l.split(/\.\s/).length, 1, `one sentence: ${l}`);
 });

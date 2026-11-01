@@ -13,7 +13,7 @@ import { MemoryClaimsStore } from "../claims/claims.store";
 import { EmailService } from "../email/email.service";
 import { DEFAULT_RPC, nearEnv } from "../network";
 
-const consent = "Hi.\n--\nThis call was recorded with notice to everyone on it.";
+const consent = "Hi.\n--\nNotes made by Aftercall on NEAR AI Cloud. Not every secure-hardware check passed for this meeting.\nWhat was and wasn't checked: https://aftercall.app/handling";
 
 function sources(over: Partial<StatsSources> = {}) {
   const calls = { chain: 0 };

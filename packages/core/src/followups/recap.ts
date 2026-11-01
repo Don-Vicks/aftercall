@@ -27,7 +27,8 @@ export const RECAP_FOOTER_MARK = "What was and wasn't checked:";
 /**
  * The footer every recap ends with. It states what the app checked and what the
  * sender said, and nothing it can't check: not that everyone agreed, not what NEAR AI
- * keeps. The audio line holds because the app deletes audio once the notes are saved.
+ * keeps. The audio line holds because the Mac app deletes the audio right after it
+ * saves the notes, and at launch for any processed recording that still has some.
  */
 export function recapFooter(facts: RecapFacts): string {
   const made = facts.verified
@@ -37,7 +38,7 @@ export function recapFooter(facts: RecapFacts): string {
     : "Notes made by Aftercall on NEAR AI Cloud. Not every secure-hardware check passed for this meeting.";
   return [
     made,
-    "Aftercall deletes the audio after transcribing it.",
+    "Aftercall deletes the call's audio once the notes are saved.",
     facts.notice ? "The sender confirmed telling everyone on the call before recording (Aftercall can't check this)." : "",
     `${RECAP_FOOTER_MARK} ${facts.verifyUrl ?? facts.handlingUrl}`,
   ]

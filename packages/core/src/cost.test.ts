@@ -71,5 +71,9 @@ test("formatCost: enough figures to be non-zero, never $0.00 for a real charge",
   assert.equal(formatCost(0.0123), "about $0.01");
   assert.equal(formatCost(1.234), "about $1.23");
   assert.equal(formatCost(0), "$0.00");
+  // At the edges: rounding up to a cent gives two decimals, and no trailing zeros below one.
+  assert.equal(formatCost(0.00995), "about $0.01");
+  assert.equal(formatCost(0.0001), "about $0.0001");
+  assert.equal(formatCost(0.001), "about $0.001");
   assert.equal(costLine(estimateCost({ chat: { model: "Qwen/Qwen3.8-27B", usage: { prompt_tokens: 20_000, completion_tokens: 2_500 } } })), "Estimated cost: about $0.0042 (NEAR AI prices as of 2026-11-01)");
 });

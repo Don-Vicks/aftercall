@@ -93,12 +93,15 @@ function parseWords(words: string[]): number | null {
       sawNumber = true;
       lastWasSmall = true;
     } else if (w in TENS) {
-      if (lastWasSmall) return null;
+      // "forty fifty" is two numbers, not ninety: one tens word per hundred.
+      if (lastWasSmall || current % 100 !== 0) return null;
       current += TENS[w];
       sawNumber = true;
       // "fifty five" is fine: allow one unit after a tens word.
       lastWasSmall = false;
     } else if (w === "hundred") {
+      // "two hundred three hundred" is two numbers, not 20,300.
+      if (current >= 100) return null;
       current = (current || 1) * 100;
       lastWasSmall = false;
     } else if (w in SCALES) {
@@ -181,45 +184,101 @@ export function amountProblem(words: string): AmountProblem | null {
 const SPAN_WORDS = new Set([...Object.keys(UNITS).filter((w) => w !== "a" && w !== "an"), ...Object.keys(TENS), "hundred", "thousand", "grand", "million", "and", "dollar", "dollars", "bucks", "usd", "usdc", "us", "cent", "cents"]);
 const MAX_SPAN = 12;
 
-/** Quote words as amounts are read: lowercase, hyphens split, edge punctuation off ("$5,000." -> "$5,000"). */
-function quoteTokens(text: string): string[] {
+/** A quote word as amounts are read, and what was around it. */
+interface QuoteToken {
+  /** Lowercase, edge punctuation off ("$5,000." -> "$5,000"). */
+  w: string;
+  /** A comma or sentence mark followed it: no amount runs past it ("fifty. Two hundred"). */
+  stop: boolean;
+  /** Another currency's sign was on it: "€2,500", "₦500". */
+  foreign: boolean;
+  /** A percent sign followed it: "50%". */
+  percent: boolean;
+}
+
+/** Quote words as amounts are read: lowercase, hyphens split, edge punctuation kept aside. */
+function quoteTokens(text: string): QuoteToken[] {
   return text
     .toLowerCase()
     .split(/[\s\-–—]+/)
-    .map((w) => w.replace(/^[^\w$]+|[^\w]+$/g, ""))
-    .filter(Boolean);
+    .map((raw) => ({
+      w: raw.replace(/^[^\w$]+|[^\w]+$/g, ""),
+      stop: /[.,;:!?…]["”’')\]]*$/.test(raw),
+      foreign: /[₦€£¥₹₵]/.test(raw),
+      percent: /%/.test(raw),
+    }))
+    .filter((t) => t.w);
 }
 
 const isDigits = (w: string) => /^\$?\d/.test(w);
+const isBare = (w: string) => w in UNITS || /^\$?\d/.test(w);
 
 /**
- * Every money amount in a transcript quote, in USDC base units: digits ("$40",
+ * Two numbers said next to each other with no scale word between them: "twelve fifty",
+ * "one fifty". parseAmount refuses these as ambiguous, so no part of them is an amount
+ * either ("one fifty" is never fifty).
+ */
+function hasBarePair(words: string[]): boolean {
+  return words.some((w, k) => {
+    const next = words[k + 1];
+    if (next === undefined) return false;
+    if (isBare(w) && w !== "a" && w !== "an") return isBare(next) || next in TENS;
+    return w in TENS && next in TENS;
+  });
+}
+
+/** Whether the words right after an amount make it something other than US dollars. */
+function notDollars(tokens: QuoteToken[], end: number): boolean {
+  const next = tokens[end];
+  if (!next) return false;
+  if (tokens[end - 1].percent || next.w === "percent" || (next.w === "per" && tokens[end + 1]?.w === "cent")) return true;
+  // Words after a comma or full stop start something else.
+  if (tokens[end - 1].stop) return false;
+  // currencyIn wants a number before ordinary words like "won" or "near".
+  return currencyIn(`1 ${tokens.slice(end, end + 2).map((t) => t.w).join(" ")}`) !== null;
+}
+
+/**
+ * Every US dollar amount in a transcript quote, in USDC base units: digits ("$40",
  * "5,000", "1.5k", "49.99") and English words ("forty dollars", "two hundred and
  * fifty", "fifty cents"). Read left to right, always taking the longest span that is
- * one amount, so "two hundred and fifty" gives 250 and never also 200 or 50.
+ * one amount, so "two hundred and fifty" gives 250 and never also 200 or 50. A span
+ * ends at a comma or full stop; a value in another currency or a percentage isn't one;
+ * and two bare numbers in a row ("one fifty") give nothing.
  */
 export function amountsIn(text: string): bigint[] {
   const tokens = quoteTokens(text);
   const found: bigint[] = [];
   let i = 0;
   while (i < tokens.length) {
-    const w = tokens[i];
+    const { w } = tokens[i];
     // "a hundred" starts a number; a lone "a" doesn't.
-    const starts = isDigits(w) || ((w in UNITS || w in TENS) && !((w === "a" || w === "an") && !(tokens[i + 1] in SCALES)));
+    const starts = isDigits(w) || ((w in UNITS || w in TENS) && !((w === "a" || w === "an") && !((tokens[i + 1]?.w ?? "") in SCALES)));
     if (!starts) {
       i++;
       continue;
     }
     // Digits continue a span only after "and" ("$5 and 50 cents"): "40 50" is two numbers.
     let end = i + 1;
-    while (end < tokens.length && end - i < MAX_SPAN && (SPAN_WORDS.has(tokens[end]) || (isDigits(tokens[end]) && tokens[end - 1] === "and"))) end++;
+    while (
+      end < tokens.length &&
+      end - i < MAX_SPAN &&
+      !tokens[end - 1].stop &&
+      (SPAN_WORDS.has(tokens[end].w) || (isDigits(tokens[end].w) && tokens[end - 1].w === "and"))
+    )
+      end++;
+    const words = tokens.slice(i, end).map((t) => t.w);
+    if (hasBarePair(words)) {
+      i = end;
+      continue;
+    }
     let taken = 1;
     for (let j = end; j > i; j--) {
-      const last = tokens[j - 1];
+      const last = tokens[j - 1].w;
       if (last === "and" || last === "us") continue;
-      const value = parseAmount(tokens.slice(i, j).join(" "));
+      const value = parseAmount(words.slice(0, j - i).join(" "));
       if (value !== null) {
-        found.push(value);
+        if (!tokens[i].foreign && !notDollars(tokens, j)) found.push(value);
         taken = j - i;
         break;
       }
