@@ -241,6 +241,7 @@ function Notes({
             {meeting.actionItems.map((item) => (
               <ActionRow
                 key={item.id}
+                rowKey={`${meeting.id}:${item.id}`}
                 item={item}
                 onToggle={() => onToggleItem(item.id)}
                 onEdit={onEditItem && ((fields) => onEditItem(item.id, fields))}
@@ -340,10 +341,22 @@ function when(iso: string): string {
 }
 
 /** One action item: the tick, the words, who and when, and what an agent did with it. Editable in place. */
-function ActionRow({ item, onToggle, onEdit, original }: { item: ActionItem; onToggle: () => void; onEdit?: (fields: ItemFields | null) => void; original: ItemFields | null }) {
+function ActionRow({
+  rowKey,
+  item,
+  onToggle,
+  onEdit,
+  original,
+}: {
+  rowKey: string;
+  item: ActionItem;
+  onToggle: () => void;
+  onEdit?: (fields: ItemFields | null) => void;
+  original: ItemFields | null;
+}) {
   const textId = useId();
   const you = useIsYou();
-  const edit = useItemEditing();
+  const edit = useItemEditing(rowKey);
   const working = !item.done && !!item.claimed;
   const owner = item.owner && item.owner !== "Unassigned" ? item.owner : null;
 
@@ -391,7 +404,7 @@ function ActionRow({ item, onToggle, onEdit, original }: { item: ActionItem; onT
   return (
     <li className="group flex items-center gap-3 border-b border-hairline py-[13px]">
       <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
         <span className="self-start text-[15px] leading-[21px] text-ink">
           <span id={textId} className="selectable">
             <Strike on={item.done}>{item.text}</Strike>
@@ -400,11 +413,11 @@ function ActionRow({ item, onToggle, onEdit, original }: { item: ActionItem; onT
         </span>
         {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+      <span className="relative inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+        {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
         {owner && <Avatar name={owner} size={20} />}
         {item.due}
       </span>
-      {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
     </li>
   );
 }

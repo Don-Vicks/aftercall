@@ -33,11 +33,20 @@ export function signedIndex(id: string): number {
   return m ? Number(m[1]) - 1 : -1;
 }
 
-/** The model's signed item behind `id`, as the meeting first showed it ("Unassigned" when it named no owner). */
+/** Fields as they are saved: trimmed, an empty owner is "Unassigned", an empty due date is none. */
+function tidy(f: { text: string; owner?: string | null; due?: string | null }): ItemFields {
+  const due = (f.due ?? "").trim();
+  return { text: f.text.trim(), owner: (f.owner ?? "").trim() || "Unassigned", ...(due ? { due } : {}) };
+}
+
+/**
+ * The model's signed item behind `id`, tidied the way a save tidies a draft ("Unassigned"
+ * when it named no owner), so saving it unchanged is no edit.
+ */
 export function originalItem(notes: Pick<Notes, "action_items"> | undefined, id: string): ItemFields | null {
   const a = notes?.action_items[signedIndex(id)];
   if (!a) return null;
-  return { text: a.text, owner: a.owner ?? "Unassigned", ...(a.due ? { due: a.due } : {}) };
+  return tidy(a);
 }
 
 /**
@@ -45,9 +54,7 @@ export function originalItem(notes: Pick<Notes, "action_items"> | undefined, id:
  * is none. An error in plain words when it can't be saved.
  */
 export function cleanItemFields(draft: { text: string; owner: string; due?: string }): { fields: ItemFields } | { error: string } {
-  const text = draft.text.trim();
-  const owner = draft.owner.trim() || "Unassigned";
-  const due = (draft.due ?? "").trim();
+  const { text, owner, due = "" } = tidy(draft);
   const length = (s: string) => Array.from(s).length;
   if (!text) return { error: "Write what needs doing" };
   if (length(text) > ITEM_TEXT_MAX) return { error: `Keep it under ${ITEM_TEXT_MAX} characters` };
@@ -56,9 +63,11 @@ export function cleanItemFields(draft: { text: string; owner: string; due?: stri
   return { fields: { text, owner, ...(due ? { due } : {}) } };
 }
 
-/** Which fields of `now` differ from the signed original, in a fixed order. */
+/** Which fields of `now` differ from the signed original, in a fixed order, both tidied first. */
 export function changedFields(original: ItemFields, now: ItemFields): EditedField[] {
-  return FIELDS.filter((f) => (original[f] ?? "") !== (now[f] ?? ""));
+  const a = tidy(original);
+  const b = tidy(now);
+  return FIELDS.filter((f) => (a[f] ?? "") !== (b[f] ?? ""));
 }
 
 function withFields(item: ActionItem, fields: ItemFields, edited: ItemEdit | undefined): ActionItem {

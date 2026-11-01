@@ -22,17 +22,31 @@ const SNIPPET_WORDS = 7;
 /** For Chinese, Japanese, Thai...: letters kept on each side of the match. */
 const SNIPPET_CHARS = 20;
 
+/**
+ * Where `wanted` (normalized) starts in the raw letters, and how many raw letters it
+ * takes. Normalizing can change the length ("ﾃﾞ" is one letter, "デ"), so the raw span
+ * is widened until it normalizes to the query.
+ */
+function rawMatch(chars: string[], wanted: string): { start: number; length: number } | null {
+  const most = [...wanted].length * 2 + 2;
+  for (let i = 0; i < chars.length; i++) {
+    if (!normalize(chars[i])) continue;
+    for (let k = i + 1; k <= Math.min(chars.length, i + most); k++) {
+      if (normalize(chars.slice(i, k).join("")) === wanted) return { start: i, length: k - i };
+    }
+  }
+  return null;
+}
+
 /** The words around the match, with "…" where text was cut. */
 export function snippet(text: string, query: string): string {
   if (hasSpacelessScript(text)) {
     // No spaces to cut at: cut by letters instead.
     const chars = [...text];
-    const wanted = normalize(query);
-    const q = [...wanted].length;
-    const start = chars.findIndex((_, i) => normalize(chars.slice(i, i + q).join("")) === wanted);
-    if (start >= 0 && chars.length > q + 2 * SNIPPET_CHARS) {
-      const from = Math.max(0, start - SNIPPET_CHARS);
-      const to = Math.min(chars.length, start + q + SNIPPET_CHARS);
+    const match = rawMatch(chars, normalize(query));
+    if (match && chars.length > match.length + 2 * SNIPPET_CHARS) {
+      const from = Math.max(0, match.start - SNIPPET_CHARS);
+      const to = Math.min(chars.length, match.start + match.length + SNIPPET_CHARS);
       return `${from > 0 ? "…" : ""}${chars.slice(from, to).join("").trim()}${to < chars.length ? "…" : ""}`;
     }
   }

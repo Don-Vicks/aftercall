@@ -107,6 +107,21 @@ test("an edit back to the original clears the mark, and Restore original brings 
   });
 });
 
+test("saving an item unchanged is no edit, even when the model gave an empty owner or spaces around the text", () => {
+  const loose: Notes = { ...notes, action_items: [{ text: "  Send Ada the recap ", owner: "", due: " today ", evidence: "send Ada the recap after this call" }] };
+  const m = buildMeeting({ id: "1793006441", project: "Launch", startedAt: "2026-10-26T09:20:41.000Z", durationSec: 60, notes: loose, transcript, payees: [], verified: true }).meeting;
+  const item = m.actionItems[0];
+  assert.equal(item.owner, "Unassigned");
+  assert.deepEqual(originalItem(loose, "a1"), { text: "Send Ada the recap", owner: "Unassigned", due: "today" });
+  assert.deepEqual(itemEdits(m, loose), [], "the meeting as built is not edited");
+  // The editor starts from the item as shown ("Unassigned" reads as an empty owner box).
+  const saved = cleanItemFields({ text: item.text, owner: "", due: item.due });
+  assert.ok("fields" in saved);
+  const after = applyItemEdit(item, originalItem(loose, "a1")!, saved.fields, "t");
+  assert.equal(after.edited, undefined);
+  assert.deepEqual(changedFields({ text: "x", owner: "" }, { text: " x ", owner: "Unassigned" }), []);
+});
+
 test("itemEdits compares the meeting with the signed notes; the signed notes and their hash never change", () => {
   const before = hashOf(notes);
   const signed = structuredClone(notes);

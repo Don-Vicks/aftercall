@@ -335,7 +335,7 @@ function Statements({ saved, delay }: { saved: SavedNotes; delay: number }) {
   return (
     <section aria-labelledby="verify-stated" className="flex flex-col gap-2.5 border-t border-hairline pt-4" style={at(delay)}>
       <h3 id="verify-stated" className="t-section m-0 text-ink">
-        Recorded with the notes <span className="font-medium text-muted">statements, not checks</span>
+        Recorded with the notes, and your edits since <span className="font-medium text-muted">statements, not checks</span>
       </h3>
       <dl className="m-0 grid grid-cols-[160px_minmax(0,1fr)] gap-x-3 gap-y-1.5">
         {rows.map((r) => (

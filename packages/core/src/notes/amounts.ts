@@ -6,9 +6,10 @@ import { USDC_DECIMALS } from "../money.ts";
  * "1.5k" -> 1,500.00, "fifty cents" -> 0.50, "five dollars and fifty cents" -> 5.50.
  * "twelve fifty" is refused (ambiguous), and so is any other currency: "fifty thousand
  * naira" is not 50,000 USDC. Number words are read in English only: "quinientos",
- * "пятьсот" or "五百" give null. Digits are read in any language, with a dollar word
- * Aftercall knows ("500 долларов", "500ドル"). Returns null when unsure: an unclear amount
- * is shown to the person, never guessed.
+ * "пятьсот" or "五百" give null. Digits 0-9 (and full-width ０-９) are read in a quote in
+ * any language, with a dollar word Aftercall knows ("500 долларов", "500ドル"); other
+ * digit sets such as ٥٠٠ or ५०० give no amount. Returns null when unsure: an unclear
+ * amount is shown to the person, never guessed.
  */
 
 const UNITS: Record<string, number> = {
@@ -28,6 +29,17 @@ const USD = /\b(us\s+dollars?|usd\s*coin|usdc|usd|dollars?|bucks|d[óo]lar(?:es)
  */
 const DOLLAR_WORD = /^(?:доллар|долар|米ドル|ドル|美元|美金|डॉलर|डालर|دولار|달러)/u;
 const DOLLAR_WORDS = /(?<![\p{L}\p{M}])(?:доллар|долар)\p{L}*|米ドル|ドル|美元|美金|डॉलर|डालर|(?<![\p{L}\p{M}])دولار\p{L}*|달러/gu;
+/**
+ * A word after "dollar" that makes it another country's dollar. Arabic always puts it
+ * after the noun ("دولار كندي", "دولار أسترالي"), Russian and Spanish or French can
+ * ("долларов канадских", "dólares canadienses", "$500 Canadian"). Any Arabic word ending
+ * like a nationality (-ي, -ية) or Russian or Ukrainian adjective in -ский counts, so
+ * countries not listed here still read as not US dollars.
+ */
+const DOLLAR_QUALIFIER =
+  /^(?:ال)?\p{scx=Arabic}{3,}(?:ي|ية|يين)$|^هون[غج]|^(?:канад|австрал|гонконг|сингапур|новозеланд|тайван|ямайк|зимбабв|намиби|либери)|^\p{scx=Cyrillic}+(?:ск|ськ)(?:ий|ій|ая|а|ое|е|ие|і|их|ого|ому|им|ими|ом|ім|ої|ою|ой)$|^(?:canadi(?:an|ens?|ennes?|enses?)|australi(?:an|ens?|ennes?|anos?|anas?)|singapor(?:ean|enses?)|singapouriens?|hongkongais|hong|neozeland\p{L}*|néo|taiwan\p{L}*|jamaica\p{L}*|cad|aud|sgd|hkd|nzd|twd)$/u;
+/** Qualifiers that say US dollars after all: "دولار أمريكي", "долларов США", "米ドル". */
+const US_QUALIFIER = /^(?:ال)?[أا]مري[كک]ي|^американск|^сша$|^usa?$|^am[ée]ricains?$|^(?:estadounidenses?|americanos?)$/u;
 const USD_WORD = "(?:us\\s+)?(?:dollars?|bucks|usdc|usd)";
 const FILLER = new Set(["and", "the", "deposit", "of", "about", "around", "just", "only", "full"]);
 
@@ -59,6 +71,9 @@ const OTHER_CURRENCIES: [string, RegExp][] = [
   ["won", new RegExp(`${NUMBER_BEFORE}won\\b|\\bkrw\\b`)],
   ["SOL", new RegExp(`${NUMBER_BEFORE}sol\\b`)],
   ["NEAR", new RegExp(`${NUMBER_BEFORE}near\\b`)],
+  // Dollars of another country, with the country after the noun.
+  ["Canadian dollars", /(?:دولار\p{L}*|доллар\p{L}*|долар\p{L}*|d[óo]lar(?:es)?|dollars?)\s+(?:ال)?(?:كندي|канадск|canadi)/u],
+  ["Australian dollars", /(?:دولار\p{L}*|доллар\p{L}*|долар\p{L}*|d[óo]lar(?:es)?|dollars?)\s+(?:ال)?(?:[أا]سترالي|австралийск|австралійськ|australi)/u],
   // The same currencies named in other languages, so the card can say which one.
   ["euros", /ユーロ|欧元|(?<!\p{L})евро(?!\p{L})|यूरो|يورو/u],
   ["pounds", new RegExp(`${NUMBER_BEFORE}(?:libras?|livres?)\\b`)],
@@ -253,7 +268,9 @@ function hasBarePair(words: string[]): boolean {
 /**
  * Whether the words right after an amount make it something other than US dollars.
  * A word in another script right after a bare number ("500 евро", "500ユーロ") must
- * be a dollar word Aftercall knows, since the currency can't be told otherwise.
+ * be a dollar word Aftercall knows, since the currency can't be told otherwise. A
+ * country named after the dollar word ("500 دولار كندي", "$500 Canadian") makes it
+ * another country's dollar.
  */
 function notDollars(tokens: QuoteToken[], start: number, end: number): boolean {
   const next = tokens[end];
@@ -261,6 +278,9 @@ function notDollars(tokens: QuoteToken[], start: number, end: number): boolean {
   if (tokens[end - 1].percent || next.w === "percent" || (next.w === "per" && tokens[end + 1]?.w === "cent")) return true;
   // Words after a comma or full stop start something else.
   if (tokens[end - 1].stop) return false;
+  const dollarWord = DOLLAR_WORD.test(next.w) || /^d[óo]lar(?:es)?$/.test(next.w);
+  const after = dollarWord ? (next.stop ? undefined : tokens[end + 1]) : next;
+  if (after && DOLLAR_QUALIFIER.test(after.w) && !US_QUALIFIER.test(after.w)) return true;
   const saysDollars = tokens.slice(start, end).some((t) => t.w.startsWith("$") || /^(?:dollars?|bucks|usdc?)$/.test(t.w));
   if (!saysDollars && /^\p{L}/u.test(next.w) && !/^\p{scx=Latin}/u.test(next.w)) return !DOLLAR_WORD.test(next.w);
   // currencyIn wants a number before ordinary words like "won" or "near".

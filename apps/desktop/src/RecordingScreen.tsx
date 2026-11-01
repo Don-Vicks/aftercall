@@ -3,8 +3,10 @@ import { FolderOpen, KeyRound } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   applyCalendarEvent,
+  dayWord,
   formatClock,
   formatDuration,
+  meetingLabel,
   plainNearAiError,
   processRecording,
   type CalendarEvent,
@@ -31,15 +33,14 @@ export function recordingTitle(r: SavedRecording): string {
   return `Recording ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+/** "Today", "Yesterday", "Monday" within the week, then "28 Oct", as meetings say it. */
 export function recordingWhen(r: SavedRecording): string {
-  const d = new Date(r.startedAt * 1000);
-  const today = new Date();
-  return d.toDateString() === today.toDateString() ? "Today" : d.toLocaleDateString([], { day: "numeric", month: "short" });
+  return dayWord(r.startedAt * 1000);
 }
 
+/** "Yesterday 14:02": the same words the meeting page uses for this recording's meeting. */
 export function recordingStartedAt(r: SavedRecording): string {
-  const d = new Date(r.startedAt * 1000);
-  return `${recordingWhen(r)} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return meetingLabel({ id: r.id, startedAt: new Date(r.startedAt * 1000).toISOString() });
 }
 
 /** How long the Verified seal shows before the meeting opens by itself. */

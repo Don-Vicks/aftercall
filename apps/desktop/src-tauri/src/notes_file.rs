@@ -140,14 +140,15 @@ struct Fields {
 }
 
 /// The model's signed item behind `item_id`: ids are `a{i+1}` for index i in
-/// notes.action_items. A missing owner reads "Unassigned", as the meeting first showed it.
+/// notes.action_items. Tidied the way `clean` tidies a draft (trimmed, a missing or empty
+/// owner reads "Unassigned"), so saving the item unchanged is no edit.
 fn signed_original(notes: &Value, item_id: &str) -> Option<Fields> {
     let n: usize = item_id.strip_prefix('a').filter(|d| !d.starts_with('0') && d.len() <= 4)?.parse().ok()?;
     let a = notes["notes"]["action_items"].get(n.checked_sub(1)?)?;
     Some(Fields {
-        text: a["text"].as_str()?.to_string(),
-        owner: a["owner"].as_str().unwrap_or("Unassigned").to_string(),
-        due: a["due"].as_str().filter(|d| !d.is_empty()).map(str::to_string),
+        text: a["text"].as_str()?.trim().to_string(),
+        owner: a["owner"].as_str().map(str::trim).filter(|o| !o.is_empty()).unwrap_or("Unassigned").to_string(),
+        due: a["due"].as_str().map(str::trim).filter(|d| !d.is_empty()).map(str::to_string),
     })
 }
 
@@ -320,6 +321,16 @@ mod tests {
         assert!(edit_item(&file, "a9", draft("ok", "You", None), "t").unwrap_err().contains("no signed original"));
         assert!(edit_item(&file, "a01", draft("ok", "You", None), "t").unwrap_err().contains("no signed original"));
         assert!(!lock_path(&file).exists());
+    }
+
+    #[test]
+    fn saving_unchanged_is_no_edit_when_the_model_gave_an_empty_owner_or_spaces() {
+        let signed_items = json!([{ "text": " Send plan  ", "owner": "", "due": " Friday ", "evidence": "e" }]);
+        let file = temp_notes(&signed(json!([{ "id": "a1", "text": " Send plan  ", "owner": "Unassigned", "due": " Friday ", "done": false }]), signed_items));
+        let v: Value = serde_json::from_str(&edit_item(&file, "a1", draft(" Send plan  ", "", Some(" Friday ")), "t").unwrap()).unwrap();
+        let item = &v["meeting"]["actionItems"][0];
+        assert!(item.get("edited").is_none());
+        assert_eq!((item["text"].as_str(), item["owner"].as_str(), item["due"].as_str()), (Some("Send plan"), Some("Unassigned"), Some("Friday")));
     }
 
     #[test]

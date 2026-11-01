@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   buildPeople,
@@ -125,14 +125,24 @@ export function ActionItemsScreen({
     onToggleItem(r.meeting.id, r.item.id);
   };
 
+  /** The tab an edited item moved to, so focus can go there when its row has left this one. */
+  const movedTo = useRef<Tab | null>(null);
+
   /** Saves an edit; when the new owner moves the item to the other tab, says where it went. */
   const edit = (r: Row, fields: ItemFields | null) => {
     if (!onEditItem) return;
     onEditItem(r.meeting.id, r.item.id, fields);
-    const owner = fields?.owner ?? originalOf?.(r.meeting.id, r.item.id)?.owner ?? r.item.owner;
+    const now = fields ?? originalOf?.(r.meeting.id, r.item.id);
+    const owner = now?.owner ?? r.item.owner;
     const wasMine = mine(r);
     const nowMine = isYou(owner, me) || owner === "Unassigned";
-    if (tab !== "agents" && wasMine !== nowMine) toast({ text: `“${fields?.text ?? r.item.text}” moved to ${nowMine ? "Mine" : "Others owe me"}` });
+    movedTo.current = tab !== "agents" && wasMine !== nowMine ? (nowMine ? "mine" : "others") : null;
+    if (movedTo.current) toast({ text: `“${now?.text ?? r.item.text}” moved to ${nowMine ? "Mine" : "Others owe me"}` });
+  };
+
+  /** The row left this tab: focus the tab that now holds it. */
+  const focusMoved = () => {
+    if (movedTo.current) document.getElementById(`actions-tab-${movedTo.current}`)?.focus();
   };
 
   const list = byTab[tab];
@@ -224,6 +234,7 @@ export function ActionItemsScreen({
                   index={Math.min(n++, 10)}
                   onToggle={() => toggle(r)}
                   onEdit={onEditItem && ((fields) => edit(r, fields))}
+                  onEditGone={focusMoved}
                   original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                   onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                 />
@@ -254,6 +265,7 @@ export function ActionItemsScreen({
                     index={Math.min(i, 10)}
                     onToggle={() => toggle(r)}
                     onEdit={onEditItem && ((fields) => edit(r, fields))}
+                    onEditGone={focusMoved}
                     original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                     onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                   />
@@ -304,6 +316,7 @@ function ItemRow({
   index,
   onToggle,
   onEdit,
+  onEditGone,
   original,
   onOpenMeeting,
 }: {
@@ -313,11 +326,13 @@ function ItemRow({
   index: number;
   onToggle: () => void;
   onEdit?: (fields: ItemFields | null) => void;
+  /** After an edit moved the row off this tab. */
+  onEditGone?: () => void;
   original: ItemFields | null;
   onOpenMeeting: () => void;
 }) {
   const textId = useId();
-  const editing = useItemEditing();
+  const editing = useItemEditing(r.key, onEditGone);
   const a = r.item;
   const agent = a.completed?.agent ?? a.claimed?.agent;
   const line = agentLine(a, now);
@@ -351,7 +366,7 @@ function ItemRow({
   return (
     <div className="group flex items-center gap-3 border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }}>
       <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
         <span className="max-w-full self-start text-[15px] leading-[21px] text-ink">
           <span id={textId} className="selectable">
             <Strike on={a.done}>{a.text}</Strike>
@@ -380,9 +395,11 @@ function ItemRow({
         {tab === "agents" && a.done && quote && <span className="selectable font-serif text-[15px] leading-[22px] text-ink-2 italic">“{quote}”</span>}
       </span>
       <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
-        {label}
+        <span className="relative">
+          {onEdit && <EditItemButton id={editing.buttonId} text={a.text} onClick={editing.open} />}
+          {label}
+        </span>
       </span>
-      {onEdit && <EditItemButton id={editing.buttonId} text={a.text} onClick={editing.open} />}
       <span
         className="flex w-[52px] shrink-0 justify-end"
         role="img"

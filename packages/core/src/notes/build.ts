@@ -86,7 +86,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
       dropped.push({ kind: "action item", text: a.text, reason: "QUOTE_NOT_IN_TRANSCRIPT" });
       return [];
     }
-    return [{ id: `a${i + 1}`, text: a.text, owner: a.owner ?? "Unassigned", due: a.due ?? undefined, done: false }];
+    return [{ id: `a${i + 1}`, text: a.text, owner: a.owner?.trim() || "Unassigned", due: a.due ?? undefined, done: false }];
   });
 
   const followUps: FollowUp[] = notes.followups.flatMap((f, i): FollowUp[] => {

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
+import { checkedAmount } from "./build.ts";
 
 const usdc = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
 
@@ -226,4 +227,42 @@ test("amountsIn reads digits in a quote in any language, but not beside a curren
     ["пятьсот долларов дизайнеру", []],
   ];
   for (const [quote, values] of cases) assert.deepEqual(amountsIn(quote), values.map(usdc), quote);
+});
+
+test("a country named after the dollar word makes it another country's dollar", () => {
+  const cases: [string, number[]][] = [
+    ["سأدفع لك 500 دولار كندي يوم الجمعة", []],
+    ["سأدفع لك 500 دولار أسترالي يوم الجمعة", []],
+    ["سأدفع لك 500 دولار سنغافوري", []],
+    ["سأدفع لك 500 دولار نيوزيلندي", []],
+    ["سأدفع لك 500 دولار هونغ كونغ", []],
+    ["заплачу 500 долларов канадских завтра", []],
+    ["заплачу 500 долларов австралийских", []],
+    ["заплачу 500 доларів канадських", []],
+    ["pagamos 500 dólares canadienses al diseñador", []],
+    ["on paie 500 dollars canadiens vendredi", []],
+    ["I'll send $500 Canadian on Friday", []],
+    // US dollars said in full still count, and so does a word that isn't a country.
+    ["سأدفع لك 500 دولار أمريكي يوم الجمعة", [500]],
+    ["заплачу 500 долларов США завтра", [500]],
+    ["заплачу 500 долларов американских", [500]],
+    ["سندفع للمصمم 500 دولار يوم الجمعة", [500]],
+    ["заплати дизайнеру 500 долларов до пятницы", [500]],
+    ["pagamos 500 dólares al diseñador", [500]],
+    ["заплачу 500 долларов. Канадский офис подождёт", [500]],
+  ];
+  for (const [quote, values] of cases) assert.deepEqual(amountsIn(quote), values.map(usdc), quote);
+  assert.deepEqual(checkedAmount("500 دولار", "سأدفع لك 500 دولار كندي يوم الجمعة"), { amount: null, amountProblem: "not-usdc" });
+  assert.deepEqual(checkedAmount("500", "سأدفع لك 500 دولار أسترالي يوم الجمعة"), { amount: null, amountProblem: "not-usdc" });
+  assert.deepEqual(checkedAmount("500 долларов", "заплачу 500 долларов канадских завтра"), { amount: null, amountProblem: "not-usdc" });
+  assert.deepEqual(amountProblem("500 دولار كندي"), { kind: "not-usdc", currency: "Canadian dollars" });
+  assert.deepEqual(amountProblem("500 долларов австралийских"), { kind: "not-usdc", currency: "Australian dollars" });
+  assert.deepEqual(amountProblem("500 dólares canadienses"), { kind: "not-usdc", currency: "Canadian dollars" });
+});
+
+test("digits other than 0-9 give no amount", () => {
+  assert.deepEqual(amountsIn("سأدفع لك ٥٠٠ دولار يوم الجمعة"), []);
+  assert.equal(parseAmount("٥٠٠ دولار"), null);
+  assert.deepEqual(amountsIn("मैं तुम्हें ५०० डॉलर दूंगा"), []);
+  assert.equal(parseAmount("५०० डॉलर"), null);
 });

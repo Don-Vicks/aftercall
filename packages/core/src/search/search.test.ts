@@ -55,4 +55,7 @@ test("snippets in Chinese or Japanese are cut by letters, since there are no spa
   const text = "来週の月曜日までに、デザイナーに500ドルを払います。それから、ロゴの案を三つ送ってもらって、金曜日にみんなで決めましょう。";
   assert.equal(snippet(text, "ロゴの案"), "…イナーに500ドルを払います。それから、ロゴの案を三つ送ってもらって、金曜日にみんなで決…");
   assert.equal(snippet("短い文です。", "文"), "短い文です。", "short lines are shown whole");
+  // Half-width katakana with a voicing mark is two letters that normalize to one.
+  const half = `${"あ".repeat(60)}ﾃﾞｽﾄ${"い".repeat(30)}`;
+  assert.equal(snippet(half, "デスト"), `…${"あ".repeat(20)}ﾃﾞｽﾄ${"い".repeat(20)}…`);
 });

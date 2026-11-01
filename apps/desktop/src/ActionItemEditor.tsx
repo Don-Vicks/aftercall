@@ -15,33 +15,46 @@ export type OriginalOf = (meetingId: string, itemId: string) => ItemFields | nul
 
 /**
  * Whether a row is being edited, and the Edit button's id so focus goes back to it
- * when the editor closes (Save, Cancel or Escape).
+ * when the editor closes (Save, Cancel or Escape). The id comes from the row's key
+ * (meeting and item), not the component, because a new due date or owner can move the
+ * row to another section, where it mounts again. When the row has left the page (another
+ * tab now holds it), `onGone` picks what gets focus instead.
  */
-export function useItemEditing() {
+export function useItemEditing(rowKey: string, onGone?: () => void) {
   const [editing, setEditing] = useState(false);
-  const buttonId = useId();
-  const was = useRef(false);
-  useEffect(() => {
-    if (was.current && !editing) document.getElementById(buttonId)?.focus();
-    was.current = editing;
-  }, [editing, buttonId]);
-  return { editing, open: () => setEditing(true), close: () => setEditing(false), buttonId };
+  const buttonId = `edit-item-${rowKey}`;
+  const close = () => {
+    setEditing(false);
+    // After React has drawn the saved row, wherever it now is.
+    requestAnimationFrame(() => {
+      const button = document.getElementById(buttonId);
+      if (button) button.focus();
+      else onGone?.();
+    });
+  };
+  return { editing, open: () => setEditing(true), close, buttonId };
 }
 
-/** The quiet pencil at the end of a row; it shows on hover and on keyboard focus. */
+/**
+ * The quiet pencil, just left of the row's owner and date; it shows on hover and on
+ * keyboard focus. It sits over the end of the text column (which keeps room for it),
+ * so the owner and date stay flush with the row's right edge.
+ */
 export function EditItemButton({ id, text, onClick }: { id: string; text: string; onClick: () => void }) {
   return (
-    <IconButton
-      id={id}
-      size="sm"
-      variant="quiet"
-      aria-label={`Edit “${text}”`}
-      tooltip="Edit"
-      onClick={onClick}
-      className="opacity-0 transition-opacity duration-(--dur-1) group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
-    >
-      <Pencil size={14} strokeWidth={2} aria-hidden="true" />
-    </IconButton>
+    <span className="absolute top-1/2 right-full mr-1.5 flex -translate-y-1/2">
+      <IconButton
+        id={id}
+        size="sm"
+        variant="quiet"
+        aria-label={`Edit “${text}”`}
+        tooltip="Edit"
+        onClick={onClick}
+        className="opacity-0 transition-opacity duration-(--dur-1) group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        <Pencil size={14} strokeWidth={2} aria-hidden="true" />
+      </IconButton>
+    </span>
   );
 }
 
@@ -94,6 +107,7 @@ export function ItemEditor({
     e.preventDefault();
     const cleaned = cleanItemFields({ text, owner, due });
     if ("error" in cleaned) {
+      // Announced by the alert below; focus goes to the text, which is what's wrong.
       setError(cleaned.error);
       textRef.current?.focus();
       return;
@@ -130,7 +144,7 @@ export function ItemEditor({
           setText(e.target.value);
           setError(null);
         }}
-        aria-invalid={error ? true : undefined}
+        invalid={Boolean(error)}
         aria-describedby={cx(error && ids.error, edited && ids.original) || undefined}
         className="h-9 text-[15px]!"
       />
@@ -158,7 +172,7 @@ export function ItemEditor({
         </span>
       </div>
       {error && (
-        <span id={ids.error} aria-live="polite" className="text-[13px] leading-[18px] text-record">
+        <span id={ids.error} role="alert" className="text-[13px] leading-[18px] text-record">
           {error}
         </span>
       )}
