@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Mic, MonitorSpeaker } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
+import { ArrowRight, AudioLines, Check, FileDown, KeyRound, Laptop, Mic, MonitorSpeaker, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { isDesktop, recorder } from "./recorder";
 import { deleteRecording } from "./projects";
-import { nearAiKey } from "./nearai";
-import { Button, Spinner, cx } from "./ui";
+import { restoredSummary } from "./recovery";
+import { CheckCircle } from "./primitives/Check";
+import { Button, Dialog, Meter, Pill, cx, enter, exit, rmsToLevel, springs } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
 import { ImportBackup, RestorePhrase } from "./RecoveryPhrase";
-import { restoredSummary } from "./recovery";
+import { IconDisc, errorText, rise } from "./SettingsParts";
+import { QuietAction, StepActions, StepHeading, StepPage, StepProgress } from "./Flow";
 
 const KEY = "aftercall.onboarded";
 
@@ -26,16 +30,19 @@ function markOnboarded() {
   }
 }
 
-const STEPS = 4;
+type Step = "welcome" | "restore" | "audio" | "nearai" | "ready";
+/** Restore is the other way through step 1. */
+const POSITION: Record<Step, number> = { welcome: 0, restore: 0, audio: 1, nearai: 2, ready: 3 };
 
 /**
- * First run: what Aftercall is, a real audio check (which also triggers macOS's
- * permission prompts), the NEAR AI key, then the first recording. NEAR and the
- * agent wallet come later, from Settings, when payments matter.
+ * First run, full screen: what Aftercall is, a real audio check (which also triggers
+ * macOS's permission prompts), the NEAR AI key, then the first recording. Or, on a
+ * new Mac, restore the key from a recovery phrase and import a backup first. NEAR
+ * and the agent wallet come later, from Settings, when payments matter.
  */
 export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => void }) {
-  const [step, setStep] = useState(0);
-  const [restoring, setRestoring] = useState(false);
+  const [step, setStep] = useState<Step>("welcome");
+  const go = (s: Step) => setStep(s);
   /** A backup was imported: the app reloads at the end to show it. */
   const [imported, setImported] = useState(false);
   const finish = (record: boolean) => {
@@ -45,77 +52,89 @@ export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => vo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-ground">
-      <div data-tauri-drag-region className="h-9 shrink-0" />
-      <div className="flex flex-1 items-center justify-center overflow-y-auto px-8 pb-12">
-        <div className="flex w-full max-w-[560px] flex-col gap-8">
-          <div className="flex items-center justify-between">
-            <span className="t-label text-muted">
-              Step {step + 1} of {STEPS}
-            </span>
-            <div aria-hidden="true" className="flex gap-1.5">
-              {Array.from({ length: STEPS }, (_, i) => (
-                <span key={i} className={cx("h-1 w-8 rounded-full", i <= step ? "bg-verdigris" : "bg-hairline")} />
-              ))}
-            </div>
-          </div>
-          {step === 0 && !restoring && <Welcome onNext={() => setStep(1)} onSkip={() => finish(false)} onRestore={() => setRestoring(true)} />}
-          {step === 0 && restoring && (
-            <Restore
-              onBack={() => setRestoring(false)}
-              onImported={() => setImported(true)}
-              onNext={() => {
-                setRestoring(false);
-                setStep(1);
-              }}
-            />
-          )}
-          {step === 1 && <AudioCheck onNext={() => setStep(2)} />}
-          {step === 2 && <NearAiStep onNext={() => setStep(3)} />}
-          {step === 3 && <Ready onRecord={() => finish(true)} onLater={() => finish(false)} />}
-        </div>
-      </div>
-    </div>
+    <Dialog placement="full" aria-label="Set up Aftercall" dismissible={false} onClose={() => {}}>
+      <AnimatePresence initial={false}>
+        {step === "welcome" && (
+          <m.div
+            key="skip"
+            className="absolute top-3.5 right-[18px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: enter }}
+            exit={{ opacity: 0, transition: exit }}
+          >
+            <Button variant="quiet" size="sm" onClick={() => finish(false)}>
+              Skip setup
+            </Button>
+          </m.div>
+        )}
+      </AnimatePresence>
+      <StepProgress step={POSITION[step]} total={4} />
+      <AnimatePresence mode="wait" initial={false}>
+        {step === "welcome" && (
+          <StepPage key="welcome" className="gap-8">
+            <Welcome onNext={() => go("audio")} onRestore={() => go("restore")} />
+          </StepPage>
+        )}
+        {step === "restore" && (
+          <StepPage key="restore">
+            <Restore onBack={() => go("welcome")} onImported={() => setImported(true)} onNext={() => go("audio")} />
+          </StepPage>
+        )}
+        {step === "audio" && (
+          <StepPage key="audio">
+            <AudioCheck onNext={() => go("nearai")} />
+          </StepPage>
+        )}
+        {step === "nearai" && (
+          <StepPage key="nearai">
+            <NearAiStep onNext={() => go("ready")} />
+          </StepPage>
+        )}
+        {step === "ready" && (
+          <StepPage key="ready">
+            <Ready onRecord={() => finish(true)} onLater={() => finish(false)} />
+          </StepPage>
+        )}
+      </AnimatePresence>
+    </Dialog>
   );
 }
 
-function Title({ children, intro }: { children: string; intro: string }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <h1 className="t-display m-0">{children}</h1>
-      <p className="t-reading m-0 text-muted">{intro}</p>
-    </div>
-  );
-}
+const POINTS: [string, string, ReactNode][] = [
+  ["Private", "Made inside NEAR AI's secure hardware, and anyone can check it.", <ShieldCheck size={18} strokeWidth={1.75} />],
+  ["Yours", "Notes stay on this Mac. The audio is deleted once it's transcribed.", <Laptop size={18} strokeWidth={1.75} />],
+  ["Done", "Recaps and payments go out after one approval, under your limits.", <Send size={18} strokeWidth={1.75} />],
+];
 
-function Welcome({ onNext, onSkip, onRestore }: { onNext: () => void; onSkip: () => void; onRestore: () => void }) {
+function Welcome({ onNext, onRestore }: { onNext: () => void; onRestore: () => void }) {
   return (
     <>
-      <div className="flex flex-col gap-3">
-        <span className="font-serif text-[40px] leading-[46px] font-medium tracking-[-0.02em]">Aftercall</span>
-        <p className="t-reading m-0 text-muted">Private meeting notes that do the follow-ups.</p>
-      </div>
-      <ul className="m-0 flex list-none flex-col p-0">
-        {[
-          ["Private", "Your meetings are transcribed and summarised inside NEAR AI's secure hardware, and anyone can check it."],
-          ["Yours", "Recordings and notes stay on this Mac. The audio is deleted once it's transcribed."],
-          ["Done", "Recaps and payments go out after one approval, under limits you set on NEAR."],
-        ].map(([label, text], i) => (
-          <li key={label} className={cx("grid grid-cols-[88px_minmax(0,1fr)] gap-4 py-3.5", i < 2 && "border-b border-hairline")}>
-            <span className="t-label pt-0.5 text-verdigris">{label}</span>
-            <span className="text-[15px] leading-[22px]">{text}</span>
+      <header className="flex flex-col gap-2.5" style={rise(1)}>
+        <h1 tabIndex={-1} className="m-0 font-serif text-[52px] leading-[56px] font-medium tracking-[-0.025em] text-ink outline-none">
+          Aftercall
+        </h1>
+        <p className="m-0 font-serif text-[20px] leading-7 text-ink-2">Private meeting notes that do the follow-ups.</p>
+      </header>
+      <ul className="m-0 flex list-none flex-col gap-[22px] p-0">
+        {POINTS.map(([title, text, icon], i) => (
+          <li key={title} className="flex items-start gap-4" style={rise(i + 2)}>
+            <IconDisc tone="raised" size={40}>
+              {icon}
+            </IconDisc>
+            <span className="flex flex-col gap-0.5 pt-px">
+              <span className="t-title text-ink">{title}</span>
+              <span className="text-ink-2">{text}</span>
+            </span>
           </li>
         ))}
       </ul>
-      <div className="flex items-center justify-between">
-        <button onClick={onSkip} className="font-semibold text-muted hover:text-ink">
-          Skip setup
-        </button>
-        <span className="flex gap-2">
-          <Button size="lg" onClick={onRestore}>Restore from a recovery phrase</Button>
-          <Button variant="primary" size="lg" onClick={onNext}>Get started</Button>
-        </span>
-      </div>
+      <StepActions style={rise(5)}>
+        <QuietAction onClick={onRestore}>Restore from a recovery phrase</QuietAction>
+        <Button variant="primary" size="lg" onClick={onNext}>
+          Get started
+          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      </StepActions>
     </>
   );
 }
@@ -129,125 +148,255 @@ function Restore({ onBack, onImported, onNext }: { onBack: () => void; onImporte
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
 
-  if (!publicKey) {
-    return (
-      <>
-        <Title intro="Your recovery phrase brings back this Mac's NEAR key. If you authorised it on your old Mac, your agent wallet already knows it, so payments and proofs work again without signing anything.">
-          Restore from a recovery phrase
-        </Title>
-        <RestorePhrase onDone={setPublicKey} onCancel={onBack} />
-      </>
-    );
-  }
-
   return (
     <>
-      <Title intro="If you exported a backup on your old Mac, import it now: notes, projects, NEAR settings and autopilot rules. Audio isn't in backups.">
-        Key restored
-      </Title>
-      <div className="flex flex-col gap-1">
-        <span className="text-muted">This Mac's key</span>
-        <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey}</span>
-      </div>
-      {summary && (
-        <p className="m-0 flex items-center gap-2 text-verdigris">
-          <Check size={14} strokeWidth={2} aria-hidden="true" /> {summary}
-        </p>
-      )}
-      <div className="flex items-start justify-between">
-        {summary ? <span /> : (
+      <StepHeading
+        title={publicKey ? "Key restored" : "Restore from a recovery phrase"}
+        intro={
+          publicKey
+            ? "If you authorised it on your old Mac, payments and proofs work again without signing anything."
+            : "Type your 12 words in order. They stay on this Mac."
+        }
+        style={rise(1)}
+      />
+      <AnimatePresence mode="wait" initial={false}>
+        {publicKey ? (
+          <m.div
+            key="key"
+            role="status"
+            className="flex items-center gap-3.5 rounded-md bg-raised px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0, transition: enter }}
+          >
+            <CheckCircle size={22} play />
+            <span className="flex min-w-0 flex-1 flex-col gap-px">
+              <span className="t-section text-ink">This Mac's key is back</span>
+              <span className="selectable truncate font-mono text-[12px] text-muted">{publicKey}</span>
+            </span>
+          </m.div>
+        ) : (
+          <m.div key="words" exit={{ opacity: 0, transition: exit }} style={rise(2)}>
+            <RestorePhrase onDone={setPublicKey} onCancel={onBack} cancelLabel="Start fresh instead" />
+          </m.div>
+        )}
+      </AnimatePresence>
+      <div className="flex flex-wrap items-center gap-3.5 border-t border-hairline pt-5" style={rise(3)}>
+        <IconDisc tone="raised" size={36}>
+          <FileDown size={16} strokeWidth={1.75} />
+        </IconDisc>
+        <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-px">
+          <span className="t-section text-ink">Import a backup file</span>
+          <span className="text-[13px] leading-[18px] text-ink-2">
+            {summary ?? "Notes, projects, NEAR settings and autopilot rules. Audio isn't in backups."}
+          </span>
+        </span>
+        {summary ? (
+          <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>
+            Imported
+          </Pill>
+        ) : publicKey ? (
           <ImportBackup
-            label="Import a backup file"
+            label="Import"
             onRestored={(r) => {
               setSummary(restoredSummary(r));
               onImported();
             }}
           />
+        ) : (
+          <Pill tone="muted">Next</Pill>
         )}
-        <Button variant="primary" size="lg" onClick={onNext}>{summary ? "Continue" : "Continue without a backup"}</Button>
       </div>
+      {publicKey && (
+        <StepActions>
+          <span />
+          <Button variant="primary" size="lg" onClick={onNext}>
+            {summary ? "Continue" : "Continue without a backup"}
+            <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+          </Button>
+        </StepActions>
+      )}
     </>
   );
 }
 
-/** Records five seconds to trigger macOS's prompts and prove both sources have sound. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Records five seconds to trigger macOS's prompts and prove both sources have sound.
+ * The meters follow the real mic and call levels; the test recording is deleted.
+ */
 function AudioCheck({ onNext }: { onNext: () => void }) {
   const [state, setState] = useState<"idle" | "running" | "done" | "failed">("idle");
-  const [peak, setPeak] = useState({ mic: 0, system: 0 });
-  const [error, setError] = useState<string | null>(null);
   const [left, setLeft] = useState(5);
-  const peakRef = useRef(peak);
-  peakRef.current = peak;
-
+  const [heard, setHeard] = useState({ mic: false, system: false });
+  const [error, setError] = useState<string | null>(null);
+  /** Live levels (0..1) the meters read every frame. */
+  const mic = useRef(0);
+  const system = useRef(0);
+  /** Still on screen: a check that ends after the step is left doesn't touch its state. */
+  const live = useRef(true);
   useEffect(() => {
-    if (state !== "running") return;
-    const off = recorder.onLevels((l) => setPeak((p) => ({ mic: Math.max(p.mic, l.mic), system: Math.max(p.system, l.system) })));
+    live.current = true;
     return () => {
-      off.then((f) => f());
+      live.current = false;
     };
-  }, [state]);
+  }, []);
 
-  const run = async () => {
-    setError(null);
-    setPeak({ mic: 0, system: 0 });
-    if (!isDesktop) return setState("done");
-    try {
-      await recorder.start("General");
-      setState("running");
-      for (let s = 5; s > 0; s--) {
-        setLeft(s);
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-      const saved = await recorder.stop();
-      await deleteRecording(saved.id).catch(() => {});
-      setState("done");
-    } catch (e) {
-      setError(String(e));
-      setState("failed");
+  const countdown = async () => {
+    for (let s = 5; s > 0; s--) {
+      if (live.current) setLeft(s);
+      await sleep(1000);
     }
   };
 
-  const heard = (v: number) => v > 0.002;
+  const run = async () => {
+    setError(null);
+    setHeard({ mic: false, system: false });
+    setLeft(5);
+    if (!isDesktop) {
+      // Browser preview: nothing is recorded. The meters follow a made-up signal, and say so.
+      setState("running");
+      const t0 = performance.now();
+      const fake = window.setInterval(() => {
+        const t = (performance.now() - t0) / 1000;
+        mic.current = 0.45 + 0.35 * Math.sin(t * 5.1);
+        system.current = 0.4 + 0.3 * Math.sin(t * 3.7 + 1);
+      }, 50);
+      await countdown();
+      window.clearInterval(fake);
+      mic.current = system.current = 0;
+      if (live.current) {
+        setHeard({ mic: true, system: true });
+        setState("done");
+      }
+      return;
+    }
+    const peak = { mic: 0, system: 0 };
+    let off: (() => void) | null = null;
+    try {
+      off = await recorder.onLevels((l) => {
+        mic.current = rmsToLevel(l.mic);
+        system.current = rmsToLevel(l.system);
+        peak.mic = Math.max(peak.mic, l.mic);
+        peak.system = Math.max(peak.system, l.system);
+      });
+      await recorder.start("General");
+      setState("running");
+      await countdown();
+      const saved = await recorder.stop();
+      await deleteRecording(saved.id).catch(() => {});
+      if (live.current) {
+        setHeard({ mic: peak.mic > 0.002, system: peak.system > 0.002 });
+        setState("done");
+      }
+    } catch (e) {
+      if (live.current) {
+        setError(errorText(e));
+        setState("failed");
+      }
+    } finally {
+      off?.();
+      mic.current = system.current = 0;
+    }
+  };
 
+  const done = state === "done";
   return (
     <>
-      <Title intro="Aftercall records your microphone (you) and the call's audio (everyone else), kept apart. macOS asks for permission the first time. Play something with sound, like a video, and say a few words.">
-        Check your audio
-      </Title>
-      <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
-        <Source icon={<Mic size={16} strokeWidth={1.5} />} name="Microphone" detail="Your side of the call" state={state} ok={heard(peak.mic)} level={peak.mic} />
-        <Source icon={<MonitorSpeaker size={16} strokeWidth={1.5} />} name="Call audio" detail="System audio from any app" state={state} ok={heard(peak.system)} level={peak.system} last />
+      <StepHeading title="Check your audio" intro="Play a video and say a few words. macOS asks for permission first." style={rise(1)} />
+      <div className="relative flex flex-col overflow-hidden rounded-md bg-raised shadow-[inset_0_0_0_1px_var(--hairline)]" style={rise(2)}>
+        <Source
+          icon={
+            <IconDisc tone="verdigris" size={40}>
+              <Mic size={18} strokeWidth={1.75} />
+            </IconDisc>
+          }
+          name="Microphone"
+          who="You"
+          swatch="bg-verdigris"
+          tone="verdigris"
+          levelRef={mic}
+          state={state}
+          heard={heard.mic}
+          divider
+        />
+        <Source
+          icon={
+            <IconDisc tone="elevated" size={40}>
+              <MonitorSpeaker size={18} strokeWidth={1.75} />
+            </IconDisc>
+          }
+          name="Call audio"
+          who="The call, from any app"
+          swatch="bg-ink-2"
+          tone="ink"
+          levelRef={system}
+          state={state}
+          heard={heard.system}
+          delay={0.14}
+        />
+        {state === "running" && (
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-verdigris"
+            style={{ animation: "ac-countdown 5000ms linear both" }}
+          />
+        )}
       </div>
-      {state === "done" && !heard(peak.system) && isDesktop && (
-        <p className="m-0 text-caution">
-          No call audio came through. Play something with sound and check again. If it stays silent, allow Aftercall in System Settings → Privacy &amp; Security → Screen &amp; System Audio Recording.
+
+      <div className="-mt-2 flex flex-col gap-2" style={rise(3)}>
+        <p className="m-0 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2">
+          <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
+          The test recording is deleted straight away.
         </p>
-      )}
-      {error && <p className="selectable m-0 text-record">{error}</p>}
-      <p className="m-0 text-muted">The test recording is deleted straight away.</p>
-      <div className="flex items-center justify-between">
-        <button onClick={onNext} className="font-semibold text-muted hover:text-ink">
-          {state === "done" ? "" : "Skip for now"}
-        </button>
-        <div className="flex gap-2">
-          <Button size="lg" onClick={run} disabled={state === "running"}>
-            {state === "running" ? (
-              <>
-                <Spinner size={12} /> Listening… {left}
-              </>
-            ) : state === "idle" ? (
-              "Check audio"
-            ) : (
-              "Check again"
-            )}
-          </Button>
-          {state === "done" && (
+        {!isDesktop && state !== "idle" && (
+          <p className="m-0 text-[13px] leading-[18px] text-ink-2">Browser preview: nothing is recorded, and these levels are made up.</p>
+        )}
+        {done && isDesktop && !heard.mic && (
+          <p className="m-0 text-[13px] leading-[19px] text-caution">
+            No sound from your microphone. Say a few words and check again. If it stays silent, allow Aftercall in System Settings → Privacy &amp; Security →
+            Microphone.
+          </p>
+        )}
+        {done && isDesktop && !heard.system && (
+          <p className="m-0 text-[13px] leading-[19px] text-caution">
+            No call audio came through. Play something with sound and check again. If it stays silent, allow Aftercall in System Settings → Privacy &amp;
+            Security → Screen &amp; System Audio Recording.
+          </p>
+        )}
+        {error && <p className="selectable m-0 text-[13px] leading-[19px] text-record">{error}</p>}
+        <span role="status" className="sr-only">
+          {state === "running"
+            ? "Listening for 5 seconds."
+            : done
+              ? `Microphone ${heard.mic ? "heard" : "silent"}. Call audio ${heard.system ? "heard" : "silent"}.`
+              : ""}
+        </span>
+      </div>
+
+      <StepActions style={rise(4)}>
+        {done ? <QuietAction onClick={run}>Check again</QuietAction> : <QuietAction onClick={onNext}>Skip for now</QuietAction>}
+        {done ? (
+          <m.span
+            className="inline-flex"
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1, transition: { ...springs.bouncy, delay: 0.26 } }}
+          >
             <Button variant="primary" size="lg" onClick={onNext}>
               Continue
+              <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
             </Button>
-          )}
-        </div>
-      </div>
+          </m.span>
+        ) : state === "running" ? (
+          <Button variant="primary" size="lg" loading>
+            Listening… <span className="min-w-[9px] font-mono font-medium">{left}</span>
+          </Button>
+        ) : (
+          <Button variant="primary" size="lg" icon={<AudioLines size={16} strokeWidth={2} aria-hidden="true" />} onClick={run}>
+            {state === "failed" ? "Check again" : "Check audio"}
+          </Button>
+        )}
+      </StepActions>
     </>
   );
 }
@@ -255,87 +404,154 @@ function AudioCheck({ onNext }: { onNext: () => void }) {
 function Source({
   icon,
   name,
-  detail,
+  who,
+  swatch,
+  tone,
+  levelRef,
   state,
-  ok,
-  level,
-  last,
+  heard,
+  delay = 0,
+  divider,
 }: {
   icon: ReactNode;
   name: string;
-  detail: string;
-  state: string;
-  ok: boolean;
-  level: number;
-  last?: boolean;
+  who: string;
+  swatch: string;
+  tone: "verdigris" | "ink";
+  levelRef: RefObject<number>;
+  state: "idle" | "running" | "done" | "failed";
+  heard: boolean;
+  delay?: number;
+  divider?: boolean;
 }) {
+  const running = state === "running";
   return (
-    <div className={cx("flex items-center gap-4 px-5 py-4", !last && "border-b border-hairline")}>
-      <span className="text-muted" aria-hidden="true">{icon}</span>
-      <span className="flex flex-1 flex-col gap-0.5">
-        <span className="t-title">{name}</span>
-        <span className="text-muted">{detail}</span>
-      </span>
-      {state === "running" && (
-        <span aria-hidden="true" className="h-1 w-24 rounded-full bg-hairline">
-          <span className="block h-1 rounded-full bg-verdigris transition-[width]" style={{ width: `${Math.min(100, Math.sqrt(level / 0.3) * 100)}%` }} />
+    <div className={cx("flex items-center gap-4 px-5 py-[18px]", divider && "border-b border-hairline")}>
+      {icon}
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="t-title text-ink">{name}</span>
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-ink-2">
+          <span aria-hidden="true" className={cx("size-2 rounded-[2px]", swatch)} />
+          {who}
         </span>
-      )}
-      {state === "done" &&
-        (ok ? (
-          <span className="flex items-center gap-1.5 font-semibold text-verdigris">
-            <Check size={14} strokeWidth={2} aria-hidden="true" /> Heard
-          </span>
+      </span>
+      <AnimatePresence mode="wait" initial={false}>
+        {state === "done" ? (
+          <m.span
+            key="result"
+            className="inline-flex"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1, transition: { ...springs.bouncy, delay } }}
+          >
+            {heard ? (
+              <Pill tone="verdigris" icon={<CheckCircle size={16} play />} className="h-[26px] pl-[5px]">
+                Heard
+              </Pill>
+            ) : (
+              <Pill tone="caution" className="h-[26px]">
+                Silent
+              </Pill>
+            )}
+          </m.span>
         ) : (
-          <span className="font-semibold text-caution">Silent</span>
-        ))}
+          <m.span key="meter" className={cx("inline-flex transition-opacity duration-200", !running && "opacity-40")} exit={{ opacity: 0, transition: exit }}>
+            <Meter
+              levelRef={running ? levelRef : undefined}
+              level={0}
+              bars={16}
+              height={24}
+              tone={tone}
+              label={running ? `${name} level` : `${name}, not listening yet`}
+            />
+          </m.span>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function NearAiStep({ onNext }: { onNext: () => void }) {
   const [connected, setConnected] = useState(false);
-  useEffect(() => {
-    if (isDesktop) nearAiKey.has().then(setConnected).catch(() => {});
-  }, []);
   return (
     <>
-      <Title intro="Your notes are made by NEAR AI's private models, which run in secure hardware. Paste an API key from cloud.near.ai; Aftercall checks it, then keeps it in your macOS Keychain.">
-        Connect NEAR AI
-      </Title>
-      <NearAiConnect compact onConnected={() => setConnected(true)} />
-      <div className="flex items-center justify-between">
-        <span className="text-muted">{connected ? "" : "You can record without it; notes wait until you add a key."}</span>
-        <Button variant={connected ? "primary" : "secondary"} size="lg" onClick={onNext}>{connected ? "Continue" : "Skip for now"}</Button>
+      <StepHeading title="Connect NEAR AI" intro="Your notes are made by NEAR AI's private models, in secure hardware." style={rise(1)} />
+      <div style={rise(2)}>
+        <NearAiConnect compact onChange={setConnected} onConnected={() => setConnected(true)} />
       </div>
+      <p className="-mt-1.5 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2" style={rise(3)}>
+        <KeyRound size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
+        {connected
+          ? "Aftercall checks the key with NEAR AI, then keeps it in your macOS Keychain."
+          : "You can record without it; notes wait until you add a key."}
+      </p>
+      <StepActions style={rise(4)}>
+        {connected ? <span /> : <QuietAction onClick={onNext}>Skip for now</QuietAction>}
+        <Button variant="primary" size="lg" disabled={!connected} onClick={onNext}>
+          Continue
+          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      </StepActions>
     </>
   );
 }
 
 function Ready({ onRecord, onLater }: { onRecord: () => void; onLater: () => void }) {
+  const steps: [string, ReactNode, ReactNode][] = [
+    [
+      "Press New recording",
+      <>
+        Or <kbd className="rounded-[4px] bg-well px-[5px] py-px font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">⌘⇧R</kbd> in Aftercall,
+        or use the menu bar.
+      </>,
+      <span className="inline-flex h-[30px] items-center gap-2 rounded-sm bg-elevated px-2.5 text-[13px] font-semibold whitespace-nowrap text-ink shadow-1">
+        <span className="size-2 rounded-full bg-record" />
+        New recording
+        <span className="font-mono text-[11px] font-normal text-muted">⌘⇧R</span>
+      </span>,
+    ],
+    [
+      "Stop when the call ends",
+      "Your notes appear in about a minute.",
+      <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full bg-record px-3 text-[13px] font-semibold text-white">
+        <span className="size-2 rounded-[2px] bg-white" />
+        Stop
+      </span>,
+    ],
+    [
+      "Approve what you want",
+      "Recaps and payments go out after one approval.",
+      <span className="inline-flex h-[30px] items-center rounded-sm bg-verdigris px-3 text-[13px] font-semibold text-on-verdigris">Approve</span>,
+    ],
+  ];
   return (
     <>
-      <Title intro="Start a call in any app, then record. Tell everyone you're taking notes: Aftercall asks you to confirm it every time.">
-        You're ready
-      </Title>
+      <StepHeading title="You're ready" intro="Start a call in any app, then record. Tell everyone you're taking notes." style={rise(1)} />
       <ol className="m-0 flex list-none flex-col border-t border-hairline p-0">
-        {[
-          ["01", "Press New recording (⌘⇧R in Aftercall), or use Aftercall in the menu bar"],
-          ["02", "Stop when the call ends; notes appear in about a minute"],
-          ["03", "Approve the recap and payments you want. Connect NEAR in Settings when you're ready to pay from your agent wallet"],
-        ].map(([n, text]) => (
-          <li key={n} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-b border-hairline py-3.5">
-            <span className="font-mono text-xs leading-5 text-muted">{n}</span>
-            <span className="text-[15px] leading-5">{text}</span>
+        {steps.map(([title, text, picture], i) => (
+          <li key={title} className="flex items-center gap-4 border-b border-hairline py-4" style={rise(i + 2)}>
+            <span
+              aria-hidden="true"
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--border)]"
+            >
+              {i + 1}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="t-title text-ink">{title}</span>
+              <span className="text-ink-2">{text}</span>
+            </span>
+            {/* A picture of the control, not the control. */}
+            <span aria-hidden="true" className="shrink-0">
+              {picture}
+            </span>
           </li>
         ))}
       </ol>
-      <div className="flex items-center justify-between">
-        <button onClick={onLater} className="font-semibold text-muted hover:text-ink">
-          Go to Home
-        </button>
-        <Button variant="primary" size="lg" onClick={onRecord}>Record my first meeting</Button>
-      </div>
+      <StepActions style={rise(5)}>
+        <QuietAction onClick={onLater}>Go to Today</QuietAction>
+        <Button variant="record" size="lg" icon={<span aria-hidden="true" className="size-[9px] rounded-full bg-white" />} onClick={onRecord}>
+          Record my first meeting
+        </Button>
+      </StepActions>
     </>
   );
 }
