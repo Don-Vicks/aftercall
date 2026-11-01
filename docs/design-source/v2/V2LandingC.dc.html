@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · landing page · concept C, proof first</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 2400px; background: var(--raised);">
+
+  <header style="padding: 0 48px; border-bottom: 1px solid var(--hairline);">
+    <div style="max-width: 1280px; height: 60px; margin: 0 auto; display: flex; align-items: center; gap: 40px;">
+      <a href="#" style="display: inline-flex; align-items: center; gap: 10px; color: var(--ink);">
+        <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 22px; line-height: 26px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <nav aria-label="Site" style="display: flex; align-items: center; gap: 26px; font-family: var(--mono); font-size: 13px;">
+        <a href="#proof" class="quiet" style="color: var(--ink-2);">What it proves</a>
+        <a href="#path" class="quiet" style="color: var(--ink-2);">Where it goes</a>
+        <a href="#followups" class="quiet" style="color: var(--ink-2);">Follow-ups</a>
+        <a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a>
+      </nav>
+      <a href="#" class="press primary" style="margin-left: auto; height: 34px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+    </div>
+  </header>
+
+  <main>
+
+    <section aria-labelledby="hero" style="padding: 44px 48px 0;">
+      <div style="max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 716px; gap: 56px; align-items: start;">
+
+        <div style="display: flex; flex-direction: column; gap: 22px; padding-top: 8px;">
+          <span style="font-family: var(--mono); font-size: 12px; line-height: 16px; color: var(--muted); animation: ac-in 320ms var(--ease) both;">Meeting notes for Mac · made in NEAR AI's secure hardware</span>
+          <h1 id="hero" style="margin: 0; font-family: var(--serif); font-size: 60px; line-height: 64px; font-weight: 500; letter-spacing: -0.03em; animation: ac-in 360ms var(--ease) 40ms both;"><span style="color: var(--ink-2);">Every AI note-taker asks for your trust.</span> Aftercall <span style="font-style: italic; white-space: nowrap;">shows its work.</span></h1>
+          <p style="margin: 0; font-size: 17px; line-height: 27px; color: var(--ink-2); animation: ac-in 360ms var(--ease) 80ms both;">It records the call on your Mac, makes the notes inside secure hardware, and prints every check it ran. Then it does what the meeting decided, once you approve.</p>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; animation: ac-in 360ms var(--ease) 120ms both;">
+            <a href="#" class="press primary" style="height: 46px; padding: 0 20px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+            <a href="V2PublicVerify.dc.html" class="press secondary" style="height: 46px; padding: 0 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); color: var(--ink); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;">Open a real proof<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+          <span style="font-family: var(--mono); font-size: 12px; line-height: 16px; color: var(--muted);">macOS 14.2 or later · open source, MIT · no bot joins the call</span>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--hairline); animation: ac-in 360ms var(--ease) 160ms both;">
+            <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Reading the stream <span style="color: var(--muted); font-weight: 500;">six terms</span></h2>
+            <dl style="margin: 0; display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px 14px; font-size: 14px; line-height: 21px;">
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">quote</dt><dd style="margin: 0; color: var(--ink-2);">Intel's signed report of the machine and what it runs.</dd>
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">nonce</dt><dd style="margin: 0; color: var(--ink-2);">Made fresh on your Mac, so old evidence can't be replayed.</dd>
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">key</dt><dd style="margin: 0; color: var(--ink-2);">Made inside each TEE and bound to its quote.</dd>
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">rtmr3</dt><dd style="margin: 0; color: var(--ink-2);">The boot log, replayed until it matches the quote.</dd>
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">compose</dt><dd style="margin: 0; color: var(--ink-2);">A hash of the exact software running, measured into the quote.</dd>
+              <dt style="font-family: var(--mono); font-size: 13px; color: var(--ink);">jwt</dt><dd style="margin: 0; color: var(--ink-2);">NVIDIA's signed verdict on the GPUs.</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 400ms var(--ease) 100ms both;">
+          <div role="region" aria-label="Proof stream: the 29 checks from one meeting" style="border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; font-family: var(--mono);">
+            <div style="display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 10px 0 18px;">
+              <span style="font-size: 12px; color: var(--ink);">Sync with Ada</span>
+              <span style="font-size: 12px; color: var(--muted);">31 Oct 2026 · 14:02</span>
+              <span style="margin-left: auto; font-size: 12px; color: var(--muted);"><span style="color: var(--ink);">{{countText}}</span> / 29 checks</span>
+              <button onClick="{{rerun}}" class="press secondary" style="height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>Run again</button>
+            </div>
+            <div aria-hidden="true" style="height: 2px; background: var(--hairline);"><div style="height: 2px; background: var(--accent); transform-origin: left; transform: scaleX({{progress}}); transition: transform 90ms linear;"></div></div>
+
+            <div style="padding: 11px 18px 9px; font-size: 12.5px; line-height: 18px;">
+              <div style="height: 18px; margin-bottom: 6px; color: var(--ink-2); opacity: {{pre}}; transition: opacity 160ms var(--ease);"><span style="color: var(--muted);">›</span> fresh nonce <span style="color: var(--ink);">3c9e07a1…d24f</span>, made on this Mac</div>
+              <ol aria-label="Checks" style="margin: 0; padding: 0; list-style: none;">
+                <sc-for list="{{ lines }}" as="l" hint-placeholder-count="29">
+                  <li style="display: grid; grid-template-columns: 20px 86px 14px minmax(0, 1fr); column-gap: 10px; align-items: center; height: 18px; margin-top: {{l.mt}}px; padding-top: {{l.mt}}px; border-top: {{l.bt}}; opacity: {{l.op}}; transform: translateY({{l.y}}px); transition: opacity 140ms var(--ease), transform 180ms var(--ease);">
+                    <span style="font-size: 11px; color: var(--muted);">{{l.idx}}</span>
+                    <span style="font-size: 12px; color: var(--ink);">{{l.scope}}</span>
+                    <span style="display: inline-flex; align-items: center; justify-content: center; color: var(--accent);">
+                      <sc-if value="{{l.ok}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Passed"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+                      <sc-if value="{{l.cur}}" hint-placeholder-val="{{ false }}"><span role="img" aria-label="Checking" style="width: 9px; height: 9px; border-radius: 999px; border: 1.5px solid var(--hairline); border-top-color: var(--ink-2); animation: ac-spin 700ms linear infinite;"></span></sc-if>
+                    </span>
+                    <span style="display: flex; align-items: center; min-width: 0;">
+                      <span style="color: {{l.labelColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{l.label}}</span>
+                      <span aria-hidden="true" style="flex: 1; min-width: 14px; margin: 0 10px; height: 0; border-bottom: 1px dotted var(--faint); transform: translateY(4px);"></span>
+                      <span style="font-size: 12px; color: {{l.valueColor}}; white-space: nowrap;">{{l.value}}</span>
+                    </span>
+                  </li>
+                </sc-for>
+              </ol>
+            </div>
+
+            <div style="position: relative; height: 94px; box-sizing: border-box; padding: 12px 18px; border-top: 1px solid var(--hairline);">
+              <sc-if value="{{running}}" hint-placeholder-val="{{ false }}">
+                <div role="status" style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; line-height: 19px; color: var(--ink-2);"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; border: 1.5px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span>Checking {{nextText}} of 29</div>
+              </sc-if>
+              <sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+                <div role="status" style="display: flex; flex-direction: column; font-size: 12.5px; line-height: 20px; animation: ac-in 240ms var(--ease) both;">
+                  <span style="color: var(--ink); font-weight: 500;">29 of 29 passed</span>
+                  <span style="color: var(--ink-2);">proof sha256 9f3a1c7e52b0…3d7b04c21e</span>
+                  <span style="color: var(--ink-2);">recorded on NEAR · aftercall.near · 14:05 UTC</span>
+                </div>
+                <div aria-hidden="true" style="position: absolute; right: 26px; bottom: 13px; transform: rotate(-6deg);">
+                  <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 9px 20px 8px; border: 2px solid var(--accent); border-radius: 10px; box-shadow: inset 0 0 0 3px var(--well), inset 0 0 0 4px var(--accent); background: var(--well); color: var(--accent); animation: ac-pop 480ms cubic-bezier(.3,1.4,.5,1) 140ms both;">
+                    <span style="display: inline-flex; align-items: center; gap: 12px; font-size: 38px; line-height: 42px; font-weight: 500; letter-spacing: .14em;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</span>
+                    <span style="font-size: 10.5px; line-height: 13px; font-weight: 500; letter-spacing: .14em;">29/29 · 31 OCT 2026 · NONCE 3C9E07A1</span>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <span style="font-family: var(--mono); font-size: 12px; line-height: 16px; color: var(--muted);">A replay of one meeting's checks. The app runs them on every recording, and sends nothing until the TEEs pass.</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="proof" aria-labelledby="s1" style="padding: 52px 48px 0;">
+      <div style="max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;">
+        <div style="display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 420px); gap: 24px; align-items: baseline; padding-top: 16px; border-top: 1px solid var(--ink);">
+          <span style="font-family: var(--mono); font-size: 13px; color: var(--muted);">01</span>
+          <h2 id="s1" style="margin: 0; font-family: var(--serif); font-size: 40px; line-height: 46px; font-weight: 500; letter-spacing: -0.02em;">What the proof shows, and what it doesn't.</h2>
+          <p style="margin: 0; font-size: 15px; line-height: 23px; color: var(--ink-2);">Read both. The second list is printed under every proof, in the app and on the Verify page.</p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 48px; padding-left: 80px;">
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+              <h3 style="margin: 0; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500;">Shown by the proof</h3>
+              <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">6 claims</span>
+            </div>
+            <ol style="margin: 0; padding: 0; list-style: none;">
+              <sc-for list="{{ shows }}" as="r" hint-placeholder-count="6">
+                <li style="display: grid; grid-template-columns: 26px 16px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--hairline);">
+                  <span style="font-family: var(--mono); font-size: 11px; line-height: 21px; color: var(--muted);">{{r.idx}}</span>
+                  <svg width="16" height="16" viewBox="0 0 22 22" role="img" aria-label="Shown" style="margin-top: 2px;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+                  <span style="color: var(--ink);">{{r.text}}</span>
+                </li>
+              </sc-for>
+            </ol>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+              <h3 style="margin: 0; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500;">Not shown</h3>
+              <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">4 limits</span>
+            </div>
+            <ol style="margin: 0; padding: 0; list-style: none;">
+              <sc-for list="{{ notShown }}" as="r" hint-placeholder-count="4">
+                <li style="display: grid; grid-template-columns: 26px 16px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--hairline);">
+                  <span style="font-family: var(--mono); font-size: 11px; line-height: 21px; color: var(--muted);">{{r.idx}}</span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" role="img" aria-label="Not shown" style="margin-top: 2px;"><circle cx="8" cy="8" r="7" fill="none" stroke-width="1.3" style="stroke: var(--border);"/><path d="M5 8h6" stroke-width="1.4" stroke-linecap="round" style="stroke: var(--ink-2);"/></svg>
+                  <span><span style="color: var(--ink); font-weight: 500;">{{r.lead}}:</span> <span style="color: var(--ink-2);">{{r.rest}}</span></span>
+                </li>
+              </sc-for>
+            </ol>
+            <p style="margin: 12px 0 0 54px; font-size: 13px; line-height: 19px; color: var(--ink-2);">Also: audio isn't end-to-end encrypted. It travels over TLS through the attested gateway, and the app says so.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="path" aria-labelledby="s2" style="padding: 52px 48px 0;">
+      <div style="max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;">
+        <div style="display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 420px); gap: 24px; align-items: baseline; padding-top: 16px; border-top: 1px solid var(--ink);">
+          <span style="font-family: var(--mono); font-size: 13px; color: var(--muted);">02</span>
+          <h2 id="s2" style="margin: 0; font-family: var(--serif); font-size: 40px; line-height: 46px; font-weight: 500; letter-spacing: -0.02em;">Where your words go.</h2>
+          <p style="margin: 0; font-size: 15px; line-height: 23px; color: var(--ink-2);">Two models in secure hardware, one relay in front of them, and a hash on NEAR.</p>
+        </div>
+
+        <div role="group" aria-label="Where meeting data goes: audio, transcript and proof" style="display: grid; grid-template-columns: 92px 184px minmax(0, 1fr) 184px minmax(0, 1fr) 184px 196px; grid-template-rows: repeat(3, 58px); row-gap: 12px; padding-left: 80px;">
+
+          <span style="grid-column: 1; grid-row: 1; align-self: center; font-family: var(--mono); font-size: 12px; color: var(--ink-2);">audio</span>
+          <span style="grid-column: 1; grid-row: 2; align-self: center; font-family: var(--mono); font-size: 12px; color: var(--ink-2);">transcript</span>
+          <span style="grid-column: 1; grid-row: 3; align-self: center; font-family: var(--mono); font-size: 12px; color: var(--ink-2);">proof</span>
+
+          <div style="grid-column: 2; grid-row: 1 / 4; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); animation: ac-in 280ms var(--ease) both;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 13px; font-weight: 500;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-2);"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>Your Mac</span>
+            <span style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 18px; color: var(--ink-2);"><span>Records mic and call</span><span>Makes the nonce</span><span>Checks every TEE</span><span>Seals notes at rest</span></span>
+          </div>
+
+          <div style="grid-column: 3; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 12px; min-width: 0;">
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">audio · TLS</span>
+            <span aria-hidden="true" style="display: flex; align-items: center; color: var(--border);"><span style="flex: 1; height: 0; border-top: 1.5px dashed currentColor;"></span><svg width="8" height="10" viewBox="0 0 8 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 4-6 4"/></svg></span>
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">not end-to-end</span>
+          </div>
+          <div style="grid-column: 3; grid-row: 2; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 12px; min-width: 0;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink); white-space: nowrap;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>to Qwen's key</span>
+            <span aria-hidden="true" style="display: flex; align-items: center; color: var(--ink);"><span style="flex: 1; height: 0; border-top: 1.5px solid currentColor;"></span><svg width="8" height="10" viewBox="0 0 8 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 4-6 4"/></svg></span>
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">end-to-end encrypted</span>
+          </div>
+          <div style="grid-column: 3 / 6; grid-row: 3; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 12px; min-width: 0;">
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">sha256 of the proof bundle, the model name, the start time</span>
+            <span aria-hidden="true" style="display: flex; align-items: center; color: var(--border);"><span style="flex: 1; height: 0; border-top: 1.5px solid currentColor;"></span><svg width="8" height="10" viewBox="0 0 8 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 4-6 4"/></svg></span>
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">no meeting content · sent from your Mac</span>
+          </div>
+
+          <div style="grid-column: 4; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); animation: ac-in 280ms var(--ease) 60ms both;">
+            <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-family: var(--mono); font-size: 13px; font-weight: 500;">Gateway TEE</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">attested · relays</span></span>
+            <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">Sees the audio over TLS. Sees the transcript only as ciphertext.</span>
+          </div>
+
+          <div style="grid-column: 5; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 12px; min-width: 0;">
+            <span style="font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink-2); white-space: nowrap;">audio · TLS</span>
+            <span aria-hidden="true" style="display: flex; align-items: center; color: var(--border);"><span style="flex: 1; height: 0; border-top: 1.5px dashed currentColor;"></span><svg width="8" height="10" viewBox="0 0 8 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 4-6 4"/></svg></span>
+            <span style="height: 14px;"></span>
+          </div>
+          <div style="grid-column: 5; grid-row: 2; display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 0 12px; min-width: 0;">
+            <span style="display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11.5px; line-height: 14px; color: var(--ink); white-space: nowrap;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ciphertext only</span>
+            <span aria-hidden="true" style="display: flex; align-items: center; color: var(--ink);"><span style="flex: 1; height: 0; border-top: 1.5px solid currentColor;"></span><svg width="8" height="10" viewBox="0 0 8 10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l6 4-6 4"/></svg></span>
+            <span style="height: 14px;"></span>
+          </div>
+
+          <div style="grid-column: 6; grid-row: 1; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); animation: ac-in 280ms var(--ease) 120ms both;">
+            <span style="font-family: var(--mono); font-size: 13px; font-weight: 500;">Whisper TEE</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">attested · transcribes</span>
+          </div>
+          <div style="grid-column: 6; grid-row: 2; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--ink); animation: ac-in 280ms var(--ease) 160ms both;">
+            <span style="font-family: var(--mono); font-size: 13px; font-weight: 500;">Qwen TEE</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">attested · signs the notes</span>
+          </div>
+          <div style="grid-column: 6; grid-row: 3; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 8px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); animation: ac-in 280ms var(--ease) 200ms both;">
+            <span style="font-family: var(--mono); font-size: 13px; font-weight: 500;">NEAR</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">aftercall.near · public</span>
+          </div>
+
+          <span style="grid-column: 7; grid-row: 1; align-self: center; padding-left: 16px; font-family: var(--mono); font-size: 12px; line-height: 17px; color: var(--ink-2);">↩ transcript, back to your Mac</span>
+          <span style="grid-column: 7; grid-row: 2; align-self: center; padding-left: 16px; font-family: var(--mono); font-size: 12px; line-height: 17px; color: var(--ink-2);">↩ signed notes, back to your Mac</span>
+          <span style="grid-column: 7; grid-row: 3; align-self: center; padding-left: 16px; font-family: var(--mono); font-size: 12px; line-height: 17px; color: var(--ink-2);">public and permanent</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 32px; padding-left: 80px; font-size: 14px; line-height: 21px;">
+          <span style="color: var(--ink-2);"><span style="color: var(--ink); font-weight: 600;">Fail closed.</span> If a TEE fails a check, nothing leaves your Mac.</span>
+          <span style="color: var(--ink-2);"><span style="color: var(--ink); font-weight: 600;">Kept nowhere else.</span> Aftercall's servers keep nothing about a meeting.</span>
+          <span aria-hidden="true" style="margin-left: auto; display: inline-flex; align-items: center; gap: 16px; font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); white-space: nowrap;"><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 22px; border-top: 1.5px solid var(--ink);"></span>end-to-end</span><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 22px; border-top: 1.5px dashed var(--border);"></span>TLS</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="followups" aria-labelledby="s3" style="padding: 52px 48px 0;">
+      <div style="max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;">
+        <div style="display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 420px); gap: 24px; align-items: baseline; padding-top: 16px; border-top: 1px solid var(--ink);">
+          <span style="font-family: var(--mono); font-size: 13px; color: var(--muted);">03</span>
+          <h2 id="s3" style="margin: 0; font-family: var(--serif); font-size: 40px; line-height: 46px; font-weight: 500; letter-spacing: -0.02em;">And then it does the follow-ups.</h2>
+          <p style="margin: 0; font-size: 15px; line-height: 23px; color: var(--ink-2);">Each one carries the exact words that asked for it. No quote from the transcript, no follow-up.</p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 620px; gap: 48px; align-items: start; padding-left: 80px;">
+          <dl style="margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 0 16px; border-top: 1px solid var(--hairline);">
+            <dt style="padding: 12px 0; border-bottom: 1px solid var(--hairline); font-family: var(--mono); font-size: 13px; line-height: 21px; color: var(--ink);">recap</dt><dd style="margin: 0; padding: 12px 0; border-bottom: 1px solid var(--hairline); color: var(--ink-2);">Draft in your own Mail, or send it through Aftercall.</dd>
+            <dt style="padding: 12px 0; border-bottom: 1px solid var(--hairline); font-family: var(--mono); font-size: 13px; line-height: 21px; color: var(--ink);">payment</dt><dd style="margin: 0; padding: 12px 0; border-bottom: 1px solid var(--hairline); color: var(--ink-2);">USDC on NEAR to listed payees, under a contract’s caps.</dd>
+            <dt style="padding: 12px 0; border-bottom: 1px solid var(--hairline); font-family: var(--mono); font-size: 13px; line-height: 21px; color: var(--ink);">over cap</dt><dd style="margin: 0; padding: 12px 0; border-bottom: 1px solid var(--hairline); color: var(--ink-2);">Waits for your own wallet. A tricked AI can't overspend.</dd>
+            <dt style="padding: 12px 0; border-bottom: 1px solid var(--hairline); font-family: var(--mono); font-size: 13px; line-height: 21px; color: var(--ink);">autopilot</dt><dd style="margin: 0; padding: 12px 0; border-bottom: 1px solid var(--hairline); color: var(--ink-2);">Off until you set rules, with 60 seconds to undo.</dd>
+          </dl>
+
+          <article aria-label="A follow-up from Sync with Ada" class="lift" style="border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); overflow: hidden;">
+            <div style="display: flex; align-items: center; gap: 14px; padding: 16px 20px 12px;">
+              <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--p4); color: var(--p4i); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">D</span>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+                <span style="display: flex; align-items: baseline; gap: 10px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Pay Designer</span><span style="font-family: var(--mono); font-size: 15px; font-weight: 500;">50.00 USDC</span></span>
+                <span style="font-size: 12px; line-height: 16px; color: var(--muted);">Sync with Ada · Fundraise · Today 14:02</span>
+              </span>
+              <sc-if value="{{payPaid}}" hint-placeholder-val="{{ false }}">
+                <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 360ms cubic-bezier(.3,1.4,.5,1) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>PAID 14:07</span>
+              </sc-if>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px; padding: 0 20px 16px 68px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 17px; line-height: 26px; font-style: italic;">“pay the designer the fifty dollar deposit today” <a href="#" style="font-family: var(--mono); font-size: 12px; font-style: normal;">14:03</a></p>
+              <div style="display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 2px 12px; padding: 9px 12px; border-radius: 8px; background: var(--well); font-family: var(--mono); font-size: 12px; line-height: 19px;">
+                <span style="color: var(--muted);">heard</span><span style="color: var(--ink-2);">“fifty dollar” → <span style="color: var(--ink);">50.00 USDC</span></span>
+                <span style="color: var(--muted);">payee</span><span style="color: var(--ink-2);">Designer → <span style="color: var(--ink);">designer.near</span> · listed, within your caps</span>
+              </div>
+            </div>
+            <div style="position: relative; display: flex; align-items: center; gap: 8px; min-height: 58px; box-sizing: border-box; padding: 10px 12px 10px 20px; border-top: 1px solid var(--hairline);">
+              <sc-if value="{{payProposed}}" hint-placeholder-val="{{ true }}">
+                <span style="flex: 1; font-size: 13px; line-height: 18px; color: var(--ink-2);">Check the words, then approve once.</span>
+                <button onClick="{{dismiss}}" class="press quiet" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Dismiss</button>
+                <button onClick="{{approve}}" class="press primary" style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Approve payment</button>
+              </sc-if>
+              <sc-if value="{{payPending}}" hint-placeholder-val="{{ false }}">
+                <span role="status" style="flex: 1; display: inline-flex; align-items: center; gap: 10px; animation: ac-in 240ms var(--ease) both;"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 900ms linear infinite;"></span>Paying Designer <span style="font-family: var(--mono); font-size: 13px;">50.00 USDC</span></span>
+                <button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font-weight: 600;">Undo <span style="color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 400;">⌘Z</span></button>
+                <span aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); transform-origin: left; animation: ac-countdown 5000ms linear both;"></span>
+              </sc-if>
+              <sc-if value="{{payPaid}}" hint-placeholder-val="{{ false }}">
+                <span role="status" style="flex: 1; font-size: 13px; line-height: 18px; color: var(--ink-2); animation: ac-in 240ms var(--ease) both;">Paid from your agent wallet to <span style="font-family: var(--mono); color: var(--ink);">designer.near</span></span>
+                <button onClick="{{reset}}" class="press quiet" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Replay</button>
+              </sc-if>
+              <sc-if value="{{payDismissed}}" hint-placeholder-val="{{ false }}">
+                <span role="status" style="flex: 1; font-size: 13px; line-height: 18px; color: var(--ink-2); animation: ac-in 240ms var(--ease) both;">Pay Designer dismissed. Nothing was paid.</span>
+                <button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font-weight: 600;">Undo <span style="color: var(--muted); font-family: var(--mono); font-size: 12px; font-weight: 400;">⌘Z</span></button>
+              </sc-if>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="cta" style="padding: 52px 48px 36px;">
+      <div style="max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 470px); gap: 24px; align-items: end; padding-top: 28px; border-top: 1px solid var(--ink);">
+        <span style="align-self: start; font-family: var(--mono); font-size: 13px; color: var(--muted);">04</span>
+        <h2 id="cta" style="margin: 0; font-family: var(--serif); font-size: 72px; line-height: 76px; font-weight: 500; letter-spacing: -0.035em;">Don't trust us. <span style="font-style: italic;">Check.</span></h2>
+        <div style="display: flex; flex-direction: column; gap: 14px; padding-bottom: 6px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <a href="V2PublicVerify.dc.html" class="press primary" style="height: 46px; padding: 0 20px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;">Open a real proof<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            <a href="#" class="press secondary" style="height: 46px; padding: 0 18px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); color: var(--ink); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+          </div>
+          <span style="font-family: var(--mono); font-size: 12px; line-height: 16px; color: var(--muted);">macOS 14.2 or later · open source, MIT</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer style="padding: 0 48px;">
+    <div style="max-width: 1280px; height: 56px; margin: 0 auto; display: flex; align-items: center; gap: 24px; border-top: 1px solid var(--hairline); font-family: var(--mono); font-size: 12px;">
+      <span style="color: var(--ink);">Built for NEAR HACKATHON</span>
+      <span style="color: var(--muted);">1–14 Nov 2026 · on NEAR AI Cloud and NEAR</span>
+      <span style="margin-left: auto; display: flex; gap: 22px;"><a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify</a><a href="#" class="quiet" style="color: var(--ink-2);">Privacy</a><a href="#" class="quiet" style="color: var(--ink-2);">Source</a></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":2400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { n: 0, pay: 'proposed' };
+    const nonce = 'nonce 3c9e07a1…';
+    const cpu = (q, k, r, c) => [
+      ['Genuine Intel TDX confidential VM', 'quote ' + q],
+      ['Debug mode off', 'debug bit 0'],
+      ['The TEE made its signing key', 'key ' + k],
+      ['Evidence is fresh', nonce],
+      ['Boot log matches the quote', 'rtmr3 ' + r],
+      ['Known software is running', 'compose ' + c]
+    ];
+    const gpu = (j) => [
+      ['Genuine NVIDIA confidential GPU', 'jwt ' + j],
+      ['GPU evidence is fresh', 'eat_' + nonce],
+      ['GPUs in secure mode', 'secboot on · dbg off']
+    ];
+    this.groups = [
+      ['gateway', cpu('6a1f92c0…', '7f2c91ab…', 'a4e18c2f…', '5e8a20c4…')],
+      ['whisper tee', cpu('2b7d4e19…', 'a90d3e5c…', '0c5b71de…', 'b37f0e9a…').concat(gpu('e41c09d7…'))],
+      ['qwen tee', cpu('9d03b6a4…', '4b1e9c07…', 'f71a2c90…', 'c41d07a9…').concat(gpu('57be2a13…'))],
+      ['response', [
+        ['Signed over exactly what was sent', 'sha256 81c4d0e2…'],
+        ['Signed over exactly what came back', 'sha256 2d07b9a1…'],
+        ['Signed for the model asked for', 'Qwen/Qwen3.8-27B'],
+        ['Signed by an attested TEE', 'ed25519 4b1e9c07…'],
+        ['Transcript encrypted to the attested model', 'to key 4b1e9c07…']
+      ]]
+    ];
+  }
+  componentDidMount() {
+    this.startId = setTimeout(() => this.run(), 500);
+  }
+  componentWillUnmount() {
+    clearTimeout(this.startId);
+    clearInterval(this.tickId);
+    clearTimeout(this.payId);
+  }
+  run() {
+    clearTimeout(this.startId);
+    clearInterval(this.tickId);
+    this.setState({ n: 0 });
+    this.tickId = setInterval(() => {
+      const n = this.state.n + 1;
+      this.setState({ n: n });
+      if (n >= 31) clearInterval(this.tickId);
+    }, 60);
+  }
+  renderVals() {
+    const s = this.state;
+    const total = 29;
+    const printed = Math.max(0, Math.min(total, s.n - 2));
+    const done = printed >= total;
+    const lines = [];
+    let i = 0;
+    this.groups.forEach((g, gi) => {
+      g[1].forEach((c, ci) => {
+        const shown = i < printed;
+        const cur = !done && s.n >= 2 && i === printed;
+        const first = ci === 0 && gi > 0;
+        lines.push({
+          idx: String(i + 1).padStart(2, '0'),
+          scope: ci === 0 ? g[0] : '',
+          label: c[0],
+          value: cur ? 'checking' : c[1],
+          ok: shown,
+          cur: cur,
+          op: shown || cur ? 1 : 0,
+          y: shown || cur ? 0 : 4,
+          labelColor: shown ? 'var(--ink)' : 'var(--ink-2)',
+          valueColor: shown ? 'var(--ink-2)' : 'var(--muted)',
+          bt: first ? '1px dashed var(--hairline)' : '0',
+          mt: first ? 5 : 0
+        });
+        i += 1;
+      });
+    });
+    const shows = [
+      'Genuine Intel TDX machines and NVIDIA confidential GPUs, debug off',
+      'Known software, measured into each quote and its boot log',
+      'Fresh evidence: every quote and GPU token carries this run’s nonce',
+      'Notes signed in the Qwen TEE, over exactly what was sent and returned',
+      'A transcript encrypted on your Mac to that TEE’s attested key',
+      'A hash on NEAR that anyone can re-check in a browser'
+    ].map((text, k) => ({ idx: String(k + 1).padStart(2, '0'), text: text }));
+    const notShown = [
+      ['That the transcript is accurate', 'Whisper can mishear names and numbers.'],
+      ['That this transcription came from the attested Whisper TEE', 'NEAR AI signs chat responses, not transcriptions.'],
+      ['That everyone on the call agreed to be recorded', "Aftercall asks you to confirm it, and can't check it."],
+      ['Who said what', "“You” is your microphone and “Others” is the call's audio."]
+    ].map((r, k) => ({ idx: String(k + 1).padStart(2, '0'), lead: r[0], rest: r[1] }));
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      lines: lines,
+      pre: s.n >= 1 ? 1 : 0,
+      progress: printed / total,
+      countText: String(printed).padStart(2, '0'),
+      nextText: String(Math.min(total, printed + 1)),
+      running: !done,
+      done: done,
+      rerun: () => this.run(),
+      shows: shows,
+      notShown: notShown,
+      payProposed: s.pay === 'proposed',
+      payPending: s.pay === 'pending',
+      payPaid: s.pay === 'paid',
+      payDismissed: s.pay === 'dismissed',
+      approve: () => {
+        this.setState({ pay: 'pending' });
+        clearTimeout(this.payId);
+        this.payId = setTimeout(() => this.setState({ pay: 'paid' }), 5000);
+      },
+      dismiss: () => {
+        clearTimeout(this.payId);
+        this.setState({ pay: 'dismissed' });
+      },
+      undo: () => {
+        clearTimeout(this.payId);
+        this.setState({ pay: 'proposed' });
+      },
+      reset: () => {
+        clearTimeout(this.payId);
+        this.setState({ pay: 'proposed' });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

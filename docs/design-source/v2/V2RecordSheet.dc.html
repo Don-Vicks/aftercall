@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · start a recording</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="width: 560px; height: 640px; box-sizing: border-box; background: var(--ground); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+
+  <div role="dialog" aria-modal="true" aria-labelledby="rs-title" style="width: 472px; box-sizing: border-box; padding: 28px; border-radius: 20px; background: var(--elevated); box-shadow: var(--shfloat); display: flex; flex-direction: column; gap: 22px; animation: ac-in 280ms var(--ease) both;">
+
+    <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <h2 id="rs-title" style="margin: 0; font-family: var(--serif); font-size: 28px; line-height: 34px; font-weight: 500; letter-spacing: -0.015em;">Start a recording</h2>
+        <p style="margin: 0; color: var(--ink-2);">Records the call and your microphone on this Mac.</p>
+      </div>
+      <button aria-label="Close" class="press quiet" style="width: 32px; height: 32px; margin: -2px -8px 0 0; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    </header>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; animation: ac-in 280ms 40ms var(--ease) both;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+        <label for="rs-project" style="font-size: 13px; line-height: 18px; font-weight: 600;">Project</label>
+        <a href="V2NewProject.dc.html" style="font-size: 13px; line-height: 18px; font-weight: 600;">New project</a>
+      </div>
+      <div style="position: relative;">
+        <select id="rs-project" class="field" style="width: 100%; height: 40px; box-sizing: border-box; padding: 0 40px 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-weight: 500; appearance: none; -webkit-appearance: none; cursor: pointer;">
+          <option>Fundraise</option>
+          <option>Platform API</option>
+          <option>Hiring</option>
+        </select>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 12px; top: 12px; color: var(--muted); pointer-events: none;"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; animation: ac-in 280ms 80ms var(--ease) both;">
+      <span style="font-size: 13px; line-height: 18px; font-weight: 600;">From your calendar <span style="color: var(--muted); font-weight: 500;">picked automatically</span></span>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+        <span role="img" aria-label="Ines Rocha" style="width: 32px; height: 32px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">IR</span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;">
+          <span style="font-size: 15px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Website kickoff with Ines</span>
+          <span style="font-size: 13px; line-height: 18px; color: var(--accent); font-weight: 500;">Starts in 2 min · <span style="font-family: var(--mono); font-weight: 400;">15:30</span></span>
+        </span>
+        <button class="press quiet" style="height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; flex-shrink: 0;">Change</button>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); animation: ac-in 280ms 120ms var(--ease) both;">
+      <button role="checkbox" aria-checked="{{tickAria}}" onClick="{{tick}}" style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: transparent; color: var(--ink); font-size: 15px; line-height: 22px; text-align: left;">
+        <span style="width: 22px; height: 22px; flex-shrink: 0; display: inline-flex;">
+          <sc-if value="{{ticked}}" hint-placeholder-val="{{ false }}">
+            <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms 120ms var(--ease) both;"/></svg>
+          </sc-if>
+          <sc-if value="{{notTicked}}" hint-placeholder-val="{{ true }}">
+            <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg>
+          </sc-if>
+        </span>
+        <span>I've told everyone on the call</span>
+      </button>
+      <button onClick="{{copy}}" title="Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted after transcription." class="press" style="height: 28px; padding: 0 4px; border: 0; border-radius: 6px; background: transparent; color: var(--accent); font-size: 13px; font-weight: 600; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>{{copyLabel}}</button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 280ms 160ms var(--ease) both;">
+      <sc-if value="{{notTicked}}" hint-placeholder-val="{{ true }}">
+        <button disabled style="width: 100%; height: 48px; border: 0; border-radius: 10px; background: var(--record); color: #fff; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 10px; opacity: .4; cursor: not-allowed;"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: #fff;"></span>Start recording</button>
+        <span style="font-size: 13px; line-height: 18px; color: var(--caution);">Tick the box once everyone knows you're recording.</span>
+      </sc-if>
+      <sc-if value="{{ticked}}" hint-placeholder-val="{{ false }}">
+        <a href="V2Recording.dc.html" class="press" style="width: 100%; height: 48px; box-sizing: border-box; border-radius: 10px; background: var(--record); color: #fff; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 10px; animation: ac-pop 260ms var(--ease);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: #fff;"></span>Start recording<span style="font-family: var(--mono); font-size: 11px; font-weight: 400; opacity: .8;">⌘⇧R</span></a>
+        <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">macOS asks for permission the first time.</span>
+      </sc-if>
+    </div>
+
+    <p style="margin: 0; font-size: 13px; line-height: 18px; color: var(--ink-2); text-align: center; animation: ac-in 280ms 200ms var(--ease) both;">No call handy? <a href="V2Processing.dc.html" style="font-weight: 500;">Open a sample recording</a></p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":560,"height":640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { ticked: false, copied: false };
+  }
+  componentWillUnmount() {
+    clearTimeout(this.copyId);
+  }
+  renderVals() {
+    const s = this.state;
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      ticked: s.ticked,
+      notTicked: !s.ticked,
+      tickAria: s.ticked ? 'true' : 'false',
+      tick: () => this.setState({ ticked: !this.state.ticked }),
+      copyLabel: s.copied ? 'Copied' : 'Copy notice',
+      copy: () => {
+        this.setState({ copied: true });
+        clearTimeout(this.copyId);
+        this.copyId = setTimeout(() => this.setState({ copied: false }), 1600);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

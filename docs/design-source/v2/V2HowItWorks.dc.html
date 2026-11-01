@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · how it keeps meetings private</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 2800px; background: var(--raised);">
+
+  <header style="padding: 0 48px;">
+    <div style="max-width: 1200px; height: 72px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+      <a href="V2Landing.dc.html" style="display: inline-flex; align-items: center; gap: 10px; color: var(--ink);">
+        <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 23px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <nav aria-label="Site" style="display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 500;">
+        <a href="V2HowItWorks.dc.html" aria-current="page" style="color: var(--ink); font-weight: 600;">Privacy</a>
+        <a href="V2Landing.dc.html#followups" class="quiet" style="color: var(--ink-2);">Follow-ups</a>
+        <a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a>
+        <a href="#" class="quiet" style="color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px;">GitHub<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <section aria-labelledby="hero" style="padding: 32px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+        <span style="font-size: 13px; line-height: 18px; font-weight: 500; color: var(--muted); animation: ac-in 320ms var(--ease) both;">How it works · privacy</span>
+        <h1 id="hero" style="margin: 0; font-family: var(--serif); font-size: 60px; line-height: 64px; font-weight: 500; letter-spacing: -0.03em; animation: ac-in 360ms var(--ease) 40ms both;">How Aftercall keeps your meetings private</h1>
+        <p style="margin: 0; font-size: 18px; line-height: 28px; color: var(--ink-2); animation: ac-in 360ms var(--ease) 100ms both;">Nothing leaves your Mac until NEAR AI's secure hardware passes its checks, and only the checked model can read your transcript.</p>
+      </div>
+    </section>
+
+    <section id="journey" aria-labelledby="jt" style="padding: 40px 48px 0;">
+      <div style="max-width: 1344px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px;">
+        <div style="padding: 0 max(0px, calc((100% - 1200px) / 2)); display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <h2 id="jt" style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">The journey of one meeting</h2>
+            <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">What each stop sees and keeps. Both trips to the models pass through the gateway; on the way to Qwen it only relays ciphertext.</p>
+          </div>
+          <button onClick="{{replay}}" class="press secondary" style="flex-shrink: 0; height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>{{replayLabel}}</button>
+        </div>
+
+        <figure aria-label="One meeting from your Mac, through NEAR AI's secure hardware, back to your Mac, then a hash on NEAR" style="margin: 0; padding: 26px 28px 18px; border-radius: 20px; background: var(--ground); animation: ac-in 360ms var(--ease) 80ms both;">
+          <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); column-gap: 40px;">
+            <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="7">
+              <li style="min-width: 0; display: flex; flex-direction: column; gap: 14px;">
+                <div style="position: relative;">
+                  <button onClick="{{n.pick}}" aria-pressed="{{n.pressed}}" aria-label="{{n.aria}}" class="press" style="width: 100%; height: 108px; box-sizing: border-box; padding: 11px 14px 12px; border: 0; border-radius: 14px; background: {{n.bg}}; box-shadow: {{n.shadow}}; color: var(--ink); text-align: left; display: flex; flex-direction: column; gap: 3px; opacity: {{n.opacity}}; transition: opacity 240ms var(--ease), box-shadow 200ms var(--ease), transform 120ms var(--ease); animation: {{n.anim}};">
+                    <span style="display: flex; align-items: center; gap: 7px; color: {{n.iconColor}};">
+                      <sc-if value="{{n.isMac}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 20h20"/></svg></sc-if>
+                      <sc-if value="{{n.isTee}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></sc-if>
+                      <sc-if value="{{n.isNear}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="7" height="8" rx="2"/><rect x="14" y="8" width="7" height="8" rx="2"/><path d="M10 12h4"/></svg></sc-if>
+                      <span style="font-size: 11px; line-height: 14px; font-weight: 500; color: var(--muted);">{{n.kind}}</span>
+                      <span style="margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted);">{{n.no}}</span>
+                    </span>
+                    <span style="margin-top: auto; font-size: 15px; line-height: 20px; font-weight: 600;">{{n.title}}</span>
+                    <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">{{n.role}}</span>
+                  </button>
+                  <sc-if value="{{n.next}}" hint-placeholder-val="{{ true }}">
+                    <span aria-hidden="true" style="position: absolute; left: 100%; top: 0; width: 40px; height: 108px; display: flex; align-items: center; justify-content: center;">
+                      <span style="width: 28px; height: 2px; border-radius: 2px; background: {{n.lineColor}}; transition: background-color 240ms var(--ease);"></span>
+                      <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-left: -5px; color: {{n.lineColor}}; transition: color 240ms var(--ease);"><path d="m1 1 5 4-5 4"/></svg>
+                      <sc-if value="{{n.hasEdge}}" hint-placeholder-val="{{ true }}">
+                        <span style="position: absolute; top: 27px; left: 50%; transform: translateX(-50%); height: 18px; padding: 0 5px; border-radius: 999px; background: {{n.chipBg}}; color: {{n.chipInk}}; display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10px; line-height: 12px; white-space: nowrap;">{{n.edge}}</span>
+                      </sc-if>
+                    </span>
+                  </sc-if>
+                </div>
+                <dl style="margin: 0; padding: 0 2px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 18px; opacity: {{n.opacity}}; transition: opacity 240ms var(--ease);">
+                  <div><dt style="display: inline; font-weight: 600; color: var(--ink);">Sees: </dt><dd style="display: inline; margin: 0; color: var(--ink-2);">{{n.sees}}</dd></div>
+                  <div><dt style="display: inline; font-weight: 600; color: var(--ink);">Keeps: </dt><dd style="display: inline; margin: 0; color: var(--ink-2);">{{n.keeps}}</dd></div>
+                </dl>
+              </li>
+            </sc-for>
+          </ol>
+          <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--hairline);">
+            <span style="flex-shrink: 0; font-family: var(--mono); font-size: 12px; color: var(--muted);">{{stepLabel}}</span>
+            <p aria-live="polite" style="flex: 1; min-width: 0; margin: 0; color: var(--ink-2);">{{caption}}</p>
+            <span style="flex-shrink: 0; display: flex; gap: 18px; font-size: 12px; color: var(--muted);">
+              <span style="display: inline-flex; align-items: center; gap: 7px;"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: var(--accent-tint); box-shadow: inset 0 0 0 1px var(--accent);"></span>Your Mac</span>
+              <span style="display: inline-flex; align-items: center; gap: 7px;"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: var(--elevated); box-shadow: inset 0 0 0 1px var(--border);"></span>Secure hardware, checked first</span>
+              <span style="display: inline-flex; align-items: center; gap: 7px;"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 3px; background: var(--well); box-shadow: inset 0 0 0 1px var(--border);"></span>NEAR, public</span>
+            </span>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <section id="checks" aria-labelledby="ct" style="padding: 48px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <h2 id="ct" style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Checked every time, before it’s sent and when it comes back</h2>
+          <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it before anything is sent, then checks the signed reply: 29 checks on a typical meeting.</p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+            <h3 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Before anything leaves your Mac <span style="color: var(--muted); font-weight: 500;">24 checks</span></h3>
+            <span style="font-size: 12px; color: var(--muted);">Counted for one node per model; each extra node adds its own set</span>
+          </div>
+          <ol style="margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline);">
+            <sc-for list="{{ before }}" as="g" hint-placeholder-count="5">
+              <li style="display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 40px; padding: 10px 0; border-top: 1px solid var(--hairline); animation: ac-in 280ms var(--ease) {{g.d}} both;">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                  <button onClick="{{g.toggle}}" aria-expanded="{{g.aria}}" class="press" style="margin: -2px 0 0 -6px; padding: 0 6px; height: 26px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">{{g.title}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted); transform: rotate({{g.rot}}deg); transition: transform 200ms var(--ease);"><path d="m9 6 6 6-6 6"/></svg></button>
+                  <span style="font-size: 12px; line-height: 16px; color: var(--muted);">{{g.meta}}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <p style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">{{g.means}}</p>
+                  <p style="margin: 0; display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 22px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 3px; color: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg><span><span style="font-weight: 600; margin-right: 0.28em;">So an attacker can't</span>{{g.cant}}</span></p>
+                  <sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+                    <ul style="margin: 6px 0 2px; padding: 10px 0 0; list-style: none; display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--hairline);">
+                      <sc-for list="{{ g.items }}" as="c" hint-placeholder-count="2">
+                        <li style="display: flex; align-items: center; gap: 10px; animation: ac-in 240ms var(--ease) {{c.d}} both;"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 300ms cubic-bezier(.3,1.5,.5,1) {{c.d1}} both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 200ms var(--ease) {{c.d2}} both;"/></svg><span style="font-weight: 500;">{{c.label}}</span><span style="font-size: 12px; color: var(--muted);">{{c.where}}</span></li>
+                      </sc-for>
+                    </ul>
+                  </sc-if>
+                </div>
+              </li>
+            </sc-for>
+          </ol>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <h3 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">When the notes come back <span style="color: var(--muted); font-weight: 500;">5 checks</span></h3>
+          <ol style="margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline);">
+            <sc-for list="{{ after }}" as="g" hint-placeholder-count="2">
+              <li style="display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 40px; padding: 10px 0; border-top: 1px solid var(--hairline); animation: ac-in 280ms var(--ease) {{g.d}} both;">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+                  <button onClick="{{g.toggle}}" aria-expanded="{{g.aria}}" class="press" style="margin: -2px 0 0 -6px; padding: 0 6px; height: 26px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">{{g.title}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted); transform: rotate({{g.rot}}deg); transition: transform 200ms var(--ease);"><path d="m9 6 6 6-6 6"/></svg></button>
+                  <span style="font-size: 12px; line-height: 16px; color: var(--muted);">{{g.meta}}</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <p style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">{{g.means}}</p>
+                  <p style="margin: 0; display: flex; align-items: flex-start; gap: 10px; font-size: 15px; line-height: 22px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 3px; color: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg><span><span style="font-weight: 600; margin-right: 0.28em;">So an attacker can't</span>{{g.cant}}</span></p>
+                  <sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+                    <ul style="margin: 6px 0 2px; padding: 10px 0 0; list-style: none; display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--hairline);">
+                      <sc-for list="{{ g.items }}" as="c" hint-placeholder-count="4">
+                        <li style="display: flex; align-items: center; gap: 10px; animation: ac-in 240ms var(--ease) {{c.d}} both;"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 300ms cubic-bezier(.3,1.5,.5,1) {{c.d1}} both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 200ms var(--ease) {{c.d2}} both;"/></svg><span style="font-weight: 500;">{{c.label}}</span><span style="font-size: 12px; color: var(--muted);">{{c.where}}</span></li>
+                      </sc-for>
+                    </ul>
+                  </sc-if>
+                </div>
+              </li>
+            </sc-for>
+          </ol>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 16px; padding: 12px 14px 12px 18px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hairline);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; color: var(--accent);"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <p style="flex: 1; margin: 0; color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">If a check fails, it stops there.</span> Nothing is sent unless the gateway, every Whisper node and the Qwen node you use all pass.</p>
+            <button onClick="{{toggleFail}}" aria-expanded="{{failAria}}" class="press secondary" style="flex-shrink: 0; height: 34px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600;">{{failLabel}}</button>
+          </div>
+          <sc-if value="{{failed}}" hint-placeholder-val="{{ false }}">
+            <div role="status" style="display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-radius: 14px; background: var(--record-tint); animation: ac-in 260ms var(--ease) both;">
+              <span style="flex-shrink: 0; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--record); color: #fff; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) 120ms both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>FAILED</span>
+              <span style="flex: 1; color: var(--ink);">Secure hardware check failed for Whisper (Boot log matches the quote). Nothing was sent.</span>
+              <span style="font-size: 12px; color: var(--muted);">As the app says it</span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </section>
+
+    <section id="e2ee" aria-labelledby="et" style="padding: 48px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <h2 id="et" style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">End-to-end encrypted summaries</h2>
+          <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">The transcript is sealed on your Mac to a key bound in Qwen's verified quote, so the gateway passes on text it can't read.</p>
+          <div style="display: flex; gap: 14px; margin-top: 4px; padding: 14px 18px; border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px; color: var(--ink-2);"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>
+            <span style="display: flex; flex-direction: column; gap: 4px;"><span style="font-weight: 600;">Audio isn't end-to-end encrypted</span><span style="color: var(--ink-2);">NEAR AI doesn't offer it for transcription. Audio goes over TLS through the attested gateway, and transcriptions aren't signed per response. The Verify sheet says so next to the Whisper checks.</span></span>
+          </div>
+        </div>
+        <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+          <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 18px; padding: 14px 0; border-top: 1px solid var(--hairline);">
+            <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 500;">1</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 16px; line-height: 22px; font-weight: 600;">Your Mac takes the key from a verified quote</span>
+              <span style="font-size: 15px; line-height: 22px; color: var(--ink-2);">Qwen's Ed25519 key has to sit in the report data of a quote that passed every check, next to this run's nonce.</span>
+            </span>
+          </li>
+          <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 18px; padding: 14px 0; border-top: 1px solid var(--hairline);">
+            <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 500;">2</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 16px; line-height: 22px; font-weight: 600;">The transcript is sealed to that key, on your Mac</span>
+              <span style="font-size: 15px; line-height: 22px; color: var(--ink-2);">Each message gets a fresh X25519 key pair. The shared secret goes through HKDF-SHA256, then XChaCha20-Poly1305 seals the text.</span>
+              <span style="align-self: flex-start; margin-top: 2px; padding: 2px 8px; border-radius: 6px; background: var(--well); font-family: var(--mono); font-size: 12px; line-height: 18px; color: var(--ink-2);">[one-time key 32] [nonce 24] [ciphertext + tag]</span>
+            </span>
+          </li>
+          <li style="display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 18px; padding: 14px 0; border-top: 1px solid var(--hairline);">
+            <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 500;">3</span>
+            <span style="display: flex; flex-direction: column; gap: 5px;">
+              <span style="font-size: 16px; line-height: 22px; font-weight: 600;">The notes come back sealed to your Mac</span>
+              <span style="font-size: 15px; line-height: 22px; color: var(--ink-2);">Qwen encrypts its reply to a key pair made for this one request. If NEAR AI refuses encryption, plain text goes only when every Qwen node passed.</span>
+            </span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="mac" aria-labelledby="mt" style="padding: 48px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <h2 id="mt" style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">On your Mac</h2>
+          <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">Audio, transcripts and notes stay in Aftercall's folder, sealed with a key in your macOS Keychain.</p>
+          <div role="img" aria-label="Your Keychain holds three keys: the at-rest key, your NEAR AI key and the app's limited NEAR key" class="lift" style="margin-top: 4px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); overflow: hidden;">
+            <span style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--hairline);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M17 6l3 3M14.5 8.5l2 2"/></svg><span style="font-weight: 600;">Keychain</span><span style="margin-left: auto; font-size: 12px; color: var(--muted);">on this Mac</span></span>
+            <span style="display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 9px 16px; padding: 13px 16px; font-size: 13px; line-height: 18px;">
+              <span style="font-family: var(--mono);">at-rest key</span><span style="color: var(--ink-2);">Seals audio, transcripts and notes</span>
+              <span style="font-family: var(--mono);">NEAR AI key</span><span style="color: var(--ink-2);">Used from Rust, only to send its own recordings</span>
+              <span style="font-family: var(--mono);">app key</span><span style="color: var(--ink-2);">Can only call pay and record_proof</span>
+            </span>
+          </div>
+        </div>
+        <dl style="margin: 0; display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+          <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 24px; padding: 13px 0; border-top: 1px solid var(--hairline);">
+            <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Audio</dt>
+            <dd style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Sealed about once a second as it records, so it's never on disk unencrypted. Deleted once the notes are saved.</dd>
+          </div>
+          <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 24px; padding: 13px 0; border-top: 1px solid var(--hairline);">
+            <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Transcripts and notes</dt>
+            <dd style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Sealed with XChaCha20-Poly1305. A changed byte or the wrong key won't open.</dd>
+          </div>
+          <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 24px; padding: 13px 0; border-top: 1px solid var(--hairline);">
+            <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Stays local</dt>
+            <dd style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Search, calendar lookups, backups, and the server agents use to read meetings.</dd>
+          </div>
+          <div style="display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 24px; padding: 13px 0; border-top: 1px solid var(--hairline);">
+            <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">The limit</dt>
+            <dd style="margin: 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">This stops other apps, backup and sync tools from reading your meetings. It doesn't protect a Mac account someone else has taken over.</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="limits" aria-label="What we can't prove, and how to check it yourself" style="padding: 48px 48px 48px;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 72px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <h2 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">What we can't prove</h2>
+          <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">Every Verify page lists these under the checks.</p>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+            <li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">That the transcript is accurate:</span> Whisper can mishear names and numbers.</span></li>
+            <li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">That this transcription came from the attested Whisper TEE:</span> NEAR AI signs chat responses, not transcriptions.</span></li>
+            <li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">That everyone on the call agreed to be recorded:</span> Aftercall asks you to confirm it, and can't check it.</span></li>
+            <li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">Who said what:</span> “You” is your microphone and “Others” is the call's audio.</span></li>
+            <li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="color: var(--ink-2);"><span style="font-weight: 600; color: var(--ink);">What NEAR AI keeps:</span> attestation proves the models ran in TEEs, not what NEAR AI's gateway logs.</span></li>
+          </ul>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <h2 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Check it yourself</h2>
+          <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">Every claim on this page points to code you can read and run.</p>
+          <div style="display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+            <a href="V2PublicVerify.dc.html" class="row" style="display: flex; align-items: center; gap: 16px; margin: 0 -12px; padding: 10px 12px; border-radius: 10px; transition: background-color 120ms var(--ease);">
+              <span style="flex: 1; display: flex; align-items: baseline; gap: 10px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Open a sample proof</span><span style="color: var(--ink-2);">re-run the checks in your browser</span></span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <a href="#" class="row" style="display: flex; align-items: center; gap: 16px; margin: 0 -12px; padding: 10px 12px; border-radius: 10px; border-top: 1px solid var(--hairline); transition: background-color 120ms var(--ease);">
+              <span style="flex: 1; display: flex; align-items: baseline; gap: 10px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">“What is proven” in the README</span><span style="color: var(--ink-2);">each claim and its test</span></span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+            </a>
+          </div>
+          <dl aria-label="Where the code is" style="margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 18px; padding: 13px 16px; border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); font-size: 13px; line-height: 18px;">
+            <dt style="font-family: var(--mono);">packages/core/src/tee/checks.ts</dt><dd style="margin: 0; color: var(--ink-2);">CPU checks, signature</dd>
+            <dt style="font-family: var(--mono);">packages/core/src/tee/nvidia.ts</dt><dd style="margin: 0; color: var(--ink-2);">NVIDIA GPU evidence</dd>
+            <dt style="font-family: var(--mono);">packages/core/src/tee/e2ee.ts</dt><dd style="margin: 0; color: var(--ink-2);">Encryption to Qwen</dd>
+            <dt style="font-family: var(--mono);">packages/core/src/notes/pipeline.ts</dt><dd style="margin: 0; color: var(--ink-2);">Order, stop on failure</dd>
+            <dt style="font-family: var(--mono);">packages/core/src/notes/proof.ts</dt><dd style="margin: 0; color: var(--ink-2);">The proof, its limits</dd>
+            <dt style="font-family: var(--mono);">apps/desktop/src-tauri/src/attest.rs</dt><dd style="margin: 0; color: var(--ink-2);">Intel quotes, NRAS</dd>
+            <dt style="font-family: var(--mono);">docs/privacy.md</dt><dd style="margin: 0; color: var(--ink-2);">Where every byte goes</dd>
+            <dt style="font-family: var(--mono); color: var(--accent);">pnpm sample:notes</dt><dd style="margin: 0; color: var(--ink-2);">Every check, on a sample call</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer style="padding: 0 48px; border-top: 1px solid var(--hairline);">
+    <div style="max-width: 1200px; height: 64px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px;">
+      <span style="color: var(--ink-2);">Aftercall · built on NEAR AI Cloud and NEAR</span>
+      <span style="display: flex; gap: 22px;"><a href="V2HowItWorks.dc.html" class="quiet" style="color: var(--ink-2);">Privacy</a><a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify</a><a href="#" class="quiet" style="color: var(--ink-2);">GitHub</a></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":2800}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 0, playing: true, open: {}, failed: false };
+  }
+  componentDidMount() {
+    this.startPlay();
+  }
+  componentWillUnmount() {
+    clearInterval(this.playId);
+  }
+  startPlay() {
+    clearInterval(this.playId);
+    this.setState({ step: 0, playing: true });
+    this.playId = setInterval(() => {
+      const next = this.state.step + 1;
+      if (next >= 6) {
+        clearInterval(this.playId);
+        this.setState({ step: 6, playing: false });
+      } else {
+        this.setState({ step: next });
+      }
+    }, 1100);
+  }
+  renderVals() {
+    const s = this.state;
+    const defs = [
+      { kind: 'mac', title: 'Your Mac', role: 'Records, seals the audio', sees: "Your mic and the call's audio, as two tracks", keeps: 'The audio, sealed, until the notes are saved', edge: 'TLS', caption: "Your Mac records your mic and the call's audio as two tracks, sealing the audio about once a second." },
+      { kind: 'tee', title: 'NEAR AI gateway', role: 'Relays to the models', sees: 'The audio, over TLS. The transcript only as ciphertext', keeps: "Up to NEAR AI. Its logs aren't attested", edge: '', caption: 'First your Mac checks the gateway, Whisper and Qwen against a fresh nonce. Only then does the audio go, over TLS.' },
+      { kind: 'tee', title: 'Whisper', role: 'Transcribes', sees: 'The audio, plus project and payee names as spelling hints', keeps: "Up to NEAR AI's policy", edge: 'TLS', caption: "Whisper transcribes every chunk of both tracks. Transcriptions aren't signed per response." },
+      { kind: 'mac', title: 'Your Mac', role: 'Encrypts the transcript to Qwen', sees: 'The transcript, as You and Others', keeps: 'The transcript, sealed', edge: 'E2EE', caption: "Your Mac merges both tracks into one transcript and encrypts it to the Qwen TEE's attested key." },
+      { kind: 'tee', title: 'Qwen', role: 'Writes and signs the notes', sees: 'The transcript and names, opened only inside the TEE', keeps: "Up to NEAR AI's policy", edge: 'E2EE', caption: 'Qwen writes the notes to a strict schema, signs the exchange with its attested key, and encrypts the reply to your Mac.' },
+      { kind: 'mac', title: 'Your Mac', role: 'Checks, then saves the notes', sees: 'The signed notes', keeps: 'The notes, sealed. The audio is deleted', edge: 'hash', caption: 'Your Mac checks the signature, drops any item without an exact quote, saves the notes and deletes the audio.' },
+      { kind: 'near', title: 'NEAR', role: 'A hash only', sees: 'A sha256 hash, the start time and the model name', keeps: 'Those, in public, for good. No content', edge: null, caption: 'A sha256 hash of the proof goes on NEAR with the start time and the model name. No meeting content.' }
+    ];
+    const kinds = { mac: 'On your Mac', tee: 'TEE', near: 'Public chain' };
+    const nodes = defs.map((d, i) => {
+      const active = i === s.step;
+      const dim = s.playing && i > s.step;
+      const lit = i < s.step || (!s.playing && s.step === 6);
+      const base = d.kind === 'mac' ? 'var(--accent-tint)' : d.kind === 'tee' ? 'var(--elevated)' : 'var(--well)';
+      const rest = d.kind === 'tee' ? 'var(--sh1)' : d.kind === 'near' ? 'inset 0 0 0 1px var(--border)' : 'none';
+      const e2ee = d.edge === 'E2EE';
+      return {
+        kind: kinds[d.kind],
+        isMac: d.kind === 'mac',
+        isTee: d.kind === 'tee',
+        isNear: d.kind === 'near',
+        no: String(i + 1).padStart(2, '0'),
+        title: d.title,
+        role: d.role,
+        sees: d.sees,
+        keeps: d.keeps,
+        aria: (i + 1) + ' of 7: ' + d.title + ', ' + d.role,
+        bg: base,
+        shadow: active ? '0 0 0 2px var(--accent), var(--sh2)' : rest,
+        iconColor: d.kind === 'near' ? 'var(--ink-2)' : 'var(--accent)',
+        opacity: dim ? 0.4 : 1,
+        anim: active ? 'ac-pop 320ms var(--ease) both' : 'none',
+        pressed: active ? 'true' : 'false',
+        next: d.edge !== null,
+        hasEdge: !!d.edge,
+        edge: d.edge || '',
+        lineColor: lit ? 'var(--accent)' : 'var(--border)',
+        chipBg: e2ee ? 'var(--accent-tint)' : 'var(--elevated)',
+        chipInk: e2ee ? 'var(--accent)' : 'var(--ink-2)',
+        pick: () => {
+          clearInterval(this.playId);
+          this.setState({ step: i, playing: false });
+        }
+      };
+    });
+
+    const all3 = 'gateway, Whisper, Qwen';
+    const before = [
+      { key: 'tdx', title: 'Intel TDX', meta: '6 checks · ' + all3, where: all3, means: "Each machine's Intel quote verifies against Intel's collateral, and debug mode is off.", cant: "pass off an ordinary server, or one in debug mode, as secure hardware.", checks: ['Genuine Intel TDX confidential VM', 'Debug mode off'] },
+      { key: 'bind', title: 'Key and nonce binding', meta: '6 checks · ' + all3, where: all3, means: "The quote holds the TEE's signing key and the nonce your Mac made for this run.", cant: "replay an old quote, or sign with a key made outside the TEE.", checks: ['The TEE made its signing key', 'Evidence is fresh'] },
+      { key: 'boot', title: 'Boot log', meta: '3 checks · ' + all3, where: all3, means: 'Every boot event in the log replays to the RTMR3 value in the quote.', cant: "hide what the machine loaded when it booted.", checks: ['Boot log matches the quote'] },
+      { key: 'sw', title: 'Software', meta: '3 checks · ' + all3, where: all3, means: "The sha256 of the TEE's Docker compose matches the mr_config in its quote.", cant: "show one Docker compose while running another.", checks: ['Known software is running'] },
+      { key: 'gpu', title: 'NVIDIA GPUs', meta: '6 checks · Whisper, Qwen', where: 'Whisper, Qwen', means: "NVIDIA signs a token for each GPU, with this run's nonce, secure boot on and debug off.", cant: "use a GPU outside confidential mode, or replay old GPU evidence.", checks: ['Genuine NVIDIA confidential GPU', 'GPU evidence is fresh', 'GPUs in secure mode'] }
+    ];
+    const after = [
+      { key: 'sig', title: 'Response signature', meta: '4 checks · Qwen', where: 'Qwen', means: 'The Ed25519 signature covers the exact request, response and model, from a key in a verified quote.', cant: "change the notes in transit, or answer from another model or machine.", checks: ['Signed over exactly what was sent', 'Signed over exactly what came back', 'Signed for the model asked for', 'Signed by an attested TEE'] },
+      { key: 'enc', title: 'Encryption', meta: '1 check · Qwen', where: 'Qwen', means: "The transcript was encrypted on your Mac to the key in Qwen's verified quote.", cant: "read the transcript at the gateway. It only relays ciphertext.", checks: ['Transcript encrypted to the attested model'] }
+    ];
+    const mk = (list, base) => list.map((g, i) => {
+      const isOpen = !!s.open[g.key];
+      return {
+        title: g.title,
+        meta: g.meta,
+        means: g.means,
+        cant: g.cant,
+        d: (base + i * 60) + 'ms',
+        open: isOpen,
+        aria: isOpen ? 'true' : 'false',
+        rot: isOpen ? 90 : 0,
+        items: g.checks.map((label, k) => ({ label: label, where: g.where, d: (k * 40) + 'ms', d1: (k * 40 + 40) + 'ms', d2: (k * 40 + 160) + 'ms' })),
+        toggle: () => {
+          const next = Object.assign({}, this.state.open);
+          next[g.key] = !next[g.key];
+          this.setState({ open: next });
+        }
+      };
+    });
+
+    const cur = defs[s.step];
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      nodes: nodes,
+      stepLabel: (s.step + 1) + ' of 7',
+      caption: cur.caption,
+      replayLabel: s.playing ? 'Playing' : 'Play it again',
+      replay: () => this.startPlay(),
+      before: mk(before, 80),
+      after: mk(after, 400),
+      failed: s.failed,
+      failAria: s.failed ? 'true' : 'false',
+      failLabel: s.failed ? 'Hide it' : 'Show a failed check',
+      toggleFail: () => this.setState({ failed: !this.state.failed })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · public verify page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1360px; background: var(--raised);">
+
+  <header style="border-bottom: 1px solid var(--hairline); padding: 0 24px;">
+    <div style="max-width: 760px; height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <a href="V2Landing.dc.html" style="display: inline-flex; align-items: center; gap: 9px; color: var(--ink);">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">proof 9f3a…c21e</span>
+    </div>
+  </header>
+
+  <main style="padding: 32px 24px 32px;">
+  <div style="max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+
+    <section aria-labelledby="vh" style="display: flex; align-items: center; gap: 32px; animation: ac-in 320ms var(--ease) both;">
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+        <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Meeting proof · 31 Oct 2026 · recorded by victor.near</span>
+        <h1 id="vh" style="margin: 0; max-width: 470px; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">This meeting was processed in secure hardware</h1>
+        <span style="color: var(--ink-2);">This page holds the evidence only, never what was said.</span>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px;">
+          <sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) 760ms both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>8 OF 8 PASSED IN YOUR BROWSER</span>
+          </sc-if>
+          <sc-if value="{{checking}}" hint-placeholder-val="{{ false }}">
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--elevated); color: var(--ink-2); display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; border: 1.5px solid var(--hairline); border-top-color: var(--ink-2); animation: ac-spin 900ms linear infinite;"></span>CHECKING</span>
+          </sc-if>
+        </div>
+      </div>
+      <div style="position: relative; width: 148px; height: 148px; flex-shrink: 0;">
+        <svg width="148" height="148" viewBox="0 0 148 148" aria-hidden="true" style="position: absolute; inset: 0;"><circle cx="74" cy="74" r="70" fill="none" stroke-width="1.5" stroke-dasharray="3 6" style="stroke: var(--border); opacity: .6;"/></svg>
+        <sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+          <div role="img" aria-label="Verified" style="position: absolute; inset: 0; animation: ac-pop 460ms cubic-bezier(.3,1.4,.5,1) 760ms both;">
+            <svg width="148" height="148" viewBox="0 0 148 148" aria-hidden="true">
+              <defs><path id="vring" d="M22 74a52 52 0 1 1 104 0a52 52 0 1 1-104 0"/></defs>
+              <circle cx="74" cy="74" r="71" style="fill: var(--accent-tint);"/>
+              <circle cx="74" cy="74" r="65" fill="none" stroke-width="1.5" style="stroke: var(--accent);"/>
+              <circle cx="74" cy="74" r="38" fill="none" stroke-width="1" style="stroke: var(--accent); opacity: .45;"/>
+              <text style="fill: var(--accent); font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .18em;"><textPath href="#vring" textLength="318" lengthAdjust="spacing">VERIFIED · IN SECURE HARDWARE · </textPath></text>
+              <g transform="translate(54.8 54.8) scale(1.6)" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></g>
+            </svg>
+          </div>
+        </sc-if>
+      </div>
+    </section>
+
+    <section aria-labelledby="vb" style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+        <h2 id="vb" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Re-checked in your browser <span style="color: var(--muted); font-weight: 500;">just now, from NEAR and the link</span></h2>
+        <span style="font-size: 12px; color: var(--muted);">8 checks</span>
+      </div>
+      <sc-if value="{{done}}" hint-placeholder-val="{{ true }}">
+        <ol style="margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline);">
+          <sc-for list="{{ browser }}" as="item" hint-placeholder-count="8">
+            <li style="display: grid; grid-template-columns: 20px minmax(0, 286px) minmax(0, 1fr); gap: 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--hairline); animation: ac-in 280ms var(--ease) {{item.d}} both;">
+              <svg width="20" height="20" viewBox="0 0 22 22" role="img" aria-label="Passed"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) {{item.d1}} both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms var(--ease) {{item.d2}} both;"/></svg>
+              <span style="font-weight: 600; line-height: 20px;">{{item.label}}</span>
+              <span style="font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{item.pre}}<span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">{{item.mono}}</span>{{item.post}}</span>
+            </li>
+          </sc-for>
+        </ol>
+      </sc-if>
+      <sc-if value="{{checking}}" hint-placeholder-val="{{ false }}">
+        <div role="status" style="display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); color: var(--ink-2); animation: ac-in 240ms var(--ease) both;"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 900ms linear infinite;"></span>Reading the proof from NEAR and checking it in your browser…</div>
+      </sc-if>
+    </section>
+
+    <section aria-labelledby="vr" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms var(--ease) 80ms both;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <h2 id="vr" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">As recorded by the app <span style="color: var(--muted); font-weight: 500;">on the Mac, 31 Oct 14:03</span></h2>
+          <span style="font-size: 12px; color: var(--muted);">29 checks</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+          <span style="color: var(--ink-2);">Your browser can't repeat the Intel quote check, so these are shown as the app ran them.</span>
+          <details style="color: var(--ink-2);">
+            <summary style="display: inline; cursor: pointer; color: var(--accent); font-weight: 600; list-style: none;">Why?</summary>
+            <span style="display: block; margin-top: 6px; max-width: 640px;">Intel's collateral service doesn't accept browser requests, and the quotes aren't in the link. The checks above re-use the values the app read from them.</span>
+          </details>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+          <div style="border-top: 1px solid var(--hairline); animation: ac-in 280ms var(--ease) {{g.d}} both;">
+            <button onClick="{{g.toggle}}" aria-expanded="{{g.aria}}" class="row" style="width: calc(100% + 20px); margin: 0 -10px; display: grid; grid-template-columns: 20px minmax(0, 286px) minmax(0, 1fr) 16px; gap: 14px; align-items: center; padding: 11px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left; transition: background-color 120ms var(--ease);">
+              <svg width="20" height="20" viewBox="0 0 22 22" role="img" aria-label="All passed"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) {{g.d1}} both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms var(--ease) {{g.d2}} both;"/></svg>
+              <span style="display: flex; align-items: baseline; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">{{g.title}}</span><span style="font-size: 12px; color: var(--muted);">{{g.count}}</span></span>
+              <span style="font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{g.detail}}</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--muted); transform: rotate({{g.rot}}deg); transition: transform 200ms var(--ease);"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; padding: 0 0 12px 34px;">
+                <ul style="margin: 0; padding: 0; list-style: none;">
+                  <sc-for list="{{ g.checks }}" as="c" hint-placeholder-count="6">
+                    <li style="display: grid; grid-template-columns: 16px minmax(0, 252px) minmax(0, 1fr); gap: 12px; align-items: center; padding: 6px 0; animation: ac-in 240ms var(--ease) {{c.d}} both;">
+                      <svg width="16" height="16" viewBox="0 0 22 22" role="img" aria-label="Passed"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 300ms cubic-bezier(.3,1.5,.5,1) {{c.d1}} both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 200ms var(--ease) {{c.d2}} both;"/></svg>
+                      <span style="font-weight: 600; line-height: 20px;">{{c.label}}</span>
+                      <span style="font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{c.pre}}<span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">{{c.mono}}</span>{{c.post}}</span>
+                    </li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{g.note}}" hint-placeholder-val="{{ false }}">
+                  <p style="margin: 8px 0 0; color: var(--ink-2); max-width: 640px;">{{g.noteText}}</p>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-label="On-chain proof" style="display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); animation: ac-in 320ms var(--ease) 120ms both;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><rect x="3" y="8" width="7" height="8" rx="2"/><rect x="14" y="8" width="7" height="8" rx="2"/><path d="M10 12h4"/></svg>Proof on NEAR</span>
+        <span title="9f3a1c7e52b0d8a4e61f09c2b7d35e8a40f1c96d2e7b3a5f8c0d943d7b04c21e" style="font-family: var(--mono); font-size: 13px;">9f3a1c7e52b0…3d7b04c21e</span>
+        <button onClick="{{copy}}" class="press quiet" aria-label="Copy proof hash" style="height: 28px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--raised); color: var(--ink-2); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--sh1);">
+          <sc-if value="{{copied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+          <sc-if value="{{notCopied}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</span></sc-if>
+        </button>
+        <a href="https://nearblocks.io/address/aftercall.near" target="_blank" rel="noreferrer" style="margin-left: auto; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">View on NEAR Explorer<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2);">
+        <span>Contract <span style="font-family: var(--mono); color: var(--ink);">aftercall.near</span></span><span style="color: var(--muted);">·</span><span>mainnet</span><span style="color: var(--muted);">·</span><span>Recorded by <span style="font-family: var(--mono); color: var(--ink);">victor.near</span></span><span style="color: var(--muted);">·</span><a href="#" style="font-weight: 600;">Download bundle (JSON)</a>
+      </div>
+    </section>
+
+    <section aria-labelledby="vn" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms var(--ease) 160ms both;">
+      <h2 id="vn" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">What this does not prove <span style="color: var(--muted); font-weight: 500;">read this too</span></h2>
+      <ul style="margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2);">
+        <li><span style="color: var(--ink); font-weight: 500;">That the transcript is accurate:</span> Whisper can mishear names and numbers.</li>
+        <li><span style="color: var(--ink); font-weight: 500;">That this transcription came from the attested Whisper TEE:</span> NEAR AI signs chat responses, not transcriptions.</li>
+        <li><span style="color: var(--ink); font-weight: 500;">That everyone on the call agreed to be recorded:</span> Aftercall asks you to confirm it, and can't check it.</li>
+        <li><span style="color: var(--ink); font-weight: 500;">Who said what:</span> “You” is your microphone and “Others” is the call's audio.</li>
+        <li><span style="color: var(--ink); font-weight: 500;">That the Intel quotes were genuine:</span> the app verified them with Intel when the meeting was processed; this page trusts that record and re-checks what it can.</li>
+      </ul>
+    </section>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; border-top: 1px solid var(--hairline);">
+      <button onClick="{{rerun}}" class="press secondary" style="height: 36px; padding: 0 16px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>Run the checks again</button>
+      <a href="V2Landing.dc.html" style="font-weight: 600;">What is Aftercall?</a>
+    </div>
+
+  </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1360}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { checking: false, copied: false, open: {} };
+  }
+  componentWillUnmount() {
+    clearTimeout(this.runId);
+    clearTimeout(this.copyId);
+  }
+  renderVals() {
+    const s = this.state;
+    const row = (label, pre, mono, post, ms, step) => ({ label: label, pre: pre, mono: mono, post: post, d: ms + 'ms', d1: (ms + step) + 'ms', d2: (ms + step + 120) + 'ms' });
+    const browserRows = [
+      ['Proof recorded on NEAR', 'Recorded ', '2026-10-31 14:05', ' UTC'],
+      ['Proof matches this meeting', 'sha256 ', '9f3a1c7e52b0d8a4…', ''],
+      ['Summary signed inside secure hardware', 'Ed25519 by ', '4b1e9c07d2…', ', over the exact request and response'],
+      ['Signer was attested', 'Key is in the model TEE’s quote, next to this meeting’s nonce', '', ''],
+      ['Signer ran the attested software', 'mr_config is 01 + sha256 of the attested compose ', 'c41d07a9…', ''],
+      ['Transcript encrypted to the attested model', 'Encrypted to a key bound in the summary TEE’s report data', '', ''],
+      ['Private model', '', 'Qwen/Qwen3.8-27B', ' on NEAR AI Confidential TEE'],
+      ['NVIDIA attested the signer’s GPUs', 'Signed by NVIDIA at ', '14:03 UTC', '; overall pass; carries this nonce']
+    ];
+    const browser = browserRows.map((r, i) => row(r[0], r[1], r[2], r[3], 140 + i * 70, 60));
+    const cpu = (key, compose) => [
+      ['Genuine Intel TDX confidential VM', 'Quote verified against Intel’s collateral; TCB UpToDate', '', ''],
+      ['Debug mode off', 'The quote’s TD attributes have the debug bit clear', '', ''],
+      ['The TEE made its signing key', 'Quote report data holds signing key ', key, ''],
+      ['Evidence is fresh', 'Report data and the reply hold the nonce made for this check', '', ''],
+      ['Boot log matches the quote', 'Every boot event replays to the quote’s RTMR3', '', ''],
+      ['Known software is running', 'sha256 of the attested compose (', compose, ') is the mr_config']
+    ];
+    const gpu = [
+      ['Genuine NVIDIA confidential GPU', 'NVIDIA NRAS passed every GPU; tokens signed by NVIDIA (ES384)', '', ''],
+      ['GPU evidence is fresh', 'GPU evidence and every NVIDIA token carry this check’s nonce', '', ''],
+      ['GPUs in secure mode', 'Secure boot on, debug off, measurements match NVIDIA’s reference', '', '']
+    ];
+    const response = [
+      ['Signed over exactly what was sent', 'sha256 of the request bytes matches the signed text', '', ''],
+      ['Signed over exactly what came back', 'sha256 of the response bytes matches the signed text', '', ''],
+      ['Signed for the model asked for', 'Signed text names ', 'Qwen/Qwen3.8-27B', ''],
+      ['Signed by an attested TEE', 'Ed25519 signer ', '4b1e9c07d2…a81f0c', ' is the model TEE, bound in a verified quote'],
+      ['Transcript encrypted to the attested model', 'Encrypted on the Mac to the Qwen TEE’s attested key', '', '']
+    ];
+    const defs = [
+      { key: 'gateway', title: 'Gateway', detail: 'Intel TDX quote, debug off, key and nonce, boot log, software', rows: cpu('7f2c91ab04…e1d3a9', '5e8a20c4f1d9…') },
+      { key: 'whisper', title: 'Whisper TEE', detail: 'The same CPU checks, plus NVIDIA GPU evidence', rows: cpu('a90d3e5c11…77b2f4', 'b37f0e9a6c25…').concat(gpu), note: true },
+      { key: 'qwen', title: 'Qwen TEE', detail: 'The same checks, and this TEE signed the summary', rows: cpu('4b1e9c07d2…a81f0c', 'c41d07a9e2f3…').concat(gpu) },
+      { key: 'response', title: 'Response', detail: 'Signed over exactly what was sent and what came back', rows: response }
+    ];
+    const groups = defs.map((g, j) => {
+      const ms = 140 + (8 + j) * 70;
+      const isOpen = !!s.open[g.key];
+      return {
+        title: g.title,
+        count: g.rows.length + ' passed',
+        detail: g.detail,
+        d: ms + 'ms', d1: (ms + 60) + 'ms', d2: (ms + 180) + 'ms',
+        open: isOpen,
+        aria: isOpen ? 'true' : 'false',
+        rot: isOpen ? 90 : 0,
+        note: !!g.note,
+        noteText: 'Transcription runs in an attested TEE but isn’t signed per response. The audio travels over TLS through the attested gateway; it isn’t end-to-end encrypted.',
+        checks: g.rows.map((r, k) => row(r[0], r[1], r[2], r[3], k * 40, 40)),
+        toggle: () => {
+          const next = Object.assign({}, this.state.open);
+          next[g.key] = !next[g.key];
+          this.setState({ open: next });
+        }
+      };
+    });
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      done: !s.checking,
+      checking: s.checking,
+      browser: browser,
+      groups: groups,
+      copied: s.copied,
+      notCopied: !s.copied,
+      copy: () => {
+        try {
+          if (navigator.clipboard) navigator.clipboard.writeText('9f3a1c7e52b0d8a4e61f09c2b7d35e8a40f1c96d2e7b3a5f8c0d943d7b04c21e').catch(() => {});
+        } catch (e) {}
+        this.setState({ copied: true });
+        clearTimeout(this.copyId);
+        this.copyId = setTimeout(() => this.setState({ copied: false }), 1600);
+      },
+      rerun: () => {
+        this.setState({ checking: true });
+        clearTimeout(this.runId);
+        this.runId = setTimeout(() => this.setState({ checking: false }), 900);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

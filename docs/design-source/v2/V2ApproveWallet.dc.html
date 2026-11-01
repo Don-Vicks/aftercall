@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · approve in your wallet</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 940px; background: var(--raised);">
+
+  <header style="border-bottom: 1px solid var(--hairline); padding: 0 24px;">
+    <div style="max-width: 640px; height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <a href="V2Landing.dc.html" style="display: inline-flex; align-items: center; gap: 9px; color: var(--ink);">
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">mainnet</span>
+    </div>
+  </header>
+
+  <main style="padding: 40px 24px 48px;">
+  <div style="max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px;">
+
+    <section aria-labelledby="ah" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms var(--ease) both;">
+      <span style="align-self: flex-start; height: 24px; padding: 0 10px; border-radius: 999px; background: {{pillBg}}; color: {{pillFg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;">{{pill}}</span>
+      <h1 id="ah" style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">{{title}}</h1>
+      <p style="margin: 0; color: var(--ink-2);">{{intro}}</p>
+    </section>
+
+    <dl class="lift" style="margin: 0; padding: 6px 24px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); display: grid; grid-template-columns: 112px minmax(0, 1fr); animation: ac-in 320ms var(--ease) 40ms both;">
+      <dt style="padding: 16px 0; font-size: 13px; line-height: 40px; font-weight: 500; color: var(--muted);">Amount</dt>
+      <dd style="margin: 0; padding: 16px 0; display: flex; align-items: baseline; gap: 8px;"><span style="font-family: var(--mono); font-size: 34px; line-height: 40px; letter-spacing: -0.03em;">5,000.00</span><span style="font-family: var(--mono); font-size: 15px; color: var(--ink-2);">USDC</span></dd>
+
+      <dt style="padding: 14px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 28px; font-weight: 500; color: var(--muted);">To</dt>
+      <dd style="margin: 0; padding: 14px 0; border-top: 1px solid var(--hairline); display: flex; align-items: center; gap: 10px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--p4); color: var(--p4i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">D</span><span style="font-weight: 600;">Designer</span><span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2);">designer.near</span></dd>
+
+      <dt style="padding: 14px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 22px; font-weight: 500; color: var(--muted);">From</dt>
+      <dd style="margin: 0; padding: 14px 0; border-top: 1px solid var(--hairline); line-height: 22px;">Sync with Ada <span style="color: var(--muted);">·</span> <span style="color: var(--ink-2);">today</span> <span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2);">14:02</span></dd>
+
+      <dt style="padding: 14px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 24px; font-weight: 500; color: var(--muted);">Heard</dt>
+      <dd style="margin: 0; padding: 14px 0; border-top: 1px solid var(--hairline); font-family: var(--serif); font-style: italic; font-size: 18px; line-height: 24px;">“five thousand”</dd>
+
+      <dt style="padding: 14px 0; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 22px; font-weight: 500; color: var(--muted);">Cap today</dt>
+      <dd style="margin: 0; padding: 14px 0; border-top: 1px solid var(--hairline); line-height: 22px;"><span style="font-family: var(--mono); font-size: 13px;">150.00 of 200.00</span> <span style="color: var(--ink-2);">left; this goes past it once</span></dd>
+    </dl>
+
+    <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}">
+      <section aria-labelledby="sw" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms var(--ease) 80ms both;">
+        <h2 id="sw" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Sign with <span style="color: var(--muted); font-weight: 500;">your own wallet, as <span style="font-family: var(--mono); font-size: 13px;">victor.near</span></span></h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <sc-for list="{{ wallets }}" as="w" hint-placeholder-count="5">
+            <button onClick="{{w.pick}}" disabled="{{w.disabled}}" class="press secondary" style="height: 44px; padding: 0 14px 0 8px; border: 1px solid {{w.border}}; border-radius: 10px; background: {{w.bg}}; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 10px; opacity: {{w.opacity}}; transition: opacity 160ms var(--ease), background-color 120ms var(--ease);">
+              <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; font-weight: 500;">{{w.mark}}</span>
+              {{w.label}}
+              <sc-if value="{{w.busy}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 900ms linear infinite;"></span></sc-if>
+            </button>
+          </sc-for>
+        </div>
+        <sc-if value="{{waiting}}" hint-placeholder-val="{{ false }}">
+          <p role="status" style="margin: 0; color: var(--ink); animation: ac-in 240ms var(--ease) both;">{{waitingText}}</p>
+        </sc-if>
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+          <span style="color: var(--ink-2);">Your wallet will ask you to call <span style="font-family: var(--mono); font-size: 13px; color: var(--ink);">{{method}}</span> with 1 yoctoNEAR attached.</span>
+          <details style="color: var(--ink-2);">
+            <summary style="display: inline; cursor: pointer; color: var(--accent); font-weight: 600; list-style: none;">Why?</summary>
+            <span style="display: block; margin-top: 6px;">It's a call on <span style="font-family: var(--mono); font-size: 13px; color: var(--ink);">aftercall.near</span>, the agent-wallet contract. The 1 yoctoNEAR is normal: it proves the signature came from you, not from Aftercall. Aftercall's own key can't attach a deposit, so it can never approve a payment or change a rule.</span>
+          </details>
+        </div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <section role="status" style="display: flex; gap: 14px; padding: 18px 20px; border-radius: 14px; background: var(--accent-tint); animation: ac-pop 360ms cubic-bezier(.3,1.3,.5,1) both;">
+        <svg width="24" height="24" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) 80ms both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms var(--ease) 220ms both;"/></svg>
+        <span style="display: flex; flex-direction: column; gap: 4px;">
+          <span style="font-weight: 600; color: var(--accent);">Signed. Aftercall updates on its own.</span>
+          <a href="https://nearblocks.io/txns/8Gk2xQ1vR7mN3cT5wY9pLd4sHf6jB2tQ9x" target="_blank" rel="noreferrer" style="font-family: var(--mono); font-size: 13px;">8Gk2xQ1v…tQ9x on NEAR Explorer</a>
+          <span style="color: var(--ink-2);">You can close this page.</span>
+        </span>
+      </section>
+    </sc-if>
+
+    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding-top: 18px; border-top: 1px solid var(--hairline);">
+      <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}"><button onClick="{{switchMode}}" class="press quiet" style="height: 34px; padding: 0 12px; margin-left: -12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">{{switchLabel}}</button></sc-if>
+      <sc-if value="{{done}}" hint-placeholder-val="{{ false }}"><span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">aftercall.near</span></sc-if>
+      <span style="font-size: 13px; color: var(--ink-2);">Only you can sign this. Aftercall never sees your wallet's keys.</span>
+    </div>
+
+  </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":940}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'approve', wallet: null, phase: 'ready' };
+  }
+  componentWillUnmount() {
+    clearTimeout(this.signId);
+  }
+  renderVals() {
+    const s = this.state;
+    const approving = s.mode === 'approve';
+    const busy = s.phase === 'signing';
+    const names = [['M', 'Meteor'], ['I', 'Intear'], ['H', 'HOT Wallet'], ['L', 'Ledger'], ['…', 'Other wallets']];
+    const wallets = names.map((n) => {
+      const mine = s.wallet === n[1];
+      return {
+        mark: n[0],
+        label: n[1],
+        busy: mine && busy,
+        disabled: busy,
+        opacity: busy && !mine ? 0.45 : 1,
+        border: mine && busy ? 'var(--accent)' : 'var(--border)',
+        bg: mine && busy ? 'var(--accent-tint)' : 'transparent',
+        pick: () => {
+          if (this.state.phase !== 'ready') return;
+          this.setState({ wallet: n[1], phase: 'signing' });
+          clearTimeout(this.signId);
+          this.signId = setTimeout(() => this.setState({ phase: 'done' }), 1800);
+        }
+      };
+    });
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      pill: approving ? 'OVER YOUR LIMITS' : 'DECLINE',
+      pillBg: approving ? 'var(--caution-tint)' : 'var(--elevated)',
+      pillFg: approving ? 'var(--caution)' : 'var(--ink-2)',
+      title: approving ? 'Approve a payment your agent wallet blocked' : 'Decline a blocked payment',
+      intro: approving ? 'Aftercall’s key can’t pay this; only your wallet can. Check every line, then sign.' : 'Nothing is paid, and the storage it used comes back to you.',
+      method: approving ? 'approve_pending' : 'cancel_pending',
+      wallets: wallets,
+      waiting: busy,
+      waitingText: 'Waiting for your wallet… Sign there; this page updates when it’s done.',
+      notDone: s.phase !== 'done',
+      done: s.phase === 'done',
+      switchLabel: approving ? 'Reject instead' : 'Approve instead',
+      switchMode: () => {
+        clearTimeout(this.signId);
+        this.setState({ mode: this.state.mode === 'approve' ? 'decline' : 'approve', phase: 'ready', wallet: null });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

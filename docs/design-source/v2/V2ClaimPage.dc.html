@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · claim page (phone)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="width: 390px; height: 844px; overflow: hidden; box-sizing: border-box; background: var(--raised); display: flex; flex-direction: column;">
+
+  <div aria-hidden="true" style="height: 44px; flex-shrink: 0; padding: 0 26px 0 30px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600;">
+    <span>14:21</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px;">
+      <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" style="fill: var(--ink);"/><rect x="4.5" y="5" width="3" height="6" rx="1" style="fill: var(--ink);"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" style="fill: var(--ink);"/><rect x="13.5" y="0" width="3" height="11" rx="1" style="fill: var(--ink);"/></svg>
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke-width="1.6" stroke-linecap="round" style="stroke: var(--ink);"><path d="M1 4a10 10 0 0 1 14 0"/><path d="M3.6 6.6a6.3 6.3 0 0 1 8.8 0"/><path d="M6.2 9.1a2.6 2.6 0 0 1 3.6 0"/></svg>
+      <svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" style="stroke: var(--muted);"/><rect x="2.5" y="2.5" width="15" height="7" rx="1.5" style="fill: var(--ink);"/><rect x="24" y="4" width="1.6" height="4" rx=".8" style="fill: var(--muted);"/></svg>
+    </span>
+  </div>
+
+  <div style="flex: 1; min-height: 0; padding: 6px 20px 24px; display: flex; flex-direction: column; gap: 22px;">
+
+    <header style="display: flex; align-items: center; justify-content: space-between;">
+      <span style="display: inline-flex; align-items: center; gap: 8px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 18px; line-height: 22px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </span>
+      <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">aftercall.app</span>
+    </header>
+
+    <section aria-labelledby="ch" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms var(--ease) both;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">A payment for you, Designer</span>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 999px; background: var(--p1); color: var(--p1i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0;">V</span>
+        <span style="display: flex; flex-direction: column;"><span style="font-weight: 600;">Victor</span><span style="font-family: var(--mono); font-size: 13px; line-height: 18px; color: var(--ink-2);">victor.near</span></span>
+      </div>
+      <h1 id="ch" style="margin: 0; display: flex; flex-direction: column; gap: 2px; font-weight: 500;">
+        <span style="font-family: var(--serif); font-size: 30px; line-height: 36px; letter-spacing: -0.015em;">Victor wants to pay you</span>
+        <span style="display: inline-block; overflow: hidden; height: 50px;"><span style="display: inline-block; font-family: var(--mono); font-size: 40px; line-height: 50px; font-weight: 400; letter-spacing: -0.03em; animation: ac-roll 420ms cubic-bezier(.3,1.3,.5,1) 160ms both;">50.00<span style="margin-left: 10px; font-size: 22px; letter-spacing: 0; color: var(--ink-2);">USDC</span></span></span>
+      </h1>
+      <p style="margin: 0; color: var(--ink-2); font-size: 15px; line-height: 22px;">Agreed in “Sync with Ada”. Tell Victor where to send it.</p>
+    </section>
+
+    <sc-if value="{{open}}" hint-placeholder-val="{{ true }}">
+      <section style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms var(--ease) 40ms both;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label for="acct" style="font-size: 13px; font-weight: 600;">Your NEAR account</label>
+          <input id="acct" class="field" defaultValue="{{account}}" onChange="{{typed}}" placeholder="yourname.near" autocapitalize="none" autocorrect="off" spellcheck="false" style="height: 48px; padding: 0 14px; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-family: var(--mono); font-size: 15px;">
+          <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">No account yet? <a href="#" style="font-weight: 600;">Create one in a NEAR wallet</a>, then come back to this link.</span>
+        </div>
+        <button onClick="{{share}}" disabled="{{cantShare}}" class="press primary" style="height: 48px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; opacity: {{buttonOpacity}};">
+          <sc-if value="{{sending}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 999px; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--on-accent); animation: ac-spin 900ms linear infinite;"></span></sc-if>
+          {{buttonLabel}}
+        </button>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <section role="status" style="display: flex; gap: 12px; padding: 16px; border-radius: 14px; background: var(--accent-tint); animation: ac-pop 360ms cubic-bezier(.3,1.3,.5,1) both;">
+        <svg width="24" height="24" viewBox="0 0 22 22" aria-hidden="true" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) 80ms both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms var(--ease) 220ms both;"/></svg>
+        <span style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-weight: 600; color: var(--accent);">Shared <span style="font-family: var(--mono); font-size: 13px; font-weight: 500;">{{account}}</span></span>
+          <span style="color: var(--ink-2);">Victor confirms it in their own wallet, then the payment is sent in USDC on NEAR. You can close this page.</span>
+        </span>
+      </section>
+    </sc-if>
+
+    <section aria-labelledby="nx" style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms var(--ease) 80ms both;">
+      <h2 id="nx" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">What happens next</h2>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px;">
+        <sc-for list="{{ steps }}" as="st" hint-placeholder-count="3">
+          <li style="display: flex; gap: 12px; align-items: flex-start;">
+            <span aria-hidden="true" style="width: 24px; height: 24px; flex-shrink: 0; border-radius: 999px; background: {{st.bg}}; color: {{st.fg}}; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; font-weight: 500; transition: background-color 200ms var(--ease), color 200ms var(--ease);">{{st.mark}}</span>
+            <span style="padding-top: 1px; color: {{st.text}}; transition: color 200ms var(--ease);">{{st.label}}</span>
+          </li>
+        </sc-for>
+      </ol>
+    </section>
+
+    <p style="margin: auto 0 0; padding-top: 14px; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 19px; color: var(--ink-2);">This link only shares where to send money; it can't take anything from you. It works once and expires in 7 days. Your name and the meeting come from the link itself and were never stored on Aftercall's server.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { account: 'designer.near', phase: 'open' };
+  }
+  componentWillUnmount() {
+    clearTimeout(this.sendId);
+  }
+  renderVals() {
+    const s = this.state;
+    const valid = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/.test(s.account);
+    const done = s.phase === 'done';
+    const sending = s.phase === 'sending';
+    const step = (n, label, state) => ({
+      label: label,
+      mark: state === 'done' ? '✓' : String(n),
+      bg: state === 'done' ? 'var(--accent)' : state === 'now' ? 'var(--accent-tint)' : 'var(--well)',
+      fg: state === 'done' ? 'var(--on-accent)' : state === 'now' ? 'var(--accent)' : 'var(--ink-2)',
+      text: state === 'later' ? 'var(--ink-2)' : 'var(--ink)'
+    });
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      account: s.account,
+      open: !done,
+      done: done,
+      sending: sending,
+      cantShare: !valid || sending,
+      buttonOpacity: valid ? 1 : 0.45,
+      buttonLabel: sending ? 'Sharing…' : 'Share account with Victor',
+      typed: (e) => {
+        const v = e && e.target ? String(e.target.value).trim().toLowerCase() : this.state.account;
+        this.setState({ account: v });
+      },
+      share: () => {
+        if (!valid || sending) return;
+        this.setState({ phase: 'sending' });
+        clearTimeout(this.sendId);
+        this.sendId = setTimeout(() => this.setState({ phase: 'done' }), 700);
+      },
+      steps: [
+        step(1, 'You share your NEAR account here.', done ? 'done' : 'now'),
+        step(2, 'Victor confirms in their own wallet that this account is you.', done ? 'now' : 'later'),
+        step(3, 'The payment is sent in USDC on NEAR, usually within seconds.', 'later')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

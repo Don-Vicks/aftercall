@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · landing concept B, try it here</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 2400px; background: var(--ground); display: flex; flex-direction: column;">
+
+  <header style="padding: 0 clamp(16px, 3.4vw, 48px);">
+    <div style="max-width: 1344px; min-height: 72px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap;">
+      <a href="#" style="font-family: var(--serif); font-size: 23px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink);">Aftercall</a>
+      <nav aria-label="Site" style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap; font-weight: 500;">
+        <a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a>
+        <a href="#" class="quiet" style="color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px;">GitHub<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <a href="#" class="press secondary" style="height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center;">Download for Mac</a>
+      </nav>
+    </div>
+  </header>
+
+  <main style="flex: 1;">
+
+    <section id="demo" aria-labelledby="hero" style="padding: 20px clamp(16px, 3.4vw, 48px) 0;">
+      <div style="max-width: 1344px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px;">
+
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 48px; flex-wrap: wrap; animation: ac-in 320ms var(--ease) both;">
+          <h1 id="hero" style="margin: 0; font-family: var(--serif); font-size: clamp(52px, 5vw, 72px); line-height: 1.06; font-weight: 500; letter-spacing: -0.03em;">Press record.</h1>
+          <p style="margin: 0 0 8px; max-width: 320px; font-size: 20px; line-height: 28px; color: var(--ink-2);">Private meeting notes that do the follow-ups.</p>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 32px 40px; align-items: stretch;">
+
+          <section aria-label="Try Aftercall on a scripted sample call" style="flex: 999 1 640px; min-width: 0; max-width: 1100px; border-radius: 14px; overflow: hidden; background: var(--raised); box-shadow: var(--shfloat); display: flex; flex-direction: column; animation: ac-in 420ms 80ms var(--ease) both;">
+
+            <div style="height: 40px; flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; padding: 0 14px; border-bottom: 1px solid var(--hairline);">
+              <span aria-hidden="true" style="display: inline-flex; gap: 7px;"><span style="width: 11px; height: 11px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 11px; height: 11px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 11px; height: 11px; border-radius: 999px; background: var(--hairline);"></span></span>
+              <span style="font-size: 12px; font-weight: 500; color: var(--muted);">Aftercall</span>
+              <span style="justify-self: end; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">SAMPLE</span>
+            </div>
+
+            <div style="position: relative; min-height: 600px; box-sizing: border-box; padding: 28px clamp(20px, 2.8vw, 40px); display: flex; flex-direction: column; gap: 24px;">
+
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 24px; flex-wrap: wrap;">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">{{meta}}</span>
+                  <sc-if value="{{pillRec}}" hint-placeholder-val="{{ false }}">
+                    <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) both;"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--record); animation: ac-breathe 2s ease-in-out infinite;"></span>RECORDING</span>
+                  </sc-if>
+                  <sc-if value="{{pillChecking}}" hint-placeholder-val="{{ false }}">
+                    <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--elevated); color: var(--ink-2); display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; box-shadow: var(--sh1); animation: ac-pop 320ms var(--ease) both;"><span aria-hidden="true" style="width: 10px; height: 10px; box-sizing: border-box; border-radius: 999px; border: 1.5px solid var(--hairline); border-top-color: var(--ink-2); animation: ac-spin 900ms linear infinite;"></span>CHECKING</span>
+                  </sc-if>
+                  <sc-if value="{{pillVerified}}" hint-placeholder-val="{{ false }}">
+                    <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 360ms cubic-bezier(.3,1.4,.5,1) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</span>
+                  </sc-if>
+                </div>
+                <h2 style="margin: 0; font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">Sync with Ada</h2>
+                <sc-if value="{{showPeople}}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 28px;">
+                    <span aria-hidden="true" style="display: inline-flex;"><span style="width: 28px; height: 28px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">You</span><span style="margin-left: -6px; width: 28px; height: 28px; border-radius: 999px; background: var(--p2); color: var(--p2i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">A</span></span>
+                    <span style="color: var(--ink-2);">You and Ada</span>
+                    <sc-if value="{{isRec}}" hint-placeholder-val="{{ false }}">
+                      <span style="display: inline-flex; align-items: center; gap: 10px; color: var(--ink-2);"><span style="color: var(--muted);">·</span><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>You told everyone it's recorded</span></span>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{isIdle}}" hint-placeholder-val="{{ true }}">
+                <div style="min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; animation: ac-in 320ms var(--ease) both;">
+                  <button onClick="{{record}}" class="press" style="padding: 0; border: 0; background: transparent; color: var(--ink); display: inline-flex; flex-direction: column; align-items: center; gap: 16px;">
+                    <span aria-hidden="true" style="display: inline-flex; padding: 14px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--hairline);">
+                      <span style="width: 128px; height: 128px; border-radius: 999px; background: var(--record); display: inline-flex; align-items: center; justify-content: center; animation: ac-breathe 2.4s ease-in-out infinite;"><span style="width: 32px; height: 32px; border-radius: 999px; background: #fff;"></span></span>
+                    </span>
+                    <span style="font-size: 20px; line-height: 26px; font-weight: 600;">Record</span>
+                  </button>
+                  <span style="color: var(--ink-2);">A scripted sample call with Ada. Your microphone stays off.</span>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{isRec}}" hint-placeholder-val="{{ false }}">
+                <div style="min-height: 420px; display: flex; flex-direction: column; justify-content: space-between; gap: 24px; animation: ac-in 280ms var(--ease) both;">
+                  <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                      <h3 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Your notes <span style="color: var(--muted); font-weight: 500;">only you write here</span></h3>
+                      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Saved, encrypted on this Mac</span>
+                    </div>
+                    <div role="textbox" aria-readonly="true" aria-label="Your notes" style="min-height: 190px; box-sizing: border-box; padding: 20px 24px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); font-family: var(--serif); font-size: 19px; line-height: 31px; color: var(--ink); white-space: pre-line;">{{typedNotes}}<span aria-hidden="true" style="display: inline-block; width: 2px; height: 22px; margin-left: 1px; vertical-align: -4px; border-radius: 1px; background: var(--accent);"></span></div>
+                  </div>
+                  <div style="display: flex; justify-content: center;">
+                    <div role="group" aria-label="Recording controls" style="display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--elevated); box-shadow: var(--shpill); animation: ac-in 360ms 120ms var(--ease) both;">
+                      <span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: var(--record); animation: ac-breathe 2s ease-in-out infinite;"></span>
+                      <span role="timer" aria-label="Recording time" style="font-family: var(--mono); font-size: 16px; font-weight: 500; min-width: 52px; letter-spacing: -0.01em;">{{timer}}</span>
+                      <span role="img" aria-label="Your mic" style="display: inline-flex; align-items: center; gap: 2px; height: 24px;">
+                        <span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 820ms ease-in-out -120ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 640ms ease-in-out -340ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 900ms ease-in-out -520ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 700ms ease-in-out -80ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 760ms ease-in-out -410ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--accent); animation: ac-bar 680ms ease-in-out -260ms infinite;"></span>
+                      </span>
+                      <span role="img" aria-label="The call" style="display: inline-flex; align-items: center; gap: 2px; height: 24px;">
+                        <span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1100ms ease-in-out -300ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 980ms ease-in-out -700ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1240ms ease-in-out -150ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 860ms ease-in-out -560ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1020ms ease-in-out -90ms infinite;"></span><span style="width: 3px; height: 24px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 920ms ease-in-out -430ms infinite;"></span>
+                      </span>
+                      <span aria-hidden="true" style="width: 1px; height: 24px; background: var(--hairline);"></span>
+                      <button onClick="{{stop}}" class="press" style="height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--record); color: #fff; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 2px; background: #fff;"></span>Stop and make notes</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{isCheck}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 28px; animation: ac-in 280ms var(--ease) both;">
+                  <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+                    <span style="position: relative; width: 124px; height: 124px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;">
+                      <sc-if value="{{notSealed}}" hint-placeholder-val="{{ true }}">
+                        <svg width="124" height="124" viewBox="0 0 124 124" role="img" aria-label="{{ringLabel}}" style="position: absolute; inset: 0;"><circle cx="62" cy="62" r="54" fill="none" stroke-width="6" style="stroke: var(--hairline);"/><circle cx="62" cy="62" r="54" fill="none" stroke-width="6" stroke-linecap="round" stroke-dasharray="339.29" style="stroke: var(--accent); stroke-dashoffset: {{ringOffset}}; transform: rotate(-90deg); transform-origin: 62px 62px; transition: stroke-dashoffset 160ms var(--ease);"/></svg>
+                        <span aria-hidden="true" style="position: relative; display: flex; flex-direction: column; align-items: center;"><span style="font-family: var(--mono); font-size: 36px; line-height: 40px; letter-spacing: -0.03em;">{{checkCount}}</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">of 29</span></span>
+                      </sc-if>
+                      <sc-if value="{{sealed}}" hint-placeholder-val="{{ false }}">
+                        <span role="img" aria-label="Verified in secure hardware" style="display: inline-flex; animation: ac-pop 460ms cubic-bezier(.3,1.4,.5,1) both;">
+                          <svg width="124" height="124" viewBox="0 0 148 148" aria-hidden="true"><defs><path id="bseal" d="M22 74a52 52 0 1 1 104 0a52 52 0 1 1-104 0"/></defs><circle cx="74" cy="74" r="71" style="fill: var(--accent-tint);"/><circle cx="74" cy="74" r="65" fill="none" stroke-width="1.5" style="stroke: var(--accent);"/><circle cx="74" cy="74" r="38" fill="none" stroke-width="1" style="stroke: var(--accent); opacity: .45;"/><text style="fill: var(--accent); font-family: var(--sans); font-size: 10.5px; font-weight: 600; letter-spacing: .18em;"><textPath href="#bseal" textLength="318" lengthAdjust="spacing">VERIFIED · IN SECURE HARDWARE · </textPath></text><g transform="translate(54.8 54.8) scale(1.6)" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></g></svg>
+                        </span>
+                      </sc-if>
+                    </span>
+                    <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px;">
+                      <span style="font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">{{checkTitle}}</span>
+                      <span style="color: var(--ink-2);">{{checkLine}}</span>
+                      <sc-if value="{{sealed}}" hint-placeholder-val="{{ false }}">
+                        <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); animation: ac-in 280ms 500ms var(--ease) both;"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span>Opening your notes</span>
+                      </sc-if>
+                    </div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px 28px;">
+                    <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+                      <div style="display: flex; flex-direction: column; min-width: 0;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--hairline);">
+                          <span style="display: flex; flex-direction: column; min-width: 0;"><span style="font-size: 14px; line-height: 20px; font-weight: 600;">{{g.title}}</span><span style="font-size: 12px; line-height: 16px; color: var(--muted);">{{g.aside}}</span></span>
+                          <span style="font-family: var(--mono); font-size: 13px; line-height: 20px; color: {{g.countColor}}; transition: color 200ms var(--ease);">{{g.count}}</span>
+                        </div>
+                        <ol aria-label="{{g.title}} checks" style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px;">
+                          <sc-for list="{{g.checks}}" as="c" hint-placeholder-count="9">
+                            <li style="display: flex; align-items: center; gap: 8px; min-height: 20px; font-size: 13px; line-height: 18px; color: {{c.color}}; transition: color 160ms var(--ease);">
+                              <sc-if value="{{c.done}}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 18 18" role="img" aria-label="Passed" style="flex-shrink: 0;"><circle cx="9" cy="9" r="9" style="fill: var(--accent-tint); transform-origin: 9px 9px; animation: ac-fill 300ms cubic-bezier(.3,1.5,.5,1) both;"/><path d="M5.2 9.3l2.5 2.5 5-5.3" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--accent); animation: ac-draw 220ms 80ms var(--ease) both;"/></svg></sc-if>
+                              <sc-if value="{{c.todo}}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 18 18" role="img" aria-label="Waiting" style="flex-shrink: 0;"><circle cx="9" cy="9" r="8" fill="none" stroke-width="1.4" style="stroke: var(--border);"/></svg></sc-if>
+                              <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{c.label}}</span>
+                            </li>
+                          </sc-for>
+                        </ol>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{isNotes}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-wrap: wrap; gap: 28px 44px; align-items: flex-start; padding-bottom: 56px;">
+
+                  <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-direction: column; gap: 22px;">
+                    <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; animation: ac-in 320ms var(--ease) both;">Ada and Victor agreed the API fix ships before Friday's demo. Victor sends Ada a recap today and pays the designer a 50 USDC deposit to refresh the deck.</p>
+                    <section aria-labelledby="b-dc" style="display: flex; flex-direction: column; gap: 8px; animation: ac-in 320ms 60ms var(--ease) both;">
+                      <h3 id="b-dc" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Decisions <span style="color: var(--muted); font-weight: 500;">2</span></h3>
+                      <ol style="margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; font-family: var(--serif); font-size: 17px; line-height: 26px;">
+                        <li>Ship the API fix before Friday's demo.</li>
+                        <li>Refresh the deck with the designer, with a 50 USDC deposit now.</li>
+                      </ol>
+                    </section>
+                    <section aria-labelledby="b-ai" style="display: flex; flex-direction: column; gap: 4px; animation: ac-in 320ms 120ms var(--ease) both;">
+                      <h3 id="b-ai" style="margin: 0 0 4px; font-size: 15px; line-height: 20px; font-weight: 600;">Action items <span style="color: var(--muted); font-weight: 500;">{{openCount}} open</span></h3>
+                      <div style="display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+                        <sc-for list="{{items}}" as="it" hint-placeholder-count="2">
+                          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--hairline);">
+                            <button role="checkbox" aria-checked="{{it.aria}}" aria-label="{{it.text}}" onClick="{{it.toggle}}" class="press" style="width: 22px; height: 22px; padding: 0; border: 0; background: transparent; flex-shrink: 0;">
+                              <sc-if value="{{it.done}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 220ms 120ms var(--ease) both;"/></svg></sc-if>
+                              <sc-if value="{{it.open}}" hint-placeholder-val="{{ true }}"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg></sc-if>
+                            </button>
+                            <span style="flex: 1; min-width: 0;"><span style="position: relative; display: inline-block; font-size: 15px; color: {{it.textColor}}; transition: color 200ms 180ms var(--ease);">{{it.text}}<sc-if value="{{it.done}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 50%; height: 1.5px; background: var(--muted); transform-origin: left; animation: ac-strike 240ms 160ms var(--ease) both;"></span></sc-if></span></span>
+                            <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted);"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">You</span>{{it.due}}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </section>
+                  </div>
+
+                  <section aria-labelledby="b-fu" style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 180ms var(--ease) both;">
+                    <h3 id="b-fu" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Follow-ups <span style="color: var(--muted); font-weight: 500;">nothing runs until you approve</span></h3>
+
+                    <div class="lift" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px 12px 16px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+                      <span aria-hidden="true" style="width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; background: var(--p2); color: var(--p2i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">A</span>
+                      <span style="flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; gap: 1px;"><span style="font-weight: 600;">Recap to Ada</span><span style="font-size: 13px; line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{recapLine}}</span></span>
+                      <sc-if value="{{notDrafted}}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{draft}}" class="press secondary" style="height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600; flex-shrink: 0;">Draft in Mail</button>
+                      </sc-if>
+                      <sc-if value="{{drafted}}" hint-placeholder-val="{{ false }}">
+                        <span style="height: 24px; padding: 0 10px; flex-shrink: 0; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 360ms cubic-bezier(.3,1.4,.5,1) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>DRAFTED</span>
+                      </sc-if>
+                    </div>
+
+                    <sc-if value="{{payVisible}}" hint-placeholder-val="{{ true }}">
+                      <div class="lift" style="display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); animation: ac-in 240ms var(--ease) both;">
+                        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;">
+                          <span aria-hidden="true" style="width: 34px; height: 34px; flex-shrink: 0; border-radius: 999px; background: var(--p4); color: var(--p4i); display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">D</span>
+                          <span style="flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 1px;"><span style="font-weight: 600;">{{payVerb}} Designer</span><span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2);">designer.near</span></span>
+                          <sc-if value="{{isPaid}}" hint-placeholder-val="{{ false }}">
+                            <span style="height: 26px; padding: 0 11px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; animation: ac-pop 420ms cubic-bezier(.3,1.4,.5,1) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-dasharray="24" style="animation: ac-draw 260ms 120ms var(--ease) both;"/></svg><span style="font-family: var(--mono); font-weight: 500;">50.00 USDC</span>paid</span>
+                          </sc-if>
+                          <sc-if value="{{notPaid}}" hint-placeholder-val="{{ true }}">
+                            <span style="display: inline-flex; align-items: baseline; gap: 6px;"><span style="font-family: var(--mono); font-size: 26px; line-height: 30px; letter-spacing: -0.02em;">50.00</span><span style="font-size: 12px; color: var(--muted);">USDC</span></span>
+                          </sc-if>
+                        </div>
+                        <sc-if value="{{isProposed}}" hint-placeholder-val="{{ true }}">
+                          <div style="display: flex; flex-direction: column; gap: 12px; padding-left: 46px;">
+                            <span style="font-family: var(--serif); font-size: 16px; line-height: 24px; font-style: italic; color: var(--ink-2);">“pay the designer the fifty dollar deposit today”</span>
+                            <div aria-label="Check before you approve" role="group" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: var(--well); font-size: 13px; line-height: 19px;">
+                              <span style="display: flex; gap: 10px; align-items: baseline;"><span style="width: 44px; flex-shrink: 0; font-size: 12px; color: var(--muted);">Heard</span><span><span style="font-family: var(--serif); font-style: italic; font-size: 14px;">“fifty dollar”</span> <span style="color: var(--muted);">→</span> <span style="font-family: var(--mono);">50.00 USDC</span></span></span>
+                              <span style="display: flex; gap: 10px; align-items: baseline;"><span style="width: 44px; flex-shrink: 0; font-size: 12px; color: var(--muted);">Payee</span><span>Designer <span style="color: var(--accent);">· on your list</span></span></span>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                              <button onClick="{{dismiss}}" class="press quiet" style="height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Dismiss</button>
+                              <button onClick="{{approve}}" class="press primary" style="height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Approve payment</button>
+                            </div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{isCountdown}}" hint-placeholder-val="{{ false }}">
+                          <div style="display: flex; flex-direction: column; gap: 10px; padding-left: 46px; animation: ac-in 200ms var(--ease) both;">
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;">
+                              <span role="status" style="color: var(--ink-2);">Paying in <span style="font-family: var(--mono); color: var(--ink);">{{left}}</span>… you can still take it back.</span>
+                              <button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--well); color: var(--ink); font-weight: 600; flex-shrink: 0;">Undo</button>
+                            </div>
+                            <div aria-hidden="true" style="height: 3px; border-radius: 999px; background: var(--hairline); overflow: hidden;"><div style="height: 3px; background: var(--accent); transform-origin: left; animation: ac-countdown 5s linear both;"></div></div>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{isSending}}" hint-placeholder-val="{{ false }}">
+                          <div role="status" style="display: flex; align-items: center; gap: 10px; padding-left: 46px; color: var(--ink-2); animation: ac-in 200ms var(--ease) both;"><span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span>Sending through your agent wallet on NEAR…</div>
+                        </sc-if>
+                        <sc-if value="{{isPaid}}" hint-placeholder-val="{{ false }}">
+                          <div style="padding-left: 46px; font-size: 13px; color: var(--ink-2); animation: ac-in 240ms var(--ease) both;">From your agent wallet, within the caps its NEAR contract sets.</div>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{isDismissed}}" hint-placeholder-val="{{ false }}">
+                      <div role="status" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hairline); animation: ac-in 240ms var(--ease) both;">
+                        <span style="color: var(--ink-2);">Payment to Designer dismissed</span>
+                        <button onClick="{{undo}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--well); color: var(--ink); font-weight: 600;">Undo</button>
+                      </div>
+                    </sc-if>
+                  </section>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{isPaid}}" hint-placeholder-val="{{ false }}">
+                <div style="position: absolute; left: 0; right: 0; bottom: 24px; display: flex; justify-content: center; pointer-events: none;">
+                  <div role="status" style="pointer-events: auto; display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 16px; border-radius: 999px; background: var(--elevated); box-shadow: var(--shpill); white-space: nowrap; animation: ac-in 280ms 200ms var(--ease) both;">
+                    <span style="display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>Paid Designer <span style="font-family: var(--mono); font-size: 13px;">50.00 USDC</span></span>
+                    <button onClick="{{replay}}" class="press" style="height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>Replay</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </section>
+
+          <aside aria-label="Demo steps" style="flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 20px; padding-top: 4px; animation: ac-in 420ms 160ms var(--ease) both;">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Try it here · four steps</span>
+            <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column;">
+              <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+                <li aria-current="{{s.aria}}" style="display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 14px;">
+                  <span style="display: flex; flex-direction: column; align-items: center;">
+                    <sc-if value="{{s.done}}" hint-placeholder-val="{{ false }}"><span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; animation: ac-pop 320ms var(--ease) both;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Done"><path d="M20 6 9 17l-5-5"/></svg></span></sc-if>
+                    <sc-if value="{{s.current}}" hint-placeholder-val="{{ false }}"><span style="width: 28px; height: 28px; flex-shrink: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px; font-weight: 500; box-shadow: 0 0 0 4px var(--accent-tint); animation: ac-pop 360ms cubic-bezier(.3,1.4,.5,1) both;">{{s.n}}</span></sc-if>
+                    <sc-if value="{{s.todo}}" hint-placeholder-val="{{ true }}"><span style="width: 28px; height: 28px; flex-shrink: 0; box-sizing: border-box; border-radius: 999px; border: 1.5px solid var(--border); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 13px;">{{s.n}}</span></sc-if>
+                    <sc-if value="{{s.hasLine}}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="flex: 1; width: 2px; min-height: 20px; margin: 6px 0; border-radius: 2px; background: {{s.lineColor}}; transition: background-color 320ms var(--ease);"></span></sc-if>
+                  </span>
+                  <span style="display: flex; flex-direction: column; gap: 3px; padding: 3px 0 26px; min-width: 0;">
+                    <span style="font-size: 16px; line-height: 22px; font-weight: 600; color: {{s.titleColor}}; transition: color 200ms var(--ease);">{{s.title}}</span>
+                    <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">{{s.line}}</span>
+                    <sc-if value="{{s.hasHint}}" hint-placeholder-val="{{ false }}">
+                      <span style="margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--accent); animation: ac-in 280ms var(--ease) both;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>{{s.hint}}</span>
+                    </sc-if>
+                  </span>
+                </li>
+              </sc-for>
+            </ol>
+            <div style="margin-top: auto; display: flex; flex-direction: column; gap: 14px;">
+              <sc-if value="{{allDone}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 18px; border-top: 1px solid var(--hairline); animation: ac-in 320ms 300ms var(--ease) both;">
+                  <span style="font-size: 15px; line-height: 20px; font-weight: 600;">Now on your own calls.</span>
+                  <a href="#" class="press primary" style="height: 40px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+                </div>
+              </sc-if>
+              <sc-if value="{{started}}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{replay}}" class="press quiet" style="align-self: flex-start; height: 32px; padding: 0 10px 0 6px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600; display: inline-flex; align-items: center; gap: 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg>Replay from the start</button>
+              </sc-if>
+            </div>
+            <p role="status" style="position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">{{liveMsg}}</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="doubts" style="padding: 240px clamp(16px, 3.4vw, 48px) 0;">
+      <div style="max-width: 1344px; margin: 0 auto; display: flex; flex-direction: column; gap: 120px;">
+        <h2 id="doubts" style="position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">Three questions, answered</h2>
+
+        <div style="max-width: 900px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 48px; padding-top: 28px; border-top: 1px solid var(--hairline);">
+          <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px;">2</span>Checked, in the demo above</span>
+            <h3 style="margin: 0; font-family: var(--serif); font-size: clamp(44px, 4.2vw, 60px); line-height: 1.07; font-weight: 500; letter-spacing: -0.03em;">Private?</h3>
+          </div>
+          <div style="flex: 1 1 400px; display: flex; flex-direction: column; gap: 14px;">
+            <p style="margin: 0; font-size: 19px; line-height: 29px; color: var(--ink-2);">Your call goes only to models in NEAR AI Cloud's secure hardware, after their attestation passes, and Aftercall's own servers keep nothing about it.</p>
+            <a href="#" style="align-self: flex-start; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">Where every byte goes<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+
+        <div style="margin-left: max(0px, calc((100% - 900px) / 2)); max-width: 900px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 48px; padding-top: 28px; border-top: 1px solid var(--hairline);">
+          <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px;">4</span>Done, in the demo above</span>
+            <h3 style="margin: 0; font-family: var(--serif); font-size: clamp(44px, 4.2vw, 60px); line-height: 1.07; font-weight: 500; letter-spacing: -0.03em;">Does it act?</h3>
+          </div>
+          <div style="flex: 1 1 400px; display: flex; flex-direction: column; gap: 14px;">
+            <p style="margin: 0; font-size: 19px; line-height: 29px; color: var(--ink-2);">Yes, after one approval: it sends the recap and pays in USDC on NEAR, under caps a NEAR contract holds, so even a hijacked app can't overspend.</p>
+            <a href="V2ApproveWallet.dc.html" style="align-self: flex-start; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">See a payment the contract blocks<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+
+        <div style="margin-left: max(0px, calc(100% - 900px)); max-width: 900px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 48px; padding-top: 28px; border-top: 1px solid var(--hairline);">
+          <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 12px;">
+            <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px;">2</span>The seal, in the demo above</span>
+            <h3 style="margin: 0; font-family: var(--serif); font-size: clamp(44px, 4.2vw, 60px); line-height: 1.07; font-weight: 500; letter-spacing: -0.03em;">Can I check?</h3>
+          </div>
+          <div style="flex: 1 1 400px; display: flex; flex-direction: column; gap: 14px;">
+            <p style="margin: 0; font-size: 19px; line-height: 29px; color: var(--ink-2);">Each meeting's proof goes on NEAR, a hash and never what was said, and anyone can check it in a browser.</p>
+            <a href="V2PublicVerify.dc.html" style="align-self: flex-start; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">Open a sample proof<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="cta" style="padding: 240px clamp(16px, 3.4vw, 48px) 150px;">
+      <div style="max-width: 1344px; margin: 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 28px;">
+        <h2 id="cta" style="margin: 0; font-family: var(--serif); font-size: clamp(44px, 4.5vw, 64px); line-height: 1.06; font-weight: 500; letter-spacing: -0.03em;">Now try it on a real call.</h2>
+        <a href="#" class="press primary" style="height: 52px; padding: 0 24px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+        <p style="margin: 4px 0 0; font-size: 13px; line-height: 18px; color: var(--ink-2);">Built for <span style="font-weight: 600; color: var(--ink);">NEAR HACKATHON</span> · 1–14 Nov 2026</p>
+      </div>
+    </section>
+  </main>
+
+  <footer style="padding: 0 clamp(16px, 3.4vw, 48px); border-top: 1px solid var(--hairline);">
+    <div style="max-width: 1344px; min-height: 64px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; font-size: 13px;">
+      <span style="color: var(--ink-2);">Aftercall · built on NEAR AI Cloud and NEAR</span>
+      <span style="display: flex; gap: 22px;"><a href="#" class="quiet" style="color: var(--ink-2);">Privacy</a><a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify</a><a href="#" class="quiet" style="color: var(--ink-2);">GitHub</a></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":2400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = this.fresh('idle');
+  }
+  fresh(phase) {
+    return { phase: phase, sec: 0, typed: 0, dur: 0, checks: 0, sealed: false, pay: 'proposed', left: 5, drafted: false, ticks: { a1: false, a2: false } };
+  }
+  notesText() {
+    return "Fix before demo, no exceptions.\nDeck: refresh with the designer, deposit now, rest when it's done.\nRecap to Ada after.";
+  }
+  componentWillUnmount() { this.clearAll(); }
+  clearAll() {
+    clearInterval(this.secId);
+    clearTimeout(this.typeId);
+    clearTimeout(this.checkId);
+    clearTimeout(this.sealId);
+    clearTimeout(this.openId);
+    clearInterval(this.countId);
+    clearTimeout(this.sendId);
+  }
+  record() {
+    this.clearAll();
+    this.setState(this.fresh('rec'));
+    this.secId = setInterval(() => this.setState({ sec: this.state.sec + 1 }), 1000);
+    this.typeId = setTimeout(() => this.typeNext(), 900);
+  }
+  typeNext() {
+    const text = this.notesText();
+    const t = this.state.typed;
+    if (t >= text.length) return;
+    const ch = text.charAt(t);
+    this.setState({ typed: t + 1 });
+    this.typeId = setTimeout(() => this.typeNext(), ch === '\n' ? 650 : (ch === ' ' ? 75 : 42));
+  }
+  stop() {
+    clearInterval(this.secId);
+    clearTimeout(this.typeId);
+    this.setState({ phase: 'check', dur: Math.max(1, this.state.sec), checks: 0, sealed: false });
+    this.checkId = setTimeout(() => this.checkNext(), 520);
+  }
+  checkNext() {
+    const n = this.state.checks + 1;
+    this.setState({ checks: n });
+    if (n < 29) {
+      const groupEnd = n === 6 || n === 15 || n === 24;
+      this.checkId = setTimeout(() => this.checkNext(), groupEnd ? 320 : 85);
+      return;
+    }
+    this.sealId = setTimeout(() => this.setState({ sealed: true }), 320);
+    this.openId = setTimeout(() => this.setState({ phase: 'notes' }), 2700);
+  }
+  approve() {
+    clearInterval(this.countId);
+    clearTimeout(this.sendId);
+    this.setState({ pay: 'countdown', left: 5 });
+    this.countId = setInterval(() => {
+      const left = this.state.left - 1;
+      if (left > 0) { this.setState({ left: left }); return; }
+      clearInterval(this.countId);
+      this.setState({ pay: 'sending' });
+      this.sendId = setTimeout(() => this.setState({ pay: 'paid' }), 1400);
+    }, 1000);
+  }
+  undo() {
+    clearInterval(this.countId);
+    clearTimeout(this.sendId);
+    this.setState({ pay: 'proposed', left: 5 });
+  }
+  replay() {
+    this.clearAll();
+    this.setState(this.fresh('idle'));
+  }
+  renderVals() {
+    const s = this.state;
+    const phase = s.phase;
+    const two = (n) => String(n).padStart(2, '0');
+    const durText = s.dur < 60 ? s.dur + ' s' : Math.floor(s.dur / 60) + ' min ' + (s.dur % 60) + ' s';
+
+    const tee = ['Genuine Intel TDX VM', 'Debug mode off', 'TEE made its signing key', 'Evidence is fresh', 'Boot log matches the quote', 'Known software running', 'Genuine NVIDIA GPU', 'GPU evidence is fresh', 'GPUs in secure mode'];
+    const resp = ['Signed over what was sent', 'Signed over what came back', 'Signed for the model asked for', 'Signed by an attested TEE', 'Encrypted to the attested model'];
+    const defs = [
+      { title: 'Gateway', aside: 'routes the request', labels: tee.slice(0, 6) },
+      { title: 'Whisper TEE', aside: 'makes the transcript', labels: tee },
+      { title: 'Qwen TEE', aside: 'writes the notes', labels: tee },
+      { title: 'Response', aside: 'the signed reply', labels: resp }
+    ];
+    let k = 0;
+    let lastLine = 'Making a fresh nonce for this run…';
+    const groups = defs.map((g) => {
+      let passed = 0;
+      const checks = g.labels.map((label) => {
+        const done = k < s.checks;
+        if (k === s.checks - 1) lastLine = g.title + ' · ' + label;
+        k += 1;
+        if (done) passed += 1;
+        return { label: label, done: done, todo: !done, color: done ? 'var(--ink)' : 'var(--muted)' };
+      });
+      const full = passed === g.labels.length;
+      return { title: g.title, aside: g.aside, checks: checks, count: passed + '/' + g.labels.length, countColor: full ? 'var(--accent)' : 'var(--muted)' };
+    });
+    const circ = 339.29;
+
+    const paying = s.pay === 'countdown' || s.pay === 'sending' || s.pay === 'paid';
+    let cur = 1;
+    if (phase === 'check') cur = 2;
+    if (phase === 'notes') cur = paying ? 4 : 3;
+    const allDone = phase === 'notes' && s.pay === 'paid';
+    const hints = {
+      idle: 'Press Record',
+      rec: 'Press Stop when you’re ready',
+      check: 'Watch the checks',
+      proposed: 'Approve the payment',
+      dismissed: 'Bring it back with Undo',
+      countdown: 'Undo, or let it pay',
+      sending: 'Sending…'
+    };
+    const hint = phase === 'notes' ? (hints[s.pay] || '') : (hints[phase] || '');
+    const stepDefs = [
+      ['Record', 'Your mic and the call, kept apart. No bot joins.'],
+      ['Checked', 'NEAR AI’s secure hardware, checked on every run.'],
+      ['Notes', 'Each follow-up quotes the call, or it’s dropped.'],
+      ['Done', 'Nothing is paid until you approve.']
+    ];
+    const steps = stepDefs.map((d, i) => {
+      const n = i + 1;
+      const done = allDone || n < cur;
+      const current = !allDone && n === cur;
+      return {
+        n: n, title: d[0], line: d[1],
+        done: done, current: current, todo: !done && !current,
+        aria: current ? 'step' : 'false',
+        titleColor: done || current ? 'var(--ink)' : 'var(--ink-2)',
+        hasLine: n < 4,
+        lineColor: allDone || n < cur ? 'var(--accent)' : 'var(--hairline)',
+        hasHint: current && !!hint,
+        hint: hint
+      };
+    });
+
+    const meta = {
+      idle: 'Fundraise · Today 14:02 · from your calendar',
+      rec: 'Fundraise · started 14:02 · from your calendar',
+      check: 'Fundraise · Today 14:02 · ' + durText,
+      notes: 'Fundraise · Today 14:02 · ' + durText
+    }[phase];
+
+    const itemMeta = { a1: ['Send Ada the recap', 'today'], a2: ['Ship the API fix', 'by Friday'] };
+    const items = ['a1', 'a2'].map((id) => {
+      const done = !!s.ticks[id];
+      return {
+        text: itemMeta[id][0], due: itemMeta[id][1],
+        done: done, open: !done, aria: done ? 'true' : 'false',
+        textColor: done ? 'var(--muted)' : 'var(--ink)',
+        toggle: () => this.setState({ ticks: Object.assign({}, this.state.ticks, { [id]: !this.state.ticks[id] }) })
+      };
+    });
+
+    const live = {
+      idle: 'Step 1 of 4, Record. Press Record to start the sample call.',
+      rec: 'Recording the sample call.',
+      check: s.sealed ? 'Verified. 29 checks passed.' : 'Step 2 of 4, Checked.',
+      notes: 'Step 3 of 4, Notes are ready.'
+    }[phase];
+    const payLive = { countdown: 'Step 4 of 4. Paying in 5 seconds; Undo to take it back.', sending: 'Sending the payment.', paid: 'Paid Designer 50.00 USDC.', dismissed: 'Payment dismissed.' };
+
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      meta: meta,
+      isIdle: phase === 'idle',
+      isRec: phase === 'rec',
+      isCheck: phase === 'check',
+      isNotes: phase === 'notes',
+      started: phase !== 'idle',
+      showPeople: phase === 'idle' || phase === 'rec',
+      pillRec: phase === 'rec',
+      pillChecking: phase === 'check' && !s.sealed,
+      pillVerified: (phase === 'check' && s.sealed) || phase === 'notes',
+      timer: two(Math.floor(s.sec / 60)) + ':' + two(s.sec % 60),
+      typedNotes: this.notesText().slice(0, s.typed),
+      groups: groups,
+      sealed: s.sealed,
+      notSealed: !s.sealed,
+      checkCount: s.checks,
+      ringOffset: (circ * (1 - s.checks / 29)).toFixed(2),
+      ringLabel: s.checks + ' of 29 checks passed',
+      checkTitle: s.sealed ? 'Verified' : 'Checking the secure hardware',
+      checkLine: s.sealed ? '29 checks passed. Proof recorded on NEAR; the audio is gone from this Mac.' : lastLine,
+      items: items,
+      openCount: items.filter((i) => !i.done).length,
+      drafted: s.drafted,
+      notDrafted: !s.drafted,
+      recapLine: s.drafted ? 'Opened as a draft in your Mail' : 'Recap: API fix before Friday, deck refresh',
+      draft: () => this.setState({ drafted: true }),
+      payVisible: s.pay !== 'dismissed',
+      isDismissed: s.pay === 'dismissed',
+      isProposed: s.pay === 'proposed',
+      isCountdown: s.pay === 'countdown',
+      isSending: s.pay === 'sending',
+      isPaid: phase === 'notes' && s.pay === 'paid',
+      notPaid: s.pay !== 'paid',
+      payVerb: s.pay === 'paid' ? 'Paid' : (s.pay === 'proposed' ? 'Pay' : 'Paying'),
+      left: s.left,
+      steps: steps,
+      allDone: allDone,
+      liveMsg: phase === 'notes' && payLive[s.pay] ? payLive[s.pay] : live,
+      record: () => this.record(),
+      stop: () => this.stop(),
+      approve: () => this.approve(),
+      dismiss: () => { clearInterval(this.countId); clearTimeout(this.sendId); this.setState({ pay: 'dismissed' }); },
+      undo: () => this.undo(),
+      replay: () => this.replay()
+    };
+  }
+}
+</script>
+</body>
+</html>

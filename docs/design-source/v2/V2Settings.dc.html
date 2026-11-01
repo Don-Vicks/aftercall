@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1900px; display: flex; flex-wrap: wrap;">
+<nav aria-label="Aftercall" style="flex: 1 1 220px; max-width: 248px; box-sizing: border-box; padding: 20px 14px 18px; display: flex; flex-direction: column; gap: 22px; background: var(--ground);">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0;">
+    <span style="font-family: var(--serif); font-size: 21px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent);"></span>victor.near</span>
+  </div>
+  <a href="V2RecordSheet.dc.html" class="press lift" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Home.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span style="flex: 1;">Today</span></a>
+    <a href="V2Palette.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex: 1;">Search</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘K</span></a>
+    <a href="V2Ask.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg><span style="flex: 1;">Ask your meetings</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span></a>
+    <a href="V2ActionItems.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span style="flex: 1;">Action items</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">5</span></a>
+    <a href="V2People.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span style="flex: 1;">People</span></a>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 6px;">
+      <a href="V2Meetings.dc.html" class="quiet" style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Projects</a>
+      <span style="display: inline-flex; align-items: center; gap: 2px;"><a href="V2Meetings.dc.html" class="quiet" style="font-size: 12px; color: var(--muted); padding: 0 6px;">All meetings</a><button aria-label="New project" class="press quiet" style="width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+    </div>
+    <a href="V2Project.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-weight: 600; color: var(--ink);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m6 9 6 6 6-6"/></svg><span style="flex: 1;">Fundraise</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">6</span></a>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--hairline);">
+      <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sync with Ada</span><span role="img" aria-label="1 to approve" style="width: 7px; height: 7px; border-radius: 999px; background: var(--caution);"></span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Deck review</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">28 Oct</span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Investor intro call</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">24 Oct</span></a>
+    </div>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Platform API</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">11</span></a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Hiring</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">3</span></a>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Wallet.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/></svg><span style="flex: 1;">Agent wallet</span><span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">180.00</span></a>
+    <a href="V2Agents.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg><span style="flex: 1;">Connected agents</span></a>
+    <a href="V2Settings.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></svg><span style="flex: 1;">Settings</span></a>
+  </div>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; background: var(--raised); border-left: 1px solid var(--hairline); box-sizing: border-box; padding: 56px 48px 72px;">
+<div style="max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+
+  <header style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms var(--ease) both;">
+    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">victor.near · NEAR mainnet</span>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Settings</h1>
+    <p style="margin: 0; color: var(--ink-2);">Private notes through NEAR AI, proofs and payments on NEAR, and what autopilot may do.</p>
+  </header>
+
+  <nav aria-label="Settings sections" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 12px 16px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hairline); animation: ac-in 320ms 40ms var(--ease) both;">
+    <a href="#s-nearai" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Done" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>NEAR AI</a>
+    <a href="#s-phrase" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Done" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>Recovery phrase</a>
+    <a href="#s-account" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Done" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>NEAR account</a>
+    <a href="#s-authorise" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);">Authorise <span style="height: 20px; padding: 0 8px; border-radius: 999px; background: var(--caution-tint); color: var(--caution); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">1 TO SIGN</span></a>
+    <a href="#s-calendar" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Done" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>Calendar</a>
+    <a href="#s-autopilot" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink);">Autopilot</a>
+  </nav>
+
+  <section id="s-nearai" aria-labelledby="h-nearai" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 80ms var(--ease) both;">
+    <h2 id="h-nearai" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">NEAR AI <span style="color: var(--muted); font-weight: 500;">makes your notes</span></h2>
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
+      <span style="flex: 1 1 180px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">API key</span><span style="font-size: 13px; color: var(--ink-2);"><span style="font-family: var(--mono);">…a1f3</span> · in your Keychain</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>CONNECTED</span>
+      <span style="display: flex; gap: 6px;">
+        <button class="press quiet" style="height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Remove</button>
+        <button class="press secondary" style="height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600;">Replace</button>
+      </span>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Aftercall checks the key with NEAR AI, then keeps it in your macOS Keychain, out of the app's web view. Only NEAR AI's Confidential TEE models are used. What NEAR AI itself keeps is set by NEAR AI.</p>
+    </details>
+  </section>
+
+  <section id="s-phrase" aria-labelledby="h-phrase" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 120ms var(--ease) both;">
+    <h2 id="h-phrase" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Recovery phrase <span style="color: var(--muted); font-weight: 500;">this Mac's key</span></h2>
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--hairline);">
+        <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        <span style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Key from your phrase</span><span style="font-size: 13px; color: var(--ink-2);">Restore it on a new Mac from here or the first-run screen.</span></span>
+        <button class="press quiet" style="height: 34px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Restore a phrase</button>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px;">
+        <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg></span>
+        <span style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Backup</span><span style="font-size: 13px; color: var(--ink-2);">Notes, projects and settings, encrypted with your phrase.</span></span>
+        <span style="display: flex; gap: 6px;">
+          <button class="press secondary" style="height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600;">Import</button>
+          <button class="press primary" style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Export backup</button>
+        </span>
+      </div>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Aftercall keeps the key made from your 12 words, never the words, so it can't show them again. Backups hold notes, projects, NEAR settings and autopilot rules. Audio and the NEAR AI key are left out.</p>
+    </details>
+  </section>
+
+  <section id="s-account" aria-labelledby="h-account" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 160ms var(--ease) both;">
+    <h2 id="h-account" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">NEAR account <span style="color: var(--muted); font-weight: 500;">proofs and payments</span></h2>
+    <div style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <div style="display: flex; align-items: flex-end; gap: 16px 20px; flex-wrap: wrap;">
+        <div style="flex: 1 1 380px; display: grid; grid-template-columns: 168px minmax(0, 1fr); align-items: center; gap: 10px 16px;">
+          <label for="na-acct" style="font-size: 13px; line-height: 18px; font-weight: 600;">NEAR account</label>
+          <span style="position: relative; display: flex;">
+            <input id="na-acct" class="field" value="victor.near" style="flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 36px 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-family: var(--mono); font-size: 13px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Found on NEAR" style="position: absolute; right: 12px; top: 11px; color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <label for="na-contract" style="font-size: 13px; line-height: 18px; font-weight: 600;">Agent-wallet contract</label>
+          <span style="position: relative; display: flex;">
+            <input id="na-contract" class="field" value="aftercall-wallet.near" style="flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 36px 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-family: var(--mono); font-size: 13px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Found on NEAR" style="position: absolute; right: 12px; top: 11px; color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>
+          </span>
+          <label for="na-net" style="font-size: 13px; line-height: 18px; font-weight: 600;">Network</label>
+          <span style="display: flex;">
+            <select id="na-net" class="field" style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-size: 13px;"><option>Mainnet</option><option>Testnet</option></select>
+          </span>
+        </div>
+        <button class="press primary" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Save and check</button>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--hairline); font-size: 13px;">
+        <span style="color: var(--ink-2);">Mainnet moves real USDC. Keep the caps small.</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 500;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Both found on NEAR</span>
+      </div>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Your agent wallet lives in this contract, and each meeting's proof is recorded there. A proof holds a hash and the model name, never what was said.</p>
+    </details>
+  </section>
+
+  <section id="s-authorise" aria-labelledby="h-authorise" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 200ms var(--ease) both;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <h2 id="h-authorise" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Authorise this Mac <span style="color: var(--muted); font-weight: 500;">once, two signatures</span></h2>
+      <p style="margin: 0; color: var(--ink-2);">Both are signed in your own NEAR wallet.</p>
+    </div>
+    <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <li style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--hairline);">
+        <span style="width: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted);">01</span>
+        <span style="flex: 1; font-size: 16px; line-height: 22px; font-weight: 600; color: var(--ink-2);">Create your agent wallet</span>
+        <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>DONE</span>
+      </li>
+      <li style="display: flex; align-items: center; gap: 16px; padding: 16px 20px;">
+        <span style="width: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted);">02</span>
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Authorise this Mac's key</span><span style="font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">ed25519:4uH7cQm9XvRz2pLk8sTn5wYb3JdFa6GeKq1Mh</span></span>
+        <button class="press primary" style="height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Sign in wallet</button>
+      </li>
+    </ol>
+    <details open="{{ true }}">
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">The first signature creates your agent wallet. The second lets this Mac's key call only <span style="font-family: var(--mono); color: var(--ink);">pay</span> and <span style="font-family: var(--mono); color: var(--ink);">record_proof</span>, within your caps. Raising a cap, adding a payee or withdrawing still needs your wallet.</p>
+    </details>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Prefer near-cli?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Copy the two commands and run them in Terminal instead.</p>
+    </details>
+  </section>
+
+  <section id="s-calendar" aria-labelledby="h-calendar" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 240ms var(--ease) both;">
+    <h2 id="h-calendar" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Calendar <span style="color: var(--muted); font-weight: 500;">optional</span></h2>
+    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      <span style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">macOS Calendar</span><span style="font-size: 13px; color: var(--ink-2);">Meeting names and recap addresses come from your calendar.</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>CONNECTED</span>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Each recording is named after the calendar event it overlaps. Aftercall only reads your calendar, on this Mac.</p>
+    </details>
+  </section>
+
+  <section id="s-autopilot" aria-labelledby="h-autopilot" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 280ms var(--ease) both;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <h2 id="h-autopilot" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Autopilot <span style="color: var(--muted); font-weight: 500;">without a tap</span></h2>
+      <p style="margin: 0; color: var(--ink-2);">Follow-ups that pass every rule run by themselves after a 60-second undo.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <div style="display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--hairline);">
+        <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;"><span id="ap-pay" style="font-size: 16px; line-height: 22px; font-weight: 600;">Pay listed payees</span><span style="font-size: 13px; color: var(--ink-2);">Only people on your list, up to <span style="font-family: var(--mono);">50.00 USDC</span> each, when the amount heard is clear.</span></span>
+        <button role="switch" aria-checked="{{payAria}}" aria-labelledby="ap-pay" onClick="{{togglePay}}" class="press" style="position: relative; width: 40px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: {{payTrack}}; flex-shrink: 0; transition: background-color 160ms var(--ease);"><span aria-hidden="true" style="position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transform: translateX({{payKnob}}px); transition: transform 240ms cubic-bezier(.3,1.4,.5,1);"></span></button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 20px;">
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;"><span id="ap-recap" style="font-size: 16px; line-height: 22px; font-weight: 600;">Send recaps to your team</span><span style="font-size: 13px; color: var(--ink-2);">Recaps to these email domains go out by themselves.</span></span>
+          <button role="switch" aria-checked="{{recapAria}}" aria-labelledby="ap-recap" onClick="{{toggleRecap}}" class="press" style="position: relative; width: 40px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: {{recapTrack}}; flex-shrink: 0; transition: background-color 160ms var(--ease);"><span aria-hidden="true" style="position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transform: translateX({{recapKnob}}px); transition: transform 240ms cubic-bezier(.3,1.4,.5,1);"></span></button>
+        </div>
+        <sc-if value="{{recapOn}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 240ms var(--ease) both;">
+            <label for="ap-domains" style="font-size: 13px; line-height: 18px; font-weight: 600;">Team domains</label>
+            <input id="ap-domains" class="field" value="example.com" style="height: 36px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--well); font-family: var(--mono); font-size: 13px;">
+          </div>
+        </sc-if>
+      </div>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Anything unclear still waits for you. Your agent wallet's caps apply on NEAR either way, so autopilot can't pay past them.</p>
+    </details>
+  </section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { pay: true, recap: true };
+  }
+  renderVals() {
+    const s = this.state;
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      payAria: s.pay ? 'true' : 'false',
+      payTrack: s.pay ? 'var(--accent)' : 'var(--border)',
+      payKnob: s.pay ? 16 : 0,
+      togglePay: () => this.setState({ pay: !this.state.pay }),
+      recapAria: s.recap ? 'true' : 'false',
+      recapTrack: s.recap ? 'var(--accent)' : 'var(--border)',
+      recapKnob: s.recap ? 16 : 0,
+      recapOn: s.recap,
+      toggleRecap: () => this.setState({ recap: !this.state.recap })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · floating recorder and menu bar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="width: 560px; height: 640px; box-sizing: border-box; background: var(--ground); overflow: hidden; display: flex; flex-direction: column;">
+
+  <div style="height: 28px; flex-shrink: 0; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; justify-content: flex-end; gap: 6px; background: var(--raised); box-shadow: inset 0 -1px 0 var(--hairline); font-size: 13px; line-height: 16px;">
+    <span role="img" aria-label="Aftercall in the menu bar, recording {{timer}}" style="height: 22px; padding: 0 8px; border-radius: 6px; background: var(--elevated); box-shadow: var(--sh1); display: inline-flex; align-items: center; gap: 6px;">
+      <span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 999px; background: {{dotColor}}; animation: ac-breathe 2s ease-in-out infinite; animation-play-state: {{playState}};"></span>
+      <span style="font-family: var(--mono); font-size: 12px; font-weight: 500; color: {{timerColor}};">{{timer}}</span>
+    </span>
+    <span style="padding: 0 6px; color: var(--ink-2);">Sat 31 Oct <span style="font-family: var(--mono); font-size: 12px;">15:43</span></span>
+  </div>
+
+  <div style="flex: 1; box-sizing: border-box; padding: 6px 16px 16px; display: grid; grid-template-columns: 136px 360px; column-gap: 32px; row-gap: 34px; align-content: start;">
+
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 14px;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Menu bar · recording</span>
+      <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">Click the time to add a note or stop.</span>
+    </div>
+
+    <div role="dialog" aria-label="Aftercall, recording" style="width: 360px; box-sizing: border-box; padding: 6px; border-radius: 14px; background: var(--elevated); box-shadow: var(--shfloat); display: flex; flex-direction: column; animation: ac-in 240ms var(--ease) both;">
+      <div style="padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: {{dotColor}}; animation: ac-breathe 2s ease-in-out infinite; animation-play-state: {{playState}}; flex-shrink: 0;"></span>
+          <span style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+            <span style="font-size: 15px; line-height: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Website kickoff with Ines</span>
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Fundraise · started 15:30</span>
+          </span>
+          <span style="font-family: var(--mono); font-size: 20px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em; color: {{timerColor}};">{{timer}}</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 16px;">
+          <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);">
+            <span role="img" aria-label="Your mic" style="display: inline-flex; align-items: center; gap: 2px; height: 22px;">
+              <span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 820ms ease-in-out -120ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 640ms ease-in-out -340ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 900ms ease-in-out -520ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 700ms ease-in-out -80ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 760ms ease-in-out -410ms infinite; animation-play-state: {{playState}};"></span>
+            </span>You
+          </span>
+          <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted);">
+            <span role="img" aria-label="The call" style="display: inline-flex; align-items: center; gap: 2px; height: 22px;">
+              <span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1100ms ease-in-out -300ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 980ms ease-in-out -700ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1240ms ease-in-out -150ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 860ms ease-in-out -560ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1020ms ease-in-out -90ms infinite; animation-play-state: {{playState}};"></span>
+            </span>The call
+          </span>
+          <span style="flex: 1;"></span>
+          <sc-if value="{{running}}" hint-placeholder-val="{{ true }}">
+            <span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 240ms var(--ease);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--record); animation: ac-breathe 2s ease-in-out infinite;"></span>RECORDING</span>
+          </sc-if>
+          <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+            <span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 240ms var(--ease);">PAUSED</span>
+          </sc-if>
+        </div>
+
+        <label style="position: relative; display: block;">
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;">Add a note to this meeting</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; left: 12px; top: 12px; color: var(--muted); pointer-events: none;"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          <input class="field" placeholder="Add a note…" style="width: 100%; height: 38px; box-sizing: border-box; padding: 0 12px 0 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--well);">
+        </label>
+
+        <div style="display: flex; gap: 8px;">
+          <button onClick="{{togglePause}}" class="press secondary" style="flex: 1; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+            <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="animation: ac-pop 200ms var(--ease);"><path d="M7 5v14l12-7z"/></svg></sc-if>
+            <sc-if value="{{running}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></sc-if>
+            {{pauseLabel}}
+          </button>
+          <a href="V2Processing.dc.html" class="press" style="flex: 2; height: 38px; border-radius: 8px; background: var(--record); color: #fff; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 2px; background: #fff;"></span>Stop and make notes</a>
+        </div>
+      </div>
+
+      <div aria-hidden="true" style="height: 1px; margin: 0 6px 4px; background: var(--hairline);"></div>
+      <a href="V2Recording.dc.html" class="press quiet" style="display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--ink-2);"><span>Open Aftercall</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘O</span></a>
+      <button class="press quiet" style="display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); text-align: left;"><span>Quit Aftercall</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘Q</span></button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">In a call</span>
+      <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">Stays on top of the call window.</span>
+    </div>
+
+    <div role="group" aria-label="Floating recorder" style="width: 320px; height: 64px; box-sizing: border-box; padding: 0 14px 0 20px; border-radius: 999px; background: var(--elevated); box-shadow: var(--shpill); display: flex; align-items: center; gap: 8px; animation: ac-in 280ms 60ms var(--ease) both;">
+      <span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: {{dotColor}}; animation: ac-breathe 2s ease-in-out infinite; animation-play-state: {{playState}}; flex-shrink: 0;"></span>
+      <span style="font-family: var(--mono); font-size: 15px; font-weight: 500; min-width: 46px; letter-spacing: -0.01em; color: {{timerColor}}; flex-shrink: 0;">{{timer}}</span>
+      <span role="img" aria-label="Your mic" style="display: inline-flex; align-items: center; gap: 2px; height: 22px; flex-shrink: 0;">
+        <span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 820ms ease-in-out -120ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 640ms ease-in-out -340ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 900ms ease-in-out -520ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 700ms ease-in-out -80ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 760ms ease-in-out -410ms infinite; animation-play-state: {{playState}};"></span>
+      </span>
+      <span role="img" aria-label="The call" style="display: inline-flex; align-items: center; gap: 2px; height: 22px; margin-left: -2px; flex-shrink: 0;">
+        <span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1100ms ease-in-out -300ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 980ms ease-in-out -700ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1240ms ease-in-out -150ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 860ms ease-in-out -560ms infinite; animation-play-state: {{playState}};"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1020ms ease-in-out -90ms infinite; animation-play-state: {{playState}};"></span>
+      </span>
+      <a href="V2Recording.dc.html" style="margin-left: auto; padding: 0 2px; font-size: 13px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">Open notes</a>
+      <button onClick="{{togglePause}}" aria-label="{{pauseLabel}}" title="{{pauseLabel}}" class="press" style="width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: var(--well); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="animation: ac-pop 200ms var(--ease);"><path d="M7 5v14l12-7z"/></svg></sc-if>
+        <sc-if value="{{running}}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></sc-if>
+      </button>
+      <a href="V2Processing.dc.html" aria-label="Stop and make notes" title="Stop and make notes" class="press" style="width: 36px; height: 36px; margin-left: -2px; border-radius: 999px; background: var(--record); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 2px; background: #fff;"></span></a>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 4px; padding-top: 10px;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Menu bar · idle</span>
+      <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">Your next meeting, one click from recording.</span>
+    </div>
+
+    <div role="dialog" aria-label="Aftercall" style="width: 360px; box-sizing: border-box; padding: 6px; border-radius: 14px; background: var(--elevated); box-shadow: var(--shfloat); display: flex; flex-direction: column; animation: ac-in 280ms 120ms var(--ease) both;">
+      <a href="V2RecordSheet.dc.html" class="press" style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: 8px; color: var(--ink); font-weight: 600;"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+      <div aria-hidden="true" style="height: 1px; margin: 4px 6px; background: var(--hairline);"></div>
+      <span style="padding: 6px 10px 2px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Next from your calendar</span>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 8px 4px 6px 10px;">
+        <span role="img" aria-label="Ines Rocha" style="width: 32px; height: 32px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">IR</span>
+        <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;">
+          <span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Website kickoff with Ines</span>
+          <span style="font-size: 13px; line-height: 18px; color: var(--accent); font-weight: 500;"><span style="font-family: var(--mono); font-weight: 400;">15:30</span> · starts in 12 min</span>
+        </span>
+        <button class="press primary" style="height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 999px; background: currentColor;"></span>Record</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":560,"height":640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sec: 754, paused: false };
+  }
+  componentDidMount() {
+    this.timerId = setInterval(() => {
+      if (!this.state.paused) this.setState({ sec: this.state.sec + 1 });
+    }, 1000);
+  }
+  componentWillUnmount() {
+    clearInterval(this.timerId);
+  }
+  renderVals() {
+    const s = this.state;
+    const mm = String(Math.floor(s.sec / 60)).padStart(2, '0');
+    const ss = String(s.sec % 60).padStart(2, '0');
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      timer: mm + ':' + ss,
+      paused: s.paused,
+      running: !s.paused,
+      playState: s.paused ? 'paused' : 'running',
+      dotColor: s.paused ? 'var(--faint)' : 'var(--record)',
+      timerColor: s.paused ? 'var(--muted)' : 'var(--ink)',
+      pauseLabel: s.paused ? 'Resume' : 'Pause',
+      togglePause: () => this.setState({ paused: !this.state.paused })
+    };
+  }
+}
+</script>
+</body>
+</html>

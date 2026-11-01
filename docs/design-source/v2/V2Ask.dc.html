@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Ask your meetings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1160px; display: flex; flex-wrap: wrap;">
+<nav aria-label="Aftercall" style="flex: 1 1 220px; max-width: 248px; box-sizing: border-box; padding: 20px 14px 18px; display: flex; flex-direction: column; gap: 22px; background: var(--ground);">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0;">
+    <span style="font-family: var(--serif); font-size: 21px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent);"></span>victor.near</span>
+  </div>
+  <a href="V2RecordSheet.dc.html" class="press lift" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Home.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span style="flex: 1;">Today</span></a>
+    <a href="V2Palette.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex: 1;">Search</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘K</span></a>
+    <a href="V2Ask.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg><span style="flex: 1;">Ask your meetings</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span></a>
+    <a href="V2ActionItems.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span style="flex: 1;">Action items</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">5</span></a>
+    <a href="V2People.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span style="flex: 1;">People</span></a>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 6px;">
+      <a href="V2Meetings.dc.html" class="quiet" style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Projects</a>
+      <span style="display: inline-flex; align-items: center; gap: 2px;"><a href="V2Meetings.dc.html" class="quiet" style="font-size: 12px; color: var(--muted); padding: 0 6px;">All meetings</a><button aria-label="New project" class="press quiet" style="width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+    </div>
+    <a href="V2Project.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-weight: 600; color: var(--ink);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m6 9 6 6 6-6"/></svg><span style="flex: 1;">Fundraise</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">6</span></a>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--hairline);">
+      <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sync with Ada</span><span role="img" aria-label="1 to approve" style="width: 7px; height: 7px; border-radius: 999px; background: var(--caution);"></span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Deck review</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">28 Oct</span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Investor intro call</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">24 Oct</span></a>
+    </div>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Platform API</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">11</span></a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Hiring</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">3</span></a>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Wallet.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/></svg><span style="flex: 1;">Agent wallet</span><span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">180.00</span></a>
+    <a href="V2Agents.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg><span style="flex: 1;">Connected agents</span></a>
+    <a href="V2Settings.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></svg><span style="flex: 1;">Settings</span></a>
+  </div>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; min-height: 1160px; background: var(--raised); border-left: 1px solid var(--hairline); box-sizing: border-box; padding: 44px 48px 0; display: flex; flex-direction: column;">
+<div style="flex: 1; width: 100%; max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
+
+  <header style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms var(--ease) both;">
+    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">20 meetings · searched on this Mac</span>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Ask your meetings</h1>
+    <p style="margin: 0; color: var(--ink-2);">Ask in plain words. Every answer shows the quotes it came from.</p>
+  </header>
+
+  <div role="group" aria-label="Suggestions" style="display: flex; flex-wrap: wrap; gap: 8px; animation: ac-in 320ms 40ms var(--ease) both;">
+    <sc-for list="{{chips}}" as="c" hint-placeholder-count="3">
+      <button onClick="{{c.ask}}" disabled="{{c.off}}" class="{{c.cls}}" style="height: 32px; padding: 0 13px; border: 0; border-radius: 999px; background: {{c.bg}}; box-shadow: {{c.shadow}}; color: {{c.color}}; opacity: {{c.opacity}}; cursor: {{c.cursor}}; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; transition: opacity 160ms var(--ease), box-shadow 160ms var(--ease);">
+        <sc-if value="{{c.asked}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+        <span>{{c.text}}</span>
+      </button>
+    </sc-for>
+  </div>
+
+  <section aria-label="Conversation" style="flex: 1; display: flex; flex-direction: column; gap: 36px; padding-top: 4px;">
+
+    <div style="display: flex; flex-direction: column; gap: 14px; animation: ac-in 320ms 80ms var(--ease) both;">
+      <div style="display: flex; justify-content: flex-end; align-items: flex-end; gap: 8px;">
+        <p style="margin: 0; max-width: 78%; padding: 10px 16px; border-radius: 18px 18px 6px 18px; background: var(--accent-tint); font-size: 15px; line-height: 22px;">What did Ines promise this week?</p>
+        <span role="img" aria-label="You" style="width: 24px; height: 24px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; flex-shrink: 0;">You</span>
+      </div>
+      <p style="margin: 0; font-family: var(--serif); font-size: 19px; line-height: 29px;">Ines said they'd send three style directions by Friday and start with the home and booking pages.</p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <sc-for list="{{firstQuotes}}" as="q" hint-placeholder-count="2">
+          <div class="lift" style="display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 18px;">
+              <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: {{q.bg}}; color: {{q.fg}}; display: inline-flex; align-items: center; justify-content: center; font-size: {{q.fs}}; font-weight: 600; flex-shrink: 0;">{{q.ini}}</span>
+              <span style="font-weight: 600;">{{q.who}}</span>
+              <span style="color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{q.meeting}}</span>
+              <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">{{q.at}}</span>
+              <a href="V2Transcript.dc.html" style="margin-left: auto; flex-shrink: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">Open in transcript<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+            </div>
+            <p style="margin: 0; font-family: var(--serif); font-size: 17px; line-height: 26px; font-style: italic;">{{q.text}}</p>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; line-height: 18px; color: var(--ink-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Answered in NEAR AI secure hardware · 2 excerpts sent, encrypted to the attested model</span><a href="V2Verify.dc.html" class="press" style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</a></p>
+    </div>
+
+    <sc-if value="{{hasCur}}" hint-placeholder-val="{{ false }}">
+      <div aria-live="polite" style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; justify-content: flex-end; align-items: flex-end; gap: 8px; animation: ac-in 280ms var(--ease) both;">
+          <p style="margin: 0; max-width: 78%; padding: 10px 16px; border-radius: 18px 18px 6px 18px; background: var(--accent-tint); font-size: 15px; line-height: 22px;">{{curQ}}</p>
+          <span role="img" aria-label="You" style="width: 24px; height: 24px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; flex-shrink: 0;">You</span>
+        </div>
+
+        <sc-if value="{{showSteps}}" hint-placeholder-val="{{ false }}">
+          <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px;">
+            <li style="display: flex; align-items: center; gap: 10px; color: var(--ink-2); animation: ac-in 240ms var(--ease) both;">
+              <span aria-hidden="true" style="width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <sc-if value="{{s1Busy}}" hint-placeholder-val="{{ true }}"><span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span></sc-if>
+                <sc-if value="{{s1Done}}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="9" style="fill: var(--accent-tint); transform-origin: 9px 9px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) both;"/><path d="M5.2 9.3l2.5 2.5 5-5.3" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--accent); animation: ac-draw 240ms 120ms var(--ease) both;"/></svg></sc-if>
+              </span>
+              <span>{{s1Text}}</span>
+              <sc-if value="{{s1Done}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; color: var(--muted); animation: ac-in 240ms var(--ease) both;">{{s1Aside}}</span></sc-if>
+            </li>
+            <sc-if value="{{showS2}}" hint-placeholder-val="{{ false }}">
+              <li style="display: flex; align-items: center; gap: 10px; color: var(--ink-2); animation: ac-in 240ms 80ms var(--ease) both;">
+                <span aria-hidden="true" style="width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 999px; border: 2px solid var(--hairline); border-top-color: var(--accent); animation: ac-spin 800ms linear infinite;"></span></span>
+                <span>{{s2Text}}</span>
+              </li>
+            </sc-if>
+          </ol>
+        </sc-if>
+
+        <sc-if value="{{showAnswer}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; font-family: var(--serif); font-size: 19px; line-height: 29px;">{{answerText}}<sc-if value="{{isStreaming}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="display: inline-block; width: 2px; height: 20px; margin-left: 3px; vertical-align: -3px; border-radius: 1px; background: var(--accent);"></span></sc-if></p>
+        </sc-if>
+
+        <sc-if value="{{showQuotes}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <sc-for list="{{curQuotes}}" as="q" hint-placeholder-count="3">
+              <div class="lift" style="display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); animation: ac-in 280ms {{q.delay}} var(--ease) both;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 18px;">
+                  <span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 999px; background: {{q.bg}}; color: {{q.fg}}; display: inline-flex; align-items: center; justify-content: center; font-size: {{q.fs}}; font-weight: 600; flex-shrink: 0;">{{q.ini}}</span>
+                  <span style="font-weight: 600;">{{q.who}}</span>
+                  <span style="color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{q.meeting}}</span>
+                  <span style="font-family: var(--mono); font-size: 12px; color: var(--muted);">{{q.at}}</span>
+                  <sc-if value="{{q.hasPill}}" hint-placeholder-val="{{ false }}"><span style="font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: nowrap;">{{q.amount}}</span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em; white-space: nowrap;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{q.pill}}</span></sc-if>
+                  <a href="V2Transcript.dc.html" style="margin-left: auto; flex-shrink: 0; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">Open in transcript<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+                </div>
+                <p style="margin: 0; font-family: var(--serif); font-size: 17px; line-height: 26px; font-style: italic;">{{q.text}}</p>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showFooter}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; line-height: 18px; color: var(--ink-2); animation: ac-in 280ms {{footerDelay}} var(--ease) both;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>{{footerText}}</span><a href="V2Verify.dc.html" class="press" style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 420ms {{pillDelay}} var(--ease) both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</a></p>
+        </sc-if>
+
+        <sc-if value="{{showNone}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 280ms var(--ease) both;">
+            <p style="margin: 0; font-family: var(--serif); font-size: 19px; line-height: 29px;">Nothing in your meetings matches that, so nothing left this Mac.</p>
+            <p style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; color: var(--ink-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Searched on this Mac · no excerpts sent</p>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+  </section>
+
+  <div style="position: sticky; bottom: 0; margin-top: auto; padding: 16px 0 28px; background: var(--raised); display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms 120ms var(--ease) both;">
+    <div style="position: relative;">
+      <label for="ask-q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Ask your meetings</label>
+      <input id="ask-q" class="field" autocomplete="off" value="{{draft}}" onChange="{{type}}" onKeyDown="{{key}}" placeholder="Ask about a person, a promise or a payment" style="width: 100%; height: 52px; box-sizing: border-box; padding: 0 128px 0 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--well); font-size: 15px;">
+      <span aria-hidden="true" style="position: absolute; right: 82px; top: 0; bottom: 0; display: flex; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span>
+      <button onClick="{{submit}}" disabled="{{cantAsk}}" class="press primary" style="position: absolute; right: 8px; top: 8px; height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; opacity: {{askOpacity}}; transition: opacity 160ms var(--ease);">Ask</button>
+    </div>
+    <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Only the excerpts needed leave this Mac</span>
+  </div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1160}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cur: null, draft: '' };
+    const you = { who: 'You', ini: 'You', bg: 'var(--accent-tint)', fg: 'var(--accent)', fs: '8px' };
+    const ines = { who: 'Ines Rocha', ini: 'IR', bg: 'var(--p5)', fg: 'var(--p5i)', fs: '9px' };
+    const ada = { who: 'Ada', ini: 'A', bg: 'var(--p2)', fg: 'var(--p2i)', fs: '10px' };
+    const q = (person, meeting, at, text, pill, amount) => Object.assign({}, person, { meeting, at, text, pill: pill || '', amount: amount || '' });
+    this.answers = {
+      ines: {
+        q: 'What did Ines promise this week?',
+        excerpts: 2,
+        meetings: 1,
+        answer: "Ines said they'd send three style directions by Friday and start with the home and booking pages.",
+        quotes: [
+          q(ines, 'Website kickoff with Ines · Today', '12:08', "“I'll send you three style directions by Friday, and you pick one.”"),
+          q(ines, 'Website kickoff with Ines · Today', '18:41', '“We start with the home page and the booking page, then everything else.”')
+        ]
+      },
+      ada: {
+        q: 'What do I owe Ada?',
+        excerpts: 3,
+        meetings: 2,
+        answer: "Two things: the deck v2 by next Friday, and a recap after today's sync. Ada said they'd “look out for the recap”.",
+        quotes: [
+          q(you, 'Deck review · 28 Oct', '21:30', "“I'll share the deck v2 with you by next Friday, once the designer's done.”"),
+          q(you, 'Sync with Ada · Today', '02:14', '“Send Ada the recap after this call”'),
+          q(ada, 'Sync with Ada · Today', '02:40', "“Great. I'll look out for the recap. Talk Friday.”")
+        ]
+      },
+      pay: {
+        q: 'Every payment I approved in October',
+        excerpts: 1,
+        meetings: 1,
+        answer: "One: the designer's fifty dollar deposit for the deck, from your sync with Ada today.",
+        quotes: [
+          q(you, 'Sync with Ada · Today', '02:14', '“pay the designer the fifty dollar deposit today”', 'PAID 14:21', '50.00 USDC')
+        ]
+      }
+    };
+    this.chipOrder = ['ines', 'ada', 'pay'];
+  }
+  componentWillUnmount() { this.clear(); }
+  clear() { clearTimeout(this.t); clearInterval(this.iv); }
+  busy() {
+    const c = this.state.cur;
+    return !!c && c.phase !== 'done' && c.phase !== 'none';
+  }
+  match(text) {
+    const s = text.toLowerCase();
+    if (s.indexOf('ines') >= 0) return 'ines';
+    if (s.indexOf('ada') >= 0 && (s.indexOf('owe') >= 0 || s.indexOf('promis') >= 0)) return 'ada';
+    if (s.indexOf('payment') >= 0 || s.indexOf('paid') >= 0 || s.indexOf('approv') >= 0) return 'pay';
+    return 'none';
+  }
+  setPhase(phase, extra) {
+    this.setState({ cur: Object.assign({}, this.state.cur, { phase }, extra || {}) });
+  }
+  ask(key, text) {
+    if (this.busy()) return;
+    this.clear();
+    this.setState({ cur: { key, q: text, phase: 'asked', shown: 0 }, draft: '' });
+    this.t = setTimeout(() => {
+      this.setPhase('search');
+      this.t = setTimeout(() => {
+        if (key === 'none') { this.setPhase('none'); return; }
+        this.setPhase('send');
+        this.t = setTimeout(() => this.stream(), 1500);
+      }, 1300);
+    }, 360);
+  }
+  stream() {
+    const total = this.answers[this.state.cur.key].answer.split(' ').length;
+    this.setPhase('stream', { shown: 1 });
+    clearInterval(this.iv);
+    this.iv = setInterval(() => {
+      const c = this.state.cur;
+      if (!c) { clearInterval(this.iv); return; }
+      if (c.shown >= total) { clearInterval(this.iv); this.setPhase('done'); return; }
+      this.setPhase('stream', { shown: c.shown + 1 });
+    }, 65);
+  }
+  submit() {
+    const text = (this.state.draft || '').trim();
+    if (!text || this.busy()) return;
+    this.ask(this.match(text), text);
+  }
+  renderVals() {
+    const s = this.state;
+    const c = s.cur;
+    const busy = this.busy();
+    const a = c && c.key !== 'none' ? this.answers[c.key] : null;
+    const phase = c ? c.phase : '';
+    const n = a ? a.excerpts : 0;
+    const plural = (k, word) => k + ' ' + word + (k === 1 ? '' : 's');
+    const view = (list, stagger) => list.map((it, i) => Object.assign({}, it, { hasPill: !!it.pill, delay: stagger ? (i * 90) + 'ms' : '0ms' }));
+    const quoteCount = a ? a.quotes.length : 0;
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      chips: this.chipOrder.map((k) => {
+        const asked = k === 'ines' || (!!c && c.key === k);
+        const off = asked || busy;
+        return {
+          text: this.answers[k].q,
+          asked,
+          off,
+          cls: off ? '' : 'press lift',
+          bg: asked ? 'transparent' : 'var(--elevated)',
+          shadow: asked ? 'inset 0 0 0 1px var(--hairline)' : 'var(--sh1)',
+          color: asked ? 'var(--ink-2)' : 'var(--ink)',
+          opacity: busy && !asked ? 0.5 : 1,
+          cursor: off ? 'default' : 'pointer',
+          ask: () => this.ask(k, this.answers[k].q)
+        };
+      }),
+      firstQuotes: view(this.answers.ines.quotes, false),
+      hasCur: !!c,
+      curQ: c ? c.q : '',
+      showSteps: phase === 'search' || phase === 'send',
+      s1Busy: phase === 'search',
+      s1Done: phase === 'send',
+      s1Text: phase === 'search' ? 'Searching your meetings on this Mac…' : 'Searched your meetings on this Mac',
+      s1Aside: a ? plural(n, 'excerpt') + ' in ' + plural(a.meetings, 'meeting') : '',
+      showS2: phase === 'send',
+      s2Text: 'Sending ' + plural(n, 'excerpt') + ', encrypted to the Qwen TEE…',
+      showAnswer: !!a && (phase === 'stream' || phase === 'done'),
+      isStreaming: phase === 'stream',
+      answerText: a ? a.answer.split(' ').slice(0, phase === 'done' ? undefined : c.shown).join(' ') : '',
+      showQuotes: !!a && phase === 'done',
+      curQuotes: a ? view(a.quotes, true) : [],
+      showFooter: !!a && phase === 'done',
+      footerText: 'Answered in NEAR AI secure hardware · ' + plural(n, 'excerpt') + ' sent, encrypted to the attested model',
+      footerDelay: (quoteCount * 90 + 80) + 'ms',
+      pillDelay: (quoteCount * 90 + 260) + 'ms',
+      showNone: phase === 'none',
+      draft: s.draft,
+      type: (e) => this.setState({ draft: e && e.target ? String(e.target.value) : '' }),
+      key: (e) => { if (e && e.key === 'Enter') { if (e.preventDefault) e.preventDefault(); this.submit(); } },
+      submit: () => this.submit(),
+      cantAsk: busy || !(s.draft || '').trim(),
+      askOpacity: busy || !(s.draft || '').trim() ? 0.45 : 1
+    };
+  }
+}
+</script>
+</body>
+</html>

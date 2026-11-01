@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · processing stopped</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="width: 760px; height: 640px; box-sizing: border-box; padding: 52px 56px; background: var(--raised); overflow: hidden; display: flex; flex-direction: column; gap: 36px;">
+
+  <header style="display: flex; flex-direction: column; gap: 10px; animation: ac-in 320ms var(--ease) both;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Fundraise · Today 15:30 · 12 min 58 s · You and Ines Rocha</span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms 200ms var(--ease) both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>STOPPED</span>
+    </div>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Website kickoff with Ines</h1>
+    <p style="margin: 0; color: var(--ink-2);">Processing stopped before your notes were written.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 312px; gap: 48px; align-items: start;">
+
+    <section role="alert" aria-labelledby="pf-why" style="display: flex; flex-direction: column; gap: 14px; animation: ac-in 320ms 40ms var(--ease) both;">
+      <h2 id="pf-why" style="margin: 0; font-family: var(--serif); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">NEAR AI refused the key</h2>
+      <p style="margin: 0; color: var(--ink-2);">It has no credit left for writing the notes. Add credit, or use another key.</p>
+      <code style="display: block; padding: 12px 14px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); font-family: var(--mono); font-size: 13px; line-height: 19px; color: var(--ink); overflow-wrap: anywhere; user-select: text;">NEAR AI 402 Payment Required: [reason from NEAR AI]</code>
+      <p style="margin: 0; display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 10px; color: var(--ink);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-top: 2px; color: var(--accent);"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Nothing was sent past the failed check. Your audio is still on this Mac.</span></p>
+      <div style="display: flex; gap: 10px; margin-top: 6px;">
+        <button class="press primary" style="height: 38px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Try again</button>
+        <a href="V2Settings.dc.html" class="press secondary" style="height: 38px; box-sizing: border-box; padding: 0 16px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>Change key</a>
+      </div>
+    </section>
+
+    <section aria-labelledby="pf-where" style="display: flex; flex-direction: column; gap: 8px; animation: ac-in 320ms 80ms var(--ease) both;">
+      <h2 id="pf-where" style="margin: 0 0 4px; font-size: 15px; line-height: 20px; font-weight: 600;">Where it stopped <span style="color: var(--muted); font-weight: 500;">step 4 of 7</span></h2>
+      <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+        <sc-for list="{{stages}}" as="st" hint-placeholder-count="7">
+          <li style="display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--hairline); animation: ac-in 280ms {{st.delay}} var(--ease) both;">
+            <span style="width: 22px; height: 20px; display: inline-flex; align-items: center; justify-content: center;">
+              <sc-if value="{{st.done}}" hint-placeholder-val="{{ true }}"><svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Done"><circle cx="9" cy="9" r="9" style="fill: var(--accent-tint);"/><path d="M5.2 9.3l2.5 2.5 5-5.3" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--accent);"/></svg></sc-if>
+              <sc-if value="{{st.failed}}" hint-placeholder-val="{{ false }}"><svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Failed" style="animation: ac-pop 320ms 420ms var(--ease) both;"><circle cx="9" cy="9" r="9" style="fill: var(--record);"/><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" fill="none" stroke-width="1.9" stroke-linecap="round" style="stroke: var(--elevated);"/></svg></sc-if>
+              <sc-if value="{{st.todo}}" hint-placeholder-val="{{ false }}"><span role="img" aria-label="Not reached" style="width: 16px; height: 16px; box-sizing: border-box; border-radius: 999px; border: 1.5px solid var(--border); opacity: .7;"></span></sc-if>
+            </span>
+            <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <span style="font-size: 15px; line-height: 20px; font-weight: 600; color: {{st.titleColor}};">{{st.title}}</span>
+              <sc-if value="{{st.failed}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; line-height: 18px; color: var(--record);">Stopped here · NEAR AI 402</span></sc-if>
+            </span>
+          </li>
+        </sc-for>
+      </ol>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":760,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const titles = [
+      'Secure hardware checked',
+      'Transcribed',
+      'Transcript sealed for the Qwen TEE',
+      'Writing the notes',
+      'Signature checked',
+      'Proof recorded on NEAR',
+      'Audio deleted from this Mac'
+    ];
+    const stopped = 3;
+    const stages = titles.map((title, i) => ({
+      title,
+      done: i < stopped,
+      failed: i === stopped,
+      todo: i > stopped,
+      titleColor: i > stopped ? 'var(--muted)' : 'var(--ink)',
+      delay: (120 + i * 50) + 'ms'
+    }));
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      stages
+    };
+  }
+}
+</script>
+</body>
+</html>

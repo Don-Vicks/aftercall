@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · landing page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 4900px; background: var(--raised); color: var(--ink);">
+
+  <header style="padding: 0 clamp(16px, 4vw, 48px);">
+    <div style="max-width: 1200px; min-height: 64px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 32px; flex-wrap: wrap; border-bottom: 1px solid var(--hairline);">
+      <a href="#" style="display: inline-flex; align-items: center; gap: 10px; color: var(--ink);">
+        <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <nav aria-label="Site" style="display: flex; align-items: center; gap: 8px 26px; flex-wrap: wrap; font-weight: 500;">
+        <a href="V2HowItWorks.dc.html" class="quiet" style="color: var(--ink-2);">How it works</a>
+        <a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a>
+        <a href="V2Download.dc.html" class="quiet" style="color: var(--ink-2);">Download</a>
+        <a href="https://github.com/Don-Vicks/aftercall" class="quiet" style="color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px;">GitHub<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <a href="V2Download.dc.html" class="press primary" style="height: 36px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <section aria-labelledby="hero" style="padding: 52px clamp(16px, 4vw, 48px) 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+        <h1 id="hero" style="margin: 0; font-family: var(--serif); font-size: clamp(52px, 7.3vw, 105px); line-height: 0.95; font-weight: 500; letter-spacing: -0.035em; animation: ac-in 360ms var(--ease) both;">Your call ends.<br><span style="font-style: italic; font-weight: 400; letter-spacing: -0.03em;">The follow-through starts.</span></h1>
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 28px 56px; animation: ac-in 360ms var(--ease) 60ms both;">
+          <p style="margin: 0 0 0 clamp(0px, calc((100vw - 720px) * 1000), 134px); flex: 1 1 380px; max-width: 560px; font-size: 19px; line-height: 29px; color: var(--ink-2);">Aftercall is a Mac app that makes private notes of your calls inside NEAR AI's secure hardware, then sends the recap and pays what you agreed, once you say so.</p>
+          <div style="margin-left: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 12px;">
+            <a href="V2Download.dc.html" class="press primary" style="height: 52px; padding: 0 24px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+            <span style="font-size: 13px; line-height: 18px; color: var(--ink-2);">Built for NEAR HACKATHON</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="story" style="padding: 44px clamp(16px, 4vw, 48px) 0;">
+      <div style="max-width: 1200px; margin: 0 auto;">
+        <h2 id="story" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0;">One call, from the moment it ends</h2>
+        <ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;">
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 120ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">15:43</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Call ends</span>
+              <span role="img" aria-label="You and Ines Rocha" style="display: inline-flex; margin-top: 10px;"><span style="width: 26px; height: 26px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">You</span><span style="margin-left: -6px; width: 26px; height: 26px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; box-shadow: 0 0 0 2px var(--raised);">IR</span></span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 32px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">15:43</span> · Call ends</span><span style="font-weight: 500;">You hang up.</span> Thirteen minutes with Ines Rocha, a new website agreed, and no bot in the call. Aftercall recorded both sides on your Mac, sealing the audio as it went.</p>
+              <div class="ac" role="img" aria-label="The live recording pill at 12:58, with your mic and the call on separate meters, and Stop and make notes" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; box-sizing: border-box; padding: 32px 20px 18px; border-radius: 14px; background: var(--ground); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; padding: 7px 7px 7px 16px; border-radius: 999px; background: var(--elevated); box-shadow: var(--shpill);">
+                  <span style="width: 9px; height: 9px; border-radius: 999px; background: var(--record); animation: ac-breathe 2s ease-in-out infinite;"></span>
+                  <span style="font-family: var(--mono); font-size: 15px; font-weight: 500; letter-spacing: -0.01em;">12:58</span>
+                  <span style="display: inline-flex; align-items: center; gap: 2px; height: 22px;"><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 820ms ease-in-out -120ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 640ms ease-in-out -340ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 900ms ease-in-out -520ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 700ms ease-in-out -80ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--accent); animation: ac-bar 760ms ease-in-out -410ms infinite;"></span></span>
+                  <span style="display: inline-flex; align-items: center; gap: 2px; height: 22px;"><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1100ms ease-in-out -300ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 980ms ease-in-out -700ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1240ms ease-in-out -150ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 860ms ease-in-out -560ms infinite;"></span><span style="width: 3px; height: 22px; border-radius: 2px; background: var(--ink-2); animation: ac-bar 1020ms ease-in-out -90ms infinite;"></span></span>
+                  <span style="width: 1px; height: 22px; background: var(--hairline);"></span>
+                  <span style="height: 34px; padding: 0 15px; border-radius: 999px; background: var(--record); color: #fff; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #fff;"></span>Stop<span style="display: inline-block; max-width: clamp(0px, calc((100vw - 720px) * 1000), 200px); overflow: hidden; white-space: nowrap; vertical-align: bottom;">&#160;and make notes</span></span>
+                </span>
+                <span aria-hidden="true" style="display: flex; gap: 18px; font-size: 12px; line-height: 16px; color: var(--muted);"><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--accent);"></span>Your mic</span><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; border-radius: 2px; background: var(--ink-2);"></span>The call</span></span>
+              </div>
+            </div>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 180ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">15:43:02</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Checked</span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 32px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">15:43:02</span> · Checked</span><span style="font-weight: 500;">Before a word leaves your Mac,</span> NEAR AI's secure hardware has to pass every check, against a fresh nonce. If one fails, nothing is sent. Your transcript is then sealed so only the model that passed can read it.</p>
+              <div class="ac" role="img" aria-label="Secure hardware checked: six checks passed, and the transcript sealed to the Qwen TEE" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; box-sizing: border-box; padding: 18px 20px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 12px;">
+                <span aria-hidden="true" style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">Secure hardware checked</span><span style="font-size: 12px; color: var(--ink-2);">Gateway · Whisper · Qwen</span></span>
+                <span aria-hidden="true" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 520ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Intel TDX quote</span>
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 610ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Debug off</span>
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 700ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Key bound</span>
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 790ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Nonce bound</span>
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 880ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Known software</span>
+                  <span style="height: 24px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; animation: ac-pop 300ms var(--ease) 970ms both;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>NVIDIA GPUs</span>
+                </span>
+                <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; padding-top: 12px; border-top: 1px solid var(--hairline); animation: ac-in 260ms var(--ease) 1100ms both;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); flex-shrink: 0;"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                  <span style="flex: 1; font-weight: 600;">Transcript sealed to the Qwen TEE</span>
+                  <span style="font-size: 12px; color: var(--muted);">the relay sees ciphertext</span>
+                </span>
+              </div>
+            </div>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 240ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">15:44</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Notes ready</span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 32px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">15:44</span> · Notes ready</span><span style="font-weight: 500;">A minute later, the notes.</span> What you decided and who does what, each tied to the exact words from the call. Anything the model can't back with a quote is dropped.</p>
+              <div class="ac" role="img" aria-label="The notes: one decision with the quote behind it, and two action items, one for you and one for Ines" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; box-sizing: border-box; padding: 18px 20px 8px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 12px;">
+                <span aria-hidden="true" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                  <span style="font-family: var(--serif); font-size: 19px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Website kickoff with Ines</span>
+                  <span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: .06em;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>VERIFIED</span>
+                </span>
+                <span aria-hidden="true" style="display: flex; flex-direction: column; gap: 4px;">
+                  <span style="font-family: var(--serif); font-size: 17px; line-height: 25px;">Home and booking pages first; the rest waits for phase two.</span>
+                  <span style="font-family: var(--serif); font-size: 14px; line-height: 21px; font-style: italic; color: var(--ink-2);">“Let's agree the home page and the booking page come first” <span style="margin-left: 4px; font-family: var(--mono); font-style: normal; font-size: 11px; color: var(--accent);">03:12</span></span>
+                </span>
+                <span aria-hidden="true" style="display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+                  <span style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; font-size: 14px;">Share the logo files and workshop photos</span><span style="width: 20px; height: 20px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">You</span><span style="width: 30px; font-size: 12px; color: var(--muted);">Wed</span></span>
+                  <span style="display: flex; align-items: center; gap: 10px; padding: 8px 0 2px;"><svg width="18" height="18" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; font-size: 14px;">Send three style directions</span><span style="width: 20px; height: 20px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">IR</span><span style="width: 30px; font-size: 12px; color: var(--muted);">Fri</span></span>
+                </span>
+              </div>
+            </div>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 300ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 20px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+              <span role="img" aria-label="You" style="width: 32px; height: 32px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">You</span>
+            </div>
+            <figure style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; margin: 0; padding: 16px 0 36px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline);">
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 8px; height: 34px; max-height: clamp(0px, calc((720px - 100vw) * 1000), 34px); overflow: hidden; font-size: 12px; font-weight: 500; color: var(--muted);"><span style="width: 22px; height: 22px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">You</span>You</span>
+              <blockquote style="margin: 0; text-indent: -0.4em; font-family: var(--serif); font-size: clamp(30px, 3.4vw, 48px); line-height: 1.15; font-style: italic; letter-spacing: -0.015em; color: var(--ink);">“I'll email you a short recap after this call.” <a href="V2Transcript.dc.html" aria-label="At 12:31 in the transcript" style="margin-left: 6px; font-family: var(--mono); font-size: 14px; font-style: normal; letter-spacing: 0; vertical-align: middle;">12:31</a></blockquote>
+            </figure>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 360ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">15:45</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Recap drafted</span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 32px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">15:45</span> · Recap drafted</span><span style="font-weight: 500;">So the recap is waiting</span> as a draft in your own Mail, addressed to Ines. Change a word, then send it. A draft made on your Mac never touches our servers.</p>
+              <div class="ac" role="img" aria-label="A recap email to Ines Rocha, drafted in your Mail: the three things you agreed and the recording notice" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; border-radius: 14px; background: var(--elevated); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; display: flex; flex-direction: column;">
+                <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 14px; background: var(--ground); border-bottom: 1px solid var(--hairline);">
+                  <span style="display: inline-flex; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 10px; height: 10px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 10px; height: 10px; border-radius: 999px; background: var(--hairline);"></span></span>
+                  <span style="flex: 1; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink-2);">Recap: website kickoff</span>
+                  <span style="width: 42px;"></span>
+                </span>
+                <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; padding: 6px 18px; border-bottom: 1px solid var(--hairline); font-size: 13px;"><span style="width: 24px; color: var(--muted);">To</span><span style="width: 20px; height: 20px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">IR</span><span>Ines Rocha</span></span>
+                <span aria-hidden="true" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 18px;">
+                  <span style="font-size: 14px; line-height: 20px;">Hi Ines, thanks for the call. Here's what we agreed:</span>
+                  <span style="display: flex; flex-direction: column; font-family: var(--serif); font-size: 15px; line-height: 22px;"><span>· Home and booking pages first, the rest in phase two</span><span>· Logo files and workshop photos from me by Wednesday</span><span>· A 40 USDC deposit today, the rest on sign-off</span></span>
+                </span>
+                <span aria-hidden="true" style="display: flex; align-items: center; gap: 8px; padding: 9px 18px 10px; border-top: 1px solid var(--hairline); font-size: 12px; line-height: 17px; color: var(--ink-2); white-space: nowrap;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; color: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg><span style="overflow: hidden; text-overflow: ellipsis;">Recorded with notice to everyone, processed in secure hardware.</span></span>
+              </div>
+            </div>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 420ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 20px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+              <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">IR</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Ines Rocha</span>
+            </div>
+            <figure style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; margin: 0; padding: 16px 0 36px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline);">
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 8px; height: 34px; max-height: clamp(0px, calc((720px - 100vw) * 1000), 34px); overflow: hidden; font-size: 12px; font-weight: 500; color: var(--muted);"><span style="width: 22px; height: 22px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600;">IR</span>Ines Rocha</span>
+              <blockquote style="margin: 0; text-indent: -0.4em; font-family: var(--serif); font-size: clamp(30px, 3.4vw, 48px); line-height: 1.15; font-style: italic; letter-spacing: -0.015em; color: var(--ink);">“Forty dollars is enough to book the slot.” <a href="V2Transcript.dc.html" aria-label="At 11:40 in the transcript" style="margin-left: 6px; font-family: var(--mono); font-size: 14px; font-style: normal; letter-spacing: 0; vertical-align: middle;">11:40</a></blockquote>
+            </figure>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 480ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">15:46</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Deposit paid</span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 32px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">15:46</span> · Deposit paid</span><span style="font-weight: 500;">One tap, and Ines is paid.</span> The amount is read from the words spoken, not the model's guess. A NEAR contract caps what the app can ever pay, so a hijacked app or a tricked AI can't overspend.</p>
+              <div class="ac" role="img" aria-label="Paid Ines Rocha 40.00 USDC at 15:46 from your agent wallet: heard the 40 dollar deposit, Ines is on your payee list, inside your caps" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; box-sizing: border-box; padding: 18px 20px 20px; border-radius: 14px; background: var(--elevated); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 14px;">
+                <span aria-hidden="true" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;">
+                  <span style="width: 34px; height: 34px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">IR</span>
+                  <span style="flex: 1; min-width: 0; display: flex; flex-direction: column;"><span style="font-weight: 600;">Paid Ines Rocha</span><span style="font-size: 13px; color: var(--ink-2); white-space: nowrap;">From your agent wallet</span></span>
+                  <span style="height: 26px; padding: 0 11px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; animation: ac-pop 420ms var(--ease) 900ms both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" stroke-dasharray="24" style="animation: ac-draw 260ms var(--ease) 1020ms both;"/></svg><span style="font-family: var(--mono); font-weight: 500;">40.00 USDC</span> paid 15:46</span>
+                </span>
+                <span aria-hidden="true" style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--well); font-size: 13px; line-height: 19px;">
+                  <span style="display: flex; gap: 10px; align-items: baseline;"><span style="width: 48px; flex-shrink: 0; font-size: 12px; color: var(--muted);">Heard</span><span><span style="font-family: var(--serif); font-style: italic; font-size: 14px;">“the 40 dollar deposit”</span> <span style="color: var(--muted);">→</span> <span style="font-family: var(--mono);">40.00 USDC</span></span></span>
+                  <span style="display: flex; gap: 10px; align-items: baseline;"><span style="width: 48px; flex-shrink: 0; font-size: 12px; color: var(--muted);">Payee</span><span>Ines Rocha <span style="color: var(--accent);">· on your list</span></span></span>
+                  <span style="display: flex; gap: 10px; align-items: baseline;"><span style="width: 48px; flex-shrink: 0; font-size: 12px; color: var(--muted);">Caps</span><span style="color: var(--ink-2);">Inside your daily and per-payment limits</span></span>
+                </span>
+              </div>
+            </div>
+          </li>
+
+          <li style="display: flex; flex-wrap: wrap; animation: ac-in 320ms var(--ease) 540ms both;">
+            <div style="flex: 0 0 auto; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 6px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+              <span style="font-family: var(--mono); font-size: 15px; line-height: 20px; font-weight: 500;">Anytime</span>
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Anyone checks</span>
+            </div>
+            <div style="position: relative; flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 0 0 8px clamp(20px, 3vw, 40px); border-left: 1px solid var(--hairline); display: flex; flex-wrap: wrap; gap: 28px 48px;">
+              <span aria-hidden="true" style="position: absolute; left: -5px; top: 11px; width: 9px; height: 9px; box-sizing: border-box; border-radius: 999px; border: 1.5px solid var(--ink); background: var(--raised); box-shadow: 0 0 0 4px var(--raised);"></span>
+              <p style="margin: 0; flex: 1 1 340px; max-width: 500px; font-family: var(--serif); font-size: 21px; line-height: 32px; color: var(--ink);"><span aria-hidden="true" style="display: block; max-height: clamp(0px, calc((720px - 100vw) * 1000), 32px); overflow: hidden; font-family: var(--sans); font-size: 12px; line-height: 32px; font-weight: 500; color: var(--muted);"><span style="font-family: var(--mono); font-size: 14px; color: var(--ink);">Anytime</span> · Anyone checks</span><span style="font-weight: 500;">And anyone can check how.</span> The proof sits on NEAR: a hash, never what was said. Open the link in any browser to re-run the checks, down to what the proof doesn't show.</p>
+              <div class="ac" role="img" aria-label="The public Verify page: a Verified seal, the proof recorded on NEAR, the summary signed in secure hardware, re-checked in this browser" style="flex: 0 1 460px; min-width: 0; margin-left: auto; align-self: flex-start; box-sizing: border-box; padding: 20px 22px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; align-items: center; gap: 20px;">
+                <svg width="96" height="96" viewBox="0 0 148 148" aria-hidden="true" style="flex-shrink: 0; animation: ac-pop 480ms var(--ease) 1000ms both;"><defs><path id="sealA" d="M22 74a52 52 0 1 1 104 0a52 52 0 1 1-104 0"/></defs><circle cx="74" cy="74" r="71" style="fill: var(--accent-tint);"/><circle cx="74" cy="74" r="65" fill="none" stroke-width="2" style="stroke: var(--accent);"/><circle cx="74" cy="74" r="38" fill="none" stroke-width="1.4" style="stroke: var(--accent); opacity: .45;"/><text style="fill: var(--accent); font-family: var(--sans); font-size: 12px; font-weight: 600; letter-spacing: .14em;"><textPath href="#sealA" textLength="318" lengthAdjust="spacing">VERIFIED · IN SECURE HARDWARE · </textPath></text><g transform="translate(54.8 54.8) scale(1.6)" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></g></svg>
+                <span aria-hidden="true" style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;">
+                  <span style="font-family: var(--mono); font-size: 11px; line-height: 16px; color: var(--muted);">/verify#… · proof by victor.near</span>
+                  <span style="display: flex; flex-direction: column;">
+                    <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--hairline); font-size: 13px; font-weight: 600;"><svg width="15" height="15" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Proof recorded on NEAR</span>
+                    <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--hairline); font-size: 13px; font-weight: 600;"><svg width="15" height="15" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Summary signed in secure hardware</span>
+                    <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); font-size: 13px; font-weight: 600;"><svg width="15" height="15" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Re-checked in this browser</span>
+                  </span>
+                  <span style="font-size: 12px; line-height: 17px; color: var(--ink-2);">Not proven here: that the transcript is accurate.</span>
+                </span>
+              </div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="does" aria-labelledby="does-h" style="padding: 64px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 600ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column;">
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 48px; padding: 20px 0 16px; border-top: 1px solid var(--ink);">
+          <h2 id="does-h" style="margin: 0; font-family: var(--serif); font-size: clamp(34px, 3.6vw, 52px); line-height: 1.04; font-weight: 500; letter-spacing: -0.03em;">What it does for you</h2>
+          <p style="margin: 0; flex: 0 1 440px; font-size: 16px; line-height: 25px; color: var(--ink-2);">Everything after the call, kept on your Mac. Two of these are still being built, and say so.</p>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; padding: 18px 0; border-top: 1px solid var(--hairline);">
+          <div style="flex: 0 0 auto; align-self: flex-start; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 10px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap;">Notes</div>
+          <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 56px;">
+            <div style="flex: 1 1 320px; max-width: 470px; display: flex; flex-direction: column; gap: 10px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);"><span style="display: block; margin-bottom: 6px; font-size: clamp(24px, 2.1vw, 30px); line-height: 1.15; font-weight: 500; letter-spacing: -0.015em;">Notes you can trust.</span>Every decision and action item carries the exact words that asked for it, one click from that moment in the transcript. If the model can't quote it, it's dropped.</p>
+            </div>
+            <div class="ac" role="img" aria-label="An action item, Send three style directions, owned by Ines and due Friday, with the line from the call that backs it" style="flex: 0 1 480px; min-width: 0; margin-left: auto; box-sizing: border-box; padding: 16px 18px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 12px;">
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px;"><svg width="18" height="18" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; font-size: 15px; font-weight: 600;">Send three style directions</span><span style="width: 22px; height: 22px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600;">IR</span><span style="font-size: 12px; color: var(--muted);">Fri</span></span>
+              <span aria-hidden="true" style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--well);">
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px;"><span style="font-weight: 600; color: var(--ink-2);">Ines Rocha</span><span style="font-family: var(--mono); color: var(--muted);">07:48</span><span style="margin-left: auto; color: var(--accent); font-weight: 600;">Open in transcript</span></span>
+                <span style="font-family: var(--serif); font-size: 16px; line-height: 24px; font-style: italic; color: var(--ink-2);">“Perfect. <span style="color: var(--ink); background: var(--accent-tint); border-radius: 4px; padding: 1px 3px;">I'll send you three style directions by Friday</span>…”</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; padding: 18px 0; border-top: 1px solid var(--hairline);">
+          <div style="flex: 0 0 auto; align-self: flex-start; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 10px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap;">Follow-ups</div>
+          <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 56px;">
+            <div class="ac" role="img" aria-label="Two follow-ups waiting for you: a recap to Ines with Draft in Mail, and a 40.00 USDC payment to Ines with Approve payment" style="flex: 0 1 480px; min-width: 0; border-radius: 14px; background: var(--elevated); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; display: flex; flex-direction: column;">
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--hairline);"><span style="width: 30px; height: 30px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">IR</span><span style="flex: 1; min-width: 0; display: flex; flex-direction: column;"><span style="font-weight: 600;">Recap to Ines</span><span style="font-size: 12px; line-height: 17px; color: var(--ink-2);">Draft in Mail keeps it on this Mac</span></span><span style="height: 32px; padding: 0 13px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap;">Draft in Mail</span></span>
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px;"><span style="width: 30px; height: 30px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">IR</span><span style="flex: 1; min-width: 0; display: flex; flex-direction: column;"><span style="font-weight: 600;">Pay Ines Rocha <span style="font-family: var(--mono); font-weight: 500;">40.00 USDC</span></span><span style="font-size: 12px; line-height: 17px; color: var(--ink-2);">On your list · inside your caps</span></span><span style="height: 32px; padding: 0 13px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap;">Approve payment</span></span>
+            </div>
+            <div style="flex: 1 1 320px; max-width: 470px; display: flex; flex-direction: column; gap: 10px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);"><span style="display: block; margin-bottom: 6px; font-size: clamp(24px, 2.1vw, 30px); line-height: 1.15; font-weight: 500; letter-spacing: -0.015em;">Nothing goes until you say yes.</span>Recaps open as drafts in your own Mail. Payments take one tap, go only to people on your list, and stay inside your caps. Autopilot is off until you set it.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; padding: 18px 0; border-top: 1px solid var(--hairline);">
+          <div style="flex: 0 0 auto; align-self: flex-start; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 10px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap;">People</div>
+          <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 56px;">
+            <div style="flex: 1 1 320px; max-width: 470px; display: flex; flex-direction: column; gap: 12px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);"><span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px;"><span style="font-size: clamp(24px, 2.1vw, 30px); line-height: 1.15; font-weight: 500; letter-spacing: -0.015em;">Who owes whom.</span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--elevated); color: var(--ink-2); box-shadow: var(--sh1); display: inline-flex; align-items: center; font-family: var(--sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: .06em;">COMING SOON</span></span>Every action item already has an owner and a due date. Soon each person gets a page: what you owe them, and what they owe you.</p>
+            </div>
+            <div class="ac" role="img" aria-label="Coming soon, a page for Ines Rocha: you owe Ines the logo files and photos by Wednesday, the 40 USDC deposit is done; Ines owes you three style directions by Friday and a first home page draft" style="flex: 0 1 480px; min-width: 0; margin-left: auto; box-sizing: border-box; padding: 16px 18px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 12px;">
+              <span aria-hidden="true" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; font-size: 13px; line-height: 18px;">
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--hairline); font-weight: 600;"><span style="width: 18px; height: 18px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 600;">You</span>You owe Ines</span>
+                  <span style="display: flex; align-items: center; gap: 8px; padding: 6px 0;"><svg width="16" height="16" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; min-width: 0;">Logo files and photos</span><span style="font-size: 12px; color: var(--muted);">Wed</span></span>
+                  <span style="display: flex; align-items: center; gap: 8px; padding: 6px 0;"><svg width="16" height="16" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg><span style="flex: 1; min-width: 0; color: var(--muted); text-decoration: line-through;">40 USDC deposit</span><span style="font-size: 12px; color: var(--muted);">paid</span></span>
+                </span>
+                <span style="display: flex; flex-direction: column; gap: 2px;">
+                  <span style="display: flex; align-items: center; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--hairline); font-weight: 600;"><span style="width: 18px; height: 18px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 600;">IR</span>Ines owes you</span>
+                  <span style="display: flex; align-items: center; gap: 8px; padding: 6px 0;"><svg width="16" height="16" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; min-width: 0;">Three style directions</span><span style="font-size: 12px; color: var(--muted);">Fri</span></span>
+                  <span style="display: flex; align-items: center; gap: 8px; padding: 6px 0;"><svg width="16" height="16" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; min-width: 0;">First home page draft</span><span style="font-size: 12px; color: var(--muted);">later</span></span>
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; padding: 18px 0; border-top: 1px solid var(--hairline);">
+          <div style="flex: 0 0 auto; align-self: flex-start; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 10px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap;">Ask</div>
+          <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 56px;">
+            <div class="ac" role="img" aria-label="Coming soon, ask your meetings: What did Ines promise this week? The answer, three style directions by Friday, comes with the quote from the call" style="flex: 0 1 480px; min-width: 0; box-sizing: border-box; padding: 14px 18px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 8px;">
+              <span aria-hidden="true" style="display: flex; justify-content: flex-end; align-items: flex-end; gap: 8px;"><span style="padding: 6px 13px; border-radius: 16px 16px 5px 16px; background: var(--accent-tint); font-size: 14px; line-height: 20px;">What did Ines promise this week?</span><span style="width: 22px; height: 22px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600; flex-shrink: 0;">You</span></span>
+              <span aria-hidden="true" style="font-family: var(--serif); font-size: 17px; line-height: 25px;">Three style directions, by Friday.</span>
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 10px; background: var(--well);"><span style="width: 20px; height: 20px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 600; flex-shrink: 0;">IR</span><span style="flex: 1; min-width: 0; font-family: var(--serif); font-size: 15px; line-height: 22px; font-style: italic; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">“I'll send you three style directions by Friday”</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">07:48</span></span>
+            </div>
+            <div style="flex: 1 1 320px; max-width: 470px; display: flex; flex-direction: column; gap: 12px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);"><span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px;"><span style="font-size: clamp(24px, 2.1vw, 30px); line-height: 1.15; font-weight: 500; letter-spacing: -0.015em;">Ask your meetings.</span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--elevated); color: var(--ink-2); box-shadow: var(--sh1); display: inline-flex; align-items: center; font-family: var(--sans); font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: .06em;">COMING SOON</span></span>Ask in plain words, and every answer shows the quotes it stands on. Search across all your meetings already works today, on your Mac.</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: center; padding: 18px 0 0; border-top: 1px solid var(--hairline);">
+          <div style="flex: 0 0 auto; align-self: flex-start; width: clamp(0px, calc((100vw - 720px) * 1000), 150px); overflow: hidden; box-sizing: border-box; padding: 10px clamp(0px, calc((100vw - 720px) * 1000), 28px) 0 0; text-align: right; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap;">Agents</div>
+          <div style="flex: 1 1 400px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 56px;">
+            <div style="flex: 1 1 320px; max-width: 470px; display: flex; flex-direction: column; gap: 10px;">
+              <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);"><span style="display: block; margin-bottom: 6px; font-size: clamp(24px, 2.1vw, 30px); line-height: 1.15; font-weight: 500; letter-spacing: -0.015em;">Hand the work to your own agents.</span>Claude Code or Codex can read your meetings and pick up an action item, only through the app on your Mac. It's off until you turn it on.</p>
+            </div>
+            <div class="ac" role="img" aria-label="Connected agents, switched on: Claude Code claimed Ship the API fix at 14:20, and Codex finished Write the release notes at 14:41" style="flex: 0 1 480px; min-width: 0; margin-left: auto; box-sizing: border-box; padding: 16px 18px; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 8px;">
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; padding-bottom: 4px;"><span style="flex: 1; font-size: 14px; font-weight: 600;">Let agents reach my meetings</span><span style="font-size: 12px; color: var(--ink-2);">You turned it on</span><span style="width: 34px; height: 20px; border-radius: 999px; background: var(--accent); position: relative; flex-shrink: 0;"><span style="position: absolute; top: 3px; left: 17px; width: 14px; height: 14px; border-radius: 999px; background: #fff;"></span></span></span>
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="9.25" fill="none" stroke-width="1.5" style="stroke: var(--border);"/></svg><span style="flex: 1; min-width: 0; font-size: 14px;">Ship the API fix</span><span style="font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap;">Claude Code is on it · 14:20</span></span>
+              <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; padding: 9px 0 0; border-top: 1px solid var(--hairline);"><svg width="18" height="18" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg><span style="flex: 1; min-width: 0; font-size: 14px; color: var(--muted); text-decoration: line-through;">Write the release notes</span><span style="font-size: 12px; color: var(--ink-2); white-space: nowrap;">Codex finished it · 14:41</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="private" aria-labelledby="private-h" style="padding: 64px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 660ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 48px; padding-top: 20px; border-top: 1px solid var(--ink);">
+          <h2 id="private-h" style="margin: 0; font-family: var(--serif); font-size: clamp(34px, 3.6vw, 52px); line-height: 1.04; font-weight: 500; letter-spacing: -0.03em;">Private by construction</h2>
+          <p style="margin: 0; flex: 0 1 440px; font-size: 16px; line-height: 25px; color: var(--ink-2);">Where a meeting goes, and what each stop can see. <a href="V2HowItWorks.dc.html" style="font-weight: 600; white-space: nowrap;">How it works</a></p>
+        </div>
+
+        <ol aria-label="The journey of one meeting" style="margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px 0;">
+          <li style="flex: 1 1 200px; min-width: 0; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; background: var(--accent-tint); display: flex; flex-direction: column; gap: 4px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: var(--accent);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="2"/><path d="M2 20h20"/></svg><span style="font-size: 15px; font-weight: 600; color: var(--ink);">Your Mac</span></span>
+            <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Records both sides, seals the audio, keeps the notes encrypted.</span>
+          </li>
+          <li aria-hidden="true" style="flex: 0 0 88px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;"><span style="font-family: var(--mono); font-size: 10px; line-height: 12px; color: var(--muted); white-space: nowrap;">checks first</span><svg width="60" height="10" viewBox="0 0 60 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color: var(--ink-2);"><path d="M1 5h57M53 1l5 4-5 4"/></svg></li>
+          <li style="flex: 1 1 200px; min-width: 0; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; gap: 4px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: var(--accent);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg><span style="font-size: 15px; font-weight: 600; color: var(--ink);">Gateway TEE</span></span>
+            <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Relays the audio over TLS, and the transcript only as ciphertext.</span>
+          </li>
+          <li aria-hidden="true" style="flex: 0 0 88px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;"><span style="font-family: var(--mono); font-size: 10px; line-height: 12px; color: var(--muted); white-space: nowrap;">checks first</span><svg width="60" height="10" viewBox="0 0 60 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color: var(--ink-2);"><path d="M1 5h57M53 1l5 4-5 4"/></svg></li>
+          <li style="flex: 1 1 200px; min-width: 0; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; gap: 4px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: var(--accent);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg><span style="font-size: 15px; font-weight: 600; color: var(--ink);">Whisper and Qwen TEEs</span></span>
+            <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Transcribe, then write the notes. The reply comes back signed.</span>
+          </li>
+          <li aria-hidden="true" style="flex: 0 0 88px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;"><span style="font-family: var(--mono); font-size: 10px; line-height: 12px; color: var(--muted); white-space: nowrap;">hash only</span><svg width="60" height="10" viewBox="0 0 60 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color: var(--ink-2);"><path d="M1 5h57M53 1l5 4-5 4"/></svg></li>
+          <li style="flex: 1 1 200px; min-width: 0; box-sizing: border-box; padding: 14px 16px; border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 4px;">
+            <span style="display: flex; align-items: center; gap: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="8" width="7" height="8" rx="2"/><rect x="14" y="8" width="7" height="8" rx="2"/><path d="M10 12h4"/></svg><span style="font-size: 15px; font-weight: 600; color: var(--ink);">NEAR</span></span>
+            <span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Your Mac records a hash of the proof. Never what was said.</span>
+          </li>
+        </ol>
+
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px 56px;">
+          <dl style="flex: 1 1 500px; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 40px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+              <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Checked before it gets anything</dt>
+              <dd style="margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-2);">On a typical meeting, 24 checks on the gateway, Whisper and Qwen against a fresh nonce, then 5 on the signed reply. One failure, and nothing is sent there.</dd>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+              <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">End-to-end encrypted summaries</dt>
+              <dd style="margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-2);">The transcript is sealed on your Mac to the Qwen TEE's attested key. Audio isn't: NEAR AI doesn't offer that for transcription, and the app says so.</dd>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+              <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Encrypted on your Mac</dt>
+              <dd style="margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-2);">Audio is sealed as it records and deleted after transcription. Notes are sealed with a key in your Keychain.</dd>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+              <dt style="font-size: 16px; line-height: 22px; font-weight: 600;">Our servers keep nothing</dt>
+              <dd style="margin: 0; font-size: 14px; line-height: 21px; color: var(--ink-2);">Nothing about a meeting is kept after a response returns. A recap you draft in Mail never reaches them.</dd>
+            </div>
+          </dl>
+          <aside aria-labelledby="cant-h" style="flex: 0 1 460px; box-sizing: border-box; padding: 16px 22px 6px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hairline); display: flex; flex-direction: column; gap: 4px;">
+            <h3 id="cant-h" style="margin: 0 0 4px; font-family: var(--serif); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">What we can't prove</h3>
+            <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 14px; line-height: 20px;">
+              <li style="padding: 7px 0; border-top: 1px solid var(--hairline);"><span style="font-weight: 600;">That the transcript is accurate:</span> <span style="color: var(--ink-2);">Whisper can mishear names and numbers.</span></li>
+              <li style="padding: 7px 0; border-top: 1px solid var(--hairline);"><span style="font-weight: 600;">That the attested Whisper TEE made it:</span> <span style="color: var(--ink-2);">NEAR AI signs chat replies, not transcriptions.</span></li>
+              <li style="padding: 7px 0; border-top: 1px solid var(--hairline);"><span style="font-weight: 600;">That everyone agreed to be recorded:</span> <span style="color: var(--ink-2);">you confirm it; Aftercall can't check.</span></li>
+              <li style="padding: 7px 0; border-top: 1px solid var(--hairline);"><span style="font-weight: 600;">Who said what:</span> <span style="color: var(--ink-2);">“You” is your mic, and “Others” is the call's audio.</span></li>
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="money" aria-labelledby="money-h" style="padding: 64px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 720ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 28px 64px; padding-top: 20px; border-top: 1px solid var(--ink);">
+        <div style="flex: 1 1 420px; max-width: 580px; display: flex; flex-direction: column; gap: 16px;">
+          <h2 id="money-h" style="margin: 0; font-family: var(--serif); font-size: clamp(34px, 3.6vw, 52px); line-height: 1.04; font-weight: 500; letter-spacing: -0.03em;">Money that can't run away</h2>
+          <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);">Payments come from an agent wallet, not your own. A NEAR contract caps each day and each payment, and pays only people on your list. Over the caps, it waits for your own wallet, so a hijacked app or a tricked AI can't overspend.</p>
+          <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; line-height: 20px; color: var(--ink-2);">
+            <li style="display: inline-flex; align-items: center; gap: 7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>The app's key can only pay and record proofs</li>
+            <li style="display: inline-flex; align-items: center; gap: 7px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg>Every rule change needs your own wallet</li>
+          </ul>
+        </div>
+        <div class="ac" role="img" aria-label="Paid Ines Rocha 40.00 USDC. A 5,000.00 USDC payment to Ines is blocked: over your caps, only your own wallet can approve it, with a Review button" style="flex: 0 1 540px; min-width: 0; margin-left: auto; border-radius: 14px; background: var(--elevated); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; display: flex; flex-direction: column;">
+            <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--hairline);"><span style="width: 30px; height: 30px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">IR</span><span style="flex: 1; min-width: 0; font-weight: 600;">Paid Ines Rocha</span><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span style="font-family: var(--mono); font-weight: 500;">40.00 USDC</span></span></span>
+            <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--caution-tint);"><span style="width: 30px; height: 30px; border-radius: 999px; background: var(--p5); color: var(--p5i); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">IR</span><span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;"><span style="font-weight: 600;">Pay Ines Rocha <span style="font-family: var(--mono); font-weight: 500;">5,000.00 USDC</span></span><span style="font-size: 12px; line-height: 17px; color: var(--caution);">Over your caps. The contract refused it; only your own wallet can approve.</span></span><span style="height: 32px; padding: 0 13px; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--caution); color: var(--caution); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center;">Review</span></span>
+          </div>
+      </div>
+    </section>
+
+    <section id="verify" aria-labelledby="verify-h" style="padding: 64px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 750ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 28px 64px; padding-top: 20px; border-top: 1px solid var(--ink);">
+        <div class="ac" role="img" aria-label="The public Verify page: Verified in secure hardware, proof recorded on NEAR, summary signed in secure hardware, re-checked in this browser" style="flex: 0 1 540px; min-width: 0; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; display: flex; flex-direction: column;">
+            <span aria-hidden="true" style="display: flex; align-items: center; gap: 12px; height: 32px; padding: 0 12px; background: var(--ground); border-bottom: 1px solid var(--hairline);"><span style="display: inline-flex; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 9px; height: 9px; border-radius: 999px; background: var(--hairline);"></span><span style="width: 9px; height: 9px; border-radius: 999px; background: var(--hairline);"></span></span><span style="flex: 1; display: flex; justify-content: center;"><span style="height: 20px; padding: 0 12px; border-radius: 6px; background: var(--well); display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10px; color: var(--ink-2);">/verify#…</span></span><span style="width: 37px;"></span></span>
+            <span aria-hidden="true" style="display: flex; align-items: center; gap: 18px; padding: 12px 18px;">
+              <svg width="68" height="68" viewBox="0 0 148 148" style="flex-shrink: 0;"><defs><path id="sealB" d="M22 74a52 52 0 1 1 104 0a52 52 0 1 1-104 0"/></defs><circle cx="74" cy="74" r="71" style="fill: var(--accent-tint);"/><circle cx="74" cy="74" r="65" fill="none" stroke-width="2" style="stroke: var(--accent);"/><circle cx="74" cy="74" r="38" fill="none" stroke-width="1.4" style="stroke: var(--accent); opacity: .45;"/><text style="fill: var(--accent); font-family: var(--sans); font-size: 12px; font-weight: 600; letter-spacing: .14em;"><textPath href="#sealB" textLength="318" lengthAdjust="spacing">VERIFIED · IN SECURE HARDWARE · </textPath></text><g transform="translate(54.8 54.8) scale(1.6)" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--accent);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></g></svg>
+              <span style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+                <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; font-weight: 600;"><svg width="14" height="14" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Proof recorded on NEAR</span>
+                <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--hairline); font-size: 13px; font-weight: 600;"><svg width="14" height="14" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Summary signed in secure hardware</span>
+                <span style="display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--hairline); font-size: 13px; font-weight: 600;"><svg width="14" height="14" viewBox="0 0 22 22" style="flex-shrink: 0;"><circle cx="11" cy="11" r="10" style="fill: var(--accent);"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>Re-checked in this browser</span>
+              </span>
+            </span>
+          </div>
+        <div style="flex: 1 1 420px; max-width: 520px; margin-left: auto; display: flex; flex-direction: column; gap: 16px;">
+          <h2 id="verify-h" style="margin: 0; font-family: var(--serif); font-size: clamp(34px, 3.6vw, 52px); line-height: 1.04; font-weight: 500; letter-spacing: -0.03em;">Check any meeting</h2>
+          <p style="margin: 0; font-family: var(--serif); font-size: 18px; line-height: 28px; color: var(--ink);">Each proof sits on NEAR as a hash. Share the link, and anyone's browser re-checks what it can, without seeing a word of the meeting.</p>
+          <a href="V2PublicVerify.dc.html" style="align-self: flex-start; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">Open a sample proof<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" aria-labelledby="faq-h" style="padding: 64px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 780ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 12px 40px; padding-top: 20px; border-top: 1px solid var(--ink);">
+        <h2 id="faq-h" style="margin: 0; flex: 0 0 150px; padding-top: 10px; font-family: var(--serif); font-size: clamp(30px, 2.6vw, 36px); line-height: 1.1; font-weight: 500; letter-spacing: -0.02em;">Questions</h2>
+        <div style="flex: 1 1 600px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 0 48px;">
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">Does a bot join my call?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">No. Aftercall records on your Mac, from your mic and your Mac's audio. You tell people it's recorded, and the app asks you to confirm.</p>
+          </details>
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">Who can read my notes?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">You. Notes stay on your Mac, sealed with a key in your Keychain. What NEAR AI keeps while making them is set by its own policy.</p>
+          </details>
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">Which call apps work?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Any app on your Mac, including calls in a browser. Aftercall records what your Mac plays and what your mic hears.</p>
+          </details>
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">What does it cost?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Notes use NEAR AI on your own key, about [cost] per hour of calls. Aftercall is [price]. Payments use the USDC in your agent wallet.</p>
+          </details>
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">What if a check fails?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Nothing goes to hardware that failed. If the gateway or Whisper fails a check, your audio stays on your Mac.</p>
+          </details>
+          <details open="" style="padding: 14px 0 16px; border-top: 1px solid var(--hairline);">
+            <summary style="cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; font-family: var(--serif); font-size: 21px; line-height: 28px; font-weight: 500;">Can I delete everything?<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; color: var(--ink-2);"><path d="M5 12h14"/></svg></summary>
+            <p style="margin: 6px 0 0; font-size: 15px; line-height: 22px; color: var(--ink-2);">Yes, on your Mac: deleting a meeting removes its notes and audio. A proof on NEAR stays, but holds only a hash.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="closing" aria-labelledby="close-h" style="padding: 72px clamp(16px, 4vw, 48px) 0; animation: ac-in 320ms var(--ease) 840ms both;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; padding-top: 20px; border-top: 2px solid var(--ink);">
+        <h2 id="close-h" style="margin: 0; font-family: var(--mono); font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink);">Always</h2>
+        <p style="margin: 0; font-family: var(--serif); font-size: clamp(30px, 3.1vw, 44px); line-height: 1.12; font-weight: 500; letter-spacing: -0.025em; color: var(--ink);">Your words reach only secure hardware that has just proven itself, or <span style="font-style: italic; font-weight: 400;">they never leave your Mac.</span> Our servers keep nothing about a meeting. Nothing said goes on chain.</p>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding-top: 12px;">
+          <a href="V2Download.dc.html" class="press primary" style="height: 52px; padding: 0 24px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 16px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Download for Mac</a>
+          <span style="font-size: 14px; line-height: 20px; color: var(--ink-2);">Open source · MIT · Built for NEAR HACKATHON</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer style="padding: 32px clamp(16px, 4vw, 48px) 0;">
+    <div style="max-width: 1200px; min-height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; border-top: 1px solid var(--hairline); font-size: 13px;">
+      <span style="color: var(--ink-2);">Aftercall · built on NEAR AI Cloud and NEAR</span>
+      <nav aria-label="Footer" style="display: flex; flex-wrap: wrap; gap: 8px 22px;"><a href="V2HowItWorks.dc.html" class="quiet" style="color: var(--ink-2);">How it works</a><a href="V2Privacy.dc.html" class="quiet" style="color: var(--ink-2);">Privacy</a><a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a><a href="V2Download.dc.html" class="quiet" style="color: var(--ink-2);">Download</a><a href="https://github.com/Don-Vicks/aftercall" class="quiet" style="color: var(--ink-2);">GitHub</a></nav>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"light"},"$preview":{"width":1440,"height":4900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      theme: this.props.theme === 'light' ? 'light' : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Privacy and your data</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1600px; display: flex; flex-wrap: wrap;">
+<nav aria-label="Aftercall" style="flex: 1 1 220px; max-width: 248px; box-sizing: border-box; padding: 20px 14px 18px; display: flex; flex-direction: column; gap: 22px; background: var(--ground);">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0;">
+    <span style="font-family: var(--serif); font-size: 21px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent);"></span>victor.near</span>
+  </div>
+  <a href="V2RecordSheet.dc.html" class="press lift" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Home.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span style="flex: 1;">Today</span></a>
+    <a href="V2Palette.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex: 1;">Search</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘K</span></a>
+    <a href="V2Ask.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg><span style="flex: 1;">Ask your meetings</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span></a>
+    <a href="V2ActionItems.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span style="flex: 1;">Action items</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">5</span></a>
+    <a href="V2People.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span style="flex: 1;">People</span></a>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 6px;">
+      <a href="V2Meetings.dc.html" class="quiet" style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Projects</a>
+      <span style="display: inline-flex; align-items: center; gap: 2px;"><a href="V2Meetings.dc.html" class="quiet" style="font-size: 12px; color: var(--muted); padding: 0 6px;">All meetings</a><button aria-label="New project" class="press quiet" style="width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+    </div>
+    <a href="V2Project.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-weight: 600; color: var(--ink);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m6 9 6 6 6-6"/></svg><span style="flex: 1;">Fundraise</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">6</span></a>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--hairline);">
+      <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sync with Ada</span><span role="img" aria-label="1 to approve" style="width: 7px; height: 7px; border-radius: 999px; background: var(--caution);"></span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Deck review</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">28 Oct</span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Investor intro call</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">24 Oct</span></a>
+    </div>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Platform API</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">11</span></a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Hiring</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">3</span></a>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Wallet.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/></svg><span style="flex: 1;">Agent wallet</span><span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">180.00</span></a>
+    <a href="V2Agents.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg><span style="flex: 1;">Connected agents</span></a>
+    <a href="V2Settings.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></svg><span style="flex: 1;">Settings</span></a>
+  </div>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; background: var(--raised); border-left: 1px solid var(--hairline); box-sizing: border-box; padding: 40px 48px 40px;">
+<div style="max-width: 840px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px;">
+
+  <header style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms var(--ease) both;">
+    <a href="V2Settings.dc.html" style="align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>Settings</a>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Privacy and your data</h1>
+    <p style="margin: 0; color: var(--ink-2);">What stays on this Mac, what leaves it, and what each place keeps.</p>
+  </header>
+
+  <section aria-labelledby="h-where" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 40ms var(--ease) both;">
+    <h2 id="h-where" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Where your data lives <span style="color: var(--muted); font-weight: 500;">on this Mac</span></h2>
+    <div style="display: flex; flex-direction: column; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+      <div style="display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--hairline);">
+        <span aria-hidden="true" style="width: 34px; height: 34px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+        <span style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+          <span style="font-size: 16px; line-height: 22px; font-weight: 600;">On this Mac, encrypted</span>
+          <span style="font-family: var(--mono); font-size: 13px; line-height: 18px; color: var(--ink-2); overflow-wrap: anywhere;">~/Library/Application Support/dev.aftercall.app</span>
+          <span style="margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 19px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--accent); flex-shrink: 0;"><path d="M20 6 9 17l-5-5"/></svg>Audio is deleted after transcription</span>
+        </span>
+        <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>ENCRYPTED</span>
+        <button class="press quiet" style="height: 32px; margin-top: -4px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">Show in Finder</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 16px;">
+        <span style="display: flex; align-items: baseline; gap: 8px;"><span style="font-size: 14px; line-height: 20px; font-weight: 600;">In your macOS Keychain</span><span style="font-size: 12px; color: var(--muted);">4 items</span></span>
+        <ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px;">
+          <li style="display: flex; align-items: center; gap: 10px; min-width: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-2); flex-shrink: 0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">NEAR AI key</span> <span style="font-size: 13px; color: var(--ink-2);">makes your notes</span></span></li>
+          <li style="display: flex; align-items: center; gap: 10px; min-width: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-2); flex-shrink: 0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">This Mac's NEAR key</span> <span style="font-size: 13px; color: var(--ink-2);">pays and records proofs, within your caps</span></span></li>
+          <li style="display: flex; align-items: center; gap: 10px; min-width: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-2); flex-shrink: 0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Data key</span> <span style="font-size: 13px; color: var(--ink-2);">seals your meetings on disk</span></span></li>
+          <li style="display: flex; align-items: center; gap: 10px; min-width: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--ink-2); flex-shrink: 0;"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg><span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Backup key</span> <span style="font-size: 13px; color: var(--ink-2);">opens backups, made from your phrase</span></span></li>
+        </ul>
+      </div>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Audio is sealed about once a second while it records, and deleted with its chunk transcripts once your notes are saved. Notes, transcripts and projects are sealed with the data key. The four Keychain items sit under <span style="font-family: var(--mono); color: var(--ink);">dev.aftercall.app</span>, and the NEAR AI key never reaches the app's window. This keeps other apps, and backup or sync tools, from reading your meetings. It doesn't protect against someone using your Mac while you're signed in, or software running as you that can open your Keychain.</p>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-leaves" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 80ms var(--ease) both;">
+    <h2 id="h-leaves" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">What leaves your Mac <span style="color: var(--muted); font-weight: 500;">5 places</span></h2>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; min-width: 640px; border-collapse: collapse; table-layout: fixed;">
+        <colgroup><col style="width: 200px"><col><col></colgroup>
+        <thead>
+          <tr>
+            <th scope="col" style="padding: 0 16px 8px 0; text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Where it goes</th>
+            <th scope="col" style="padding: 0 16px 8px 0; text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">What it sees</th>
+            <th scope="col" style="padding: 0 0 8px; text-align: left; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">What it keeps</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);"><span style="display: flex; align-items: flex-start; gap: 12px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 10h4v4h-4zM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><span style="display: flex; flex-direction: column;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">NEAR AI</span><span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Secure hardware (TEE)</span></span></span></td>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); color: var(--ink-2);">Audio in chunks, then the transcript, with project and payee names for spelling.</td>
+            <td style="padding: 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);">Set by NEAR AI's policy, not by Aftercall.</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);"><span style="display: flex; align-items: flex-start; gap: 12px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a2 2 0 0 1 2 2V14"/></svg></span><span style="display: flex; flex-direction: column;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">NEAR blockchain</span><span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Public, permanent</span></span></span></td>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); color: var(--ink-2);">Proofs: start time, a hash, the model. Payments: payee, amount, a fixed memo.</td>
+            <td style="padding: 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);">All of it, forever and in public. Never what was said.</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);"><span style="display: flex; align-items: flex-start; gap: 12px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span style="display: flex; flex-direction: column;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">Aftercall server</span><span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Only if you use it</span></span></span></td>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); color: var(--ink-2);">Recaps you send through Aftercall, for one request. Claim links you make.</td>
+            <td style="padding: 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);">A send count. Per claim link: token hash, amount, expiry, status, payee account.</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);"><span style="display: flex; align-items: flex-start; gap: 12px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><span style="display: flex; flex-direction: column;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">Resend</span><span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Recap email</span></span></span></td>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); color: var(--ink-2);">Recaps you send through Aftercall.</td>
+            <td style="padding: 10px 0; vertical-align: top; border-top: 1px solid var(--hairline);">Sent mail, under Resend's own policy.</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);"><span style="display: flex; align-items: flex-start; gap: 12px;"><span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h14l-3-3M20 16H6l3 3"/></svg></span><span style="display: flex; flex-direction: column;"><span style="font-size: 15px; line-height: 20px; font-weight: 600;">1Click</span><span style="font-size: 13px; line-height: 19px; color: var(--ink-2);">Solana and Base payees</span></span></span></td>
+            <td style="padding: 10px 16px 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); color: var(--ink-2);">Amount, destination address and your NEAR account for refunds.</td>
+            <td style="padding: 10px 0; vertical-align: top; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);">Set by 1Click's policy.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <details>
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Draft in Mail, the default, opens a recap in your own mail app, so Aftercall's server never sees it. A claim link keeps the payee's name and the meeting title in the link itself, which browsers never send to a server. NEAR AI's hardware check proves the models ran in a TEE; it doesn't prove what NEAR AI's gateway logs. NEAR RPC also sees the account reads and transactions the app sends.</p>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-usage" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 120ms var(--ease) both;">
+    <h2 id="h-usage" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">NEAR AI usage <span style="color: var(--muted); font-weight: 500;">this month</span></h2>
+    <div style="display: flex; align-items: center; gap: 12px 32px; flex-wrap: wrap; padding: 14px 20px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--hairline);">
+      <span style="display: inline-flex; align-items: baseline; gap: 8px;"><span style="font-family: var(--mono); font-size: 22px; line-height: 28px; letter-spacing: -0.02em;">[requests]</span><span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">requests</span></span>
+      <span style="display: inline-flex; align-items: baseline; gap: 8px;"><span style="font-family: var(--mono); font-size: 22px; line-height: 28px; letter-spacing: -0.02em;">[cost]</span><span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">cost</span></span>
+      <span style="flex: 1 1 240px; color: var(--ink-2); text-align: right;">Billed by NEAR AI on your key, not through Aftercall.</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-wallet" style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 160ms var(--ease) both;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <h2 id="h-wallet" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Wallet activity <span style="color: var(--muted); font-weight: 500;">public on NEAR</span></h2>
+      <a href="#" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">aftercall-wallet.near<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+    </div>
+    <div style="overflow-x: auto;">
+    <ol style="margin: 0; padding: 0; list-style: none; min-width: 640px; display: flex; flex-direction: column; border-top: 1px solid var(--hairline);">
+      <li style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px 116px 56px; align-items: center; gap: 14px; min-height: 42px; border-bottom: 1px solid var(--hairline);">
+        <span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--caution-tint); color: var(--caution); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">BLOCKED</span></span>
+        <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Pay Designer</span> <span style="color: var(--ink-2);">· over your limits, not paid</span></span>
+        <span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2); text-align: right;">5,000.00 USDC</span>
+        <a href="#" aria-label="Transaction Fz7L…c2Ma on the NEAR explorer" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">Fz7L…c2Ma<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <span style="font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right;">14:22</span>
+      </li>
+      <li style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px 116px 56px; align-items: center; gap: 14px; min-height: 42px; border-bottom: 1px solid var(--hairline);">
+        <span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>PAID</span></span>
+        <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Designer</span> <span style="color: var(--ink-2);">· deposit from Sync with Ada</span></span>
+        <span style="font-family: var(--mono); font-size: 13px; text-align: right;">50.00 USDC</span>
+        <a href="#" aria-label="Transaction 8Hn2…wq4D on the NEAR explorer" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">8Hn2…wq4D<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <span style="font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right;">14:21</span>
+      </li>
+      <li style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px 116px 56px; align-items: center; gap: 14px; min-height: 42px; border-bottom: 1px solid var(--hairline);">
+        <span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>PROOF</span></span>
+        <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Sync with Ada</span> <span style="color: var(--ink-2);">· hash and model name</span></span>
+        <span></span>
+        <a href="#" aria-label="Transaction 3kPq…9vXe on the NEAR explorer" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">3kPq…9vXe<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <span style="font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right;">14:05</span>
+      </li>
+      <li style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px 116px 56px; align-items: center; gap: 14px; min-height: 42px; border-bottom: 1px solid var(--hairline);">
+        <span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">DEPOSIT</span></span>
+        <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">From</span> <span style="font-family: var(--mono); font-size: 13px; color: var(--ink-2);">victor.near</span></span>
+        <span style="font-family: var(--mono); font-size: 13px; color: var(--accent); text-align: right;">+25.00 USDC</span>
+        <a href="#" aria-label="Transaction B1rT…k8Ns on the NEAR explorer" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">B1rT…k8Ns<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <span style="font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right;">30 Oct</span>
+      </li>
+      <li style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 128px 116px 56px; align-items: center; gap: 14px; min-height: 42px; border-bottom: 1px solid var(--hairline);">
+        <span><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>PROOF</span></span>
+        <span style="min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 600;">Data room walkthrough</span> <span style="color: var(--ink-2);">· hash and model name</span></span>
+        <span></span>
+        <a href="#" aria-label="Transaction 9aXm…Q4tE on the NEAR explorer" style="display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 13px;">9aXm…Q4tE<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        <span style="font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right;">29 Oct</span>
+      </li>
+    </ol>
+    </div>
+  </section>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 24px; animation: ac-in 320ms 200ms var(--ease) both;">
+    <section aria-labelledby="h-backups" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 12px;">
+      <h2 id="h-backups" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Backups <span style="color: var(--muted); font-weight: 500;">one encrypted file</span></h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+        <span style="color: var(--ink-2);">Notes, projects, NEAR settings and autopilot rules. Audio and the NEAR AI key stay out.</span>
+        <span style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="press primary" style="height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600;">Export backup</button>
+          <button class="press secondary" style="height: 36px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-weight: 600;">Import backup</button>
+        </span>
+        <span style="display: flex; flex-direction: column; gap: 2px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 19px;">
+          <span><span style="color: var(--muted);">Last saved 30 Oct</span> · <a href="#" style="font-weight: 600;">Show in Finder</a></span>
+          <span style="font-family: var(--mono); font-size: 12px; line-height: 18px; color: var(--ink-2); overflow-wrap: anywhere;">Aftercall backup 2026-10-30.aftercall</span>
+        </span>
+      </div>
+      <details>
+        <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+        <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Only the key made from your recovery phrase opens a backup. On a new Mac, restore your phrase first, then import.</p>
+      </details>
+    </section>
+
+    <section aria-labelledby="h-delete" style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 12px;">
+      <h2 id="h-delete" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Delete <span style="color: var(--muted); font-weight: 500;">no undo</span></h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1);">
+        <span style="color: var(--ink-2);">Removes every meeting, note, transcript and project here, and Aftercall's four Keychain items.</span>
+        <button class="press" style="align-self: flex-start; height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--record-tint); color: var(--record); font-weight: 600; display: inline-flex; align-items: center; gap: 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Delete everything on this Mac</button>
+        <span style="display: flex; align-items: flex-start; gap: 8px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 13px; line-height: 19px; color: var(--ink-2);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--muted);"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 6.5h4a2 2 0 0 1 2 2V14"/></svg><span>Proofs on NEAR can't be deleted. They hold a hash and the model name, never what was said.</span></span>
+      </div>
+      <details>
+        <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+        <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Payments on NEAR stay too. This Mac's NEAR key stays authorised on your account until you remove it in your wallet, and your agent wallet keeps its balance on NEAR; withdraw it first if you're leaving.</p>
+      </details>
+    </section>
+  </div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme === 'light' ? 'light' : '' };
+  }
+}
+</script>
+</body>
+</html>

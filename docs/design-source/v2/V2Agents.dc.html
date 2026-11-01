@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Connected agents</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1240px; display: flex; flex-wrap: wrap;">
+<nav aria-label="Aftercall" style="flex: 1 1 220px; max-width: 248px; box-sizing: border-box; padding: 20px 14px 18px; display: flex; flex-direction: column; gap: 22px; background: var(--ground);">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 0;">
+    <span style="font-family: var(--serif); font-size: 21px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted);"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent);"></span>victor.near</span>
+  </div>
+  <a href="V2RecordSheet.dc.html" class="press lift" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 999px; background: var(--record);"></span><span style="flex: 1;">New recording</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">⌘⇧R</span></a>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Home.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span style="flex: 1;">Today</span></a>
+    <a href="V2Palette.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span style="flex: 1;">Search</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘K</span></a>
+    <a href="V2Ask.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></svg><span style="flex: 1;">Ask your meetings</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">⌘J</span></a>
+    <a href="V2ActionItems.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span style="flex: 1;">Action items</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">5</span></a>
+    <a href="V2People.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span style="flex: 1;">People</span></a>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 2px;">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 6px;">
+      <a href="V2Meetings.dc.html" class="quiet" style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Projects</a>
+      <span style="display: inline-flex; align-items: center; gap: 2px;"><a href="V2Meetings.dc.html" class="quiet" style="font-size: 12px; color: var(--muted); padding: 0 6px;">All meetings</a><button aria-label="New project" class="press quiet" style="width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></span>
+    </div>
+    <a href="V2Project.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-weight: 600; color: var(--ink);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m6 9 6 6 6-6"/></svg><span style="flex: 1;">Fundraise</span><span style="font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted);">6</span></a>
+    <div style="display: flex; flex-direction: column; gap: 2px; margin-left: 15px; padding-left: 10px; border-left: 1px solid var(--hairline);">
+      <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Sync with Ada</span><span role="img" aria-label="1 to approve" style="width: 7px; height: 7px; border-radius: 999px; background: var(--caution);"></span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Deck review</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">28 Oct</span></a>
+      <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; color: var(--ink-2);"><span style="flex: 1;">Investor intro call</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">24 Oct</span></a>
+    </div>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Platform API</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">11</span></a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color: var(--faint);"><path d="m9 6 6 6-6 6"/></svg><span style="flex: 1;">Hiring</span><span style="font-family: var(--mono); font-size: 11px; color: var(--muted);">3</span></a>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+    <a href="V2Wallet.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3v3a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5"/></svg><span style="flex: 1;">Agent wallet</span><span style="font-family: var(--mono); font-size: 12px; color: var(--ink);">180.00</span></a>
+    <a href="V2Agents.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--elevated); color: var(--ink); font-weight: 600; box-shadow: var(--sh1);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg><span style="flex: 1;">Connected agents</span></a>
+    <a href="V2Settings.dc.html" class="row" style="display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1"/></svg><span style="flex: 1;">Settings</span></a>
+  </div>
+</nav>
+<main style="flex: 999 1 560px; min-width: 0; background: var(--raised); border-left: 1px solid var(--hairline); box-sizing: border-box; padding: 48px 48px 48px;">
+<div style="max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px;">
+
+  <header style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms var(--ease) both;">
+    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">On this Mac only</span>
+    <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Connected agents</h1>
+    <p style="margin: 0; color: var(--ink-2);">Let Claude Code or Codex pick up action items from your meetings.</p>
+    <details style="margin-top: 2px;">
+      <summary style="cursor: pointer; width: fit-content; font-size: 13px; line-height: 19px; font-weight: 600; color: var(--accent);">Why?</summary>
+      <p style="margin: 8px 0 0; font-size: 13px; line-height: 19px; color: var(--ink-2);">Agents reach a small server on this Mac, which asks Aftercall over a local channel only while this is on. What an agent reads then goes wherever that agent runs.</p>
+    </details>
+  </header>
+
+  <section aria-label="Agent access" style="display: flex; flex-direction: column; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); overflow: hidden; animation: ac-in 320ms 40ms var(--ease) both;">
+    <div style="display: flex; align-items: center; gap: 16px; padding: 16px 20px;">
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+        <span id="ag-switch" style="font-size: 16px; line-height: 22px; font-weight: 600;">Let agents reach my meetings</span>
+        <span style="font-size: 13px; color: var(--ink-2);">{{onLabel}}</span>
+      </span>
+      <button role="switch" aria-checked="{{onAria}}" aria-labelledby="ag-switch" onClick="{{toggle}}" class="press" style="position: relative; width: 44px; height: 26px; padding: 0; border: 0; border-radius: 999px; background: {{trackBg}}; flex-shrink: 0; transition: background-color 180ms var(--ease);"><span aria-hidden="true" style="position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transform: translateX({{knobX}}px); transition: transform 260ms cubic-bezier(.3,1.4,.5,1);"></span></button>
+    </div>
+    <sc-if value="{{on}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--hairline); animation: ac-in 240ms var(--ease) both;">
+        <span style="font-size: 13px; font-weight: 600; color: var(--ink-2);">Token</span>
+        <span style="flex: 1; min-width: 0; display: flex;">
+          <sc-if value="{{tokA}}" hint-placeholder-val="{{ true }}"><span style="min-width: 0; font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: ac-pop 280ms var(--ease) both;">{{token}}</span></sc-if>
+          <sc-if value="{{tokB}}" hint-placeholder-val="{{ false }}"><span style="min-width: 0; font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: ac-pop 280ms var(--ease) both;">{{token}}</span></sc-if>
+        </span>
+        <button onClick="{{newToken}}" class="press quiet" style="height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-weight: 600;">New token</button>
+      </div>
+    </sc-if>
+  </section>
+
+  <sc-if value="{{on}}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; flex-direction: column; gap: 24px; animation: ac-in 280ms 40ms var(--ease) both;">
+      <section aria-labelledby="h-claude" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h2 id="h-claude" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Claude Code <span style="color: var(--muted); font-weight: 500;">in Terminal</span></h2>
+          <p style="margin: 0; color: var(--ink-2);">Run this once. Run it again after a new token.</p>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px 14px 16px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+          <code style="flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; line-height: 20px; color: var(--ink); white-space: pre-wrap; word-break: break-all;">claude mcp remove --scope user aftercall 2&gt;/dev/null; claude mcp add --scope user --env AFTERCALL_TOKEN={{token}} aftercall -- node /Users/victor/aftercall/apps/mcp/src/main.ts --data-dir '/Users/victor/Library/Application Support/dev.aftercall.app'</code>
+          <button onClick="{{copyClaude}}" aria-label="{{claudeAria}}" class="press" style="min-width: 86px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--elevated); box-shadow: var(--sh1); color: var(--ink); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <sc-if value="{{claudeCopied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+            <sc-if value="{{claudeIdle}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</span></sc-if>
+          </button>
+        </div>
+      </section>
+
+      <section aria-labelledby="h-codex" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h2 id="h-codex" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Codex <span style="color: var(--muted); font-weight: 500;">config file</span></h2>
+          <p style="margin: 0; color: var(--ink-2);">Add this to <span style="font-family: var(--mono); font-size: 13px; color: var(--ink);">~/.codex/config.toml</span>, then restart Codex.</p>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px 14px 16px; border-radius: 12px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+          <code style="flex: 1; min-width: 0; display: flex; flex-direction: column; font-family: var(--mono); font-size: 13px; line-height: 20px; color: var(--ink); word-break: break-all;"><span>[mcp_servers.aftercall]</span><span>command = "node"</span><span>args = ["/Users/victor/aftercall/apps/mcp/src/main.ts", "--data-dir", "/Users/victor/Library/Application Support/dev.aftercall.app"]</span><span>env = { AFTERCALL_TOKEN = "{{token}}" }</span></code>
+          <button onClick="{{copyCodex}}" aria-label="{{codexAria}}" class="press" style="min-width: 86px; height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--elevated); box-shadow: var(--sh1); color: var(--ink); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <sc-if value="{{codexCopied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+            <sc-if value="{{codexIdle}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</span></sc-if>
+          </button>
+        </div>
+      </section>
+    </div>
+  </sc-if>
+  <sc-if value="{{off}}" hint-placeholder-val="{{ false }}">
+    <p style="margin: 0; color: var(--ink-2); animation: ac-in 240ms var(--ease) both;">Turn this on to get setup commands for Claude Code and Codex, with a fresh token.</p>
+  </sc-if>
+
+  <section aria-label="What agents can and can't do" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; animation: ac-in 320ms 80ms var(--ease) both;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Agents can</h2>
+      <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px;">
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg><span>Search and read your meetings</span></li>
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg><span>Claim an action item, by name</span></li>
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--accent);"><path d="M20 6 9 17l-5-5"/></svg><span>Mark an item they claimed as done, with a note</span></li>
+      </ul>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Agents can't</h2>
+      <ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px;">
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--muted);"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Send email or recaps</span></li>
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--muted);"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Pay, or touch the agent wallet</span></li>
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--muted);"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Change or delete notes</span></li>
+        <li style="display: flex; gap: 10px; color: var(--ink-2);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="margin-top: 3px; flex-shrink: 0; color: var(--muted);"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Reach meetings while this is off</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-activity" style="display: flex; flex-direction: column; gap: 6px; animation: ac-in 320ms 120ms var(--ease) both;">
+    <h2 id="h-activity" style="margin: 0 0 8px; font-size: 15px; line-height: 20px; font-weight: 600;">Recent activity <span style="color: var(--muted); font-weight: 500;">3</span></h2>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 14px; padding: 12px; margin: 0 -12px; border-radius: 10px; color: var(--ink);">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; flex-shrink: 0;">CC</span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">Fix the flaky payout test</span><span style="font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Claude Code · Weekly check-in · “retry with backoff; test now stable”</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>DONE</span>
+      <span style="width: 44px; text-align: right; font-family: var(--mono); font-size: 12px; color: var(--muted);">14:31</span>
+    </a>
+    <a href="V2Meeting.dc.html" class="row" style="display: flex; align-items: center; gap: 14px; padding: 12px; margin: 0 -12px; border-radius: 10px; color: var(--ink);">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; flex-shrink: 0;">CC</span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">Ship the API fix</span><span style="font-size: 13px; color: var(--ink-2);">Claude Code · Sync with Ada</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">CLAIMED</span>
+      <span style="width: 44px; text-align: right; font-family: var(--mono); font-size: 12px; color: var(--muted);">14:20</span>
+    </a>
+    <a href="#" class="row" style="display: flex; align-items: center; gap: 14px; padding: 12px; margin: 0 -12px; border-radius: 10px; color: var(--ink);">
+      <span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 999px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); color: var(--ink-2); display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 500; flex-shrink: 0;">CX</span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0;"><span style="font-weight: 600;">Draft the pricing page copy</span><span style="font-size: 13px; color: var(--ink-2);">Codex · Weekly check-in</span></span>
+      <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: var(--well); color: var(--ink-2); display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em;">CLAIMED</span>
+      <span style="width: 44px; text-align: right; font-family: var(--mono); font-size: 12px; color: var(--muted);">30 Oct</span>
+    </a>
+  </section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { on: true, copied: null, tok: 0 };
+    this.tokens = ['7c1e9a4f52b8d06e3a91f4c2', 'b42f0d8e17c95a6b0e3d8a71', '3e9b6c0a5d21f87e4c6b19d0', 'f05a2d7c93e1b48a6d0c7e25'];
+  }
+  componentWillUnmount() {
+    clearTimeout(this.copyId);
+  }
+  copy(which) {
+    clearTimeout(this.copyId);
+    this.setState({ copied: which });
+    this.copyId = setTimeout(() => this.setState({ copied: null }), 1600);
+  }
+  renderVals() {
+    const s = this.state;
+    const token = this.tokens[s.tok % this.tokens.length];
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      on: s.on,
+      off: !s.on,
+      onAria: s.on ? 'true' : 'false',
+      onLabel: s.on ? 'On while Aftercall is open. Agents need the token below.' : 'Off. No agent can reach your meetings.',
+      trackBg: s.on ? 'var(--accent)' : 'var(--border)',
+      knobX: s.on ? 18 : 0,
+      toggle: () => {
+        clearTimeout(this.copyId);
+        const on = !this.state.on;
+        this.setState({ on: on, copied: null, tok: on ? this.state.tok + 1 : this.state.tok });
+      },
+      token: token,
+      tokA: s.tok % 2 === 0,
+      tokB: s.tok % 2 === 1,
+      newToken: () => { clearTimeout(this.copyId); this.setState({ tok: this.state.tok + 1, copied: null }); },
+      claudeCopied: s.copied === 'claude',
+      claudeIdle: s.copied !== 'claude',
+      claudeAria: s.copied === 'claude' ? 'Copied' : 'Copy the Claude Code command',
+      copyClaude: () => this.copy('claude'),
+      codexCopied: s.copied === 'codex',
+      codexIdle: s.copied !== 'codex',
+      codexAria: s.copied === 'codex' ? 'Copied' : 'Copy the Codex config',
+      copyCodex: () => this.copy('codex')
+    };
+  }
+}
+</script>
+</body>
+</html>

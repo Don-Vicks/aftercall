@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · Check your recovery words</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="position: relative; width: 720px; height: 700px; box-sizing: border-box; padding: 36px 48px; background: var(--ground); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+  <div style="width: 100%; max-width: 520px; display: flex; flex-direction: column; gap: 28px;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; animation: ac-in 280ms var(--ease) both;">
+      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: var(--muted);">Step 3 of 4 · Set up payments</span>
+      <span aria-hidden="true" style="display: flex; gap: 6px;">
+        <span style="width: 32px; height: 4px; border-radius: 999px; background: var(--accent);"></span>
+        <span style="width: 32px; height: 4px; border-radius: 999px; background: var(--accent);"></span>
+        <span style="position: relative; width: 32px; height: 4px; border-radius: 999px; background: var(--hairline); overflow: hidden;"><span style="position: absolute; inset: 0; border-radius: 999px; background: var(--accent); transform-origin: left; animation: ac-strike 520ms 240ms var(--ease) both;"></span></span>
+        <span style="width: 32px; height: 4px; border-radius: 999px; background: var(--hairline);"></span>
+      </span>
+    </div>
+
+    <header style="display: flex; flex-direction: column; gap: 8px; animation: ac-in 320ms 40ms var(--ease) both;">
+      <h1 style="margin: 0; font-family: var(--serif); font-size: 36px; line-height: 42px; font-weight: 500; letter-spacing: -0.02em;">Check you have them</h1>
+      <p style="margin: 0; color: var(--ink-2);">Type three of your words from the paper, not from memory.</p>
+    </header>
+
+    <section style="display: flex; flex-direction: column; gap: 12px; animation: ac-in 320ms 80ms var(--ease) both;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Your words <span style="color: var(--muted); font-weight: 500;">one from each third</span></h2>
+        <button onClick="{{fill}}" class="press secondary" style="height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--ink); font-size: 13px; font-weight: 600;">{{fillLabel}}</button>
+      </div>
+      <div style="display: flex; flex-direction: column; border-radius: 14px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--hairline);">
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--hairline);">
+        <label for="w04" style="width: 84px; flex-shrink: 0; font-weight: 600;">Word <span style="font-family: var(--mono); font-weight: 500;">04</span></label>
+        <input id="w04" class="field" autocomplete="off" autocapitalize="off" spellcheck="false" value="{{v04}}" placeholder="Type word 4" aria-invalid="{{inv04}}" style="flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid {{b04}}; background: var(--well); font-family: var(--mono); font-size: 13px; transition: border-color 160ms var(--ease);">
+        <span style="width: 112px; flex-shrink: 0; display: flex; justify-content: flex-end;">
+          <sc-if value="{{ok04}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 5px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) both;"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 240ms 160ms var(--ease) both;"/></svg>MATCHES</span>
+          </sc-if>
+          <sc-if value="{{bad04}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 8px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; animation: ac-pop 320ms var(--ease) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>NO MATCH</span>
+          </sc-if>
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--hairline);">
+        <label for="w08" style="width: 84px; flex-shrink: 0; font-weight: 600;">Word <span style="font-family: var(--mono); font-weight: 500;">08</span></label>
+        <input id="w08" class="field" autocomplete="off" autocapitalize="off" spellcheck="false" value="{{v08}}" placeholder="Type word 8" aria-invalid="{{inv08}}" style="flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid {{b08}}; background: var(--well); font-family: var(--mono); font-size: 13px; transition: border-color 160ms var(--ease);">
+        <span style="width: 112px; flex-shrink: 0; display: flex; justify-content: flex-end;">
+          <sc-if value="{{ok08}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 5px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) both;"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 240ms 160ms var(--ease) both;"/></svg>MATCHES</span>
+          </sc-if>
+          <sc-if value="{{bad08}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 8px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; animation: ac-pop 320ms var(--ease) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>NO MATCH</span>
+          </sc-if>
+        </span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px; padding: 14px 18px;">
+        <label for="w11" style="width: 84px; flex-shrink: 0; font-weight: 600;">Word <span style="font-family: var(--mono); font-weight: 500;">11</span></label>
+        <input id="w11" class="field" autocomplete="off" autocapitalize="off" spellcheck="false" value="{{v11}}" placeholder="Type word 11" aria-invalid="{{inv11}}" style="flex: 1; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 12px; border-radius: 8px; border: 1px solid {{b11}}; background: var(--well); font-family: var(--mono); font-size: 13px; transform: translateX({{shake11}}px); transition: transform 55ms ease-out, border-color 160ms var(--ease);">
+        <span style="width: 112px; flex-shrink: 0; display: flex; justify-content: flex-end;">
+          <sc-if value="{{ok11}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 5px; border-radius: 999px; background: var(--accent-tint); color: var(--accent); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; animation: ac-pop 320ms var(--ease) both;"><svg width="16" height="16" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" style="fill: var(--accent); transform-origin: 11px 11px; animation: ac-fill 320ms cubic-bezier(.3,1.5,.5,1) both;"/><path d="M6.5 11.5l3 3 6-6.5" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="14" style="stroke: var(--on-accent); animation: ac-draw 240ms 160ms var(--ease) both;"/></svg>MATCHES</span>
+          </sc-if>
+          <sc-if value="{{bad11}}" hint-placeholder-val="{{ false }}">
+            <span role="status" style="height: 26px; padding: 0 10px 0 8px; border-radius: 999px; background: var(--record-tint); color: var(--record); display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; white-space: nowrap; animation: ac-pop 320ms var(--ease) both;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>NO MATCH</span>
+          </sc-if>
+        </span>
+      </div>
+      </div>
+      <sc-if value="{{bad11}}" hint-placeholder-val="{{ false }}">
+        <p style="margin: 0; font-size: 13px; line-height: 18px; color: var(--record); animation: ac-in 240ms 120ms var(--ease) both;">Word 11 doesn't match. Check what you wrote down.</p>
+      </sc-if>
+    </section>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; animation: ac-in 320ms 120ms var(--ease) both;">
+      <a href="V2RecoveryPhrase.dc.html" class="press quiet" style="height: 44px; padding: 0 12px; margin-left: -12px; border-radius: 10px; display: inline-flex; align-items: center; color: var(--ink-2); font-size: 15px; font-weight: 600;">Show words again</a>
+      <sc-if value="{{allMatch}}" hint-placeholder-val="{{ false }}">
+        <a href="V2WalletSetup.dc.html" class="press primary" style="height: 44px; padding: 0 22px; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; animation: ac-pop 320ms 200ms var(--ease) both;">Continue<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+      </sc-if>
+      <sc-if value="{{notAllMatch}}" hint-placeholder-val="{{ true }}">
+        <button disabled style="height: 44px; padding: 0 22px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; opacity: .4; cursor: not-allowed;">Continue<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":720,"height":700}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: 0, shake: 0 };
+    this.timers = [];
+  }
+  componentWillUnmount() {
+    this.clearShake();
+  }
+  clearShake() {
+    this.timers.forEach((t) => clearTimeout(t));
+    this.timers = [];
+  }
+  fill() {
+    const next = (this.state.stage + 1) % 3;
+    this.clearShake();
+    this.setState({ stage: next, shake: 0 });
+    if (next === 1) {
+      const seq = [-6, 6, -4, 4, -2, 0];
+      this.timers = seq.map((x, i) => setTimeout(() => this.setState({ shake: x }), 240 + i * 55));
+    }
+  }
+  renderVals() {
+    const st = this.state.stage;
+    const ok04 = st >= 1;
+    const ok08 = st === 2;
+    const ok11 = st === 2;
+    const bad11 = st === 1;
+    const border = (ok, bad) => ok ? 'var(--accent)' : bad ? 'var(--record)' : 'var(--border)';
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      v04: ok04 ? '[word 4]' : '',
+      v08: ok08 ? '[word 8]' : '',
+      v11: ok11 ? '[word 11]' : bad11 ? '[a different word]' : '',
+      b04: border(ok04, false),
+      b08: border(ok08, false),
+      b11: border(ok11, bad11),
+      inv04: 'false',
+      inv08: 'false',
+      inv11: bad11 ? 'true' : 'false',
+      ok04: ok04,
+      ok08: ok08,
+      ok11: ok11,
+      bad04: false,
+      bad08: false,
+      bad11: bad11,
+      shake11: this.state.shake,
+      allMatch: ok04 && ok08 && ok11,
+      notAllMatch: !(ok04 && ok08 && ok11),
+      fillLabel: st === 0 ? 'Fill sample' : st === 1 ? 'Fill correct words' : 'Clear',
+      fill: () => this.fill()
+    };
+  }
+}
+</script>
+</body>
+</html>

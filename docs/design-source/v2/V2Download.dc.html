@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Aftercall · download</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#141311}
+.ac{--ground:#141311;--raised:#1b1a17;--elevated:#24221e;--well:#0f0e0c;--ink:#ede9e1;--ink-2:#cbc6bb;--muted:#a39e94;--faint:#77726a;--hairline:#2b2925;--border:#6f6a61;--accent:#8dbfa8;--accent-hover:#b3d6c5;--on-accent:#10201a;--accent-tint:#1a2a23;--record:#e8775f;--record-tint:#2e1a15;--caution:#dcac5c;--caution-tint:#2c2416;--p1:oklch(0.34 0.05 255);--p1i:oklch(0.88 0.06 255);--p2:oklch(0.34 0.05 290);--p2i:oklch(0.88 0.06 290);--p3:oklch(0.34 0.05 325);--p3i:oklch(0.88 0.06 325);--p4:oklch(0.34 0.05 215);--p4i:oklch(0.88 0.06 215);--p5:oklch(0.34 0.05 110);--p5i:oklch(0.88 0.06 110);--p6:oklch(0.34 0.05 355);--p6i:oklch(0.88 0.06 355);--sh1:0 0 0 1px rgba(255,255,255,0.05),0 1px 2px rgba(0,0,0,0.30);--sh2:0 0 0 1px rgba(255,255,255,0.08),0 6px 16px rgba(0,0,0,0.35);--shpill:0 0 0 1px rgba(255,255,255,0.08),0 12px 32px rgba(0,0,0,0.50);--shfloat:0 0 0 1px rgba(255,255,255,0.06),0 24px 56px rgba(0,0,0,0.50);--ease:cubic-bezier(.2,.8,.2,1);--serif:Newsreader,'Iowan Old Style',Georgia,serif;--sans:'Instrument Sans',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Geist Mono',ui-monospace,Menlo,monospace;color-scheme:dark;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:21px;-webkit-font-smoothing:antialiased}
+.ac.light{--ground:#f4f1ea;--raised:#fbf9f4;--elevated:#ffffff;--well:#ebe7de;--ink:#1d1b17;--ink-2:#3d3a35;--muted:#65605a;--faint:#8a847a;--hairline:#e2ddd2;--border:#8c867b;--accent:#2d5e4f;--accent-hover:#234a3e;--on-accent:#ffffff;--accent-tint:#e3ece6;--record:#b3412d;--record-tint:#f7e6e0;--caution:#855610;--caution-tint:#f4ead6;--p1:oklch(0.90 0.045 255);--p1i:oklch(0.36 0.08 255);--p2:oklch(0.90 0.045 290);--p2i:oklch(0.36 0.08 290);--p3:oklch(0.90 0.045 325);--p3i:oklch(0.36 0.08 325);--p4:oklch(0.90 0.045 215);--p4i:oklch(0.36 0.08 215);--p5:oklch(0.90 0.045 110);--p5i:oklch(0.36 0.08 110);--p6:oklch(0.90 0.045 355);--p6i:oklch(0.36 0.08 355);--sh1:0 0 0 1px rgba(29,27,23,0.07),0 1px 2px rgba(29,27,23,0.04);--sh2:0 0 0 1px rgba(29,27,23,0.09),0 6px 16px rgba(29,27,23,0.06);--shpill:0 0 0 1px rgba(29,27,23,0.08),0 12px 32px rgba(29,27,23,0.12);--shfloat:0 0 0 1px rgba(29,27,23,0.06),0 24px 56px rgba(29,27,23,0.12);color-scheme:light}
+.ac a{color:var(--accent);text-decoration:none}.ac a:hover{color:var(--accent-hover)}
+.ac button,.ac input,.ac textarea,.ac select{font-family:inherit;font-size:inherit;color:inherit}
+.ac button{cursor:pointer}
+.ac :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ac .press{transition:transform 120ms var(--ease),background-color 120ms var(--ease),box-shadow 160ms var(--ease),color 120ms var(--ease)}
+.ac .press:active{transform:scale(.97)}
+.ac .lift{transition:box-shadow 160ms var(--ease),transform 160ms var(--ease)}
+.ac .lift:hover{box-shadow:var(--sh2)}
+.ac .row:hover{background:var(--elevated)}
+.ac .quiet:hover{color:var(--ink)}
+.ac .primary:hover{background:var(--accent-hover)}
+.ac .secondary:hover{background:var(--elevated)}
+.ac .field:focus{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);outline:none}
+@keyframes ac-bar{0%,100%{transform:scaleY(.22)}50%{transform:scaleY(1)}}
+@keyframes ac-breathe{0%,100%{box-shadow:0 0 0 0 rgba(232,119,95,.45)}50%{box-shadow:0 0 0 6px rgba(232,119,95,0)}}
+@keyframes ac-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ac-pop{0%{opacity:0;transform:scale(.92)}60%{opacity:1;transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes ac-draw{from{stroke-dashoffset:14}to{stroke-dashoffset:0}}
+@keyframes ac-fill{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes ac-strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes ac-roll{from{transform:translateY(100%);opacity:0}to{transform:none;opacity:1}}
+@keyframes ac-rise{0%{opacity:0;transform:translateY(6px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-22px)}}
+@keyframes ac-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes ac-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ac *{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+</style>
+</helmet>
+<div class="ac {{theme}}" style="min-height: 1600px; background: var(--raised);">
+
+  <header style="padding: 0 48px;">
+    <div style="max-width: 1200px; height: 72px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px;">
+      <a href="V2Landing.dc.html" style="display: inline-flex; align-items: center; gap: 10px; color: var(--ink);">
+        <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="13" height="18" rx="2.2" style="fill: var(--ink);"/><rect x="6.6" y="9" width="1.5" height="4" rx=".75" style="fill: var(--raised);"/><rect x="9.1" y="7" width="1.5" height="8" rx=".75" style="fill: var(--raised);"/><rect x="11.6" y="8.2" width="1.5" height="5.6" rx=".75" style="fill: var(--raised);"/><rect x="14.1" y="9.4" width="1.5" height="3.2" rx=".75" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="5.4" style="fill: var(--raised);"/><circle cx="17.6" cy="18.4" r="4.2" style="fill: var(--accent);"/><path d="M15.7 18.5l1.3 1.3 2.4-2.6" fill="none" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--on-accent);"/></svg>
+        <span style="font-family: var(--serif); font-size: 23px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">Aftercall</span>
+      </a>
+      <nav aria-label="Site" style="display: flex; align-items: center; gap: 28px; font-size: 14px; font-weight: 500;">
+        <a href="V2HowItWorks.dc.html" class="quiet" style="color: var(--ink-2);">Privacy</a>
+        <a href="V2Landing.dc.html#followups" class="quiet" style="color: var(--ink-2);">Follow-ups</a>
+        <a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify a proof</a>
+        <a href="#" class="quiet" style="color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px;">GitHub<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+
+    <section aria-labelledby="dh" style="padding: 32px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 56px; align-items: end;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <span style="font-size: 13px; line-height: 18px; font-weight: 500; color: var(--muted); animation: ac-in 320ms var(--ease) both;">Download · for Mac</span>
+          <h1 id="dh" style="margin: 0; font-family: var(--serif); font-size: 56px; line-height: 60px; font-weight: 500; letter-spacing: -0.03em; animation: ac-in 360ms var(--ease) 40ms both;">Download Aftercall</h1>
+          <p style="margin: 0; font-size: 18px; line-height: 28px; color: var(--ink-2); animation: ac-in 360ms var(--ease) 80ms both;">Private meeting notes made in NEAR AI's secure hardware. Open source, MIT.</p>
+          <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 6px; animation: ac-in 360ms var(--ease) 120ms both;">
+            <a href="#" onClick="{{download}}" class="press primary" style="height: 56px; padding: 0 26px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-size: 17px; font-weight: 600; display: inline-flex; align-items: center; gap: 10px;">
+              <sc-if value="{{dlIdle}}" hint-placeholder-val="{{ true }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></sc-if>
+              <sc-if value="{{dlStarting}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 15px; height: 15px; border-radius: 999px; border: 2px solid rgba(255,255,255,.35); border-top-color: var(--on-accent); animation: ac-spin 900ms linear infinite;"></span></sc-if>
+              <sc-if value="{{dlStarted}}" hint-placeholder-val="{{ false }}"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="animation: ac-pop 320ms var(--ease) both;"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+              {{dlLabel}}
+            </a>
+            <span style="display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 18px;">
+              <span style="color: var(--ink);">Version [version] · [size]</span>
+              <span style="color: var(--muted);">macOS 14.2 or later</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="lift" style="display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 14px; background: var(--elevated); box-shadow: var(--sh1); animation: ac-in 360ms var(--ease) 160ms both;">
+          <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600;">Check the download <span style="color: var(--muted); font-weight: 500;">SHA-256</span></h2>
+          <div style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 5px 0 12px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+            <span style="flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">[sha256 of the release file]</span>
+            <button onClick="{{copyHash}}" aria-label="Copy the SHA-256" class="press quiet" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--raised); color: var(--ink-2); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--sh1);">
+              <sc-if value="{{hashCopied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+              <sc-if value="{{hashIdle}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</span></sc-if>
+            </button>
+          </div>
+          <span style="font-size: 13px; line-height: 18px; font-weight: 600;">Then in Terminal</span>
+          <div style="display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 5px 0 12px; border-radius: 8px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+            <span style="flex: 1; min-width: 0; font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">shasum -a 256 ~/Downloads/[file]</span>
+            <button onClick="{{copyCmd}}" aria-label="Copy the shasum command" class="press quiet" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--raised); color: var(--ink-2); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--sh1);">
+              <sc-if value="{{cmdCopied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+              <sc-if value="{{cmdIdle}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</span></sc-if>
+            </button>
+          </div>
+          <span style="color: var(--ink-2);">The two should match. If they don't, don't open the file.</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="ph" style="padding: 52px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <h2 id="ph" style="margin: 0; font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">What it will ask for, and why</h2>
+            <p style="margin: 0; font-size: 16px; line-height: 26px; color: var(--ink-2);">macOS asks the first time each one is needed. The wording below is what the prompt says.</p>
+          </div>
+          <span style="font-size: 12px; color: var(--muted);">Change any of them in System Settings › Privacy &amp; Security</span>
+        </div>
+        <ul style="margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline);">
+          <sc-for list="{{ perms }}" as="p" hint-placeholder-count="5">
+            <li style="display: grid; grid-template-columns: 36px minmax(0, 330px) minmax(0, 1fr) 156px; gap: 20px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); animation: ac-in 280ms var(--ease) {{p.d}} both;">
+              <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 999px; background: var(--well); color: var(--ink); display: inline-flex; align-items: center; justify-content: center;">
+                <sc-if value="{{p.isMic}}" hint-placeholder-val="{{ true }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></sc-if>
+                <sc-if value="{{p.isAudio}}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></sc-if>
+                <sc-if value="{{p.isCal}}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></sc-if>
+                <sc-if value="{{p.isBell}}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></sc-if>
+                <sc-if value="{{p.isKey}}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M17 6l3 3M14.5 8.5l2 2"/></svg></sc-if>
+              </span>
+              <span style="display: flex; flex-direction: column; gap: 1px;">
+                <span style="font-size: 16px; line-height: 22px; font-weight: 600;">{{p.name}}</span>
+                <span style="font-size: 12px; line-height: 16px; color: var(--muted);">{{p.where}}</span>
+              </span>
+              <span style="font-size: 14px; line-height: 21px; color: var(--ink-2);"><sc-if value="{{p.hasLead}}" hint-placeholder-val="{{ false }}"><span style="font-weight: 600; color: var(--ink); margin-right: 0.28em;">{{p.lead}}</span></sc-if>{{p.why}}</span>
+              <span style="justify-self: end; height: 24px; padding: 0 10px; border-radius: 999px; background: {{p.pillBg}}; color: {{p.pillInk}}; box-shadow: {{p.pillRing}}; display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: .06em; white-space: nowrap;">{{p.pill}}</span>
+            </li>
+          </sc-for>
+        </ul>
+      </div>
+    </section>
+
+    <section aria-label="First run, and if macOS warns you" style="padding: 52px 48px 0;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 64px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <h2 style="margin: 0; font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">First run</h2>
+          <ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+            <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--hairline);">
+              <span style="font-family: var(--mono); font-size: 13px; line-height: 22px; color: var(--accent);">01</span>
+              <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Check your audio</span><span style="color: var(--ink-2);">Play something with sound and say a few words. macOS asks for the microphone and system audio here. The test recording is deleted straight away.</span></span>
+            </li>
+            <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--hairline);">
+              <span style="font-family: var(--mono); font-size: 13px; line-height: 22px; color: var(--accent);">02</span>
+              <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Add your NEAR AI key</span><span style="color: var(--ink-2);">Paste a key from cloud.near.ai. Aftercall checks it and keeps it in your Keychain. You can record without one; notes wait until you add it.</span></span>
+            </li>
+            <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--hairline);">
+              <span style="font-family: var(--mono); font-size: 13px; line-height: 22px; color: var(--accent);">03</span>
+              <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Record a call</span><span style="color: var(--ink-2);">Start the call in any app, then press New recording (<span style="font-family: var(--mono); font-size: 13px;">⌘⇧R</span>) or use the menu bar. Tell everyone you're taking notes; Aftercall asks you to confirm it.</span></span>
+            </li>
+            <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--hairline);">
+              <span style="font-family: var(--mono); font-size: 13px; line-height: 22px; color: var(--accent);">04</span>
+              <span style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 16px; line-height: 22px; font-weight: 600;">Approve the follow-ups</span><span style="color: var(--ink-2);">Approve the recap and payments you want. Connect NEAR in Settings when you're ready to pay from your agent wallet.</span></span>
+            </li>
+          </ol>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+            <h2 style="margin: 0; font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">If macOS warns you</h2>
+            <span style="height: 24px; padding: 0 8px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); display: inline-flex; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap;">[Shown only for unsigned builds]</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;">
+            <span style="color: var(--ink-2);">This build isn't notarized by Apple, so macOS stops it the first time you open it.</span>
+            <details style="color: var(--ink-2);">
+              <summary style="display: inline; cursor: pointer; color: var(--accent); font-weight: 600; list-style: none;">Why?</summary>
+              <span style="display: block; margin-top: 6px;">Apple notarizes apps signed with a Developer ID, and this build isn't signed with one, so macOS can't confirm who made it. Check the SHA-256 above, or build it yourself from the source below.</span>
+            </details>
+          </div>
+          <div role="tablist" aria-label="Your macOS version" style="align-self: flex-start; display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline);">
+            <button role="tab" aria-selected="{{os14Sel}}" onClick="{{pick14}}" class="press" style="height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: {{os14Bg}}; box-shadow: {{os14Sh}}; color: {{os14Ink}}; font-weight: 600; transition: background-color 160ms var(--ease), box-shadow 160ms var(--ease), color 160ms var(--ease);">macOS 14</button>
+            <button role="tab" aria-selected="{{os15Sel}}" onClick="{{pick15}}" class="press" style="height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: {{os15Bg}}; box-shadow: {{os15Sh}}; color: {{os15Ink}}; font-weight: 600; transition: background-color 160ms var(--ease), box-shadow 160ms var(--ease), color 160ms var(--ease);">macOS 15 or later</button>
+          </div>
+          <ol role="tabpanel" style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-bottom: 1px solid var(--hairline);">
+            <sc-for list="{{ osSteps }}" as="st" hint-placeholder-count="3">
+              <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 11px 0; border-top: 1px solid var(--hairline); animation: ac-in 240ms var(--ease) {{st.d}} both;">
+                <span style="font-family: var(--mono); font-size: 13px; line-height: 21px; color: var(--muted);">{{st.no}}</span>
+                <span style="color: var(--ink);">{{st.text}}</span>
+              </li>
+            </sc-for>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="bh" style="padding: 52px 48px 36px;">
+      <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: start;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <h2 id="bh" style="margin: 0; font-family: var(--serif); font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.02em;">Build it yourself</h2>
+          <p style="margin: 0; color: var(--ink-2);">Needs Node 24, pnpm 10 and Rust stable. macOS only lets a bundled app capture system audio, so build the app to record, then open the <span style="font-family: var(--mono); font-size: 13px; color: var(--ink);">.app</span> it makes.</p>
+          <a href="#" style="align-self: flex-start; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">Read the code on GitHub<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+        </div>
+        <div style="border-radius: 14px; background: var(--well); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; padding: 0 6px 0 16px; border-bottom: 1px solid var(--hairline);">
+            <span style="font-size: 12px; font-weight: 500; color: var(--muted);">Terminal</span>
+            <button onClick="{{copyBuild}}" aria-label="Copy the build commands" class="press quiet" style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: var(--raised); color: var(--ink-2); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--sh1);">
+              <sc-if value="{{buildCopied}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 6px; color: var(--accent); animation: ac-pop 260ms var(--ease) both;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Copied</span></sc-if>
+              <sc-if value="{{buildIdle}}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy</span></sc-if>
+            </button>
+          </div>
+          <pre style="margin: 0; padding: 14px 16px 16px; font-family: var(--mono); font-size: 13px; line-height: 22px; color: var(--ink); white-space: pre; overflow-x: auto;">git clone [repo URL] aftercall
+cd aftercall
+pnpm install
+pnpm verify      <span style="color: var(--muted);"># every check</span>
+pnpm --filter @aftercall/desktop tauri build --debug --bundles app</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer style="padding: 0 48px; border-top: 1px solid var(--hairline);">
+    <div style="max-width: 1200px; height: 64px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px;">
+      <span style="color: var(--ink-2);">Aftercall · built on NEAR AI Cloud and NEAR</span>
+      <span style="display: flex; gap: 22px;"><a href="V2HowItWorks.dc.html" class="quiet" style="color: var(--ink-2);">Privacy</a><a href="V2PublicVerify.dc.html" class="quiet" style="color: var(--ink-2);">Verify</a><a href="#" class="quiet" style="color: var(--ink-2);">GitHub</a></span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1280,"height":1600}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { dl: 'idle', copied: '', os: '15' };
+  }
+  componentWillUnmount() {
+    clearTimeout(this.dlId);
+    clearTimeout(this.copyId);
+  }
+  renderVals() {
+    const s = this.state;
+    const needed = { pill: 'NEEDED TO RECORD', pillBg: 'var(--elevated)', pillInk: 'var(--ink)', pillRing: 'var(--sh1)' };
+    const optional = { pill: 'OFF BY DEFAULT', pillBg: 'transparent', pillInk: 'var(--ink-2)', pillRing: 'inset 0 0 0 1px var(--border)' };
+    const defs = [
+      Object.assign({ icon: 'mic', name: 'Microphone', where: 'Privacy & Security › Microphone', lead: '', why: 'Aftercall records your side of the call to make private meeting notes. The audio is deleted after transcription.' }, needed),
+      Object.assign({ icon: 'audio', name: 'Screen & System Audio Recording', where: 'Privacy & Security › Screen & System Audio Recording', lead: "The call's audio, not your screen.", why: "Aftercall records the call's audio to make private meeting notes. The audio is deleted after transcription." }, needed),
+      Object.assign({ icon: 'cal', name: 'Calendar', where: 'Privacy & Security › Calendars', lead: 'Only if you choose Connect calendar in Settings.', why: "Aftercall reads the meeting you're recording from your calendar to name the notes and suggest who gets the recap. It never changes your calendar." }, optional),
+      Object.assign({ icon: 'bell', name: 'Notifications', where: 'System Settings › Notifications', lead: '', why: 'Tells you when a meeting’s notes are ready to review.' }, optional),
+      Object.assign({ icon: 'key', name: 'Keychain', where: 'Your login keychain, on this Mac', lead: '', why: "Holds the key that seals your recordings and notes, your NEAR AI key, and the app's limited NEAR key." }, needed)
+    ];
+    const perms = defs.map((p, i) => ({
+      name: p.name,
+      where: p.where,
+      why: p.why,
+      lead: p.lead,
+      hasLead: !!p.lead,
+      pill: p.pill,
+      pillBg: p.pillBg,
+      pillInk: p.pillInk,
+      pillRing: p.pillRing,
+      isMic: p.icon === 'mic',
+      isAudio: p.icon === 'audio',
+      isCal: p.icon === 'cal',
+      isBell: p.icon === 'bell',
+      isKey: p.icon === 'key',
+      d: (60 + i * 50) + 'ms'
+    }));
+    const steps14 = [
+      'In Finder, open your Applications folder.',
+      'Control-click Aftercall, or right-click it, and choose Open.',
+      'Choose Open again in the dialog. macOS remembers this, so it’s only once.'
+    ];
+    const steps15 = [
+      'Open Aftercall once, then choose Done in the warning.',
+      'Go to System Settings › Privacy & Security and scroll down.',
+      'Choose Open Anyway next to Aftercall, then confirm with your password.'
+    ];
+    const list = s.os === '14' ? steps14 : steps15;
+    const on = { bg: 'var(--elevated)', sh: 'var(--sh1)', ink: 'var(--ink)' };
+    const off = { bg: 'transparent', sh: 'none', ink: 'var(--ink-2)' };
+    const t14 = s.os === '14' ? on : off;
+    const t15 = s.os === '15' ? on : off;
+    const copy = (key, text) => () => {
+      try {
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+      } catch (e) {}
+      this.setState({ copied: key });
+      clearTimeout(this.copyId);
+      this.copyId = setTimeout(() => this.setState({ copied: '' }), 1600);
+    };
+    return {
+      theme: this.props.theme === 'light' ? 'light' : '',
+      dlIdle: s.dl === 'idle',
+      dlStarting: s.dl === 'starting',
+      dlStarted: s.dl === 'started',
+      dlLabel: s.dl === 'starting' ? 'Starting download' : s.dl === 'started' ? 'Download started' : 'Download for Mac',
+      download: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (this.state.dl !== 'idle') return;
+        this.setState({ dl: 'starting' });
+        clearTimeout(this.dlId);
+        this.dlId = setTimeout(() => {
+          this.setState({ dl: 'started' });
+          this.dlId = setTimeout(() => this.setState({ dl: 'idle' }), 2400);
+        }, 800);
+      },
+      hashCopied: s.copied === 'hash',
+      hashIdle: s.copied !== 'hash',
+      cmdCopied: s.copied === 'cmd',
+      cmdIdle: s.copied !== 'cmd',
+      buildCopied: s.copied === 'build',
+      buildIdle: s.copied !== 'build',
+      copyHash: copy('hash', '[sha256 of the release file]'),
+      copyCmd: copy('cmd', 'shasum -a 256 ~/Downloads/[file]'),
+      copyBuild: copy('build', 'git clone [repo URL] aftercall\ncd aftercall\npnpm install\npnpm verify\npnpm --filter @aftercall/desktop tauri build --debug --bundles app'),
+      perms: perms,
+      osSteps: list.map((text, i) => ({ no: String(i + 1).padStart(2, '0'), text: text, d: (i * 50) + 'ms' })),
+      os14Sel: s.os === '14' ? 'true' : 'false',
+      os15Sel: s.os === '15' ? 'true' : 'false',
+      os14Bg: t14.bg, os14Sh: t14.sh, os14Ink: t14.ink,
+      os15Bg: t15.bg, os15Sh: t15.sh, os15Ink: t15.ink,
+      pick14: () => this.setState({ os: '14' }),
+      pick15: () => this.setState({ os: '15' })
+    };
+  }
+}
+</script>
+</body>
+</html>
