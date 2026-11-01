@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ArrowUpRight, MicOff, Pause, PenLine, PhoneOff, Play, VolumeX, X } from "lucide-react";
 import { formatClock } from "@aftercall/core";
@@ -96,8 +96,10 @@ type Warning = "ended" | "mic" | "silent" | "unavailable";
 /** The one warning the pill shows, if any. "Keep recording" hides each until it starts again. */
 function warningFor(s: RecordingSession): Warning | null {
   if (!isLive(s)) return null;
-  // Not while paused: a paused call is quiet on purpose.
-  if (s.callEnded && !s.callEndedDismissed && s.phase !== "paused") return "ended";
+  // Not while paused: a paused call is quiet on purpose. Not while the call side can't
+  // be heard either: then "either side" isn't true, and the call warning matters more.
+  const callHeard = s.systemAudio && !s.callSilent;
+  if (s.callEnded && callHeard && !s.callEndedDismissed && s.phase !== "paused") return "ended";
   if (s.micSilent && !s.micWarningDismissed) return "mic";
   if (!s.warningDismissed && (s.callSilent || !s.systemAudio)) return s.systemAudio ? "silent" : "unavailable";
   return null;
@@ -195,11 +197,14 @@ const openSettings = (pane: "call" | "mic") => () =>
 
 /** A warning or question growing out of the bottom of the pill: an icon, what happened, then what you can do. */
 function PillPanel({ icon, title, eyebrow, children }: { icon: ReactNode; title: string; eyebrow: string; children: ReactNode }) {
+  // Reduced motion: the panel fades in at its full height.
+  const still = useReducedMotion();
+  const shown = (on: boolean) => (still ? { opacity: on ? 1 : 0 } : { height: on ? "auto" : 0, opacity: on ? 1 : 0 });
   return (
     <m.div
-      initial={{ height: 0, opacity: 0 }}
-      animate={{ height: "auto", opacity: 1, transition: springs.gentle }}
-      exit={{ height: 0, opacity: 0, transition: exit }}
+      initial={shown(false)}
+      animate={{ ...shown(true), transition: still ? enter : springs.gentle }}
+      exit={{ ...shown(false), transition: exit }}
       className="overflow-hidden"
     >
       <div aria-hidden="true" className="mx-4 h-px bg-hairline" />

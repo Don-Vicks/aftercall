@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CalendarEvent, NoticeLog } from "@aftercall/core";
 import { rmsToLevel } from "../primitives";
 import { calendar } from "../calendar";
@@ -442,6 +442,22 @@ export function useRecordShortcut(fn: () => void) {
       if (i >= 0) shortcutTakers.splice(i, 1);
     };
   }, []);
+}
+
+/**
+ * Whether ⌘⇧R works from any app. False in the Mac app when another app already holds
+ * it, so the copy can say "in Aftercall" instead. The browser preview shows the usual case.
+ */
+export function useShortcutEverywhere(): boolean {
+  const [everywhere, setEverywhere] = useState(true);
+  useEffect(() => {
+    if (!isDesktop) return;
+    recorder
+      .shortcutEverywhere()
+      .then(setEverywhere)
+      .catch(() => {});
+  }, []);
+  return everywhere;
 }
 
 /** The live page tells the store while it's on screen (it has the notes; the pill drops its Note). */

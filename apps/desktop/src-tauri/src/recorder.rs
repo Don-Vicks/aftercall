@@ -9,7 +9,8 @@
 //! - the mic stream stopping altogether, with no audio for 10 seconds, as it can
 //!   when AirPods switch or a mic is unplugged;
 //! - both sides quiet for 2 minutes, when the call has probably ended. That one
-//!   only asks; the recorder never stops by itself.
+//!   only asks, and only while the call side can be heard; the recorder never
+//!   stops by itself.
 //!
 //! Chunks are encrypted as they are written (at_rest::AudioWriter): about one second
 //! of audio is held in memory, then sealed and appended. No plaintext audio touches
@@ -156,9 +157,15 @@ pub struct QuietWatch {
 }
 
 impl QuietWatch {
-    /// `loudest`: the higher RMS of the two stems over the last `elapsed`.
-    pub fn feed(&mut self, loudest: f32, elapsed: Duration) -> SilenceChange {
-        self.quiet_for = if loudest < QUIET_RMS { self.quiet_for + elapsed } else { Duration::ZERO };
+    /// `mic` and `call`: each side's RMS over the last `elapsed`. `call` is None while the
+    /// call side can't be heard (no system audio, or only exact zeros from it): then only
+    /// one side is measured, so it never asks, and a question already asked is withdrawn.
+    pub fn feed(&mut self, mic: f32, call: Option<f32>, elapsed: Duration) -> SilenceChange {
+        let Some(call) = call else {
+            self.quiet_for = Duration::ZERO;
+            return change(&mut self.asked, false);
+        };
+        self.quiet_for = if mic.max(call) < QUIET_RMS { self.quiet_for + elapsed } else { Duration::ZERO };
         change(&mut self.asked, self.quiet_for >= Duration::from_secs(CALL_ENDED_SECONDS))
     }
 }
@@ -186,8 +193,8 @@ struct Stem {
     silence: SilenceWatch,
     /// Only the mic: the system tap delivers zeros, not nothing, when the call is quiet.
     stall: Option<StallWatch>,
-    /// What the interface was last told: zeros or stopped.
-    silent: bool,
+    /// What the interface was last told: (silent, stopped). Silent is zeros or stopped.
+    reported: (bool, bool),
     raw: Vec<f32>,
     out: Vec<f32>,
     level: f32,
@@ -207,7 +214,7 @@ impl Stem {
             writer: None,
             silence: SilenceWatch::default(),
             stall: (name == "mic").then(StallWatch::default),
-            silent: false,
+            reported: (false, false),
             raw: vec![0.0; 16_384],
             out: Vec::with_capacity(8_192),
             level: 0.0,
@@ -241,8 +248,8 @@ impl Stem {
     }
 
     /// Drains the ring. When `keep` is false (paused) the audio is discarded and the
-    /// watches wait. Returns the stem's new silent state when it changes: exact zeros
-    /// for 30 s, or (the mic) no audio at all for 10 s.
+    /// watches wait. Returns the stem's silent state when it or its cause changes: exact
+    /// zeros for 30 s, or (the mic) no audio at all for 10 s.
     fn drain(&mut self, source: &mut ringbuf::HeapCons<f32>, keep: bool, elapsed: Duration) -> Result<Option<bool>> {
         let mut level_samples = 0usize;
         let mut level_sum = 0f32;
@@ -278,11 +285,12 @@ impl Stem {
             // A stopped stream has no last level to hold: the meter goes flat.
             self.level = 0.0;
         }
-        let silent = self.silence.warned || self.stopped();
-        Ok(match change(&mut self.silent, silent) {
-            SilenceChange::None => None,
-            _ => Some(silent),
-        })
+        let now = (self.silence.warned || self.stopped(), self.stopped());
+        if now == self.reported {
+            return Ok(None);
+        }
+        self.reported = now;
+        Ok(Some(now.0))
     }
 }
 
@@ -447,8 +455,14 @@ fn run(dir: PathBuf, key: Key, inbox: Receiver<Command>, ready: Sender<Result<Re
         if !paused {
             quiet_window += elapsed;
             if quiet_window >= QUIET_WINDOW {
-                let loudest = mic_stem.take_window_rms().max(sys_stem.as_mut().map_or(0.0, Stem::take_window_rms));
-                if let SilenceChange::Started | SilenceChange::Ended = quiet.feed(loudest, quiet_window) {
+                let mic_rms = mic_stem.take_window_rms();
+                // The call side counts only while it is heard: a missing tap or one sending
+                // exact zeros (no permission) says nothing about whether the call is quiet.
+                let call_rms = sys_stem.as_mut().and_then(|s| {
+                    let rms = s.take_window_rms();
+                    (!s.silence.warned).then_some(rms)
+                });
+                if let SilenceChange::Started | SilenceChange::Ended = quiet.feed(mic_rms, call_rms, quiet_window) {
                     events.quiet(QuietEvent { quiet: quiet.asked });
                 }
                 quiet_window = Duration::ZERO;
@@ -573,30 +587,51 @@ mod tests {
         let room = 0.003; // a quiet room, under QUIET_RMS
         let voice = 0.05; // ordinary speech, about -26 dBFS
         for _ in 0..119 {
-            assert_eq!(w.feed(room, second), SilenceChange::None);
+            assert_eq!(w.feed(room, Some(room), second), SilenceChange::None);
         }
-        // One second of someone talking starts the two minutes again.
-        assert_eq!(w.feed(voice, second), SilenceChange::None);
+        // One second of someone on the call talking starts the two minutes again.
+        assert_eq!(w.feed(room, Some(voice), second), SilenceChange::None);
         for _ in 0..119 {
-            assert_eq!(w.feed(0.0, second), SilenceChange::None);
+            assert_eq!(w.feed(0.0, Some(0.0), second), SilenceChange::None);
         }
-        assert_eq!(w.feed(room, second), SilenceChange::Started, "both sides quiet for 2 minutes");
+        assert_eq!(w.feed(room, Some(room), second), SilenceChange::Started, "both sides quiet for 2 minutes");
         for _ in 0..600 {
-            assert_eq!(w.feed(room, second), SilenceChange::None, "it asks once, however long it stays quiet");
+            assert_eq!(w.feed(room, Some(room), second), SilenceChange::None, "it asks once, however long it stays quiet");
         }
-        assert_eq!(w.feed(voice, second), SilenceChange::Ended, "sound came back");
+        assert_eq!(w.feed(voice, Some(room), second), SilenceChange::Ended, "you spoke");
         for _ in 0..119 {
-            assert_eq!(w.feed(room, second), SilenceChange::None);
+            assert_eq!(w.feed(room, Some(room), second), SilenceChange::None);
         }
-        assert_eq!(w.feed(room, second), SilenceChange::Started, "quiet again for 2 minutes");
+        assert_eq!(w.feed(room, Some(room), second), SilenceChange::Started, "quiet again for 2 minutes");
     }
 
     #[test]
     fn a_noisy_room_never_counts_as_quiet() {
         let mut w = QuietWatch::default();
         for _ in 0..600 {
-            assert_eq!(w.feed(QUIET_RMS, Duration::from_secs(1)), SilenceChange::None);
+            assert_eq!(w.feed(QUIET_RMS, Some(QUIET_RMS), Duration::from_secs(1)), SilenceChange::None);
         }
+    }
+
+    #[test]
+    fn a_call_side_that_cant_be_heard_never_counts_as_quiet() {
+        let mut w = QuietWatch::default();
+        let second = Duration::from_secs(1);
+        // No system audio, or only exact zeros from it: you listening quietly isn't the call ending.
+        for _ in 0..600 {
+            assert_eq!(w.feed(0.0, None, second), SilenceChange::None);
+        }
+        // Asked while both sides were heard, then the call side goes unheard: the question is withdrawn.
+        for _ in 0..119 {
+            assert_eq!(w.feed(0.0, Some(0.0), second), SilenceChange::None);
+        }
+        assert_eq!(w.feed(0.0, Some(0.0), second), SilenceChange::Started);
+        assert_eq!(w.feed(0.0, None, second), SilenceChange::Ended);
+        // Heard again: the two minutes start over.
+        for _ in 0..119 {
+            assert_eq!(w.feed(0.0, Some(0.0), second), SilenceChange::None);
+        }
+        assert_eq!(w.feed(0.0, Some(0.0), second), SilenceChange::Started);
     }
 
     #[test]
@@ -629,6 +664,16 @@ mod tests {
             prod.push_slice(&[0.0; 1_000]);
             assert_eq!(mic.drain(&mut cons, true, Duration::from_secs(1)).unwrap(), None);
         }
+        prod.push_slice(&[0.0; 1_000]);
+        assert_eq!(mic.drain(&mut cons, true, Duration::from_secs(1)).unwrap(), Some(true));
+        assert!(!mic.stopped());
+        // Then the stream stops as well: still silent, but the cause changed, so it reports again.
+        for _ in 0..9 {
+            assert_eq!(mic.drain(&mut cons, true, Duration::from_secs(1)).unwrap(), None);
+        }
+        assert_eq!(mic.drain(&mut cons, true, Duration::from_secs(1)).unwrap(), Some(true));
+        assert!(mic.stopped());
+        // Zeros again: it no longer counts as stopped.
         prod.push_slice(&[0.0; 1_000]);
         assert_eq!(mic.drain(&mut cons, true, Duration::from_secs(1)).unwrap(), Some(true));
         assert!(!mic.stopped());

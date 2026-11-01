@@ -149,7 +149,7 @@ export default function Download() {
                   <span className={d.stepText}>
                     <span>Record a call</span>
                     <span>
-                      Start the call in any app, then press <span className="mono" style={{ fontSize: 13 }}>⌘⇧R</span>: it works from any app while Aftercall is running. Or press New recording, or use the menu bar. Tell everyone you&apos;re taking notes; Aftercall asks you to confirm it.
+                      Start the call in any app, then press <span className="mono" style={{ fontSize: 13 }}>⌘⇧R</span>: it works from any app while Aftercall is running, unless another app already uses it. Or press New recording, or use the menu bar. Tell everyone you&apos;re taking notes; Aftercall asks you to confirm it.
                     </span>
                   </span>
                 </li>

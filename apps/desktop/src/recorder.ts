@@ -86,6 +86,8 @@ export const recorder = {
   /** The floating recorder's "Open notes", or "Add a note…" in the menu bar. */
   onOpenLive: (fn: () => void): Promise<UnlistenFn> => listen("recorder:open-live", () => fn()),
   onMenuNewRecording: (fn: () => void): Promise<UnlistenFn> => listen("menu:new-recording", () => fn()),
+  /** True when ⌘⇧R works from any app; false when another app holds it and it works only in Aftercall. */
+  shortcutEverywhere: () => invoke<boolean>("record_shortcut_everywhere"),
   /** ⌘⇧R pressed in any app (the global shortcut). Aftercall is already in front. */
   onShortcut: (fn: () => void): Promise<UnlistenFn> => listen("shortcut:record", () => fn()),
 };

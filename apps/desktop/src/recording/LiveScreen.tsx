@@ -3,7 +3,7 @@ import { Check, MicOff, Monitor, VolumeX } from "lucide-react";
 import { isDesktop } from "../recorder";
 import { AvatarStack, Pill, SectionTitle } from "../ui";
 import { NOTES_HELP, NotesArea, SavedLabel } from "./YourNotes";
-import { isLive, setNotes, useLivePage, useRecordingSession } from "./session";
+import { isLive, setNotes, useLivePage, useRecordingSession, useShortcutEverywhere } from "./session";
 
 const hhmm = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -21,6 +21,7 @@ function othersText(names: string[]): string {
 export function LiveScreen() {
   useLivePage();
   const s = useRecordingSession();
+  const everywhere = useShortcutEverywhere();
   const notes = useRef<HTMLTextAreaElement>(null);
   const notesId = useId();
 
@@ -127,7 +128,7 @@ export function LiveScreen() {
           <Monitor size={18} strokeWidth={1.75} className="shrink-0 text-faint" aria-hidden="true" />
           <span className="flex-1 text-ink-2">
             {isDesktop
-              ? "Switch to your call: a small recorder stays on top, the menu bar shows the time, and ⌘⇧R from any app brings back your notes."
+              ? `Switch to your call: a small recorder stays on top, the menu bar shows the time, and ⌘⇧R ${everywhere ? "from any app" : "in Aftercall"} brings back your notes.`
               : "In the Mac app, switching to your call shows a small recorder on top, and the menu bar shows the time."}
           </span>
         </section>

@@ -246,6 +246,17 @@ impl PressGate {
     }
 }
 
+/// Whether ⌘⇧R was registered system-wide. False when another app already holds it:
+/// then it works only inside Aftercall, and the app's copy says so.
+#[derive(Default)]
+struct RecordShortcut(AtomicBool);
+
+/// True when ⌘⇧R works from any app; false when it works only inside Aftercall.
+#[tauri::command]
+fn record_shortcut_everywhere(state: State<RecordShortcut>) -> bool {
+    state.0.load(Ordering::Relaxed)
+}
+
 /// ⌘⇧R pressed in any app. Aftercall comes to the front and the main window does what
 /// ⌘⇧R does inside it: idle, the record sheet opens (and with the sheet open and the
 /// box ticked, recording starts); recording, your notes open. The window decides
@@ -953,6 +964,7 @@ pub fn run() {
         )
         .manage(RecorderState::default())
         .manage(PressGate::default())
+        .manage(RecordShortcut::default())
         .manage(AgentsState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
@@ -962,6 +974,7 @@ pub fn run() {
             save_live_notes,
             save_your_notes,
             open_audio_settings,
+            record_shortcut_everywhere,
             live_open_notes,
             show_main_window,
             list_recordings,
@@ -1038,8 +1051,9 @@ pub fn run() {
                     eprintln!("agents: {e}");
                 }
             }
-            if let Err(e) = app.global_shortcut().register(RECORD_SHORTCUT) {
-                eprintln!("shortcut: ⌘⇧R works only inside Aftercall: {e}");
+            match app.global_shortcut().register(RECORD_SHORTCUT) {
+                Ok(()) => app.state::<RecordShortcut>().0.store(true, Ordering::Relaxed),
+                Err(e) => eprintln!("shortcut: ⌘⇧R works only inside Aftercall: {e}"),
             }
             // Menu bar item: start a recording or open the app from anywhere. While
             // recording it shows the time and offers Add a note, Pause and Stop.
