@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autopilotDecision, DEFAULT_RULES } from "./autopilot.ts";
-import type { EmailFollowUp, PaymentFollowUp } from "../meeting.ts";
+import { AUTOPILOT_HELD, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot } from "./autopilot.ts";
+import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 
 const usdc = (n: number) => BigInt(n) * 1_000_000n;
 const payment: PaymentFollowUp = {
@@ -30,4 +30,23 @@ test("any failing rule leaves it for a person, and says why", () => {
   assert.deepEqual(autopilotDecision({ ...payment, amount: null }, on, limits).reasons, ["Amount unclear"]);
   assert.deepEqual(autopilotDecision(payment, on, { ...limits, perPaymentCap: 0n }).reasons, ["No per-payment limit set"]);
   assert.deepEqual(autopilotDecision(payment, on, null).reasons, ["Agent wallet not connected"]);
+});
+
+test("a queued follow-up read from disk at launch is held for you, never run", () => {
+  const meeting = (followUps: Meeting["followUps"]): Meeting => ({
+    id: "m1", project: "General", title: "Call", startedAt: "2026-11-01T10:00:00Z", durationSec: 60, verified: true,
+    summary: "", decisions: [], actionItems: [], followUps, transcript: [],
+  });
+  // Quit 20 seconds into the undo window; the next launch is long after it would have run.
+  const queued = { ...payment, autopilotAt: Date.now() - 3_600_000 };
+  const held = holdInterruptedAutopilot(meeting([queued, recap]))!;
+  const [pay, mail] = held.followUps;
+  assert.equal(pay.autopilotAt, undefined, "off the queue, so the run loop never sees it");
+  assert.equal(pay.autopilotHeld, true);
+  assert.equal(pay.status, "proposed", "waits for your approval");
+  assert.deepEqual(autopilotDecision(pay, on, limits), { run: false, reasons: [AUTOPILOT_HELD] }, "every rule passing still doesn't run it");
+  assert.equal(mail, recap, "a follow-up that wasn't queued is untouched");
+  assert.equal(holdInterruptedAutopilot(meeting([payment, recap])), null, "nothing queued: nothing to save");
+  assert.equal(holdInterruptedAutopilot(meeting([queued, recap]), (id) => id === queued.id), null, "queued in this run: its countdown goes on");
+  assert.equal(JSON.parse(JSON.stringify({ ...pay, amount: null })).autopilotHeld, true, "the flag is plain JSON, so notes.json keeps it");
 });

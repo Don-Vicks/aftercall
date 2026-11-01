@@ -9,6 +9,7 @@ import {
   meetingLabel,
   plainNearAiError,
   processRecording,
+  YourNotesDrafts,
   type CalendarEvent,
   type Stage as PipelineStage,
   type TeeCheck,
@@ -96,6 +97,11 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
   };
   report(id, { state: "running", at: 0, times: [] });
   try {
+    // Exactly what you last typed, saved to your-notes.json first, so the model, the
+    // proof's salted hash and the file agree. The list's copy can be older.
+    const yourNotes = await drafts.forRun(id, recording.yourNotes).catch((e) => {
+      throw new Error(`Couldn't save your notes, so nothing was sent: ${e instanceof Error ? e.message : String(e)}`);
+    });
     const chunks = await recordingFiles.chunks(id);
     if (chunks.length === 0) throw new Error("This recording has no audio left to transcribe.");
     const result = await processRecording(
@@ -112,7 +118,7 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         vocabulary: [recording.project, ...payees.map((p) => p.name)],
         transcriptCache: transcriptCache(id),
         // What you typed during the call: context for the model, covered by the proof's salted hash.
-        yourNotes: recording.yourNotes,
+        yourNotes,
         // Your "I've told everyone" tick goes into the proof as your statement. A sample is a made-up call: none.
         notice: recording.label ? undefined : recording.notice,
       },
@@ -160,7 +166,7 @@ export function isProcessing(id: string): boolean {
 }
 
 /** Your notes typed on this page after the call, by recording, so they survive leaving it. */
-const editedNotes = new Map<string, string>();
+const drafts = new YourNotesDrafts((id, text) => recorder.saveYourNotes(id, text));
 
 /**
  * A real recording that has no notes yet. With a NEAR AI key it runs the notes
@@ -324,28 +330,12 @@ export function RecordingScreen({
 
 /** Your notes from the call, still editable until the notes are made (save_your_notes). */
 function WaitingNotes({ recording }: { recording: SavedRecording }) {
-  const [text, setText] = useState(() => editedNotes.get(recording.id) ?? recording.yourNotes ?? "");
+  const [text, setText] = useState(() => drafts.get(recording.id) ?? recording.yourNotes ?? "");
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const timer = useRef(0);
   const latest = useRef(text);
-  const write = (value: string) =>
-    recorder
-      .saveYourNotes(recording.id, value)
-      .then(() => latest.current === value && setSave("saved"))
-      .catch((e) => {
-        setSave("error");
-        setError(e instanceof Error ? e.message : String(e));
-      });
   // Leaving the page saves what's still waiting.
-  useEffect(
-    () => () => {
-      if (!timer.current) return;
-      window.clearTimeout(timer.current);
-      void recorder.saveYourNotes(recording.id, latest.current).catch(() => {});
-    },
-    [],
-  );
+  useEffect(() => () => void drafts.flush(recording.id).catch(() => {}), []);
   return (
     <section aria-labelledby="waiting-notes" className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
@@ -364,13 +354,15 @@ function WaitingNotes({ recording }: { recording: SavedRecording }) {
           const value = e.target.value;
           setText(value);
           latest.current = value;
-          editedNotes.set(recording.id, value);
           setSave("saving");
-          window.clearTimeout(timer.current);
-          timer.current = window.setTimeout(() => {
-            timer.current = 0;
-            void write(value);
-          }, 600);
+          drafts
+            .edit(recording.id, value)
+            .then(() => latest.current === value && setSave("saved"))
+            .catch((e) => {
+              if (latest.current !== value) return;
+              setSave("error");
+              setError(e instanceof Error ? e.message : String(e));
+            });
         }}
       />
     </section>

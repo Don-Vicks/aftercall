@@ -70,6 +70,11 @@ interface FollowUpBase {
   error?: string;
   /** Set when autopilot will run it at this time (ms since epoch), unless undone. */
   autopilotAt?: number;
+  /**
+   * Set when autopilot had queued it but Aftercall closed before its undo window ran
+   * out. It never runs by itself after that: it waits for you to approve or dismiss it.
+   */
+  autopilotHeld?: boolean;
   /** Set when autopilot sent or paid it, rather than a person approving it. */
   byAutopilot?: boolean;
 }

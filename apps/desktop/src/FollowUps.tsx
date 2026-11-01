@@ -4,6 +4,7 @@ import * as m from "motion/react-m";
 import { Copy, Link2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  AUTOPILOT_HELD,
   CHAIN_NAME,
   UNDO_SECONDS,
   amountNote,
@@ -268,6 +269,11 @@ function AutopilotLine({ at, verb, why, onUndo }: { at: number; verb: string; wh
   );
 }
 
+/** Why a follow-up autopilot had queued now waits: Aftercall closed before its undo window ran out. */
+function HeldNote() {
+  return <span className="text-[13px] text-ink-2">{AUTOPILOT_HELD} Approve it yourself, or dismiss it.</span>;
+}
+
 /**
  * The "done" pill. It pops in, and its check draws, when the state changed on screen.
  * `upper` is the status-pill style (SENT 14:06); a payment's pill reads "50.00 USDC paid 14:21".
@@ -394,6 +400,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
         {state === "open" && (
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This recap waits for you.</span>}
+            {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
             <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
             {!f.to && (
               <div className="flex flex-col gap-2">
@@ -639,6 +646,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
         {state === "open" && (
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This payment waits for you.</span>}
+            {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
             <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
             <dl className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-well px-3.5 py-3">
               <div className="flex items-baseline gap-2.5">

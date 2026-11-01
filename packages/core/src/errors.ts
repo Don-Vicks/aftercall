@@ -43,3 +43,52 @@ export function plainNearAiError(e: unknown): string {
   if (status === 429) return NEAR_AI_RATE_MESSAGE;
   return message;
 }
+
+/*
+ * NEAR AI's answers about end-to-end encryption that the app recognises, as its gateway
+ * words them (github.com/nearai/cloud-api, read 1 Nov 2026): 400 naming an encryption
+ * header it didn't accept (validate_encryption_headers), and 421 "The encryption key is
+ * no longer valid…" when no node serves the pinned model key. Only these are
+ * recognised. Any other 4xx, including "Model '…' does not support encryption" for a
+ * model outside the TEE, is treated as a refusal of the request and stops processing.
+ */
+const E2EE_HEADER = /\bX-(?:Encryption-Version|Signing-Algo|Client-Pub-Key|Model-Pub-Key)\b/i;
+const E2EE_STALE_KEY = /\bencryption key\b[^.]*\b(?:no longer valid|not valid|invalid)\b/i;
+
+/**
+ * Why NEAR AI turned down end-to-end encryption itself, in plain words, when it named an
+ * encryption header it didn't accept; null for anything else, account errors and the
+ * stale-key answer included. Only this may lead to TLS.
+ */
+export function e2eeRefusal(e: unknown): string | null {
+  const status = nearAiStatus(e);
+  if (status !== 400 || isNearAiAccountError(e)) return null;
+  const message = e instanceof Error ? e.message : String(e);
+  return E2EE_HEADER.test(message) ? "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)" : null;
+}
+
+/**
+ * True when NEAR AI answered 421 that the attested model key is no longer one it
+ * serves. It asks for a fresh attestation, so the app attests again and retries
+ * encrypted; it never leads to TLS.
+ */
+export function e2eeStaleKey(e: unknown): boolean {
+  if (nearAiStatus(e) !== 421) return false;
+  return E2EE_STALE_KEY.test(e instanceof Error ? e.message : String(e));
+}
+
+/** The message in a NEAR AI error body ({"error":{"message":…}} or plain text), cut to 200 characters. */
+export function nearAiErrorText(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  const body = message.replace(/^NEAR AI \d{3}[^:]*:\s*/, "");
+  let text = body;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown } | string; message?: unknown; detail?: unknown };
+    const inner = typeof parsed.error === "string" ? parsed.error : (parsed.error?.message ?? parsed.message ?? parsed.detail);
+    if (typeof inner === "string") text = inner;
+  } catch {
+    // Not JSON: the body as it came.
+  }
+  text = text.trim();
+  return text.length > 200 ? `${text.slice(0, 199)}…` : text;
+}

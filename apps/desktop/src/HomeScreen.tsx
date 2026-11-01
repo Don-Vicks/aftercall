@@ -492,6 +492,8 @@ function FollowUpRow({
     <span className="text-record">{f.error}</span>
   ) : f.autopilotAt ? (
     <span className="text-ink-2">Autopilot runs this soon · {where}</span>
+  ) : f.autopilotHeld && f.status === "proposed" ? (
+    <span className="text-ink-2">Autopilot held this for your approval · {where}</span>
   ) : (
     <span className="t-quote text-[14px] text-ink-2">
       “{f.evidence.quote}” <span className="font-sans not-italic">· {where}</span>
