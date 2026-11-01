@@ -258,6 +258,21 @@ export default function App() {
   /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
   const queuedHere = useRef(new Set<string>());
 
+  /** notes.json as last read from disk, by id, to spot changes made outside the app (agents, via the MCP server). */
+  const diskNotes = useRef<Record<string, string>>({});
+  /** Each meeting's last notes.json save, so saves land in the order they were made. */
+  const notesSaves = useRef<Record<string, Promise<void>>>({});
+
+  /**
+   * Saves a meeting's notes.json, one save at a time per meeting, and takes it as what
+   * is on disk, so the refresh doesn't read the app's own save as an outside change.
+   */
+  const writeNotes = (id: string, notes: SavedNotes) => {
+    const text = serializeNotes(notes);
+    diskNotes.current[id] = text;
+    notesSaves.current[id] = (notesSaves.current[id] ?? Promise.resolve()).then(() => recordingFiles.saveNotes(id, text)).catch(() => {});
+  };
+
   // Recordings that have notes open as meetings. Autopilot queued before this launch
   // (Aftercall closed during the undo window) is held for you and saved that way.
   const addProcessed = (list: SavedRecording[]) => {
@@ -270,7 +285,7 @@ export default function App() {
         const held = holdInterruptedAutopilot(parsed.meeting, (fuId) => queuedHere.current.has(`${r.id}:${fuId}`));
         notes[r.id] = held ? { ...parsed, meeting: held } : parsed;
         processed[r.id] = notes[r.id].meeting;
-        if (held && isDesktop) recordingFiles.saveNotes(r.id, serializeNotes(notes[r.id])).catch(() => {});
+        if (held && isDesktop) writeNotes(r.id, notes[r.id]);
       } catch {
         // A damaged notes.json leaves the recording on its status page.
       }
@@ -282,9 +297,6 @@ export default function App() {
   /** Names recordings that have no notes yet after their calendar event, when there is one. */
   const nameFromCalendar = (list: SavedRecording[]) =>
     eventTitles(list).then((titles) => setRecordings((all) => all.map((r) => (titles[r.id] && !r.notes ? { ...r, eventTitle: titles[r.id] } : r))));
-
-  /** notes.json as last read from disk, by id, to spot changes made outside the app (agents, via the MCP server). */
-  const diskNotes = useRef<Record<string, string>>({});
 
   /** Takes notes.json from disk as the truth for one meeting. */
   const applyDiskNotes = (id: string, notes: string) => {
@@ -408,17 +420,22 @@ export default function App() {
     }
   };
 
-  /** Changes one follow-up and, for real meetings, saves it to the meeting's notes.json. */
+  /**
+   * Changes one follow-up and, for real meetings, saves it to the meeting's notes.json.
+   * Reads the latest saved notes, not this render's: autopilot queues right after a
+   * meeting is processed, before a render has its notes.
+   */
   const patchFollowUp = (meetingId: string, fuId: string, patch: Patch) => {
     setMeetings((all) => {
       const m = all[meetingId];
       const next = { ...m, followUps: m.followUps.map((f) => (f.id === fuId ? ({ ...f, ...patch } as FollowUp) : f)) };
-      const notes = saved[meetingId];
-      if (notes) {
+      setSaved((s) => {
+        const notes = s[meetingId];
+        if (!notes) return s;
         const updated = { ...notes, meeting: next };
-        setSaved((s) => ({ ...s, [meetingId]: updated }));
-        recordingFiles.saveNotes(meetingId, serializeNotes(updated)).catch(() => {});
-      }
+        writeNotes(meetingId, updated);
+        return { ...s, [meetingId]: updated };
+      });
       return { ...all, [meetingId]: next };
     });
   };
@@ -442,7 +459,8 @@ export default function App() {
       },
       routeFor: (f: FollowUp) => (sample || f.kind !== "payment" ? null : (destinations[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
-      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined, autopilotHeld: undefined }),
+      // A held item keeps its flag, so Undo brings back why it waits; it shows only while proposed.
+      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
       onRestore: (id: string, status: FollowUp["status"]) => apply(id)({ status }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
       onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, autopilotHeld: undefined, error: undefined }),
@@ -542,6 +560,8 @@ export default function App() {
     const recording = recordings.find((r) => r.id === id);
     if (!recording) return;
     const updated = { ...recording, notes };
+    // The run saved these notes itself; the refresh needn't read them back.
+    diskNotes.current[id] = notes;
     setRecordings((all) => all.map((r) => (r.id === id ? updated : r)));
     addProcessed([updated]);
     setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v));
