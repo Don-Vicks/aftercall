@@ -49,7 +49,17 @@ async function projectMenu(page, project) {
  */
 const SHOTS = [
   { name: "home", go: async () => {} },
-  { name: "search", go: (p) => click(p, "button", /^Search/) },
+  // The sidebar's Search opens the ⌘K palette; ⌘Enter in it opens the full Search page.
+  { name: "search", wait: "[role=combobox]", go: (p) => click(p, "button", /^Search/) },
+  {
+    name: "search-page",
+    go: async (p) => {
+      await click(p, "button", /^Search/);
+      await p.keyboard.type("recap");
+      await p.keyboard.press("Meta+Enter");
+    },
+  },
+  { name: "project", wait: "text=Record in General", go: (p) => click(p, "button", "General") },
   { name: "meeting", go: (p) => click(p, "button", /^Sync with Ada/) },
   {
     name: "transcript",

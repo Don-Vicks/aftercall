@@ -36,6 +36,32 @@ export function bestEvent(events: CalendarEvent[], start: number, end: number): 
   return best?.event ?? null;
 }
 
+/**
+ * What's still ahead, for "Coming up" on Home: timed events that haven't ended,
+ * soonest first. All-day events, ones already over, and the same event seen twice
+ * (shared calendars) are left out.
+ */
+export function upcomingEvents(events: CalendarEvent[], now: number, limit = 3): CalendarEvent[] {
+  const seen = new Set<string>();
+  return events
+    .filter((e) => !e.allDay && e.end > e.start && e.end > now)
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .filter((e) => {
+      const key = `${e.title}\u0000${e.start}\u0000${e.end}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, Math.max(0, limit));
+}
+
+/** "Now" once it has started, "Starts in 12 min" within the hour, otherwise null. */
+export function startsIn(event: Pick<CalendarEvent, "start">, now: number): string | null {
+  if (event.start <= now) return "Now";
+  const minutes = Math.ceil((event.start - now) / 60);
+  return minutes <= 60 ? `Starts in ${minutes} min` : null;
+}
+
 const words = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").match(/[a-z0-9]+/g) ?? [];
 
 /**

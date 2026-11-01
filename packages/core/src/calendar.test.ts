@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyCalendarEvent, bestEvent, matchAttendee, type Attendee, type CalendarEvent } from "./calendar.ts";
+import { applyCalendarEvent, bestEvent, matchAttendee, startsIn, upcomingEvents, type Attendee, type CalendarEvent } from "./calendar.ts";
 import type { EmailFollowUp, Meeting } from "./meeting.ts";
 
 const at = (hhmm: string) => {
@@ -84,4 +84,32 @@ test("an unnamed recap goes to the only other person invited, and only then", ()
 
 test("an event without a title keeps the notes' title", () => {
   assert.equal(applyCalendarEvent(meeting([]), event("", "15:00", "15:30")).title, "API fix and demo");
+});
+
+test("coming up: timed events not yet over, soonest first", () => {
+  const events = [
+    event("Weekly check-in", "17:00", "17:30"),
+    event("Offsite", "00:00", "23:59", { allDay: true }),
+    event("Standup", "09:00", "09:15"),
+    event("Website kickoff", "15:30", "16:00"),
+    event("Design review", "15:00", "15:45"),
+  ];
+  assert.deepEqual(
+    upcomingEvents(events, at("15:20")).map((e) => e.title),
+    ["Design review", "Website kickoff", "Weekly check-in"],
+  );
+  assert.deepEqual(upcomingEvents(events, at("15:20"), 1).map((e) => e.title), ["Design review"]);
+  assert.deepEqual(upcomingEvents(events, at("18:00")), []);
+});
+
+test("coming up: the same event from two calendars shows once", () => {
+  const twice = [event("Sync with Ada", "15:00", "15:30"), event("Sync with Ada", "15:00", "15:30")];
+  assert.equal(upcomingEvents(twice, at("14:00")).length, 1);
+});
+
+test("starts in: now, minutes within the hour, nothing further out", () => {
+  assert.equal(startsIn(event("x", "15:30", "16:00"), at("15:31")), "Now");
+  assert.equal(startsIn(event("x", "15:30", "16:00"), at("15:18")), "Starts in 12 min");
+  assert.equal(startsIn(event("x", "15:30", "16:00"), at("14:30")), "Starts in 60 min");
+  assert.equal(startsIn(event("x", "15:30", "16:00"), at("14:29")), null);
 });

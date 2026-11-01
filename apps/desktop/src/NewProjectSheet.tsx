@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Sheet } from "./Sheet";
-import { Button } from "./ui";
+import { Button, Dialog, Field, Input } from "./ui";
 
 /** Names a project, or renames one. Its name also helps transcription spell it right. */
 export function NewProjectSheet({
@@ -21,29 +20,35 @@ export function NewProjectSheet({
   const unchanged = initial !== undefined && clean === initial;
   const ok = clean.length > 0 && !taken && !unchanged;
   return (
-    <Sheet
+    <Dialog
       title={initial ? "Rename project" : "New project"}
-      intro={initial ? "Its meetings move with it." : "What a set of meetings is about, like a client, a fundraise or a hire. Its name helps transcription spell it right."}
+      intro={initial ? "Its meetings move with it." : "What a set of meetings is about, like a client, a fundraise or a hire."}
       onClose={onClose}
     >
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="project-name" className="t-label text-muted">Name</label>
-        <input
-          id="project-name"
+      <Field label="Name" hint="Its name also helps transcription spell it right." error={taken ? "You already have a project called that." : undefined}>
+        <Input
           autoFocus
           value={name}
           maxLength={60}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ok && onCreate(clean)}
           placeholder="Fundraise"
-          className="selectable h-9 rounded-sm border border-border bg-well px-3 text-sm text-ink outline-none"
         />
-        {taken && <span className="text-caution">You already have a project called that.</span>}
+      </Field>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+          <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-[6px] bg-well px-[5px] font-mono text-[11px] text-ink-2 shadow-[inset_0_0_0_1px_var(--hairline)]">↵</kbd>
+          to {initial ? "rename" : "create"}
+        </span>
+        <span className="flex gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!ok} onClick={() => onCreate(clean)}>
+            {initial ? "Rename" : "Create project"}
+          </Button>
+        </span>
       </div>
-      <div className="mt-2 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!ok} onClick={() => onCreate(clean)}>{initial ? "Rename" : "Create project"}</Button>
-      </div>
-    </Sheet>
+    </Dialog>
   );
 }

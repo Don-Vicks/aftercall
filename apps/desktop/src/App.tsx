@@ -27,11 +27,19 @@ import { eventTitles } from "./calendar";
 import { AgentsScreen } from "./AgentsScreen";
 import { agentsApi } from "./agents";
 import { openSample } from "./sampleRecordings";
-import { DialogHost, MotionProvider, Toaster, deferred, toast, useConfirm, view as viewMotion } from "./ui";
+import { CommandPalette } from "./CommandPalette";
+import { ProjectScreen } from "./ProjectScreen";
+import { DialogHost, MotionProvider, Toaster, anyLayerOpen, deferred, toast, useConfirm, view as viewMotion } from "./ui";
 
 type View =
   | { name: "home" }
-  | { name: "search" }
+  | { name: "search"; query?: string }
+  | { name: "project"; id: string }
+  // Screens built on another branch; until they land, a placeholder says so.
+  | { name: "ask" }
+  | { name: "actions" }
+  | { name: "people" }
+  | { name: "meetings" }
   | { name: "meeting"; id: string; at?: number }
   | { name: "processing"; project: string; seconds: number }
   | { name: "recording"; id: string }
@@ -61,6 +69,7 @@ export default function App() {
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
   const [view, setView] = useState<View>({ name: "home" });
   const [recordOpen, setRecordOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [recordings, setRecordings] = useState<SavedRecording[]>([]);
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
@@ -111,6 +120,7 @@ export default function App() {
     await projectsApi.save(next);
     if (count) await refile(p.name, target.name);
     setProjects(next);
+    setView((v) => (v.name === "project" && v.id === id ? { name: "home" } : v));
   };
   const [onboarding, setOnboarding] = useState(needsOnboarding);
   const [account, setAccount] = useState<string | null>(null);
@@ -273,6 +283,8 @@ export default function App() {
     };
   }, []);
 
+  const paletteBlocked = useRef(false);
+  paletteBlocked.current = onboarding || recordOpen;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === "r") {
@@ -281,7 +293,12 @@ export default function App() {
       }
       if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setView({ name: "search" });
+        // ⌘K toggles the palette. It doesn't open over another dialog, a menu, onboarding or the record panel.
+        setPaletteOpen((open) => (open ? false : !anyLayerOpen() && !paletteBlocked.current));
+      }
+      if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "j" && !anyLayerOpen() && !paletteBlocked.current) {
+        e.preventDefault();
+        setView({ name: "ask" });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -447,7 +464,12 @@ export default function App() {
   const shownMeetings = meetingList.filter((m) => !hidden[m.id]);
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
   /** One key per screen, so switching screens fades between them. */
-  const viewKey = view.name === "meeting" || view.name === "recording" ? `${view.name}:${view.id}` : view.name;
+  const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "project" ? `${view.name}:${view.id}` : view.name;
+  const openProject = view.name === "project" ? projects.find((p) => p.id === view.id) : undefined;
+  const openActions = shownMeetings.reduce((n, m) => n + m.actionItems.filter((a) => !a.done).length, 0);
+  const openMeeting = (id: string, at?: number) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id });
+  /** Screens another branch builds: until they land, the sidebar and ⌘J open this. */
+  const comingSoon: Partial<Record<View["name"], string>> = { ask: "Ask your meetings", actions: "Action items", people: "People", meetings: "All meetings" };
 
   return (
     <MotionProvider>
@@ -457,18 +479,21 @@ export default function App() {
           sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
           account={account}
           balance={balance}
+          current={view.name}
           selectedMeetingId={selectedMeetingId}
+          selectedProjectId={view.name === "project" ? view.id : null}
           pendingByMeeting={pendingByMeeting}
           recordings={shownRecordings}
           meetingTitles={meetingTitles}
-          homeSelected={view.name === "home"}
-          walletSelected={view.name === "wallet"}
-          settingsSelected={view.name === "settings"}
-          agentsSelected={view.name === "agents"}
+          openActions={openActions}
           onOpenAgents={() => setView({ name: "agents" })}
           onOpenHome={() => setView({ name: "home" })}
-          searchSelected={view.name === "search"}
-          onOpenSearch={() => setView({ name: "search" })}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onOpenAsk={() => setView({ name: "ask" })}
+          onOpenActions={() => setView({ name: "actions" })}
+          onOpenPeople={() => setView({ name: "people" })}
+          onOpenMeetings={() => setView({ name: "meetings" })}
+          onOpenProject={(id) => setView({ name: "project", id })}
           onNewProject={() => setNewProjectOpen(true)}
           onRenameProject={(id) => setRenaming(projects.find((p) => p.id === id) ?? null)}
           onDeleteProject={deleteProject}
@@ -518,9 +543,25 @@ export default function App() {
                 sampleId={syncWithAda.id}
                 onNewRecording={() => setRecordOpen(true)}
                 onOpenSample={(sampleId) => openSampleRecording(sampleId)}
-                onOpenMeeting={(id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id })}
+                onOpenMeeting={(id) => openMeeting(id)}
                 onOpenSettings={() => setView({ name: "settings" })}
                 onOpenWallet={() => setView({ name: "wallet" })}
+                handlersFor={handlersFor}
+              />
+            )}
+            {openProject && (
+              <ProjectScreen
+                project={openProject}
+                recordings={shownRecordings.filter((r) => r.project === openProject.name)}
+                meetings={meetings}
+                account={account}
+                onToggleItem={toggleItem}
+                onOpenMeeting={(id) => openMeeting(id)}
+                onRecord={() => {
+                  setCreatedProject(openProject.name);
+                  setRecordOpen(true);
+                }}
+                onRename={() => setRenaming(openProject)}
               />
             )}
             {view.name === "wallet" && (
@@ -531,6 +572,7 @@ export default function App() {
                   patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
                   refreshWallet();
                 }}
+                onChanged={refreshWallet}
               />
             )}
             {view.name === "settings" && <ConnectNear />}
@@ -538,12 +580,18 @@ export default function App() {
               <AgentsScreen meetings={shownMeetings.filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
             )}
             {view.name === "search" && (
-              <SearchScreen
-                meetings={shownMeetings}
-                onOpen={(id, at) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id })}
-              />
+              <SearchScreen key={view.query ?? ""} meetings={shownMeetings} initialQuery={view.query} onOpen={openMeeting} />
             )}
             {view.name === "processing" && <ProcessingScreen project={view.project} seconds={view.seconds} onDone={finishProcessing} />}
+            {comingSoon[view.name] && (
+              <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
+                <div data-tauri-drag-region className="h-9" />
+                <div className="mx-auto flex max-w-[680px] flex-1 flex-col justify-center gap-3 px-12 pb-24">
+                  <h1 className="t-display m-0">{comingSoon[view.name]}</h1>
+                  <p className="m-0 text-ink-2">This screen isn’t in this build yet.</p>
+                </div>
+              </main>
+            )}
             {view.name === "placeholder" && (
               <main className="flex min-w-0 flex-1 flex-col border-l border-hairline bg-raised">
                 <div data-tauri-drag-region className="h-9" />
@@ -601,6 +649,25 @@ export default function App() {
           />
         )}
         <AnimatePresence>
+          {paletteOpen && (
+            <CommandPalette
+              key="palette"
+              meetings={shownMeetings}
+              recordings={shownRecordings}
+              balance={balance}
+              sampleId={syncWithAda.id}
+              onClose={() => setPaletteOpen(false)}
+              onNewRecording={() => setRecordOpen(true)}
+              onNewProject={() => setNewProjectOpen(true)}
+              onOpenWallet={() => setView({ name: "wallet" })}
+              onOpenSettings={() => setView({ name: "settings" })}
+              onOpenAgents={() => setView({ name: "agents" })}
+              onOpenAsk={() => setView({ name: "ask" })}
+              onOpenPeople={() => setView({ name: "people" })}
+              onOpenMeeting={openMeeting}
+              onOpenSearch={(query) => setView({ name: "search", query })}
+            />
+          )}
           {newProjectOpen && <NewProjectSheet key="new-project" existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
           {renaming && (
             <NewProjectSheet key="rename-project" existing={projects.map((p) => p.name)} initial={renaming.name} onClose={() => setRenaming(null)} onCreate={(name) => renameProject(renaming, name)} />

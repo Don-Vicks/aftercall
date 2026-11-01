@@ -7,7 +7,7 @@ import { cx } from "./cx";
 import { enter, exit } from "./motion";
 import { focusables, useLayer } from "./overlay";
 
-export type DialogPlacement = "center" | "anchored" | "full";
+export type DialogPlacement = "center" | "anchored" | "full" | "top";
 
 export interface DialogProps {
   /** Defaults to true. Or render it conditionally inside <AnimatePresence> to animate out. */
@@ -19,12 +19,15 @@ export interface DialogProps {
   intro?: ReactNode;
   /** Names it when there is no visible title. */
   "aria-label"?: string;
-  /** "center" (a sheet over a dimmed window), "anchored" (below an element, or the window's top-right), "full" (covers the window). */
+  /**
+   * "center" (a sheet over a dimmed window), "anchored" (below an element, or the window's top-right),
+   * "full" (covers the window), "top" (near the top of a dimmed window, without padding: a command palette).
+   */
   placement?: DialogPlacement;
   /** For "anchored": the element (or its rect) to sit under. */
   anchor?: HTMLElement | DOMRect | null;
   align?: "start" | "end";
-  /** Panel width for "center" (560) and "anchored" (360). */
+  /** Panel width for "center" (560), "anchored" (360) and "top" (640). */
   width?: number;
   /** "alertdialog" for confirmations. */
   role?: "dialog" | "alertdialog";
@@ -105,6 +108,7 @@ function Panel({
   };
 
   const anchored = placement === "anchored";
+  const top = placement === "top";
   const [spot, setSpot] = useState<{ top: number; left?: number; right?: number } | null>(null);
   useLayoutEffect(() => {
     if (!anchored) return;
@@ -158,7 +162,7 @@ function Panel({
   }
 
   return (
-    <div className={cx("fixed inset-0 z-[70] flex", anchored ? "items-start justify-end" : "items-center justify-center overflow-y-auto p-6")}>
+    <div className={cx("fixed inset-0 z-[70] flex", anchored ? "items-start justify-end" : top ? "items-start justify-center px-4 pt-24" : "items-center justify-center overflow-y-auto p-6")}>
       <m.div
         aria-hidden="true"
         className={cx("absolute inset-0", anchored ? "bg-transparent" : "bg-black/40")}
@@ -174,12 +178,12 @@ function Panel({
         animate={{ opacity: 1, y: 0, scale: 1, transition: enter }}
         exit={{ opacity: 0, y: 4, scale: 0.98, transition: exit }}
         className={cx(
-          "relative flex max-w-[calc(100vw-48px)] flex-col gap-5 rounded-lg bg-elevated shadow-float outline-none",
-          anchored ? "fixed p-4" : "my-auto p-8",
+          "relative flex max-w-[calc(100vw-48px)] flex-col rounded-lg bg-elevated shadow-float outline-none",
+          anchored ? "fixed gap-5 p-4" : top ? "max-h-[calc(100vh-128px)] overflow-hidden" : "my-auto gap-5 p-8",
           className,
         )}
         style={{
-          width: width ?? (anchored ? 360 : 560),
+          width: width ?? (anchored ? 360 : top ? 640 : 560),
           ...(anchored ? { top: spot?.top ?? 40, left: spot?.left, right: spot?.left === undefined ? (spot?.right ?? 12) : undefined, transformOrigin: align === "end" ? "top right" : "top left" } : null),
         }}
       >
