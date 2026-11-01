@@ -1,0 +1,218 @@
+import { Icon, OpenCircle, REPO_URL, SiteFooter, SiteHeader, vars } from "../ui";
+import { Checks } from "./Checks";
+import { Journey } from "./Journey";
+import h from "./how.module.css";
+
+export const metadata = {
+  title: "How it works · Aftercall",
+  description: "How Aftercall keeps your meetings private: the journey of one meeting, the checks it passes, and what it can't prove.",
+};
+
+const CODE: [string, string][] = [
+  ["packages/core/src/tee/checks.ts", "CPU checks, signature"],
+  ["packages/core/src/tee/nvidia.ts", "NVIDIA GPU evidence"],
+  ["packages/core/src/tee/e2ee.ts", "Encryption to Qwen"],
+  ["packages/core/src/notes/pipeline.ts", "Order, stop on failure"],
+  ["packages/core/src/notes/proof.ts", "The proof, its limits"],
+  ["apps/desktop/src-tauri/src/attest.rs", "Intel quotes, NRAS"],
+  ["docs/privacy.md", "Where every byte goes"],
+];
+
+const LIMITS: [string, string][] = [
+  ["That the transcript is accurate:", "Whisper can mishear names and numbers."],
+  ["That this transcription came from the attested Whisper TEE:", "NEAR AI signs chat responses, not transcriptions."],
+  ["That everyone on the call agreed to be recorded:", "Aftercall asks you to confirm it, and can't check it."],
+  ["Who said what:", "“You” is your microphone and “Others” is the call's audio."],
+  ["What NEAR AI keeps:", "attestation proves the models ran in TEEs, not what NEAR AI's gateway logs."],
+];
+
+/** V2HowItWorks: the privacy story, step by step, with links to the code behind each claim. */
+export default function HowItWorks() {
+  return (
+    <>
+      <SiteHeader current="how" />
+      <main>
+        <section aria-labelledby="hero" className={h.hero}>
+          <div className={h.heroInner}>
+            <span className={`${h.eyebrow} enter`}>How it works · privacy</span>
+            <h1 id="hero" className={`${h.h1} enter`} style={vars({ d: "40ms", dur: "360ms" })}>
+              How Aftercall keeps your meetings private
+            </h1>
+            <p className={`${h.lede} enter`} style={vars({ d: "100ms", dur: "360ms" })}>
+              Nothing leaves your Mac until NEAR AI&apos;s secure hardware passes its checks, and only the checked model can read your transcript.
+            </p>
+          </div>
+        </section>
+
+        <section id="journey" aria-labelledby="jt" className={h.journeySection}>
+          <Journey />
+        </section>
+
+        <section id="checks" aria-labelledby="ct" className={h.section}>
+          <div className={`${h.wrap} ${h.checksWrap}`}>
+            <div className={h.col} style={{ gap: 8 }}>
+              <h2 id="ct" className={h.h2}>
+                Checked every time, before it’s sent and when it comes back
+              </h2>
+              <p className={h.intro}>
+                Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it before anything is sent, then checks the signed reply: 29 checks on a typical meeting, with one node per model.
+              </p>
+            </div>
+            <Checks />
+          </div>
+        </section>
+
+        <section id="e2ee" aria-labelledby="et" className={h.section}>
+          <div className={`${h.wrap} ${h.two}`}>
+            <div className={h.col}>
+              <h2 id="et" className={h.h2}>
+                End-to-end encrypted summaries
+              </h2>
+              <p className={h.intro}>The transcript is sealed on your Mac to a key bound in Qwen&apos;s verified quote, so the gateway passes on text it can&apos;t read.</p>
+              <div className={h.notice}>
+                <Icon name="info" size={18} stroke={1.75} />
+                <span>
+                  <span style={{ fontWeight: 600 }}>Audio isn&apos;t end-to-end encrypted</span>
+                  <span className="ink-2">
+                    NEAR AI doesn&apos;t offer it for transcription. Audio goes over TLS through the attested gateway, and transcriptions aren&apos;t signed per response. The Verify sheet says so next to the Whisper checks.
+                  </span>
+                </span>
+              </div>
+            </div>
+            <ol className={h.numbered}>
+              <li>
+                <span aria-hidden="true" className={h.num}>
+                  1
+                </span>
+                <span>
+                  <span className={h.t}>Your Mac takes the key from a verified quote</span>
+                  <span className={h.d}>Qwen&apos;s Ed25519 key has to sit in the report data of a quote that passed every check, next to this run&apos;s nonce.</span>
+                </span>
+              </li>
+              <li>
+                <span aria-hidden="true" className={h.num}>
+                  2
+                </span>
+                <span>
+                  <span className={h.t}>The transcript is sealed to that key, on your Mac</span>
+                  <span className={h.d}>Each message gets a fresh X25519 key pair. The shared secret goes through HKDF-SHA256, then XChaCha20-Poly1305 seals the text.</span>
+                  <span className={h.code}>[one-time key 32] [nonce 24] [ciphertext + tag]</span>
+                </span>
+              </li>
+              <li>
+                <span aria-hidden="true" className={h.num}>
+                  3
+                </span>
+                <span>
+                  <span className={h.t}>The notes come back sealed to your Mac</span>
+                  <span className={h.d}>Qwen encrypts its reply to a key pair made for this one request. If NEAR AI refuses encryption, plain text goes only when every Qwen node passed.</span>
+                </span>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <section id="mac" aria-labelledby="mt" className={h.section}>
+          <div className={`${h.wrap} ${h.two}`}>
+            <div className={h.col}>
+              <h2 id="mt" className={h.h2}>
+                On your Mac
+              </h2>
+              <p className={h.intro}>Audio, transcripts and notes stay in Aftercall&apos;s folder, sealed with a key in your macOS Keychain.</p>
+              <div role="img" aria-label="Your Keychain holds three keys: the at-rest key, your NEAR AI key and the app's limited NEAR key" className={`${h.keychain} lift`}>
+                <span aria-hidden="true" className={h.keychainHead}>
+                  <Icon name="key" size={16} stroke={1.75} className="accent" />
+                  <span style={{ fontWeight: 600 }}>Keychain</span>
+                  <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
+                    on this Mac
+                  </span>
+                </span>
+                <span aria-hidden="true" className={h.keychainBody}>
+                  <span className="mono">at-rest key</span>
+                  <span className="ink-2">Seals audio, transcripts and notes</span>
+                  <span className="mono">NEAR AI key</span>
+                  <span className="ink-2">Used from Rust, only to send its own recordings</span>
+                  <span className="mono">app key</span>
+                  <span className="ink-2">Can only call pay and record_proof</span>
+                </span>
+              </div>
+            </div>
+            <dl className={h.rows}>
+              <div>
+                <dt>Audio</dt>
+                <dd>Sealed about once a second as it records, so it&apos;s never on disk unencrypted. Deleted once the notes are saved.</dd>
+              </div>
+              <div>
+                <dt>Transcripts and notes</dt>
+                <dd>Sealed with XChaCha20-Poly1305. A changed byte or the wrong key won&apos;t open.</dd>
+              </div>
+              <div>
+                <dt>Stays local</dt>
+                <dd>Search, calendar lookups, backups, and the server agents use to read meetings.</dd>
+              </div>
+              <div>
+                <dt>The limit</dt>
+                <dd>This stops other apps, backup and sync tools from reading your meetings. It doesn&apos;t protect a Mac account someone else has taken over.</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section id="limits" aria-label="What we can't prove, and how to check it yourself" className={h.section} style={{ paddingBottom: 48 }}>
+          <div className={`${h.wrap} ${h.two} ${h.half}`}>
+            <div className={h.col}>
+              <h2 className={h.h2}>What we can&apos;t prove</h2>
+              <p className={h.intro}>Every Verify page lists these under the checks.</p>
+              <ul className={h.limits}>
+                {LIMITS.map(([lead, rest]) => (
+                  <li key={lead}>
+                    <OpenCircle />
+                    <span>
+                      <strong>{lead}</strong> {rest}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className={h.col}>
+              <h2 className={h.h2}>Check it yourself</h2>
+              <p className={h.intro}>Every claim on this page points to code you can read and run.</p>
+              <div className={h.linkRows}>
+                <a href="/verify" className={h.linkRow}>
+                  <span>
+                    <strong>Open a sample proof</strong>
+                    <span className="ink-2">re-run the checks in your browser</span>
+                  </span>
+                  <Icon name="arrowRight" size={16} stroke={2.2} />
+                </a>
+                <a href={`${REPO_URL}#what-is-proven`} className={h.linkRow}>
+                  <span>
+                    <strong>“What is proven” in the README</strong>
+                    <span className="ink-2">each claim and its test</span>
+                  </span>
+                  <Icon name="external" size={16} />
+                </a>
+              </div>
+              <dl aria-label="Where the code is" className={h.where}>
+                {CODE.map(([path, what]) => (
+                  <div key={path} style={{ display: "contents" }}>
+                    <dt>
+                      <a href={`${REPO_URL}/blob/main/${path}`} className="quiet">
+                        {path}
+                      </a>
+                    </dt>
+                    <dd>{what}</dd>
+                  </div>
+                ))}
+                <dt className="accent">pnpm sample:notes</dt>
+                <dd>Every check, on a sample call</dd>
+              </dl>
+            </div>
+          </div>
+        </section>
+      </main>
+      <SiteFooter />
+    </>
+  );
+}

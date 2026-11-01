@@ -1,0 +1,12 @@
+{
+  "name": "@aftercall/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aftercall design tokens v3 as plain CSS: colours (dark and light), people, shadows, radius, type families, motion and keyframes.",
+  "exports": {
+    "./tokens.css": "./tokens.css"
+  },
+  "files": [
+    "tokens.css"
+  ]
+}

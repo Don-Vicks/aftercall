@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Page } from "../ui";
+import { AppHeader, vars } from "../ui";
+import s from "./stats.module.css";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
 
@@ -43,27 +44,45 @@ export function StatsClient() {
   }, []);
 
   return (
-    <Page tag={stats?.network}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <h1 className="serif" style={{ margin: 0, fontSize: 34, lineHeight: "40px", fontWeight: 500, letterSpacing: "-0.015em" }}>Aftercall in numbers</h1>
-        <p className="serif muted" style={{ margin: 0, fontSize: 18, lineHeight: "29px" }}>
-          Counts only. Proofs and payments are read from the agent-wallet contract on NEAR; the rest from Aftercall's server.
-        </p>
-      </div>
-      {error && <p style={{ margin: 0, color: "var(--caution)" }}>{error}</p>}
-      {stats && (
-        <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "14px 20px", padding: "22px 24px", borderRadius: 10, background: "var(--raised)", boxShadow: "inset 0 0 0 1px var(--hairline)" }}>
-          {ROWS.map(([key, label]) => (
-            <div key={key} style={{ display: "contents" }}>
-              <dt>{label}</dt>
-              <dd className="mono" style={{ margin: 0, fontSize: 15, textAlign: "right" }}>
-                {stats[key] === null ? <span className="muted">not available</span> : Number(stats[key]).toLocaleString("en-US")}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {stats && <span className="muted" style={{ fontSize: 13 }}>Updated {new Date(stats.updatedAt).toUTCString()}. Refreshes at most once a minute.</span>}
-    </Page>
+    <>
+      <AppHeader width={640} tag={stats?.network ?? "stats"} />
+      <main className={s.main}>
+        <div className={s.inner}>
+          <section aria-labelledby="sh" className={`${s.intro} enter`}>
+            <h1 id="sh" className="t-display">
+              Aftercall in numbers
+            </h1>
+            <p className="ink-2">Counts only. Proofs and payments are read from the agent-wallet contract on NEAR; the rest from Aftercall&apos;s server.</p>
+          </section>
+
+          {error && (
+            <p role="alert" style={{ color: "var(--caution)" }}>
+              {error}
+            </p>
+          )}
+          {!stats && !error && (
+            <p role="status" className={`${s.loading} ink-2`}>
+              <span aria-hidden="true" className="spinner" />
+              Reading the counts…
+            </p>
+          )}
+          {stats && (
+            <dl className={s.counts}>
+              {ROWS.map(([key, label], i) => (
+                <div key={key} className="enter" style={vars({ d: `${40 + i * 50}ms`, dur: "280ms" })}>
+                  <dt>{label}</dt>
+                  <dd>{stats[key] === null ? <span className={s.na}>not available</span> : Number(stats[key]).toLocaleString("en-US")}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {stats && (
+            <span className="muted" style={{ fontSize: 13 }}>
+              Updated {new Date(stats.updatedAt).toUTCString()}. Refreshes at most once a minute.
+            </span>
+          )}
+        </div>
+      </main>
+    </>
   );
 }

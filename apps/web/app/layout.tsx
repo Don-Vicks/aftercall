@@ -1,16 +1,23 @@
 import type { ReactNode } from "react";
-import { Geist_Mono, Instrument_Sans, Newsreader } from "next/font/google";
+// The same font files as the desktop app (bundled, no request to a font service).
+import "@fontsource-variable/newsreader/opsz.css";
+import "@fontsource-variable/newsreader/opsz-italic.css";
+import "@fontsource/instrument-sans/400.css";
+import "@fontsource/instrument-sans/500.css";
+import "@fontsource/instrument-sans/600.css";
+import "@fontsource/geist-mono/400.css";
+import "@fontsource/geist-mono/500.css";
+import "@aftercall/tokens/tokens.css";
 import "./globals.css";
 
-const serif = Newsreader({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-serif" });
-const sans = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-sans" });
-const mono = Geist_Mono({ subsets: ["latin"], weight: ["400"], variable: "--font-mono" });
-
-export const metadata = { title: "Aftercall", description: "Private meeting notes that do the follow-ups" };
+export const metadata = {
+  title: "Aftercall · private meeting notes that do the follow-ups",
+  description: "A Mac app that makes private notes of your calls inside NEAR AI's secure hardware, then sends the recap and pays what you agreed, once you say so.",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

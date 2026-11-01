@@ -1,0 +1,348 @@
+/* Aftercall design system v3, "calm but alive": the tokens as plain CSS, for the web pages.
+   The values mirror apps/desktop/src/styles.css (source: docs/design-source/project/ds/aftercall/tokens.json,
+   motion from docs/design-source/v2/V2System.dc.html). Change both together.
+
+   Theme: dark by default, light when the system asks for it. `data-theme="light"` or
+   `data-theme="dark"` on any element overrides the system for that subtree. */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #141311;
+  --raised: #1b1a17;
+  --elevated: #24221e;
+  --well: #0f0e0c;
+  --ink: #ede9e1;
+  /* Secondary text you still read; muted is for metadata only, faint is never text. */
+  --ink-2: #cbc6bb;
+  --muted: #a39e94;
+  --faint: #77726a;
+  --hairline: #2b2925;
+  --border: #6f6a61;
+  --verdigris: #8dbfa8;
+  --verdigris-hover: #b3d6c5;
+  --on-verdigris: #10201a;
+  --verdigris-tint: #1a2a23;
+  --record: #e8775f;
+  --record-tint: #2e1a15;
+  --caution: #dcac5c;
+  --caution-tint: #2c2416;
+
+  /* People: avatar grounds (pN) and initials (pNi), same chroma and lightness for everyone. */
+  --p1: oklch(0.34 0.05 255);
+  --p1i: oklch(0.88 0.06 255);
+  --p2: oklch(0.34 0.05 290);
+  --p2i: oklch(0.88 0.06 290);
+  --p3: oklch(0.34 0.05 325);
+  --p3i: oklch(0.88 0.06 325);
+  --p4: oklch(0.34 0.05 215);
+  --p4i: oklch(0.88 0.06 215);
+  --p5: oklch(0.34 0.05 110);
+  --p5i: oklch(0.88 0.06 110);
+  --p6: oklch(0.34 0.05 355);
+  --p6i: oklch(0.88 0.06 355);
+
+  /* Depth: cards at rest, under the pointer, the live pill and toasts, sheets. */
+  --sh1: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh2: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shpill: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shfloat: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 24px 56px rgba(0, 0, 0, 0.5);
+  --shadow-float: var(--shfloat);
+}
+
+/* The same light values twice: once for the system setting, once for an explicit override. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --ground: #f4f1ea;
+    --raised: #fbf9f4;
+    --elevated: #ffffff;
+    --well: #ebe7de;
+    --ink: #1d1b17;
+    --ink-2: #3d3a35;
+    --muted: #65605a;
+    --faint: #8a847a;
+    --hairline: #e2ddd2;
+    --border: #8c867b;
+    --verdigris: #2d5e4f;
+    --verdigris-hover: #234a3e;
+    --on-verdigris: #ffffff;
+    --verdigris-tint: #e3ece6;
+    --record: #b3412d;
+    --record-tint: #f7e6e0;
+    --caution: #855610;
+    --caution-tint: #f4ead6;
+
+    --p1: oklch(0.9 0.045 255);
+    --p1i: oklch(0.36 0.08 255);
+    --p2: oklch(0.9 0.045 290);
+    --p2i: oklch(0.36 0.08 290);
+    --p3: oklch(0.9 0.045 325);
+    --p3i: oklch(0.36 0.08 325);
+    --p4: oklch(0.9 0.045 215);
+    --p4i: oklch(0.36 0.08 215);
+    --p5: oklch(0.9 0.045 110);
+    --p5i: oklch(0.36 0.08 110);
+    --p6: oklch(0.9 0.045 355);
+    --p6i: oklch(0.36 0.08 355);
+
+    --sh1: 0 0 0 1px rgba(29, 27, 23, 0.07), 0 1px 2px rgba(29, 27, 23, 0.04);
+    --sh2: 0 0 0 1px rgba(29, 27, 23, 0.09), 0 6px 16px rgba(29, 27, 23, 0.06);
+    --shpill: 0 0 0 1px rgba(29, 27, 23, 0.08), 0 12px 32px rgba(29, 27, 23, 0.12);
+    --shfloat: 0 0 0 1px rgba(29, 27, 23, 0.06), 0 24px 56px rgba(29, 27, 23, 0.12);
+  }
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --ground: #f4f1ea;
+  --raised: #fbf9f4;
+  --elevated: #ffffff;
+  --well: #ebe7de;
+  --ink: #1d1b17;
+  --ink-2: #3d3a35;
+  --muted: #65605a;
+  --faint: #8a847a;
+  --hairline: #e2ddd2;
+  --border: #8c867b;
+  --verdigris: #2d5e4f;
+  --verdigris-hover: #234a3e;
+  --on-verdigris: #ffffff;
+  --verdigris-tint: #e3ece6;
+  --record: #b3412d;
+  --record-tint: #f7e6e0;
+  --caution: #855610;
+  --caution-tint: #f4ead6;
+
+  --p1: oklch(0.9 0.045 255);
+  --p1i: oklch(0.36 0.08 255);
+  --p2: oklch(0.9 0.045 290);
+  --p2i: oklch(0.36 0.08 290);
+  --p3: oklch(0.9 0.045 325);
+  --p3i: oklch(0.36 0.08 325);
+  --p4: oklch(0.9 0.045 215);
+  --p4i: oklch(0.36 0.08 215);
+  --p5: oklch(0.9 0.045 110);
+  --p5i: oklch(0.36 0.08 110);
+  --p6: oklch(0.9 0.045 355);
+  --p6i: oklch(0.36 0.08 355);
+
+  --sh1: 0 0 0 1px rgba(29, 27, 23, 0.07), 0 1px 2px rgba(29, 27, 23, 0.04);
+  --sh2: 0 0 0 1px rgba(29, 27, 23, 0.09), 0 6px 16px rgba(29, 27, 23, 0.06);
+  --shpill: 0 0 0 1px rgba(29, 27, 23, 0.08), 0 12px 32px rgba(29, 27, 23, 0.12);
+  --shfloat: 0 0 0 1px rgba(29, 27, 23, 0.06), 0 24px 56px rgba(29, 27, 23, 0.12);
+}
+
+/* Theme-independent: type families, shape by role, motion. */
+:root {
+  --font-serif: "Newsreader Variable", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Controls, cards you act on, floating sheets, pills and avatars. */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  /* Small state changes, exits, entries. Exits are always faster than entries. */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Motion from the kit. With reduced motion, the moving ones are redefined below as fades. */
+@keyframes ac-bar {
+  0%,
+  100% {
+    transform: scaleY(0.22);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes ac-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--record) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--record) 0%, transparent);
+  }
+}
+@keyframes ac-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ac-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ac-draw {
+  from {
+    stroke-dashoffset: 14;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ac-fill {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes ac-strike {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes ac-roll {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes ac-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+@keyframes ac-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Reduced motion: nothing moves, things fade. Spinners and countdowns still show
+   progress (they carry information); state changes land at once. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  @keyframes ac-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-pop {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-roll {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-rise {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    20%,
+    80% {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-fill {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes ac-draw {
+    from {
+      stroke-dashoffset: 0;
+      opacity: 0;
+    }
+    to {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
+  }
+  @keyframes ac-strike {
+    from {
+      transform: none;
+      opacity: 0;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes ac-bar {
+    0%,
+    100% {
+      transform: scaleY(0.5);
+    }
+  }
+  @keyframes ac-breathe {
+    0%,
+    100% {
+      box-shadow: none;
+    }
+  }
+}
