@@ -5,8 +5,10 @@ import { USDC_DECIMALS } from "../money.ts";
  * "fifty dollar" -> 50.00, "$5,000" -> 5,000.00, "two hundred and fifty bucks" -> 250.00,
  * "1.5k" -> 1,500.00, "fifty cents" -> 0.50, "five dollars and fifty cents" -> 5.50.
  * "twelve fifty" is refused (ambiguous), and so is any other currency: "fifty thousand
- * naira" is not 50,000 USDC. Returns null when unsure: an unclear amount is shown to
- * the person, never guessed.
+ * naira" is not 50,000 USDC. Number words are read in English only: "quinientos",
+ * "пятьсот" or "五百" give null. Digits are read in any language, with a dollar word
+ * Aftercall knows ("500 долларов", "500ドル"). Returns null when unsure: an unclear amount
+ * is shown to the person, never guessed.
  */
 
 const UNITS: Record<string, number> = {
@@ -19,7 +21,13 @@ const TENS: Record<string, number> = {
 };
 const SCALES: Record<string, number> = { hundred: 100, thousand: 1_000, k: 1_000, grand: 1_000, million: 1_000_000, m: 1_000_000 };
 /** Words that mean US dollars or USDC; dropped before the number is read. */
-const USD = /\b(us\s+dollars?|usd\s*coin|usdc|usd|dollars?|bucks)\b/g;
+const USD = /\b(us\s+dollars?|usd\s*coin|usdc|usd|dollars?|bucks|d[óo]lar(?:es)?)\b/g;
+/**
+ * "Dollar" in scripts other than Latin, at the start of a word ("долларов", "ドルを").
+ * "カナダドル" (Canadian dollars) doesn't start with one, so it never reads as US dollars.
+ */
+const DOLLAR_WORD = /^(?:доллар|долар|米ドル|ドル|美元|美金|डॉलर|डालर|دولار|달러)/u;
+const DOLLAR_WORDS = /(?<![\p{L}\p{M}])(?:доллар|долар)\p{L}*|米ドル|ドル|美元|美金|डॉलर|डालर|(?<![\p{L}\p{M}])دولار\p{L}*|달러/gu;
 const USD_WORD = "(?:us\\s+)?(?:dollars?|bucks|usdc|usd)";
 const FILLER = new Set(["and", "the", "deposit", "of", "about", "around", "just", "only", "full"]);
 
@@ -51,6 +59,13 @@ const OTHER_CURRENCIES: [string, RegExp][] = [
   ["won", new RegExp(`${NUMBER_BEFORE}won\\b|\\bkrw\\b`)],
   ["SOL", new RegExp(`${NUMBER_BEFORE}sol\\b`)],
   ["NEAR", new RegExp(`${NUMBER_BEFORE}near\\b`)],
+  // The same currencies named in other languages, so the card can say which one.
+  ["euros", /ユーロ|欧元|(?<!\p{L})евро(?!\p{L})|यूरो|يورو/u],
+  ["pounds", new RegExp(`${NUMBER_BEFORE}(?:libras?|livres?)\\b`)],
+  ["rubles", /(?<!\p{L})рубл|\b(?:roubles?|rubles?|rublos?)\b/u],
+  ["rupees", /रुप(?:य|ए)|\brupias?\b/u],
+  ["yen", /\d\s*円|日元/u],
+  ["yuan", /\d\s*[元块]|人民币/u],
 ];
 
 /** The other currency these words name, e.g. "naira" for "fifty thousand naira"; null for dollars, USDC or none. */
@@ -134,6 +149,7 @@ function parseCents(text: string): number | null {
 /** Lowercase, hyphens as spaces, single spaces, no quotes or trailing punctuation. */
 function clean(heard: string): string {
   return heard
+    .normalize("NFKC")
     .toLowerCase()
     .replace(/^[“”"']+|[“”"'.!?]+$/g, "")
     .replace(/-/g, " ")
@@ -160,7 +176,7 @@ function dollarsIn(heard: string): number | null {
     const cents = only ? parseNumber(only[1]) : null;
     return cents !== null && Number.isInteger(cents) ? cents / 100 : null;
   }
-  return parseNumber(text.replace(USD, " ").replace(/\s+/g, " ").trim());
+  return parseNumber(text.replace(USD, " ").replace(DOLLAR_WORDS, " ").replace(/\s+/g, " ").trim());
 }
 
 export function parseAmount(heard: string): bigint | null {
@@ -196,14 +212,21 @@ interface QuoteToken {
   percent: boolean;
 }
 
-/** Quote words as amounts are read: lowercase, hyphens split, edge punctuation kept aside. */
+/**
+ * Quote words as amounts are read: lowercase, hyphens split, edge punctuation kept
+ * aside. Digits written against letters of another script are split from them:
+ * "に500ドルを" is "に", "500", "ドルを".
+ */
 function quoteTokens(text: string): QuoteToken[] {
   return text
+    .normalize("NFKC")
     .toLowerCase()
+    .replace(/(\d)(?=\p{L})(?!\p{scx=Latin})/gu, "$1 ")
+    .replace(/(?<=\p{L})(?<!\p{scx=Latin})(?=[\d$])/gu, " ")
     .split(/[\s\-–—]+/)
     .map((raw) => ({
-      w: raw.replace(/^[^\w$]+|[^\w]+$/g, ""),
-      stop: /[.,;:!?…]["”’')\]]*$/.test(raw),
+      w: raw.replace(/^[^\p{L}\p{N}$]+|[^\p{L}\p{N}]+$/gu, ""),
+      stop: /[.,;:!?…。、，！？；：،؛।]["”’')\]」』]*$/.test(raw),
       foreign: /[₦€£¥₹₵]/.test(raw),
       percent: /%/.test(raw),
     }))
@@ -227,21 +250,27 @@ function hasBarePair(words: string[]): boolean {
   });
 }
 
-/** Whether the words right after an amount make it something other than US dollars. */
-function notDollars(tokens: QuoteToken[], end: number): boolean {
+/**
+ * Whether the words right after an amount make it something other than US dollars.
+ * A word in another script right after a bare number ("500 евро", "500ユーロ") must
+ * be a dollar word Aftercall knows, since the currency can't be told otherwise.
+ */
+function notDollars(tokens: QuoteToken[], start: number, end: number): boolean {
   const next = tokens[end];
   if (!next) return false;
   if (tokens[end - 1].percent || next.w === "percent" || (next.w === "per" && tokens[end + 1]?.w === "cent")) return true;
   // Words after a comma or full stop start something else.
   if (tokens[end - 1].stop) return false;
+  const saysDollars = tokens.slice(start, end).some((t) => t.w.startsWith("$") || /^(?:dollars?|bucks|usdc?)$/.test(t.w));
+  if (!saysDollars && /^\p{L}/u.test(next.w) && !/^\p{scx=Latin}/u.test(next.w)) return !DOLLAR_WORD.test(next.w);
   // currencyIn wants a number before ordinary words like "won" or "near".
   return currencyIn(`1 ${tokens.slice(end, end + 2).map((t) => t.w).join(" ")}`) !== null;
 }
 
 /**
  * Every US dollar amount in a transcript quote, in USDC base units: digits ("$40",
- * "5,000", "1.5k", "49.99") and English words ("forty dollars", "two hundred and
- * fifty", "fifty cents"). Read left to right, always taking the longest span that is
+ * "5,000", "1.5k", "49.99", also in a quote in another language) and English words
+ * ("forty dollars", "two hundred and fifty", "fifty cents"). Read left to right, always taking the longest span that is
  * one amount, so "two hundred and fifty" gives 250 and never also 200 or 50. A span
  * ends at a comma or full stop; a value in another currency or a percentage isn't one;
  * and two bare numbers in a row ("one fifty") give nothing.
@@ -278,7 +307,7 @@ export function amountsIn(text: string): bigint[] {
       if (last === "and" || last === "us") continue;
       const value = parseAmount(words.slice(0, j - i).join(" "));
       if (value !== null) {
-        if (!tokens[i].foreign && !notDollars(tokens, j)) found.push(value);
+        if (!tokens[i].foreign && !notDollars(tokens, i, j)) found.push(value);
         taken = j - i;
         break;
       }

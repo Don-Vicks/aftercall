@@ -35,3 +35,24 @@ test("transcript hits show the words around the match", () => {
 test("too-short queries return nothing", () => {
   assert.equal(search(meetings, "a").meetings, 0);
 });
+
+test("finds words in any language, accents and case aside only where they are case", () => {
+  const world = [
+    m("Tokyo", { transcript: [{ at: 5, speaker: "others", text: "来週の月曜日までに、デザイナーに500ドルを払います。それから、ロゴの案を三つ送ってもらって、金曜日にみんなで決めましょう。" }] }),
+    m("Moscow", { decisions: ["Платим дизайнеру в понедельник."] }),
+    m("Paris", { transcript: [{ at: 9, speaker: "you", text: "On a déjà décidé pour vendredi." }] }),
+    m("Delhi", { actionItems: [{ id: "a1", text: "डिज़ाइनर को भुगतान करना", owner: "You", done: false }] }),
+  ];
+  assert.equal(search(world, "デザイナー").transcript.length, 1);
+  assert.equal(search(world, "ДИЗАЙНЕРУ").decisions.length, 1);
+  assert.equal(search(world, "DÉJÀ").transcript.length, 1);
+  assert.equal(search(world, "deja").transcript.length, 0, "déjà is not deja");
+  assert.equal(search(world, "भुगतान").actions.length, 1);
+  assert.equal(search(world, "pricing").meetings, 0, "English queries don't match other scripts");
+});
+
+test("snippets in Chinese or Japanese are cut by letters, since there are no spaces", () => {
+  const text = "来週の月曜日までに、デザイナーに500ドルを払います。それから、ロゴの案を三つ送ってもらって、金曜日にみんなで決めましょう。";
+  assert.equal(snippet(text, "ロゴの案"), "…イナーに500ドルを払います。それから、ロゴの案を三つ送ってもらって、金曜日にみんなで決…");
+  assert.equal(snippet("短い文です。", "文"), "短い文です。", "short lines are shown whole");
+});

@@ -182,3 +182,75 @@ test("one fifty is not fifty, and two amounts aren't joined into one", () => {
   assert.deepEqual(checkedAmount("fifty dollars", "Ada gets fifty. Two hundred goes to Ben."), { amount: usdc(50) });
   assert.deepEqual(checkedAmount("ninety dollars", "Pay Ada forty, fifty dollars for it"), { amount: null, amountProblem: "not-in-quote" });
 });
+
+// ---------- meetings in other languages ----------
+
+const rules = { payments: true, recapDomains: [] };
+const limits = { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) };
+
+/** A meeting in another language: notes in English, evidence copied in the language spoken. */
+function meetingIn(lines: string[], n: Omit<Notes, "title" | "summary">) {
+  const transcript = lines.map((text, i): TranscriptLine => ({ at: i * 30, speaker: i % 2 ? "others" : "you", text }));
+  return buildMeeting({ ...base, transcript, notes: { title: "t", summary: "s", ...n }, payees: designer });
+}
+
+test("a Japanese meeting keeps its notes: quotes match with no spaces between words", () => {
+  const { meeting, dropped } = meetingIn(["APIの修正はデモの前に出します。", "デザイナーに500ドルを今日払ってください。", "来週、デザイナーに五百ドルを払います。"], {
+    decisions: [{ text: "Ship the API fix before the demo.", evidence: "APIの修正はデモの前に出します" }],
+    action_items: [{ text: "Pay the designer", owner: null, due: "today", evidence: "デザイナーに500ドルを今日払って" }],
+    followups: [
+      { type: "payment", payee_name: "Designer", amount_words: "500ドル", memo: null, evidence: "デザイナーに500ドルを今日払ってください" },
+      { type: "payment", payee_name: "Designer", amount_words: "五百ドル", memo: null, evidence: "来週、デザイナーに五百ドルを払います" },
+      { type: "payment", payee_name: "Designer", amount_words: "500 dollars", memo: null, evidence: "pay the designer 500 dollars today" },
+    ],
+  });
+  assert.deepEqual(meeting.decisions, ["Ship the API fix before the demo."]);
+  assert.equal(meeting.actionItems.length, 1);
+  const [digits, words] = meeting.followUps.filter((f) => f.kind === "payment");
+  assert.ok(digits?.kind === "payment" && words?.kind === "payment");
+  assert.deepEqual([digits.amount, digits.evidence.quote], [usdc(500), "デザイナーに500ドルを今日払ってください"], "digits in the quote still match");
+  assert.deepEqual([words.amount, words.amountProblem], [null, "unclear"], "五百 is a number word Aftercall doesn't read");
+  assert.deepEqual(autopilotDecision(words, rules, limits).reasons, ["Amount unclear"], "the card says Amount unclear: enter it, and autopilot waits");
+  assert.deepEqual(dropped.map((d) => d.text), ["Pay Designer 500 dollars"], "a translated quote isn't in the transcript");
+});
+
+test("Russian and Arabic meetings: number words give no amount, digits do, another currency is named", () => {
+  const ru = meetingIn(["Хорошо, заплати дизайнеру пятьсот долларов до пятницы.", "И ещё 500 евро за иконки, ладно?"], {
+    decisions: [],
+    action_items: [],
+    followups: [
+      { type: "payment", payee_name: "Designer", amount_words: "пятьсот долларов", memo: null, evidence: "заплати дизайнеру пятьсот долларов до пятницы" },
+      { type: "payment", payee_name: "Designer", amount_words: "$500", memo: null, evidence: "И ещё 500 евро за иконки" },
+    ],
+  });
+  assert.deepEqual(ru.meeting.followUps.map((f) => f.kind === "payment" && [f.amount, f.amountProblem]), [[null, "unclear"], [null, "not-usdc"]]);
+  const euros = ru.meeting.followUps[1];
+  assert.equal(euros?.kind === "payment" && amountNote(euros), "The quote gives this amount in euros, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.");
+  const ar = meetingIn(["اتفقنا، سندفع للمصمم 500 دولار يوم الجمعة."], {
+    decisions: [{ text: "Pay the designer on Friday.", evidence: "سندفع للمصمم 500 دولار يوم الجمعة" }],
+    action_items: [],
+    followups: [{ type: "payment", payee_name: "Designer", amount_words: "500 دولار", memo: null, evidence: "سندفع للمصمم 500 دولار يوم الجمعة" }],
+  });
+  assert.deepEqual(ar.meeting.decisions, ["Pay the designer on Friday."]);
+  assert.deepEqual(ar.meeting.followUps.map((f) => f.kind === "payment" && f.amount), [usdc(500)]);
+});
+
+test("Hindi, French and Spanish meetings keep quotes with their own spelling", () => {
+  const { meeting, dropped } = meetingIn(["सोमवार तक डिज़ाइनर को 500 डॉलर दे देना।", "On a déjà décidé : le déploiement se fait vendredi.", "¿Podemos pagar al diseñador quinientos dólares mañana?"], {
+    decisions: [{ text: "Deploy on Friday.", evidence: "déjà décidé : le déploiement se fait vendredi" }],
+    action_items: [{ text: "Pay the designer by Monday", owner: "You", due: "Monday", evidence: "सोमवार तक डिज़ाइनर को 500 डॉलर" }],
+    followups: [
+      { type: "payment", payee_name: "Designer", amount_words: "500 डॉलर", memo: null, evidence: "डिज़ाइनर को 500 डॉलर दे देना" },
+      { type: "payment", payee_name: "Designer", amount_words: "quinientos dólares", memo: null, evidence: "pagar al diseñador quinientos dólares mañana" },
+    ],
+  });
+  assert.deepEqual(dropped, []);
+  assert.deepEqual(meeting.decisions, ["Deploy on Friday."]);
+  assert.deepEqual(
+    meeting.followUps.map((f) => f.kind === "payment" && [f.evidence.quote, f.amount, f.amountProblem]),
+    [
+      ["डिज़ाइनर को 500 डॉलर दे देना", usdc(500), undefined],
+      ["pagar al diseñador quinientos dólares mañana", null, "unclear"],
+    ],
+  );
+});

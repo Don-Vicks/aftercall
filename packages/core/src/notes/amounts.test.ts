@@ -173,3 +173,57 @@ test("two numbers in a row are two numbers: tens after tens, hundred after hundr
   assert.equal(parseAmount("twenty three hundred"), usdc(2_300));
   assert.equal(parseAmount("one thousand fifty"), usdc(1_050));
 });
+
+// ---------- amounts in other languages ----------
+
+test("number words are read in English only; other languages give no amount", () => {
+  for (const heard of ["quinientos dólares", "cinq cents dollars", "пятьсот долларов", "五百ドル", "五百美元", "पाँच सौ डॉलर", "خمسمائة دولار"]) {
+    assert.equal(parseAmount(heard), null, heard);
+    assert.deepEqual(amountProblem(heard), { kind: "unclear" }, heard);
+  }
+});
+
+test("digits with a dollar word in another language are dollars; other currencies are named", () => {
+  const dollars: [string, number][] = [
+    ["500 dólares", 500],
+    ["500 долларов", 500],
+    ["500ドル", 500],
+    ["５００ドル", 500],
+    ["500美元", 500],
+    ["500 डॉलर", 500],
+    ["500 دولار", 500],
+  ];
+  for (const [heard, value] of dollars) assert.equal(parseAmount(heard), usdc(value), heard);
+  const other: [string, string][] = [
+    ["500 евро", "euros"],
+    ["500ユーロ", "euros"],
+    ["500 рублей", "rubles"],
+    ["500円", "yen"],
+    ["500元", "yuan"],
+    ["500 रुपये", "rupees"],
+    ["500 libras", "pounds"],
+  ];
+  for (const [heard, currency] of other) assert.deepEqual(amountProblem(heard), { kind: "not-usdc", currency }, heard);
+  assert.equal(parseAmount("500カナダドル"), null, "Canadian dollars are not US dollars");
+  assert.equal(currencyIn("Европа"), null, "евро only as a word of its own");
+});
+
+test("amountsIn reads digits in a quote in any language, but not beside a currency it can't name as dollars", () => {
+  const cases: [string, number[]][] = [
+    ["デザイナーに500ドルを払います。", [500]],
+    ["デザイナーに$500を払います。", [500]],
+    ["заплати дизайнеру 500 долларов до пятницы", [500]],
+    ["pagamos 500 dólares al diseñador", [500]],
+    ["On paie 500 au designer vendredi.", [500]],
+    ["सोमवार तक डिज़ाइनर को 500 डॉलर दे देना।", [500]],
+    ["سندفع للمصمم 500 دولار يوم الجمعة", [500]],
+    ["デザイナーに500ユーロを払います。", []],
+    ["デザイナーに500円を払います。", []],
+    ["заплати дизайнеру 500 евро до пятницы", []],
+    ["заплати дизайнеру 500 до пятницы", []],
+    ["500カナダドルを払います", []],
+    ["デザイナーに五百ドルを払います。", []],
+    ["пятьсот долларов дизайнеру", []],
+  ];
+  for (const [quote, values] of cases) assert.deepEqual(amountsIn(quote), values.map(usdc), quote);
+});

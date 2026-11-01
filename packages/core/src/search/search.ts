@@ -1,5 +1,5 @@
 import type { Meeting, Speaker } from "../meeting.ts";
-import { normalize } from "../notes/transcript.ts";
+import { hasSpacelessScript, normalize } from "../notes/transcript.ts";
 
 /**
  * Search across meetings, on the device. Results are grouped the way people
@@ -19,9 +19,23 @@ export interface Results {
 }
 
 const SNIPPET_WORDS = 7;
+/** For Chinese, Japanese, Thai...: letters kept on each side of the match. */
+const SNIPPET_CHARS = 20;
 
 /** The words around the match, with "…" where text was cut. */
 export function snippet(text: string, query: string): string {
+  if (hasSpacelessScript(text)) {
+    // No spaces to cut at: cut by letters instead.
+    const chars = [...text];
+    const wanted = normalize(query);
+    const q = [...wanted].length;
+    const start = chars.findIndex((_, i) => normalize(chars.slice(i, i + q).join("")) === wanted);
+    if (start >= 0 && chars.length > q + 2 * SNIPPET_CHARS) {
+      const from = Math.max(0, start - SNIPPET_CHARS);
+      const to = Math.min(chars.length, start + q + SNIPPET_CHARS);
+      return `${from > 0 ? "…" : ""}${chars.slice(from, to).join("").trim()}${to < chars.length ? "…" : ""}`;
+    }
+  }
   const words = text.split(/\s+/);
   const q = normalize(query).split(" ");
   const start = words.findIndex((_, i) => normalize(words.slice(i, i + q.length).join(" ")).includes(q.join(" ")));
