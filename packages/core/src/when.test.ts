@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dueGroup, dueLabel, groupRows, meetingTime, parseDue, relativeDay, shortDate, weekGroup } from "./when.ts";
+import { dueGroup, dueLabel, groupRows, longDate, meetingLabel, meetingTime, parseDue, relativeDay, shortDate, weekGroup } from "./when.ts";
 
 // Local times, so the tests hold in any time zone. Wednesday 4 November 2026, noon.
 const at = (y: number, mo: number, d: number, h = 12, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
@@ -11,6 +11,15 @@ test("meetingTime reads a recording id (Unix seconds) or the sample's 'Today HH:
   assert.equal(meetingTime({ id: "1793006441", startedAt: "whatever" }), 1793006441_000);
   assert.equal(meetingTime({ id: "sync-ada", startedAt: "Today 14:02" }, NOW), at(2026, 11, 4, 14, 2));
   assert.equal(meetingTime({ id: "sync-ada", startedAt: "3 Nov 10:00" }, NOW), null);
+});
+
+test("meetingLabel comes from the recording time, not the label stored when the notes were made", () => {
+  const id = String(at(2026, 10, 28, 17) / 1000);
+  assert.equal(meetingLabel({ id, startedAt: "Today 17:00" }, NOW), "28 Oct 17:00");
+  assert.equal(meetingLabel({ id: String(at(2026, 11, 3, 9, 30) / 1000), startedAt: "" }, NOW), "Yesterday 09:30");
+  assert.equal(meetingLabel({ id: "sync-ada", startedAt: "Today 14:02" }, NOW), "Today 14:02");
+  assert.equal(meetingLabel({ id: "x", startedAt: "Someday" }, NOW), "Someday");
+  assert.equal(longDate(NOW), "Wednesday 4 Nov 2026");
 });
 
 test("dates read as people say them", () => {
@@ -34,7 +43,13 @@ test("weekGroup: today, this week, last week, then months; no date last", () => 
 
 test("groupRows starts a new heading only where the group changes", () => {
   const groups = groupRows([1, 2, 3, 5], (n) => ({ key: n < 3 ? "a" : "b", title: n < 3 ? "A" : "B" }));
-  assert.deepEqual(groups.map((g) => [g.group.title, g.rows]), [["A", [1, 2]], ["B", [3, 5]]]);
+  assert.deepEqual(
+    groups.map((g) => [g.group.title, g.rows]),
+    [
+      ["A", [1, 2]],
+      ["B", [3, 5]],
+    ],
+  );
 });
 
 test("parseDue: relative words count from the day of the meeting", () => {

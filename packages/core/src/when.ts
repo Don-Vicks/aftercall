@@ -62,6 +62,24 @@ export function relativeDay(ms: number, now = Date.now()): string {
   return shortDate(ms, now);
 }
 
+/**
+ * When a meeting started, for people and prompts: "Today 14:02", "Yesterday 09:30" or
+ * "28 Oct 17:00". Worked out from the recording time, since the stored label was
+ * written on the day the notes were made. The stored label when there is no time.
+ */
+export function meetingLabel(m: Pick<Meeting, "id" | "startedAt">, now = Date.now()): string {
+  const t = meetingTime(m, now);
+  if (t === null) return m.startedAt;
+  const day = relativeDay(t, now);
+  return `${day === "today" ? "Today" : day === "yesterday" ? "Yesterday" : day} ${clockTime(t)}`;
+}
+
+/** "Sunday 1 Nov 2026" */
+export function longDate(ms: number): string {
+  const d = new Date(ms);
+  return `${WEEKDAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 /** "14:02" */
 export function clockTime(ms: number): string {
   const d = new Date(ms);
@@ -123,7 +141,10 @@ function endOfWorkWeek(ms: number): number {
 export function parseDue(due: string | undefined | null, said: number | null): number | null {
   if (!due || said === null) return null;
   let s = due.toLowerCase().replace(/[.,!]/g, " ").replace(/\s+/g, " ").trim();
-  s = s.replace(/^(due|by|before|on|until|no later than|for)\s+/, "").replace(/^the\s+/, "").replace(/\s+at\s+.*$/, "");
+  s = s
+    .replace(/^(due|by|before|on|until|no later than|for)\s+/, "")
+    .replace(/^the\s+/, "")
+    .replace(/\s+at\s+.*$/, "");
 
   if (/^(today|tonight|end of (the )?day|eod|this (morning|afternoon|evening))$/.test(s)) return startOfDay(said);
   if (/^tomorrow( (morning|afternoon|evening))?$/.test(s)) return addDays(said, 1);

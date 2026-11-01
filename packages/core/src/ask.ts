@@ -8,7 +8,7 @@ import { search } from "./search/search.ts";
 import { attestModel, failedLabels, gatewayChecks, loadNvidiaKeys, modelChecks } from "./tee/attest.ts";
 import { responseChecks, short, type TeeCheck } from "./tee/checks.ts";
 import { decryptWith, encryptMessages, newClientKeys } from "./tee/e2ee.ts";
-import { meetingTime, startOfDay, startOfWeek } from "./when.ts";
+import { longDate, meetingLabel, meetingTime, startOfDay, startOfWeek } from "./when.ts";
 
 /**
  * "Ask your meetings": the question is searched on this Mac, and only the few
@@ -91,7 +91,11 @@ export function questionRange(question: string, now: number): { from: number; to
 function cut(text: string, terms: string[], max: number): string {
   if (text.length <= max) return text;
   const lower = text.toLowerCase();
-  const hit = terms.map((t) => lower.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const hit =
+    terms
+      .map((t) => lower.indexOf(t))
+      .filter((i) => i >= 0)
+      .sort((a, b) => a - b)[0] ?? 0;
   let from = Math.max(0, Math.min(hit - Math.floor(max / 3), text.length - max));
   let to = Math.min(text.length, from + max);
   if (from > 0) from = text.indexOf(" ", from) + 1 || from;
@@ -158,9 +162,7 @@ export function pickExcerpts(meetings: Meeting[], question: string, opts: { me?:
     }
   }
 
-  const lines = inRange.flatMap((m) =>
-    m.transcript.map((l) => ({ m, l, s: score.get(key(m.id, l.at, l.speaker)) ?? 0 })),
-  );
+  const lines = inRange.flatMap((m) => m.transcript.map((l) => ({ m, l, s: score.get(key(m.id, l.at, l.speaker)) ?? 0 })));
   const order = new Map(inRange.map((m, i) => [m.id, meetingTime(m, now) ?? -i]));
   const top = lines
     .filter((x) => x.s > 0)
@@ -174,7 +176,7 @@ export function pickExcerpts(meetings: Meeting[], question: string, opts: { me?:
     meetingId: m.id,
     meeting: m.title,
     project: m.project,
-    when: m.startedAt,
+    when: meetingLabel(m, now),
     at: l.at,
     speaker: l.speaker,
     who: l.speaker === "you" ? "You" : (otherSideName(people, m.id) ?? "Others"),
@@ -217,11 +219,11 @@ export const askJsonSchema = {
 } as const;
 
 /** The exact request messages for a question and its excerpts (before encryption). */
-export function askMessages(question: string, excerpts: Excerpt[]): { role: "system" | "user"; content: string }[] {
+export function askMessages(question: string, excerpts: Excerpt[], now = Date.now()): { role: "system" | "user"; content: string }[] {
   const lines = excerpts.map((e) => `[${e.n}] ${e.meeting} · ${e.when} · ${formatClock(e.at)} · ${e.who}: ${e.text}`);
   return [
     { role: "system", content: ASK_SYSTEM_PROMPT },
-    { role: "user", content: `Question: ${question.trim().slice(0, ASK_MAX_QUESTION)}\n\nExcerpts:\n${lines.join("\n")}` },
+    { role: "user", content: `Today is ${longDate(now)}.\nQuestion: ${question.trim().slice(0, ASK_MAX_QUESTION)}\n\nExcerpts:\n${lines.join("\n")}` },
   ];
 }
 
@@ -286,7 +288,7 @@ interface Completion {
  */
 export async function askMeetings(
   t: NearAiTransport,
-  input: { question: string; excerpts: Excerpt[] },
+  input: { question: string; excerpts: Excerpt[]; now?: number },
   hooks: { onStage?: (stage: AskStage) => void; onAnswer?: (answer: AskAnswer) => void } = {},
   wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<AskResult> {
@@ -309,7 +311,7 @@ export async function askMeetings(
   const request = JSON.stringify({
     model: SUMMARY_MODEL,
     stream: false,
-    messages: encryptMessages(askMessages(question, excerpts), modelKey),
+    messages: encryptMessages(askMessages(question, excerpts, input.now), modelKey),
     response_format: { type: "json_schema", json_schema: { name: "meeting_answer", strict: true, schema: askJsonSchema } },
   });
   let response: string;

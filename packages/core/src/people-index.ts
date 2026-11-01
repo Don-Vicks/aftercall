@@ -88,9 +88,62 @@ export interface PeopleIndex {
 export const openCount = (items: { done: boolean }[]) => items.filter((i) => !i.done).length;
 
 /** Owners that aren't a person. */
-const NOT_PEOPLE = new Set(["", "unassigned", "unknown", "unknown payee", "someone", "nobody", "everyone", "everybody", "all", "both", "team", "the team", "we", "us", "they", "them", "others", "other", "n/a", "na", "none", "tbd"]);
+const NOT_PEOPLE = new Set([
+  "",
+  "unassigned",
+  "unknown",
+  "unknown payee",
+  "someone",
+  "nobody",
+  "everyone",
+  "everybody",
+  "all",
+  "both",
+  "team",
+  "the team",
+  "we",
+  "us",
+  "they",
+  "them",
+  "others",
+  "other",
+  "n/a",
+  "na",
+  "none",
+  "tbd",
+]);
 /** First names that are also everyday words: never matched on their own inside an item's text. */
-const WORD_NAMES = new Set(["will", "may", "mark", "bill", "grace", "hope", "joy", "june", "april", "summer", "rose", "sky", "frank", "art", "sue", "pat", "gene", "max", "jack", "bob", "rob", "sam", "dawn", "faith", "drew", "chase", "miles", "page", "rich"]);
+const WORD_NAMES = new Set([
+  "will",
+  "may",
+  "mark",
+  "bill",
+  "grace",
+  "hope",
+  "joy",
+  "june",
+  "april",
+  "summer",
+  "rose",
+  "sky",
+  "frank",
+  "art",
+  "sue",
+  "pat",
+  "gene",
+  "max",
+  "jack",
+  "bob",
+  "rob",
+  "sam",
+  "dawn",
+  "faith",
+  "drew",
+  "chase",
+  "miles",
+  "page",
+  "rich",
+]);
 const NAME_ONLY_MAX_PER_MEETING = 2;
 
 type How = "invited" | "named" | "paid";
@@ -103,7 +156,7 @@ const QUOTE_MIN_WORDS = 6;
 function norm(s: string): string {
   return s
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\([^)]*\)/g, " ")
     .toLowerCase()
     .replace(/[^a-z0-9@.'\- ]+/g, " ")
@@ -111,7 +164,11 @@ function norm(s: string): string {
     .trim();
 }
 
-const words = (s: string) => norm(s).replace(/[@.'-]/g, " ").split(" ").filter(Boolean);
+const words = (s: string) =>
+  norm(s)
+    .replace(/[@.'-]/g, " ")
+    .split(" ")
+    .filter(Boolean);
 
 /** Invitees other than you: `invited`, plus `attendees` when a newer app version writes it. */
 export function attendeesOf(m: Meeting, me: readonly string[] = []): Attendee[] {
@@ -231,26 +288,45 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
   }
 
   const keyed = () => [...drafts.values()];
+  /** Who each name in each meeting turned out to be, so every later lookup agrees. */
+  const assigned = new Map<string, string>();
+  const slot = (m: Meeting, name: string) => `${m.id}\u0000${words(name).join(" ")}`;
+  const assignedTo = (name: string, m: Meeting) => {
+    const id = assigned.get(slot(m, name));
+    return id ? drafts.get(id) : undefined;
+  };
 
   /**
-   * The person a bare name refers to. In its own meeting, the calendar invite decides
-   * (matchAttendee); otherwise a known person whose full name is that name, or whose
-   * first name, email or NEAR account starts with it, when exactly one fits. Null
-   * when none or several fit.
+   * The person a bare name refers to. In its own meeting the invite decides: a guest
+   * with an email (matchAttendee), then a guest without one. Otherwise a known person
+   * (with an email or account, or invited by name elsewhere) whose full name is that
+   * name, or whose first name, email or NEAR account starts with it, when exactly one
+   * fits. Null when none or several fit.
    */
   const resolve = (name: string, m: Meeting): Draft | null => {
-    const invited = attendeesOf(m, me).filter((a) => a.email);
-    const local = matchAttendee(name, invited);
+    const guests = attendeesOf(m, me);
+    const local = matchAttendee(
+      name,
+      guests.filter((a) => a.email),
+    );
     if (local) return drafts.get(`email:${local.email.toLowerCase()}`) ?? null;
     const want = words(name);
     if (want.length === 0) return null;
     const full = want.join(" ");
+    const sameName = (n: string) => words(n).join(" ") === full || (want.length === 1 && words(n)[0] === want[0]);
+    const localGuests = guests.filter((a) => !a.email && a.name && sameName(a.name));
+    if (localGuests.length === 1) {
+      const guest = assignedTo(localGuests[0].name, m);
+      if (guest) return guest;
+    }
+    if (localGuests.length > 1) return null;
     const tests: ((p: Draft) => boolean)[] = [
       (p) => words(p.name).join(" ") === full,
       (p) => want.length === 1 && (words(p.name)[0] === want[0] || words(p.email.split("@")[0] ?? "")[0] === want[0] || words(p.account)[0] === want[0]),
     ];
+    const known = keyed().filter((p) => !p.id.startsWith("name:") || p.sources.includes("calendar"));
     for (const test of tests) {
-      const found = keyed().filter((p) => !p.id.startsWith("name:") && test(p));
+      const found = known.filter(test);
       if (found.length === 1) return found[0];
       if (found.length > 1) return null;
     }
@@ -259,20 +335,18 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
 
   const isPerson = (name: string) => !NOT_PEOPLE.has(norm(name)) && !isYou(name, me);
 
-  /** A named person: someone already known, else a name-only person. */
+  /** A named person: someone already known, else a name-only person. Remembered per meeting. */
   const named = (name: string, m: Meeting, rank: number, source: PersonSource): Draft | null => {
     if (!isPerson(name)) return null;
-    const known = resolve(name, m);
-    if (known) {
-      upsert(known.id, { name }, rank, source);
-      return known;
-    }
+    const already = assignedTo(name, m);
+    const known = already ?? resolve(name, m);
     const key = words(name).join(" ");
-    return key ? upsert(`name:${key}`, { name }, rank, source) : null;
+    const p = known ? upsert(known.id, { name }, rank, source) : key ? upsert(`name:${key}`, { name }, rank, source) : null;
+    if (p) assigned.set(slot(m, name), p.id);
+    return p;
   };
 
-  // Pass 2: names without an email or account (guests without an address, owners,
-  // recaps with no address yet, payees not on your list).
+  // Pass 2: guests without an email address, who are still invitations.
   for (const m of sorted) {
     for (const a of attendeesOf(m, me)) {
       if (!a.email && a.name) {
@@ -280,6 +354,10 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
         if (p) mention(m.id, p.id, "invited");
       }
     }
+  }
+
+  // Pass 3: names in the notes (owners, recaps with no address yet, payees not on your list).
+  for (const m of sorted) {
     for (const a of m.actionItems) {
       const p = named(a.owner, m, 2, "said");
       if (p) mention(m.id, p.id, "named");
@@ -303,7 +381,7 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
     const invitees = attendeesOf(m, me);
     if (invitees.length !== 1) continue;
     const a = invitees[0];
-    const p = a.email ? drafts.get(`email:${a.email.toLowerCase()}`) : resolve(a.name, m) ?? drafts.get(`name:${words(a.name).join(" ")}`);
+    const p = a.email ? drafts.get(`email:${a.email.toLowerCase()}`) : assignedTo(a.name, m);
     if (p) oneToOne[m.id] = p.id;
   }
 
@@ -351,14 +429,14 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
           else if (oneToOne[m.id] === p.id) p.youOwe.push({ ...item, why: "one-to-one" });
         }
       } else if (isPerson(a.owner)) {
-        const owner = resolve(a.owner, m) ?? drafts.get(`name:${words(a.owner).join(" ")}`);
+        const owner = assignedTo(a.owner, m);
         owner?.theyOwe.push({ ...item, why: "owner" });
       }
     }
 
     for (const f of m.followUps) {
       if (f.kind !== "payment") continue;
-      const p = f.payeeAccount ? drafts.get(`near:${f.payeeAccount.toLowerCase()}`) : f.payeeName ? (resolve(f.payeeName, m) ?? drafts.get(`name:${words(f.payeeName).join(" ")}`)) : undefined;
+      const p = f.payeeAccount ? drafts.get(`near:${f.payeeAccount.toLowerCase()}`) : f.payeeName ? assignedTo(f.payeeName, m) : undefined;
       p?.payments.push({ ...base, followUpId: f.id, amount: f.amount, heard: f.heard, status: f.status, doneAt: f.doneAt });
     }
 

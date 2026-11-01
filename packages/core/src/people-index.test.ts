@@ -68,7 +68,11 @@ const index = buildPeople([intro, sync, deck], { me, now: NOW });
 
 test("people come from invites, owners, recap recipients and payees; never you, never 'Unassigned'", () => {
   assert.deepEqual(index.people.map((p) => p.id).sort(), ["email:ada@example.com", "email:ines@example.com", "name:sam", "near:designer.near"]);
-  assert.deepEqual(index.people.map((p) => p.name), ["Ada Lovelace", "Designer", "Ines Rocha", "Sam"], "newest first, then by name");
+  assert.deepEqual(
+    index.people.map((p) => p.name),
+    ["Ada Lovelace", "Designer", "Ines Rocha", "Sam"],
+    "newest first, then by name",
+  );
 });
 
 test("a person's meetings, newest first, and how they came up", () => {
@@ -87,10 +91,23 @@ test("a person's meetings, newest first, and how they came up", () => {
 });
 
 test("they owe you: items they own, resolved through the invite or a NEAR account", () => {
-  assert.deepEqual(index.byId["email:ada@example.com"].theyOwe.map((i) => i.text), ["Intro to an investor"]);
-  assert.deepEqual(index.byId["email:ines@example.com"].theyOwe.map((i) => i.text), ["Send three style directions"], "'Ines' is Ines Rocha from the invite");
-  assert.deepEqual(index.byId["near:designer.near"].theyOwe.map((i) => i.text), ["Refresh the deck with the new brand"]);
-  assert.deepEqual(index.byId["name:sam"].theyOwe.map((i) => i.due), ["28 Oct"]);
+  assert.deepEqual(
+    index.byId["email:ada@example.com"].theyOwe.map((i) => i.text),
+    ["Intro to an investor"],
+  );
+  assert.deepEqual(
+    index.byId["email:ines@example.com"].theyOwe.map((i) => i.text),
+    ["Send three style directions"],
+    "'Ines' is Ines Rocha from the invite",
+  );
+  assert.deepEqual(
+    index.byId["near:designer.near"].theyOwe.map((i) => i.text),
+    ["Refresh the deck with the new brand"],
+  );
+  assert.deepEqual(
+    index.byId["name:sam"].theyOwe.map((i) => i.due),
+    ["28 Oct"],
+  );
 });
 
 test("you owe them: your items that name them, or from a call with only them", () => {
@@ -106,7 +123,11 @@ test("you owe them: your items that name them, or from a call with only them", (
 
 test("quotes only from one-to-one calls, and only full sentences", () => {
   const a = index.byId["email:ada@example.com"];
-  assert.deepEqual(a.quotes.map((q) => q.at), [31, 60], "'Sure.' is too short; Deck review had two guests");
+  assert.deepEqual(
+    a.quotes.map((q) => q.at),
+    [31, 60],
+    "'Sure.' is too short; Deck review had two guests",
+  );
   assert.equal(otherSideName(index, sync.id), "Ada Lovelace");
   assert.equal(otherSideName(index, deck.id), null);
   assert.equal(otherSideName(index, intro.id), null, "no invite, no name for the other side");
@@ -114,9 +135,18 @@ test("quotes only from one-to-one calls, and only full sentences", () => {
 });
 
 test("payments and decisions", () => {
-  assert.deepEqual(index.byId["near:designer.near"].payments.map((p) => [p.amount, p.status]), [[50_000_000n, "paid"]]);
-  assert.deepEqual(index.byId["name:sam"].payments.map((p) => p.heard), ["a bit"]);
-  assert.deepEqual(index.byId["email:ada@example.com"].decisions.map((d) => d.text), ["Ship the API fix before Friday's demo.", "Open the deck with the product demo."]);
+  assert.deepEqual(
+    index.byId["near:designer.near"].payments.map((p) => [p.amount, p.status]),
+    [[50_000_000n, "paid"]],
+  );
+  assert.deepEqual(
+    index.byId["name:sam"].payments.map((p) => p.heard),
+    ["a bit"],
+  );
+  assert.deepEqual(
+    index.byId["email:ada@example.com"].decisions.map((d) => d.text),
+    ["Ship the API fix before Friday's demo.", "Open the deck with the product demo."],
+  );
   assert.deepEqual(index.byId["name:sam"].decisions, [], "only meetings they were invited to");
 });
 
@@ -135,7 +165,10 @@ test("a name that fits two people is credited to neither", () => {
   const ix = buildPeople([a1, a2, loose], { now: NOW });
   assert.deepEqual(ix.byId["email:ada@one.com"].theyOwe, []);
   assert.deepEqual(ix.byId["email:ada@two.com"].theyOwe, []);
-  assert.deepEqual(ix.byId["name:ada"].theyOwe.map((i) => i.text), ["Send the contract"]);
+  assert.deepEqual(
+    ix.byId["name:ada"].theyOwe.map((i) => i.text),
+    ["Send the contract"],
+  );
 });
 
 test("everyday words aren't read as names inside an item", () => {
@@ -146,7 +179,11 @@ test("everyday words aren't read as names inside an item", () => {
 test("attendees: a newer `attendees` list is read too, guests without an email included", () => {
   const m = meeting({ id: idAt(11, 3), invited: [ines] }) as Meeting & { attendees: unknown };
   m.attendees = [{ name: "Theo Moss", email: "" }, "mara@example.com", { name: "Victor", email: "victor@example.com", self: true }, { name: "Ines Rocha", email: "INES@example.com" }, 42, null];
-  assert.deepEqual(attendeesOf(m, me), [{ name: "Theo Moss", email: "" }, { name: "", email: "mara@example.com" }, { name: "Ines Rocha", email: "INES@example.com" }]);
+  assert.deepEqual(attendeesOf(m, me), [
+    { name: "Theo Moss", email: "" },
+    { name: "", email: "mara@example.com" },
+    { name: "Ines Rocha", email: "INES@example.com" },
+  ]);
   const ix = buildPeople([m], { me, now: NOW });
   assert.deepEqual(ix.people.map((p) => p.name).sort(), ["Ines Rocha", "Mara", "Theo Moss"]);
   assert.deepEqual(ix.byId["name:theo moss"].sources, ["calendar"]);
@@ -159,6 +196,23 @@ test("a one-to-one with a guest who has no email still names the other side", ()
   const ix = buildPeople([m], { now: NOW });
   assert.equal(otherSideName(ix, m.id), "Theo Moss");
   assert.equal(ix.byId["name:theo moss"].quotes.length, 1);
+});
+
+test("an owner's first name finds the guest without an email who was invited, in that call and later ones", () => {
+  const call = meeting({ id: idAt(10, 20), invited: [], actionItems: [item("a1", "Sam", "Send the data room link")] }) as Meeting & { attendees: unknown };
+  call.attendees = [{ name: "Sam Obi", email: "" }];
+  const later = meeting({ id: idAt(10, 22), actionItems: [item("a1", "Sam", "Share the investor list")] });
+  const ix = buildPeople([call, later], { now: NOW });
+  assert.deepEqual(
+    ix.people.map((p) => p.id),
+    ["name:sam obi"],
+    "one person, not 'Sam' and 'Sam Obi'",
+  );
+  assert.deepEqual(
+    ix.byId["name:sam obi"].theyOwe.map((i) => i.text),
+    ["Share the investor list", "Send the data room link"],
+  );
+  assert.equal(otherSideName(ix, call.id), "Sam Obi");
 });
 
 test("firstName", () => {

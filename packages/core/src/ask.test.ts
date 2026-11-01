@@ -33,7 +33,17 @@ const sync: Meeting = {
   startedAt: "26 Oct 14:02",
   invited: [{ name: "Ada", email: "ada@example.com" }],
   followUps: [
-    { id: "f2", kind: "payment", status: "paid", evidence: { quote: "pay the designer the fifty dollar deposit today", at: 134 }, payeeName: "Designer", payeeAccount: "designer.near", amount: 50_000_000n, heard: "fifty dollar", payeeListed: true },
+    {
+      id: "f2",
+      kind: "payment",
+      status: "paid",
+      evidence: { quote: "pay the designer the fifty dollar deposit today", at: 134 },
+      payeeName: "Designer",
+      payeeAccount: "designer.near",
+      amount: 50_000_000n,
+      heard: "fifty dollar",
+      payeeListed: true,
+    },
   ],
   transcript: [
     line(31, "others", "The API fix has to ship before the demo. If it slips, we move the demo, not the fix."),
@@ -46,7 +56,10 @@ const group: Meeting = {
   id: idAt(11, 2),
   title: "Weekly check-in",
   startedAt: "2 Nov 17:00",
-  invited: [{ name: "Theo Moss", email: "theo@example.com" }, { name: "Mara Kade", email: "mara@example.com" }],
+  invited: [
+    { name: "Theo Moss", email: "theo@example.com" },
+    { name: "Mara Kade", email: "mara@example.com" },
+  ],
   transcript: [line(40, "others", "Ines said the designs are late, but that's fine by me.")],
 };
 
@@ -69,17 +82,29 @@ test("excerpts: a named person's own lines come only from calls with just them",
     "Ines's lines from the kickoff, plus a group-call line that says 'Ines' (spoken by someone else)",
   );
   assert.equal(n, 2);
-  assert.deepEqual(excerpts.map((e) => e.n), [1, 2, 3]);
+  assert.deepEqual(
+    excerpts.map((e) => e.n),
+    [1, 2, 3],
+  );
 });
 
 test("excerpts: a month narrows the meetings; a payment question finds the payment's quote", () => {
   const { excerpts } = pickExcerpts(meetings, "Every payment I approved in October", { now: NOW });
-  assert.deepEqual(excerpts.map((e) => [e.meetingId, e.at, e.who]), [[sync.id, 134, "You"]]);
+  assert.deepEqual(
+    excerpts.map((e) => [e.meetingId, e.at, e.who]),
+    [[sync.id, 134, "You"]],
+  );
 });
 
 test("excerpts are capped in number and length, cut around the words that matched", () => {
   const long = "word ".repeat(300) + "the invoice is due on the first " + "word ".repeat(300);
-  const many: Meeting = { ...base, id: idAt(11, 1), title: "Long call", startedAt: "", transcript: Array.from({ length: 30 }, (_, i) => line(i * 10, "you", `invoice number ${i}`)).concat([line(999, "others", long)]) };
+  const many: Meeting = {
+    ...base,
+    id: idAt(11, 1),
+    title: "Long call",
+    startedAt: "",
+    transcript: Array.from({ length: 30 }, (_, i) => line(i * 10, "you", `invoice number ${i}`)).concat([line(999, "others", long)]),
+  };
   const { excerpts } = pickExcerpts([many], "the invoice", { now: NOW });
   assert.equal(excerpts.length, 8);
   const cutOne = pickExcerpts([many], "invoice is due", { now: NOW, max: 1 }).excerpts[0];
@@ -166,14 +191,17 @@ const good = {
 test("asks the attested TEE end-to-end encrypted and keeps only quotes found in the excerpts", async () => {
   const ai = await fakeNearAi({ reply: good });
   const events: string[] = [];
-  const r = await askMeetings(ai.transport, { question, excerpts }, { onStage: (s) => events.push(s), onAnswer: () => events.push("answer") }, noWait);
+  const r = await askMeetings(ai.transport, { question, excerpts, now: NOW }, { onStage: (s) => events.push(s), onAnswer: () => events.push("answer") }, noWait);
 
   assert.deepEqual(events, ["attest", "send", "answer", "signature"], "the answer shows before the signature check");
   assert.equal(r.answer, good.answer);
-  assert.deepEqual(r.quotes.map((q) => [q.n, q.quote, q.who]), [
-    [1, "I'll send you three style directions by Friday", "Ines Rocha"],
-    [2, "We start with the home page and the booking page", "Ines Rocha"],
-  ]);
+  assert.deepEqual(
+    r.quotes.map((q) => [q.n, q.quote, q.who]),
+    [
+      [1, "I'll send you three style directions by Friday", "Ines Rocha"],
+      [2, "We start with the home page and the booking page", "Ines Rocha"],
+    ],
+  );
   assert.equal(r.dropped, 1, "the invented brand book quote is dropped");
   assert.equal(r.sent, 3);
   assert.equal(r.verified, true);
@@ -181,16 +209,28 @@ test("asks the attested TEE end-to-end encrypted and keeps only quotes found in 
   assert.ok(r.checks.some((c) => c.id === "response-e2ee" && c.ok));
   assert.ok(r.checks.some((c) => c.id === "response-signer" && c.ok));
 
-  assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"]);
-  assert.match(ai.seenInTee[0], /Question: What did Ines promise this week\?/);
-  assert.match(ai.seenInTee[0], /\[1\] Website kickoff with Ines · 3 Nov 15:30 · 12:08 · Ines Rocha: I'll send you three style directions/);
+  assert.deepEqual(
+    ai.calls.filter((c) => c.startsWith("chat")),
+    ["chat e2ee"],
+  );
+  assert.match(ai.seenInTee[0], /^Today is Wednesday 4 Nov 2026\.\nQuestion: What did Ines promise this week\?/);
+  assert.match(ai.seenInTee[0], /\[1\] Website kickoff with Ines · Yesterday 10:00 · 12:08 · Ines Rocha: I'll send you three style directions/, "times come from the recording, not the stored label");
   assert.ok(!ai.seenByGateway.join().includes("style directions"), "the gateway only relays ciphertext");
   assert.ok(!ai.seenByGateway.join().includes("Ines"), "not even the question");
   assert.ok(!ai.seenInTee[0].includes("booking page matters most"), "lines that weren't picked never leave");
 });
 
 test("an answer whose quotes are all invented isn't shown", async () => {
-  const ai = await fakeNearAi({ reply: { found: true, answer: "Ines promised a brand book.", quotes: [{ excerpt: 1, quote: "a full brand book by Monday" }, { excerpt: 9, quote: "I'll send you three style directions" }] } });
+  const ai = await fakeNearAi({
+    reply: {
+      found: true,
+      answer: "Ines promised a brand book.",
+      quotes: [
+        { excerpt: 1, quote: "a full brand book by Monday" },
+        { excerpt: 9, quote: "I'll send you three style directions" },
+      ],
+    },
+  });
   const r = await askMeetings(ai.transport, { question, excerpts }, {}, noWait);
   assert.equal(r.answer, null);
   assert.equal(r.found, false);
@@ -216,7 +256,10 @@ test("nothing is sent when the gateway or the model TEE fails its check", async 
 test("no unencrypted fallback when NEAR AI refuses E2EE", async () => {
   const ai = await fakeNearAi({ reply: good, e2eeRefused: true });
   await assert.rejects(askMeetings(ai.transport, { question, excerpts }, {}, noWait), /refused the encrypted request \(400\), so nothing else was sent/);
-  assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"]);
+  assert.deepEqual(
+    ai.calls.filter((c) => c.startsWith("chat")),
+    ["chat e2ee"],
+  );
 });
 
 test("a reply that doesn't match its signature is shown but not verified", async () => {
@@ -224,7 +267,10 @@ test("a reply that doesn't match its signature is shown but not verified", async
   const r = await askMeetings(ai.transport, { question, excerpts }, {}, noWait);
   assert.equal(r.answer, good.answer);
   assert.equal(r.verified, false);
-  assert.deepEqual(r.checks.filter((c) => !c.ok).map((c) => c.id), ["response-response"]);
+  assert.deepEqual(
+    r.checks.filter((c) => !c.ok).map((c) => c.id),
+    ["response-response"],
+  );
 });
 
 test("no excerpts: no network at all", async () => {
@@ -246,6 +292,19 @@ test("too many or too long excerpts are refused before anything is sent", async 
 });
 
 test("checkAnswer de-duplicates and keeps the excerpt's own spelling", () => {
-  const r = checkAnswer({ found: true, answer: "x", quotes: [{ excerpt: 2, quote: "we START with the home page" }, { excerpt: 2, quote: "We start with the home page" }] }, excerpts);
-  assert.deepEqual(r.quotes.map((q) => q.quote), ["We start with the home page"]);
+  const r = checkAnswer(
+    {
+      found: true,
+      answer: "x",
+      quotes: [
+        { excerpt: 2, quote: "we START with the home page" },
+        { excerpt: 2, quote: "We start with the home page" },
+      ],
+    },
+    excerpts,
+  );
+  assert.deepEqual(
+    r.quotes.map((q) => q.quote),
+    ["We start with the home page"],
+  );
 });
