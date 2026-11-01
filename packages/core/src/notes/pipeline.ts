@@ -7,7 +7,7 @@ import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse
 import { decryptWith, encryptMessages, newClientKeys } from "../tee/e2ee.ts";
 import type { Meeting, NoticeLog, Speaker } from "../meeting.ts";
 import { estimateCost, type CostEstimate, type Usage } from "../cost.ts";
-import { e2eeRefusal, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
+import { e2eeRefusal, e2eeStaleKey, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
 
 export const WHISPER_MODEL = "openai/whisper-large-v3";
 export const SUMMARY_MODEL = "Qwen/Qwen3.8-27B";
@@ -279,10 +279,12 @@ export async function processRecording(
   onStage("attest");
   const jwks = await loadNvidiaKeys(t);
   // Ed25519 for the summary model: its key is both the E2EE key and the response signer.
-  const [summaryAttest, whisperAttest] = await Promise.all([
+  const [firstSummaryAttest, whisperAttest] = await Promise.all([
     attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks }),
     attestModel(t, WHISPER_MODEL, "ecdsa", { withGateway: false, jwks }),
   ]);
+  // Replaced if NEAR AI asks for a fresh attestation before the summary.
+  let summaryAttest = firstSummaryAttest;
   requireAttested(summaryAttest, whisperAttest);
 
   const prompt = input.vocabulary.filter(Boolean).join(", ");
@@ -324,28 +326,55 @@ export async function processRecording(
   let request = "";
   let response = "";
   let content: string | undefined;
-  const node = e2eeNode(summaryAttest);
-  if (node) {
+  /** One summary request encrypted to `node`'s attested key. */
+  const sendEncrypted = async (node: VerifiedTee) => {
     const client = newClientKeys();
     const modelKey = node.evidence.signingAddress;
     request = requestFor(encryptMessages(messages, modelKey));
+    response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: modelKey });
+    const reply = JSON.parse(response) as Completion;
+    // finish_reason sits outside the encrypted content, so this needs no decryption.
+    requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
+    content = decryptWith(reply.choices?.[0]?.message?.content ?? "", client.x25519Secret);
+    e2ee = { used: true, modelKey };
+  };
+  /** What to throw for a failed encrypted request: any other 4xx is about the request, so it stops in plain words. */
+  const requestError = (e: unknown): unknown => {
+    const status = nearAiStatus(e);
+    if (status !== null && status >= 400 && status < 500 && !isNearAiAccountError(e)) {
+      return new Error(`NEAR AI turned down the encrypted summary request (${status}: ${nearAiErrorText(e) || "no reason given"}). The transcript wasn't sent again.`);
+    }
+    return e;
+  };
+  const node = e2eeNode(summaryAttest);
+  if (node) {
     try {
-      response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: modelKey });
-      const reply = JSON.parse(response) as Completion;
-      // finish_reason sits outside the encrypted content, so this needs no decryption.
-      requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
-      content = decryptWith(reply.choices?.[0]?.message?.content ?? "", client.x25519Secret);
-      e2ee = { used: true, modelKey };
+      await sendEncrypted(node);
     } catch (e) {
-      // Only NEAR AI saying no to encryption itself may lead to TLS. Any other 4xx is
-      // about the request: stop, and never send the transcript again.
-      const refused = e2eeRefusal(e);
-      const status = nearAiStatus(e);
-      if (!refused && status !== null && status >= 400 && status < 500 && !isNearAiAccountError(e)) {
-        throw new Error(`NEAR AI turned down the encrypted summary request (${status}: ${nearAiErrorText(e) || "no reason given"}). The transcript wasn't sent again.`);
+      if (e2eeStaleKey(e)) {
+        // NEAR AI no longer serves the attested key and asks for a fresh attestation.
+        // The node set may have changed, so the old attestation can't open TLS: attest
+        // again and retry encrypted once, to a key from the new quotes.
+        summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks });
+        const gw = gatewayChecks(summaryAttest);
+        const fresh = gw.every((c) => c.ok) ? e2eeNode(summaryAttest) : undefined;
+        if (!fresh) {
+          throw new Error(`NEAR AI asked for a fresh attestation and no summary TEE passed it with an attested key (${failedLabels([...gw, ...modelChecks(summaryAttest)]) || "no attested Ed25519 key"}). The transcript wasn't sent again.`);
+        }
+        try {
+          await sendEncrypted(fresh);
+        } catch (again) {
+          if (e2eeStaleKey(again) || e2eeRefusal(again)) {
+            throw new Error(`NEAR AI turned down the encrypted summary request again after a fresh attestation (${nearAiStatus(again)}: ${nearAiErrorText(again)}). The transcript wasn't sent without end-to-end encryption.`);
+          }
+          throw requestError(again);
+        }
+      } else {
+        // Only NEAR AI saying no to the encryption headers themselves may lead to TLS.
+        const refused = e2eeRefusal(e);
+        if (!refused) throw requestError(e);
+        e2ee = { used: false, reason: refused };
       }
-      if (!refused) throw e;
-      e2ee = { used: false, reason: refused };
     }
   }
   if (!e2ee.used) {

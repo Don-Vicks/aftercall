@@ -45,28 +45,36 @@ export function plainNearAiError(e: unknown): string {
 }
 
 /*
- * NEAR AI's own refusals of end-to-end encryption, as its gateway words them
- * (github.com/nearai/cloud-api, read 1 Nov 2026): 400 naming an encryption header it
- * didn't accept (validate_encryption_headers), 421 "The encryption key is no longer
- * valid…" when no node serves the pinned model key, and 400 "End-to-end encryption
- * is not supported on …". Any other 4xx is about the request itself.
+ * NEAR AI's answers about end-to-end encryption that the app recognises, as its gateway
+ * words them (github.com/nearai/cloud-api, read 1 Nov 2026): 400 naming an encryption
+ * header it didn't accept (validate_encryption_headers), and 421 "The encryption key is
+ * no longer valid…" when no node serves the pinned model key. Only these are
+ * recognised. Any other 4xx, including "Model '…' does not support encryption" for a
+ * model outside the TEE, is treated as a refusal of the request and stops processing.
  */
 const E2EE_HEADER = /\bX-(?:Encryption-Version|Signing-Algo|Client-Pub-Key|Model-Pub-Key)\b/i;
 const E2EE_STALE_KEY = /\bencryption key\b[^.]*\b(?:no longer valid|not valid|invalid)\b/i;
-const E2EE_UNSUPPORTED = /\b(?:end[- ]to[- ]end encryption|E2EE)\b[^.]*\bnot supported\b/i;
 
 /**
- * Why NEAR AI turned down end-to-end encryption, in plain words, when its answer
- * clearly says so (status and message); null for anything else, account errors included.
+ * Why NEAR AI turned down end-to-end encryption itself, in plain words, when it named an
+ * encryption header it didn't accept; null for anything else, account errors and the
+ * stale-key answer included. Only this may lead to TLS.
  */
 export function e2eeRefusal(e: unknown): string | null {
   const status = nearAiStatus(e);
-  if (status === null || isNearAiAccountError(e)) return null;
+  if (status !== 400 || isNearAiAccountError(e)) return null;
   const message = e instanceof Error ? e.message : String(e);
-  if (status === 421 && E2EE_STALE_KEY.test(message)) return "NEAR AI refused end-to-end encryption (421: the attested model key is no longer one it serves)";
-  if (status === 400 && E2EE_HEADER.test(message)) return "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)";
-  if ((status === 400 || status === 421) && E2EE_UNSUPPORTED.test(message)) return `NEAR AI refused end-to-end encryption (${status}: not supported for this request)`;
-  return null;
+  return E2EE_HEADER.test(message) ? "NEAR AI refused end-to-end encryption (400: it didn't accept the encryption headers)" : null;
+}
+
+/**
+ * True when NEAR AI answered 421 that the attested model key is no longer one it
+ * serves. It asks for a fresh attestation, so the app attests again and retries
+ * encrypted; it never leads to TLS.
+ */
+export function e2eeStaleKey(e: unknown): boolean {
+  if (nearAiStatus(e) !== 421) return false;
+  return E2EE_STALE_KEY.test(e instanceof Error ? e.message : String(e));
 }
 
 /** The message in a NEAR AI error body ({"error":{"message":…}} or plain text), cut to 200 characters. */

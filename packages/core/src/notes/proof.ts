@@ -266,7 +266,7 @@ export const NOT_PROVEN = [
   "Who said what: “You” is your microphone and the rest is the call's audio, and a name on the call's side comes from your calendar, not the voice.",
   "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
   "What NEAR AI keeps or trains on: that is set by NEAR AI's own policy, not shown by these checks.",
-  "That every transcript was end-to-end encrypted: when end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI answers that it won't take it: an encryption header refused, the model key no longer served, or encryption not supported), the app sends it over TLS to the attested hardware only if every summary node passed, and that meeting's proof says so; any other error stops processing, and the transcript isn't sent again.",
+  "That every transcript was end-to-end encrypted: when end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI refuses an encryption header), the app sends it over TLS to the attested hardware only if every summary node passed, and that meeting's proof says so; a model key NEAR AI no longer serves leads to a fresh check and one more encrypted try, never TLS, and any other error stops processing.",
 ];
 
 /**

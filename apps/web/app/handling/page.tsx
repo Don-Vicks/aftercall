@@ -46,7 +46,7 @@ const STEPS: { where: Where; title: string; body: string; travels?: string }[] =
     where: "tee",
     title: "Summarised by a model in an attested TEE",
     travels: "End to end if NEAR AI accepts",
-    body: "The Mac merges both tracks into one transcript and encrypts it to a key bound in the summary model's verified quote, so the gateway passes on text it can't read. If end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI answers that it won't take it: an encryption header refused, the model key no longer served, or encryption not supported), the transcript goes over TLS only when every summary node passed. Any other error stops processing, and the transcript isn't sent again. The proof says which happened. The model signs the exchange.",
+    body: "The Mac merges both tracks into one transcript and encrypts it to a key bound in the summary model's verified quote, so the gateway passes on text it can't read. If end-to-end encryption isn't available (no verified node offers an attested key, or NEAR AI refuses an encryption header), the transcript goes over TLS only when every summary node passed. If NEAR AI no longer serves the attested model key, the Mac checks the hardware again and retries encrypted once, never over TLS. Any other error stops processing, and the transcript isn't sent again. The proof says which happened. The model signs the exchange.",
   },
   {
     where: "mac",
