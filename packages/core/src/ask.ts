@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { Meeting, Speaker } from "./meeting.ts";
 import { formatClock } from "./meeting.ts";
-import { SUMMARY_MODEL, e2eeNode, fetchSignature, type NearAiTransport } from "./notes/pipeline.ts";
+import { estimateCost, type CostEstimate } from "./cost.ts";
+import { isNearAiAccountError } from "./errors.ts";
+import { SUMMARY_MODEL, e2eeNode, fetchSignature, requireComplete, type Completion, type NearAiTransport } from "./notes/pipeline.ts";
 import { findQuote, normalize } from "./notes/transcript.ts";
 import { buildPeople, otherSideName } from "./people-index.ts";
 import { search } from "./search/search.ts";
@@ -23,6 +25,11 @@ export const ASK_MAX_EXCERPTS = 8;
 export const ASK_MAX_CHARS = 400;
 /** Longer questions are cut. */
 export const ASK_MAX_QUESTION = 500;
+/**
+ * Output cap for one answer. Generous until reasoning tokens are measured on a live
+ * run: Qwen3.8-27B allows 65,536 output tokens, so an uncapped call could cost about $0.09.
+ */
+export const ASK_MAX_TOKENS = 6_144;
 
 export interface Excerpt {
   /** 1-based; the number the model cites. */
@@ -249,6 +256,8 @@ export interface AskResult extends AskAnswer {
   checks: TeeCheck[];
   /** The attested Ed25519 key the excerpts were encrypted to. */
   modelKey: string;
+  /** What this question probably cost in NEAR AI credit; zero when nothing was sent. */
+  cost: CostEstimate;
 }
 
 export type AskStage = "attest" | "send" | "signature";
@@ -272,11 +281,6 @@ export function checkAnswer(raw: z.infer<typeof askSchema>, excerpts: Excerpt[])
   return { found: raw.found && quotes.length > 0, answer: shown, quotes: raw.found ? quotes : [], dropped, sent: excerpts.length };
 }
 
-interface Completion {
-  id: string;
-  choices?: { message?: { content?: string } }[];
-}
-
 /**
  * Asks the attested Qwen TEE about the excerpts, end-to-end encrypted. Order: verify
  * the gateway and the model TEEs with a fresh nonce (Intel TDX and NVIDIA), and stop
@@ -294,7 +298,7 @@ export async function askMeetings(
 ): Promise<AskResult> {
   const { question, excerpts } = input;
   if (!question.trim()) throw new Error("Ask a question first.");
-  if (excerpts.length === 0) return { found: false, answer: null, quotes: [], dropped: 0, sent: 0, verified: false, checks: [], modelKey: "" };
+  if (excerpts.length === 0) return { found: false, answer: null, quotes: [], dropped: 0, sent: 0, verified: false, checks: [], modelKey: "", cost: estimateCost({}) };
   if (excerpts.length > ASK_MAX_EXCERPTS || excerpts.some((e) => e.text.length > ASK_MAX_CHARS + 4)) throw new Error("Too many excerpts for one question. Nothing was sent.");
 
   hooks.onStage?.("attest");
@@ -311,6 +315,7 @@ export async function askMeetings(
   const request = JSON.stringify({
     model: SUMMARY_MODEL,
     stream: false,
+    max_tokens: ASK_MAX_TOKENS,
     messages: encryptMessages(askMessages(question, excerpts, input.now), modelKey),
     response_format: { type: "json_schema", json_schema: { name: "meeting_answer", strict: true, schema: askJsonSchema } },
   });
@@ -319,10 +324,12 @@ export async function askMeetings(
     response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: modelKey });
   } catch (e) {
     const status = /NEAR AI (4\d\d)/.exec(e instanceof Error ? e.message : String(e))?.[1];
-    if (status && !["401", "402", "403", "429"].includes(status)) throw new Error(`NEAR AI refused the encrypted request (${status}), so nothing else was sent.`);
+    if (status && !isNearAiAccountError(e)) throw new Error(`NEAR AI refused the encrypted request (${status}), so nothing else was sent.`);
     throw e;
   }
   const completion = JSON.parse(response) as Completion;
+  // finish_reason sits outside the encrypted content.
+  requireComplete(completion, ASK_MAX_TOKENS, "the answer would be incomplete. Nothing is shown.");
   let content: string;
   try {
     content = decryptWith(completion.choices?.[0]?.message?.content ?? "", client.x25519Secret);
@@ -350,5 +357,6 @@ export async function askMeetings(
     detail: `Encrypted on this Mac to Ed25519 key ${short(modelKey)}, bound in a verified quote; the answer came back encrypted to a key made for this question`,
   };
   const checks = [...gateway, ...node.checks, ...signed, e2ee];
-  return { ...answer, verified: checks.every((c) => c.ok), checks, modelKey };
+  const cost = estimateCost({ chat: { model: SUMMARY_MODEL, usage: completion.usage } });
+  return { ...answer, verified: checks.every((c) => c.ok), checks, modelKey, cost };
 }

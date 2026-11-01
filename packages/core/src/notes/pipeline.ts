@@ -5,12 +5,21 @@ import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { attestModel, attestedKeys, failedLabels, gatewayChecks, loadNvidiaKeys, modelChecks, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
 import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse, type TeeCheck } from "../tee/checks.ts";
 import { decryptWith, encryptMessages, newClientKeys } from "../tee/e2ee.ts";
-import type { Meeting, Speaker } from "../meeting.ts";
+import type { Meeting, NoticeLog, Speaker } from "../meeting.ts";
+import { estimateCost, type CostEstimate, type Usage } from "../cost.ts";
+import { isNearAiAccountError } from "../errors.ts";
 
 export const WHISPER_MODEL = "openai/whisper-large-v3";
 export const SUMMARY_MODEL = "Qwen/Qwen3.8-27B";
 /** Same Confidential TEE tier; used if the main model is unavailable. Smaller output cap. */
 export const FALLBACK_SUMMARY_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
+
+/**
+ * Output cap for the notes call. Generous until reasoning tokens are measured on a
+ * live run: Qwen3.8-27B allows 65,536 output tokens, so an uncapped call could cost
+ * about $0.09.
+ */
+export const SUMMARY_MAX_TOKENS = 12_288;
 
 /** The public keys for an end-to-end encrypted chat request. */
 export interface E2eeKeys {
@@ -59,6 +68,8 @@ export interface ProcessInput {
    * hash in the proof.
    */
   yourNotes?: string;
+  /** That you told everyone on the call before recording, as you logged it. Goes into the proof as your statement. */
+  notice?: NoticeLog;
 }
 
 /** The most of your notes that goes to the model and onto the meeting, in characters. */
@@ -140,6 +151,20 @@ export interface ProofBundleV2 extends Omit<ProofBundleV1, "version"> {
    * key out, so they hash exactly as before it existed.
    */
   yourNotesHash?: string;
+  /**
+   * How many items the model proposed that the app dropped because their quote wasn't
+   * in the transcript. A statement the app recorded, covered by the hash on NEAR; it
+   * can't be re-run from the bundle. Older bundles lack the key and hash as before.
+   */
+  dropped?: DroppedCounts;
+  /** The notice you logged before recording, when you did. Absent otherwise, so older bundles hash as before. */
+  notice?: NoticeLog;
+}
+
+export interface DroppedCounts {
+  decisions: number;
+  actionItems: number;
+  followUps: number;
 }
 
 export type ProofBundle = ProofBundleV1 | ProofBundleV2;
@@ -157,6 +182,8 @@ export interface ProcessResult {
    * in notes.json (encrypted on the Mac), never in the proof or its public link.
    */
   yourNotesSalt?: string;
+  /** What this run probably cost in NEAR AI credit. Not in the proof. */
+  cost: CostEstimate;
 }
 
 const enc = new TextEncoder();
@@ -184,7 +211,44 @@ export function e2eeNode(summary: ModelAttestation): VerifiedTee | undefined {
 /** NEAR AI answered 4xx to the encrypted request for a reason other than the key, credit or rate. */
 function e2eeRefused(e: unknown): string | null {
   const m = /NEAR AI (4\d\d)/.exec(e instanceof Error ? e.message : String(e));
-  return m && !["401", "402", "403", "429"].includes(m[1]) ? `NEAR AI refused the encrypted request (${m[1]})` : null;
+  return m && !isNearAiAccountError(e) ? `NEAR AI refused the encrypted request (${m[1]})` : null;
+}
+
+/** An OpenAI-style chat completion: the parts the app reads. Under E2EE only `content` is encrypted. */
+export interface Completion {
+  id: string;
+  choices?: { message?: { content?: string }; finish_reason?: string | null }[];
+  usage?: Usage;
+}
+
+/**
+ * Throws when the reply was cut off at max_tokens: half a JSON object is useless, and
+ * a cut list could silently miss a payment. `consequence` finishes the sentence.
+ */
+export function requireComplete(completion: Completion, maxTokens: number, consequence: string): void {
+  if (completion.choices?.[0]?.finish_reason === "length") {
+    throw new Error(`The model's reply hit the ${maxTokens.toLocaleString("en-US")}-token limit, so ${consequence}`);
+  }
+}
+
+const NOTES_CUT = "the notes would be incomplete. Nothing was saved.";
+
+/**
+ * Seconds of audio Whisper bills for one chunk: Whisper's `duration`. When it's
+ * missing, the chunk's length inferred from the recording (every chunk is
+ * `chunkSeconds` long except the last), which is what was uploaded.
+ */
+function billedSeconds(result: WhisperResult, chunk: AudioChunk, input: ProcessInput): number {
+  if (typeof result.duration === "number" && Number.isFinite(result.duration) && result.duration >= 0) return Math.ceil(result.duration);
+  const inferred = Math.min(input.chunkSeconds, input.durationSec - chunk.index * input.chunkSeconds);
+  const lastSegment = Math.max(0, ...(result.segments ?? []).map((s) => s.end));
+  return Math.ceil(inferred > 0 ? inferred : lastSegment);
+}
+
+/** Only the fields a notice log has, so nothing else can slip into the hashed bundle. */
+function cleanNotice(n: NoticeLog | undefined): NoticeLog | undefined {
+  if (!n || n.by !== "you" || typeof n.at !== "string" || !n.at) return undefined;
+  return { by: "you", at: n.at, ...(n.how ? { how: n.how } : {}) };
 }
 
 /** Waits for the signature, which NEAR AI publishes a moment after the response. */
@@ -228,14 +292,18 @@ export async function processRecording(
 
   const prompt = input.vocabulary.filter(Boolean).join(", ");
   const transcribed: TranscribedChunk[] = [];
+  // Only audio sent in this run costs anything: cached chunks were paid for earlier.
+  let whisperSeconds = 0;
   for (const [i, chunk] of input.chunks.entries()) {
     onStage("transcribe", `${i + 1} of ${input.chunks.length}`);
     let raw = (await input.transcriptCache?.get(chunk).catch(() => null)) ?? null;
+    const fresh = raw === null;
     if (raw === null) {
       raw = await t.transcribe(chunk.path, WHISPER_MODEL, prompt);
       await input.transcriptCache?.set(chunk, raw).catch(() => {});
     }
     const result = JSON.parse(raw) as WhisperResult;
+    if (fresh) whisperSeconds += billedSeconds(result, chunk, input);
     transcribed.push({ speaker: chunk.speaker, index: chunk.index, result });
   }
   const transcript = mergeTranscript(transcribed, input.chunkSeconds);
@@ -250,6 +318,7 @@ export async function processRecording(
     JSON.stringify({
       model: SUMMARY_MODEL,
       stream: false,
+      max_tokens: SUMMARY_MAX_TOKENS,
       messages: msgs,
       response_format: { type: "json_schema", json_schema: { name: "meeting_notes", strict: true, schema: notesJsonSchema } },
     });
@@ -267,8 +336,10 @@ export async function processRecording(
     request = requestFor(encryptMessages(messages, modelKey));
     try {
       response = await t.chat(request, { clientPubKey: client.publicKey, modelPubKey: modelKey });
-      const sealed = (JSON.parse(response) as Completion).choices?.[0]?.message?.content ?? "";
-      content = decryptWith(sealed, client.x25519Secret);
+      const reply = JSON.parse(response) as Completion;
+      // finish_reason sits outside the encrypted content, so this needs no decryption.
+      requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
+      content = decryptWith(reply.choices?.[0]?.message?.content ?? "", client.x25519Secret);
       e2ee = { used: true, modelKey };
     } catch (e) {
       const refused = e2eeRefused(e);
@@ -283,7 +354,9 @@ export async function processRecording(
     }
     request = requestFor(messages);
     response = await t.chat(request);
-    content = (JSON.parse(response) as Completion).choices?.[0]?.message?.content;
+    const reply = JSON.parse(response) as Completion;
+    requireComplete(reply, SUMMARY_MAX_TOKENS, NOTES_CUT);
+    content = reply.choices?.[0]?.message?.content;
   }
   const completion = JSON.parse(response) as Completion;
   const notes = notesSchema.parse(JSON.parse(content ?? "null"));
@@ -325,6 +398,8 @@ export async function processRecording(
     yourNotes,
   });
   const yourNotesSalt = yourNotes ? t.randomHex() : undefined;
+  const notice = cleanNotice(input.notice);
+  const count = (kind: Dropped["kind"]) => dropped.filter((d) => d.kind === kind).length;
 
   return {
     meeting,
@@ -332,6 +407,7 @@ export async function processRecording(
     dropped,
     checks,
     ...(yourNotesSalt ? { yourNotesSalt } : {}),
+    cost: estimateCost({ whisperSeconds, chat: { model: SUMMARY_MODEL, usage: completion.usage } }),
     proof: {
       version: 2,
       meetingId: input.id,
@@ -351,11 +427,8 @@ export async function processRecording(
       transcriptHash: sha256Hex(enc.encode(JSON.stringify(transcript))),
       notesHash: sha256Hex(enc.encode(JSON.stringify(notes))),
       ...(yourNotes && yourNotesSalt ? { yourNotesHash: yourNotesHash(yourNotesSalt, yourNotes) } : {}),
+      dropped: { decisions: count("decision"), actionItems: count("action item"), followUps: count("follow-up") },
+      ...(notice ? { notice } : {}),
     },
   };
-}
-
-interface Completion {
-  id: string;
-  choices?: { message?: { content?: string } }[];
 }

@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { formatClock } from "../meeting.ts";
+import { costLine, formatCost } from "../cost.ts";
 import { formatUsdc } from "../money.ts";
-import type { Payee } from "../notes/build.ts";
+import { amountNote, type Payee } from "../notes/build.ts";
 import { processRecording, WHISPER_MODEL, type NearAiTransport, type ProcessResult } from "../notes/pipeline.ts";
 import { groupChecks, WHISPER_NOTE } from "../notes/proof.ts";
 
@@ -67,7 +68,7 @@ export function formatSampleNotes(script: SampleScript, r: ProcessResult): strin
     const what =
       f.kind === "email"
         ? `Recap email to ${f.toName || "someone"}: "${f.subject}"`
-        : `Pay ${f.payeeName}${f.payeeListed ? ` (${f.payeeAccount})` : " (not a listed payee)"} ${f.amount === null ? "an unclear amount" : `${formatUsdc(f.amount)} USDC`}, heard "${f.heard}"`;
+        : `Pay ${f.payeeName}${f.payeeListed ? ` (${f.payeeAccount})` : " (not a listed payee)"} ${f.amount === null ? `no amount (${amountNote(f)})` : `${formatUsdc(f.amount)} USDC`}, heard "${f.heard}"`;
     out.push(`- ${what}`, `    [${formatClock(f.evidence.at)}] "${f.evidence.quote}"`);
   }
   if (r.dropped.length) out.push("", "## Dropped (quote not found in the transcript)", ...r.dropped.map((d) => `- ${d.kind}: ${d.text}`));
@@ -82,6 +83,13 @@ export function formatSampleNotes(script: SampleScript, r: ProcessResult): strin
     `- ${WHISPER_NOTE}`,
     `- Transcript end-to-end encrypted to the attested summary model: ${r.proof.e2ee.used ? "yes" : `no (${r.proof.e2ee.reason ?? "unavailable"})`}`,
     `- Proof bundle: request ${r.proof.requestHash.slice(0, 16)}…, response ${r.proof.responseHash.slice(0, 16)}…, notes ${r.proof.notesHash.slice(0, 16)}…`,
+    "",
+    "## Cost",
+    costLine(r.cost),
+    `- Whisper: ${r.cost.whisperSeconds} s of audio, ${formatCost(r.cost.whisperUsd)}`,
+    ...(r.cost.chat
+      ? [`- ${r.cost.chat.model}: ${r.cost.chat.promptTokens} input and ${r.cost.chat.completionTokens} output tokens${r.cost.chat.reasoningTokens !== undefined ? ` (${r.cost.chat.reasoningTokens} of them reasoning)` : ""}, ${formatCost(r.cost.chat.usd)}`]
+      : []),
   );
   return out.join("\n");
 }

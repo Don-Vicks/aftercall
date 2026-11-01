@@ -85,6 +85,26 @@ export interface PaymentFollowUp extends FollowUpBase {
   claim?: { id: string; link: string; account?: string };
   /** Set once the payment went out through NEAR Intents to the payee's address on another chain. */
   crossChain?: CrossChainPayout;
+  /**
+   * Why `amount` is null, when the app knows: "not-in-quote" (the words parsed, but
+   * that figure isn't in the evidence quote from the transcript), "not-usdc" (said in
+   * another currency; `amountProblem(heard)` names it) or "unclear" (the words don't
+   * read as one amount). Absent on meetings made before it existed; read null as unclear.
+   */
+  amountProblem?: AmountProblemKind;
+}
+
+export type AmountProblemKind = "not-in-quote" | "not-usdc" | "unclear";
+
+/**
+ * That you told everyone on the call before recording, as you ticked it. Aftercall
+ * records your statement; it can't check it.
+ */
+export interface NoticeLog {
+  by: "you";
+  /** ISO 8601 time the box was ticked. */
+  at: string;
+  how?: "aloud" | "chat" | "invite" | "email";
 }
 
 /** A payment routed through NEAR Intents 1Click; amounts are USDC base-unit strings. */

@@ -4,6 +4,8 @@ import { formatClock } from "../meeting.ts";
 /** The part of Whisper's `verbose_json` response the app uses. */
 export interface WhisperResult {
   text: string;
+  /** Seconds of audio, which is what Whisper bills for. */
+  duration?: number;
   segments?: { start: number; end: number; text: string; no_speech_prob?: number }[];
 }
 

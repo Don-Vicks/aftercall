@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { edwardsToMontgomeryPriv } from "@noble/curves/ed25519";
-import { ASK_MAX_CHARS, askMeetings, checkAnswer, pickExcerpts, questionTerms, type Excerpt } from "./ask.ts";
+import { ASK_MAX_CHARS, ASK_MAX_TOKENS, askMeetings, checkAnswer, pickExcerpts, questionTerms, type Excerpt } from "./ask.ts";
 import type { Meeting, TranscriptLine } from "./meeting.ts";
 import type { E2eeKeys, NearAiTransport } from "./notes/pipeline.ts";
 import { sha256Hex } from "./notes/verify.ts";
@@ -123,6 +123,8 @@ interface FakeOpts {
   badModel?: boolean;
   e2eeRefused?: boolean;
   tamper?: boolean;
+  usage?: object;
+  finishReason?: string;
 }
 
 /** NEAR AI with real keys: attests, decrypts the request inside the "TEE", encrypts the reply, signs the exchange. */
@@ -167,7 +169,11 @@ async function fakeNearAi(opts: FakeOpts) {
       const plaintext = decryptWith(user, edwardsToMontgomeryPriv(node.seed!));
       seenInTee.push(plaintext);
       const reply = typeof opts.reply === "function" ? opts.reply(plaintext) : opts.reply;
-      const response = JSON.stringify({ id: "chatcmpl-ask", choices: [{ message: { content: encryptTo(JSON.stringify(reply), e2ee.clientPubKey) } }] });
+      const response = JSON.stringify({
+        id: "chatcmpl-ask",
+        choices: [{ message: { content: encryptTo(JSON.stringify(reply), e2ee.clientPubKey) }, ...(opts.finishReason ? { finish_reason: opts.finishReason } : {}) }],
+        ...(opts.usage ? { usage: opts.usage } : {}),
+      });
       last = { request: body, response };
       return response;
     },
@@ -307,4 +313,40 @@ test("checkAnswer de-duplicates and keeps the excerpt's own spelling", () => {
     r.quotes.map((q) => q.quote),
     ["We start with the home page"],
   );
+});
+
+// ---------- the output cap and the cost estimate ----------
+
+test("Ask is capped at ASK_MAX_TOKENS and reports its estimated cost", async () => {
+  const ai = await fakeNearAi({ reply: good, usage: { prompt_tokens: 3_000, completion_tokens: 400 } });
+  const r = await askMeetings(ai.transport, { question, excerpts, now: NOW }, {}, noWait);
+  assert.equal(ASK_MAX_TOKENS, 6_144);
+  assert.equal(JSON.parse(ai.seenByGateway[0]).max_tokens, 6_144);
+  // 3,000 × $0.04/M + 400 × $1.35/M
+  assert.ok(r.cost.usd !== null && Math.abs(r.cost.usd - 0.00066) < 1e-12, String(r.cost.usd));
+  assert.equal(r.cost.whisperSeconds, 0);
+  assert.equal(r.cost.chat?.promptTokens, 3_000);
+});
+
+test("Ask without usage from NEAR AI: cost unknown; with no excerpts: nothing sent, nothing spent", async () => {
+  const ai = await fakeNearAi({ reply: good });
+  assert.equal((await askMeetings(ai.transport, { question, excerpts, now: NOW }, {}, noWait)).cost.usd, null);
+  const none = await askMeetings(ai.transport, { question, excerpts: [], now: NOW }, {}, noWait);
+  assert.equal(none.cost.usd, 0);
+});
+
+test("an answer cut off at the cap isn't shown", async () => {
+  const ai = await fakeNearAi({ reply: good, finishReason: "length" });
+  let answered = false;
+  await assert.rejects(
+    askMeetings(ai.transport, { question, excerpts, now: NOW }, { onAnswer: () => (answered = true) }, noWait),
+    { message: "The model's reply hit the 6,144-token limit, so the answer would be incomplete. Nothing is shown." },
+  );
+  assert.equal(answered, false);
+});
+
+test("Ask passes credit and key errors through so they can be said plainly", async () => {
+  const ai = await fakeNearAi({ reply: good });
+  const broke = { ...ai.transport, chat: async () => { throw new Error("NEAR AI 400: insufficient credits"); } };
+  await assert.rejects(askMeetings(broke, { question, excerpts, now: NOW }, {}, noWait), /insufficient credits/, "not mistaken for a refused encrypted request");
 });

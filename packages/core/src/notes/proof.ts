@@ -1,5 +1,6 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
+import type { NoticeLog } from "../meeting.ts";
 import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
 import { expectedMrConfig, expectedReportData, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
@@ -262,9 +263,54 @@ export const NOT_PROVEN = [
   "That the transcript is accurate: Whisper can mishear names and numbers.",
   "That this transcription came from the attested Whisper TEE: NEAR AI signs chat responses, not transcriptions.",
   "That everyone on the call agreed to be recorded: Aftercall asks you to confirm it, and can't check it.",
-  "Who said what: “You” is your microphone and the rest is the call's audio. A name on the call's side comes from your calendar, not the voice.",
+  "Who said what: “You” is your microphone and the rest is the call's audio, and a name on the call's side comes from your calendar, not the voice.",
   "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
+  "That NEAR AI keeps no copy of the audio or transcript and doesn't train on them: that is NEAR AI's stated policy, not something these checks show.",
+  "That every transcript was end-to-end encrypted: when NEAR AI refuses encryption, the app sends it over TLS to the attested hardware only if every summary node passed, and that meeting's proof says so.",
 ];
+
+/**
+ * What the app dropped from the model's notes, for the Verify sheet and /verify. A
+ * statement the app recorded and the hash on NEAR covers, not a check anyone can
+ * re-run (the transcript isn't public). Null for bundles made before it was recorded.
+ */
+export function droppedLine(bundle: ProofBundle): string | null {
+  if (bundle.version !== 2 || !bundle.dropped) return null;
+  const { decisions, actionItems, followUps } = bundle.dropped;
+  const total = decisions + actionItems + followUps;
+  if (total === 0) return "Every item the model proposed had an exact quote in the transcript.";
+  const parts = [
+    [decisions, "decision", "decisions"],
+    [actionItems, "action item", "action items"],
+    [followUps, "follow-up", "follow-ups"],
+  ] as const;
+  const which = parts.filter(([n]) => n > 0).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+  return total === 1
+    ? `The app dropped 1 item the model proposed (${which[0]}) because its quote wasn't in the transcript.`
+    : `The app dropped ${total} items the model proposed (${which.join(", ")}) because their quotes weren't in the transcript.`;
+}
+
+const HOW: Record<NonNullable<NoticeLog["how"]>, string> = {
+  aloud: "aloud",
+  chat: "in chat",
+  invite: "in the invite",
+  email: "by email",
+};
+
+/**
+ * The notice the person who recorded logged, as the Verify sheet and /verify show it:
+ * "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't
+ * check this." Times are 24-hour, in `timeZone` (the viewer's own by default).
+ */
+export function noticeLine(notice: NoticeLog | undefined, opts: { timeZone?: string } = {}): string {
+  if (!notice) return "No notice logged";
+  const at = new Date(notice.at);
+  const time = Number.isNaN(at.getTime())
+    ? ""
+    : ` at ${new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: opts.timeZone }).format(at)}`;
+  const how = notice.how ? ` ${HOW[notice.how]}` : "";
+  return `Stated by the person who recorded: told everyone${how}${time}. Aftercall can't check this.`;
+}
 
 /** Public link payload: everything the Verify page needs, base64url in the URL fragment. */
 export interface PublicProof {

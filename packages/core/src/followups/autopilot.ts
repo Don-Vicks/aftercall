@@ -1,4 +1,4 @@
-import type { FollowUp } from "../meeting.ts";
+import type { AmountProblemKind, FollowUp } from "../meeting.ts";
 
 /** What the person allows to happen without a tap. Off unless they turn it on. */
 export interface AutopilotRules {
@@ -23,6 +23,13 @@ export interface Decision {
   reasons: string[];
 }
 
+/** Why a payment with no amount waits for a person, in plain words. */
+export const AMOUNT_PROBLEM_REASONS: Record<AmountProblemKind, string> = {
+  "not-in-quote": "Amount isn't in the quote",
+  "not-usdc": "Amount isn't in US dollars",
+  unclear: "Amount unclear",
+};
+
 /** Seconds a person has to undo an autopilot follow-up before it runs. */
 export const UNDO_SECONDS = 60;
 
@@ -41,7 +48,7 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
   }
   if (!rules.payments) reasons.push("Autopilot payments are off");
   if (!f.payeeListed) reasons.push("Payee isn't on your list");
-  if (f.amount === null) reasons.push("Amount unclear");
+  if (f.amount === null) reasons.push(AMOUNT_PROBLEM_REASONS[f.amountProblem ?? "unclear"]);
   if (!limits) reasons.push("Agent wallet not connected");
   else if (f.amount !== null) {
     if (limits.perPaymentCap === 0n) reasons.push("No per-payment limit set");

@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMeeting } from "./build.ts";
+import { amountNote, buildMeeting, checkedAmount } from "./build.ts";
+import { autopilotDecision } from "../followups/autopilot.ts";
 import { notesSchema, type Notes } from "./schema.ts";
-import type { TranscriptLine } from "../meeting.ts";
+import type { PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 
 const transcript: TranscriptLine[] = [
   { at: 31, speaker: "others", text: "The API fix has to ship before the demo." },
@@ -70,4 +71,77 @@ test("your notes ride along on the meeting but are never evidence", () => {
   assert.ok(!meeting.followUps.some((f) => f.kind === "payment" && f.heard === "three hundred"), "a payment only in your notes is dropped");
   assert.ok(dropped.some((d) => d.text === "Pay Designer three hundred"));
   assert.equal("yourNotes" in buildMeeting({ ...base, notes, payees: [] }).meeting, false);
+});
+
+// ---------- the amount must be in the quote ----------
+
+const usdc = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
+const designer = [{ name: "Designer", account: "designer.near" }];
+
+/** One payment the model proposed, against a one-line transcript. */
+function pay(line: string, amountWords: string, evidence: string): PaymentFollowUp {
+  const n = notesSchema.parse({
+    title: "t",
+    summary: "s",
+    decisions: [],
+    action_items: [],
+    followups: [{ type: "payment", payee_name: "Designer", amount_words: amountWords, memo: null, evidence }],
+  });
+  const { meeting } = buildMeeting({ ...base, notes: n, payees: designer, transcript: [{ at: 60, speaker: "you", text: line }] });
+  const f = meeting.followUps[0];
+  assert.ok(f && f.kind === "payment", "the payment's quote is in the transcript, so it is kept");
+  return f;
+}
+
+test("the amount is kept when the quote says the same value in other words: $40 vs forty dollars", () => {
+  const f = pay("Okay, pay the designer $40 for the icons.", "forty dollars", "pay the designer $40 for the icons");
+  assert.equal(f.amount, usdc(40));
+  assert.equal(f.amountProblem, undefined);
+  assert.equal(amountNote(f), null);
+  const g = pay("Okay, pay the designer forty dollars for the icons.", "$40", "pay the designer forty dollars for the icons");
+  assert.equal(g.amount, usdc(40), "and the other way round");
+});
+
+test("an amount that isn't in the quote is dropped to null, with the reason, and autopilot waits", () => {
+  const f = pay("Okay, pay the designer for the icons when they're done.", "four hundred dollars", "pay the designer for the icons when they're done");
+  assert.equal(f.amount, null);
+  assert.equal(f.amountProblem, "not-in-quote");
+  assert.equal(f.heard, "four hundred dollars", "the heard words are still shown");
+  assert.match(amountNote(f)!, /isn't in the quote from the transcript/);
+  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, ["Amount isn't in the quote"]);
+});
+
+test("a different number in the quote doesn't count: forty is not four hundred", () => {
+  const f = pay("Okay, pay the designer forty dollars for the icons.", "four hundred dollars", "pay the designer forty dollars for the icons");
+  assert.equal(f.amount, null);
+  assert.equal(f.amountProblem, "not-in-quote");
+});
+
+test("partial-span trap: two hundred in the words, two hundred and fifty in the quote", () => {
+  const f = pay("Right, pay the designer two hundred and fifty for the logo.", "two hundred", "pay the designer two hundred and fifty for the logo");
+  assert.equal(f.amount, null, "200 is only part of 250, so it isn't in the quote");
+  assert.equal(f.amountProblem, "not-in-quote");
+  const g = pay("Right, pay the designer two hundred and fifty for the logo.", "two hundred and fifty", "pay the designer two hundred and fifty for the logo");
+  assert.equal(g.amount, usdc(250));
+});
+
+test("naira is not USDC: no amount, the reason names the currency, autopilot waits", () => {
+  const f = pay("Pay the designer fifty thousand naira for the deck.", "fifty thousand naira", "Pay the designer fifty thousand naira for the deck");
+  assert.equal(f.amount, null, "never 50,000.00 USDC");
+  assert.equal(f.amountProblem, "not-usdc");
+  assert.equal(amountNote(f), '"fifty thousand naira" is in naira, not US dollars. Aftercall doesn\'t convert currencies, so the amount wasn\'t filled in.');
+  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, ["Amount isn't in US dollars"]);
+});
+
+test("unclear words give no amount and say so", () => {
+  const f = pay("Pay the designer twelve fifty for the icons.", "twelve fifty", "Pay the designer twelve fifty for the icons");
+  assert.equal(f.amount, null);
+  assert.equal(f.amountProblem, "unclear");
+  assert.equal(amountNote(f), '"twelve fifty" doesn\'t read as one amount, so it wasn\'t filled in.');
+});
+
+test("checkedAmount: cents and digits in the quote", () => {
+  assert.deepEqual(checkedAmount("fifty cents", "it's fifty cents a page"), { amount: usdc(0.5) });
+  assert.deepEqual(checkedAmount("fifty dollars", "it's fifty cents a page"), { amount: null, amountProblem: "not-in-quote" });
+  assert.deepEqual(checkedAmount("five thousand", "send the $5,000 deposit"), { amount: usdc(5_000) });
 });

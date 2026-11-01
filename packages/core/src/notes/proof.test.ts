@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import { canonicalJson, decodePublicProof, encodePublicProof, groupChecks, proofHash, verifyProof, verifyProofGpu, type OnChainProof } from "./proof.ts";
+import { NOT_PROVEN, canonicalJson, decodePublicProof, droppedLine, encodePublicProof, groupChecks, noticeLine, proofHash, verifyProof, verifyProofGpu, type OnChainProof } from "./proof.ts";
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
 import { expectedMrConfig, expectedReportData } from "../tee/checks.ts";
 import { fakeNras, teeKey } from "../tee/testkit.ts";
@@ -202,4 +202,43 @@ test("your notes check: matches with the salt, fails if changed, added or the sa
   assert.equal(yourNotesHash(salt, typed), sha256Hex(new Uint8Array([...Buffer.from(salt, "hex"), ...utf8ToBytes(typed)])), "sha256(salt bytes ‖ UTF-8 notes)");
   // The public page passes no notes: nothing to check, and the hash alone says nothing about the words.
   assert.equal(verifyProof(bundle, null).some((c) => c.id === "your-notes"), false);
+});
+
+// ---------- dropped items and the notice ----------
+
+test("old proofs without dropped or notice hash exactly as before", () => {
+  const fixed = { version: 2, meetingId: "1793006441", summaryModel: "Qwen/Qwen3.8-27B", whisperModel: "openai/whisper-large-v3", requestHash: "aa", responseHash: "bb", transcriptHash: "cc", notesHash: "dd", checkedAt: "2026-11-02T10:00:00.000Z" };
+  assert.equal(proofHash({ ...fixed, dropped: undefined, notice: undefined } as never), "11bb23c4d909137da92a6a38a17c3691d93c002c2d8494275bacd37d297a33e5");
+  assert.notEqual(proofHash({ ...fixed, dropped: { decisions: 0, actionItems: 0, followUps: 0 } } as never), proofHash(fixed as never), "a recorded count is covered by the hash");
+});
+
+test("droppedLine: counts in words, none for old bundles, never a check", async () => {
+  const { bundle } = await signedV2();
+  assert.equal(droppedLine(bundle), null, "a bundle made before the count existed");
+  assert.equal(droppedLine(signed().bundle), null, "v1");
+  const line = (decisions: number, actionItems: number, followUps: number) => droppedLine({ ...bundle, dropped: { decisions, actionItems, followUps } });
+  assert.equal(line(0, 0, 0), "Every item the model proposed had an exact quote in the transcript.");
+  assert.equal(line(0, 1, 0), "The app dropped 1 item the model proposed (1 action item) because its quote wasn't in the transcript.");
+  assert.equal(line(1, 0, 1), "The app dropped 2 items the model proposed (1 decision, 1 follow-up) because their quotes weren't in the transcript.");
+  assert.equal(line(2, 3, 0), "The app dropped 5 items the model proposed (2 decisions, 3 action items) because their quotes weren't in the transcript.");
+  const withCount = { ...bundle, dropped: { decisions: 1, actionItems: 0, followUps: 0 } };
+  assert.deepEqual(verifyProof(withCount, null).map((c) => c.id), verifyProof(bundle, null).map((c) => c.id), "no new check: the transcript isn't public, so it can't be re-run");
+});
+
+test("noticeLine: who said it, how, when, and that the app can't check it", () => {
+  const at = "2026-11-01T14:02:45.000Z";
+  assert.equal(noticeLine({ by: "you", at, how: "chat" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "aloud" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone aloud at 14:02. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "invite" }, { timeZone: "Africa/Lagos" }), "Stated by the person who recorded: told everyone in the invite at 15:02. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at, how: "email" }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone by email at 14:02. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at }, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone at 14:02. Aftercall can't check this.");
+  assert.equal(noticeLine({ by: "you", at: "not a time" }), "Stated by the person who recorded: told everyone. Aftercall can't check this.");
+  assert.equal(noticeLine(undefined), "No notice logged");
+});
+
+test("what the proof doesn't show includes NEAR AI's data policy and the TLS fallback", () => {
+  assert.ok(NOT_PROVEN.some((l) => /keeps no copy/.test(l) && /policy/.test(l)));
+  assert.ok(NOT_PROVEN.some((l) => /over TLS/.test(l) && /every summary node passed/.test(l)));
+  assert.ok(NOT_PROVEN.some((l) => /Whisper can mishear/.test(l)), "the existing items stay");
+  for (const l of NOT_PROVEN) assert.equal(l.split(/\.\s/).length, 1, `one sentence: ${l}`);
 });

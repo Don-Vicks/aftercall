@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { edwardsToMontgomeryPriv } from "@noble/curves/ed25519";
-import { YOUR_NOTES_MAX, cleanYourNotes, processRecording, type E2eeKeys, type NearAiTransport, type ProcessInput } from "./pipeline.ts";
-import { encodePublicProof, proofHash, verifyProof, verifyProofGpu } from "./proof.ts";
+import { SUMMARY_MAX_TOKENS, YOUR_NOTES_MAX, cleanYourNotes, processRecording, type E2eeKeys, type NearAiTransport, type ProcessInput } from "./pipeline.ts";
+import { droppedLine, encodePublicProof, noticeLine, proofHash, verifyProof, verifyProofGpu } from "./proof.ts";
 import { NOTES_SYSTEM_PROMPT } from "./schema.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { decryptWith, encryptTo } from "../tee/e2ee.ts";
@@ -21,6 +21,11 @@ interface FakeOpts {
   /** Summary TEE nodes; node 2 onward can be made to fail. */
   summaryNodes?: number;
   badSecondNode?: boolean;
+  /** The chat completion's `usage`, as NEAR AI reports it (absent unless given). */
+  usage?: object;
+  finishReason?: string;
+  /** Whisper's `duration` in seconds; absent unless given. */
+  whisperDuration?: number;
 }
 
 /**
@@ -75,7 +80,7 @@ async function fakeNearAi(opts: FakeOpts) {
       const text = path.includes("mic")
         ? "Send Ada the recap after this call, and pay the designer the fifty dollar deposit today."
         : "Great, I'll look out for the recap.";
-      return JSON.stringify({ text, segments: [{ start: path.includes("mic") ? 4 : 9, end: 8, text }] });
+      return JSON.stringify({ text, ...(opts.whisperDuration !== undefined ? { duration: opts.whisperDuration } : {}), segments: [{ start: path.includes("mic") ? 4 : 9, end: 8, text }] });
     },
     async chat(body: string, e2ee?: E2eeKeys) {
       calls.push(e2ee ? "chat e2ee" : "chat");
@@ -95,7 +100,12 @@ async function fakeNearAi(opts: FakeOpts) {
       } else {
         seenByTee.push((JSON.parse(body).messages as { content: string }[])[1].content);
       }
-      const response = JSON.stringify({ id: "chatcmpl-42", choices: [{ message: { content } }] });
+      // usage and finish_reason sit outside the encrypted content, as NEAR AI sends them.
+      const response = JSON.stringify({
+        id: "chatcmpl-42",
+        choices: [{ message: { content }, ...(opts.finishReason ? { finish_reason: opts.finishReason } : {}) }],
+        ...(opts.usage ? { usage: opts.usage } : {}),
+      });
       lastChat = { request: body, response, signer };
       return response;
     },
@@ -308,4 +318,97 @@ test("your notes are cleaned: trimmed, at most 8,000 characters, no <<< or >>>",
   assert.equal(Array.from(long).length, YOUR_NOTES_MAX);
   assert.ok(!long.includes("overflow"));
   assert.equal(Array.from(cleanYourNotes("😀".repeat(9000))!).length, YOUR_NOTES_MAX, "never splits a character");
+});
+
+// ---------- the output cap and the cost estimate ----------
+
+const usage = { prompt_tokens: 20_000, completion_tokens: 1_500, completion_tokens_details: { reasoning_tokens: 900 } };
+const near = (a: number | null | undefined, b: number) => assert.ok(a != null && Math.abs(a - b) < 1e-12, `${a} ≈ ${b}`);
+
+test("every summary request is capped at SUMMARY_MAX_TOKENS, encrypted or over TLS", async () => {
+  assert.equal(SUMMARY_MAX_TOKENS, 12_288);
+  for (const e2eeRefused of [false, true]) {
+    const ai = await fakeNearAi({ notes, e2eeRefused });
+    await processRecording(ai.transport, input, undefined, noWait);
+    const bodies = ai.seenByGateway.map((b) => JSON.parse(b));
+    assert.ok(bodies.length >= 1);
+    for (const b of bodies) assert.equal(b.max_tokens, 12_288, e2eeRefused ? "TLS fallback" : "E2EE");
+  }
+});
+
+test("a reply cut off at the cap stops processing in plain words, encrypted or not", async () => {
+  for (const e2eeRefused of [false, true]) {
+    const ai = await fakeNearAi({ notes, finishReason: "length", e2eeRefused });
+    await assert.rejects(
+      processRecording(ai.transport, input, undefined, noWait),
+      { message: "The model's reply hit the 12,288-token limit, so the notes would be incomplete. Nothing was saved." },
+    );
+    assert.ok(!ai.calls.some((c) => c.startsWith("get signature")), "stops before the signature step");
+  }
+  const ok = await fakeNearAi({ notes, finishReason: "stop" });
+  assert.equal((await processRecording(ok.transport, input, undefined, noWait)).meeting.verified, true);
+});
+
+test("the cost estimate: Whisper's reported seconds plus the chat call's tokens; not in the proof", async () => {
+  const ai = await fakeNearAi({ notes, usage, whisperDuration: 9.2 });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.equal(r.cost.whisperSeconds, 20, "two chunks of 9.2 s, each billed as 10");
+  near(r.cost.whisperUsd, 0.0000002);
+  assert.deepEqual(r.cost.chat && [r.cost.chat.model, r.cost.chat.promptTokens, r.cost.chat.completionTokens, r.cost.chat.reasoningTokens], ["Qwen/Qwen3.8-27B", 20_000, 1_500, 900]);
+  near(r.cost.usd, 0.002825 + 0.0000002);
+  assert.equal(r.cost.pricesAsOf, "2026-11-01");
+  assert.equal("cost" in r.proof, false, "the proof says what was checked, not what it cost");
+  assert.ok(!JSON.stringify(r.proof).includes("prompt_tokens"));
+});
+
+test("no usage from NEAR AI: the total is unknown, the Whisper part still counted", async () => {
+  const ai = await fakeNearAi({ notes, whisperDuration: 9.2 });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.equal(r.cost.usd, null);
+  assert.equal(r.cost.whisperSeconds, 20);
+});
+
+test("without Whisper's duration, the chunk's length from the recording is billed", async () => {
+  const ai = await fakeNearAi({ notes, usage });
+  const r = await processRecording(ai.transport, { ...input, durationSec: 190 }, undefined, noWait);
+  assert.equal(r.cost.whisperSeconds, 380, "two stems of the one 190-second chunk");
+});
+
+test("cached chunks were paid for earlier and aren't counted again", async () => {
+  const ai = await fakeNearAi({ notes, usage, whisperDuration: 300 });
+  const stored = new Map<string, string>();
+  const cache = { get: async (c: { path: string }) => stored.get(c.path) ?? null, set: async (c: { path: string }, raw: string) => void stored.set(c.path, raw) };
+  const first = await processRecording(ai.transport, { ...input, transcriptCache: cache }, undefined, noWait);
+  assert.equal(first.cost.whisperSeconds, 600);
+  const again = await processRecording(ai.transport, { ...input, transcriptCache: cache }, undefined, noWait);
+  assert.equal(again.cost.whisperSeconds, 0);
+  assert.equal(again.cost.whisperUsd, 0);
+  near(again.cost.usd, 0.002825);
+});
+
+// ---------- dropped items and the notice, in the proof ----------
+
+test("the proof records how many proposed items were dropped, and the line says so", async () => {
+  const ai = await fakeNearAi({ notes });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.deepEqual(r.proof.dropped, { decisions: 0, actionItems: 0, followUps: 1 });
+  assert.equal(droppedLine(r.proof), "The app dropped 1 item the model proposed (1 follow-up) because its quote wasn't in the transcript.");
+  assert.ok(!verifyProof(r.proof, null).some((c) => (c.id as string) === "dropped"), "a recorded statement, not a re-runnable check");
+
+  const clean = await fakeNearAi({ notes: { ...notes, followups: notes.followups.slice(0, 2) } });
+  const r2 = await processRecording(clean.transport, input, undefined, noWait);
+  assert.deepEqual(r2.proof.dropped, { decisions: 0, actionItems: 0, followUps: 0 });
+  assert.equal(droppedLine(r2.proof), "Every item the model proposed had an exact quote in the transcript.");
+});
+
+test("a logged notice goes into the proof as your statement; without one the key is absent", async () => {
+  const notice = { by: "you" as const, at: "2026-11-01T14:02:10.000Z", how: "chat" as const };
+  const ai = await fakeNearAi({ notes });
+  const r = await processRecording(ai.transport, { ...input, notice: { ...notice, extra: "not hashed" } as never }, undefined, noWait);
+  assert.deepEqual(r.proof.notice, notice, "only the notice's own fields");
+  assert.equal(noticeLine(r.proof.notice, { timeZone: "UTC" }), "Stated by the person who recorded: told everyone in chat at 14:02. Aftercall can't check this.");
+
+  const none = await processRecording((await fakeNearAi({ notes })).transport, input, undefined, noWait);
+  assert.equal("notice" in none.proof, false);
+  assert.equal(proofHash(none.proof), proofHash({ ...none.proof, notice: undefined }));
 });

@@ -1,5 +1,5 @@
-import type { ActionItem, FollowUp, Meeting, TranscriptLine } from "../meeting.ts";
-import { parseAmount } from "./amounts.ts";
+import type { ActionItem, AmountProblemKind, FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
+import { amountProblem, amountsIn, parseAmount } from "./amounts.ts";
 import type { Notes } from "./schema.ts";
 import { findQuote } from "./transcript.ts";
 
@@ -35,9 +35,35 @@ function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
 }
 
 /**
+ * A payment's amount, kept only when the same value is in its evidence quote as found
+ * in the transcript. Values, not words: Whisper writes "$40" where the model writes
+ * "forty dollars". Otherwise null, with the reason.
+ */
+export function checkedAmount(heard: string, quote: string): { amount: bigint | null; amountProblem?: AmountProblemKind } {
+  const problem = amountProblem(heard);
+  if (problem) return { amount: null, amountProblem: problem.kind };
+  const amount = parseAmount(heard);
+  if (amount === null) return { amount: null, amountProblem: "unclear" };
+  return amountsIn(quote).includes(amount) ? { amount } : { amount: null, amountProblem: "not-in-quote" };
+}
+
+/** One sentence for the payment card on why the amount is empty; null when there is an amount. */
+export function amountNote(f: Pick<PaymentFollowUp, "amount" | "amountProblem" | "heard">): string | null {
+  if (f.amount !== null) return null;
+  if (f.amountProblem === "not-in-quote") return `The model heard "${f.heard}", but that amount isn't in the quote from the transcript, so it wasn't filled in.`;
+  const problem = amountProblem(f.heard);
+  if (f.amountProblem === "not-usdc" || problem?.kind === "not-usdc") {
+    const currency = problem?.kind === "not-usdc" ? problem.currency : "another currency";
+    return `"${f.heard}" is in ${currency}, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.`;
+  }
+  return `"${f.heard}" doesn't read as one amount, so it wasn't filled in.`;
+}
+
+/**
  * Turns the model's notes into a meeting. Anything whose evidence quote isn't in
  * the transcript is dropped and reported, so the model can't invent a payment, and
- * a payment that appears only in your notes never becomes a follow-up.
+ * a payment that appears only in your notes never becomes a follow-up. A payment's
+ * amount must also be in its quote (see `checkedAmount`).
  */
 export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dropped[] } {
   const { notes, transcript } = input;
@@ -78,7 +104,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
         payeeName: payee?.name ?? f.payee_name ?? "Unknown payee",
         payeeAccount: payee?.account ?? "",
         payeeListed: !!payee,
-        amount: parseAmount(f.amount_words),
+        ...checkedAmount(f.amount_words, quote.text),
         heard: f.amount_words,
       },
     ];
