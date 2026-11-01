@@ -69,6 +69,12 @@
     display: none;
   }
 }
+/* A phone has room for three links on one row; the footer still links Call handling. */
+@media (max-width: 480px) {
+  .navNarrowHide {
+    display: none;
+  }
+}
 
 .footer {
   max-width: 1200px;

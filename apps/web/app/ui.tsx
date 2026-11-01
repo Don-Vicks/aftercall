@@ -102,6 +102,12 @@ const ICONS = {
       <path d="m10.8 12.2 8.7-8.7M17 6l3 3M14.5 8.5l2 2" />
     </>
   ),
+  note: (
+    <>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M9 13h6M9 17h4" />
+    </>
+  ),
   info: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -226,9 +232,9 @@ export function Seal({ size = 148, id, fine, className, style }: { size?: number
 
 // ---------- headers and footers ----------
 
-type Current = "how" | "download" | null;
+type Current = "how" | "handling" | "download" | null;
 
-/** The site header on the landing, How it works and Download pages. */
+/** The site header on the landing, How it works, Call handling and Download pages. */
 export function SiteHeader({ current = null }: { current?: Current }) {
   const here = (page: Current) => (current === page ? { "aria-current": "page" as const } : {});
   return (
@@ -241,6 +247,9 @@ export function SiteHeader({ current = null }: { current?: Current }) {
         <nav aria-label="Site" className={s.nav}>
           <a href="/how-it-works" className="quiet" {...here("how")}>
             How it works
+          </a>
+          <a href="/handling" className={`quiet ${s.navNarrowHide}`} {...here("handling")}>
+            Call handling
           </a>
           <a href="/verify" className="quiet">
             Verify a proof
@@ -270,6 +279,9 @@ export function SiteFooter() {
         <nav aria-label="Footer" className={s.footerNav}>
           <a href="/how-it-works" className="quiet">
             How it works
+          </a>
+          <a href="/handling" className="quiet">
+            How a call is handled
           </a>
           <a href={`${REPO_URL}/blob/main/docs/privacy.md`} className="quiet">
             Privacy

@@ -1,3 +1,4 @@
+import { NOT_PROVEN } from "@aftercall/core";
 import { Icon, OpenCircle, REPO_URL, SiteFooter, SiteHeader, vars } from "../ui";
 import { Checks } from "./Checks";
 import { Journey } from "./Journey";
@@ -18,13 +19,11 @@ const CODE: [string, string][] = [
   ["docs/privacy.md", "Where every byte goes"],
 ];
 
-const LIMITS: [string, string][] = [
-  ["That the transcript is accurate:", "Whisper can mishear names and numbers."],
-  ["That this transcription came from the attested Whisper TEE:", "NEAR AI signs chat responses, not transcriptions."],
-  ["That everyone on the call agreed to be recorded:", "Aftercall asks you to confirm it, and can't check it."],
-  ["Who said what:", "“You” is your microphone and “Others” is the call's audio."],
-  ["What NEAR AI keeps:", "attestation proves the models ran in TEEs, not what NEAR AI's gateway logs."],
-];
+// The same list the Verify page shows, split into its bold lead and the rest.
+const LIMITS = NOT_PROVEN.map((n) => {
+  const cut = n.indexOf(": ");
+  return cut > 0 ? [n.slice(0, cut + 1), n.slice(cut + 2)] : ["", n];
+});
 
 /** V2HowItWorks: the privacy story, step by step, with links to the code behind each claim. */
 export default function HowItWorks() {
@@ -105,7 +104,7 @@ export default function HowItWorks() {
                 </span>
                 <span>
                   <span className={h.t}>The notes come back sealed to your Mac</span>
-                  <span className={h.d}>Qwen encrypts its reply to a key pair made for this one request. If NEAR AI refuses encryption, plain text goes only when every Qwen node passed.</span>
+                  <span className={h.d}>Qwen encrypts its reply to a key pair made for this one request. If end-to-end encryption isn&apos;t available, the transcript goes over TLS only when every Qwen node passed.</span>
                 </span>
               </li>
             </ol>
@@ -183,6 +182,13 @@ export default function HowItWorks() {
                   <span>
                     <strong>Open a sample proof</strong>
                     <span className="ink-2">re-run the checks in your browser</span>
+                  </span>
+                  <Icon name="arrowRight" size={16} stroke={2.2} />
+                </a>
+                <a href="/handling" className={h.linkRow}>
+                  <span>
+                    <strong>How a call is handled</strong>
+                    <span className="ink-2">each step, and the recap footer</span>
                   </span>
                   <Icon name="arrowRight" size={16} stroke={2.2} />
                 </a>

@@ -673,8 +673,12 @@
   color: var(--verdigris);
   transition: background-color var(--dur-1) var(--ease);
 }
+/* The divider sits inside the row's padding, so it lines up with the border above. */
 .linkRow + .linkRow {
-  border-top: 1px solid var(--hairline);
+  background-image: linear-gradient(var(--hairline), var(--hairline));
+  background-position: 12px 0;
+  background-size: calc(100% - 24px) 1px;
+  background-repeat: no-repeat;
 }
 .linkRow:hover {
   background: var(--elevated);

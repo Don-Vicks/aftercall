@@ -323,3 +323,53 @@
   line-height: 28px;
   color: var(--ink-2);
 }
+
+/* ---------- statements: recorded in the proof, not re-run, so no ticks ---------- */
+
+.statements {
+  margin: 0;
+  padding: 4px 18px;
+  list-style: none;
+  border-radius: var(--radius-md);
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.statement {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 268px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 10px 0;
+}
+.statement + .statement {
+  border-top: 1px solid var(--hairline);
+}
+.statementMark {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.statementText {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+.messageLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+@media (max-width: 640px) {
+  .statement {
+    grid-template-columns: 20px minmax(0, 1fr);
+    row-gap: 2px;
+  }
+  .statementText {
+    grid-column: 2;
+  }
+}

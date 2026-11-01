@@ -6,9 +6,12 @@ import {
   NOT_PROVEN,
   WHISPER_NOTE,
   decodePublicProof,
+  droppedLine,
   explorerAccountUrl,
   groupChecks,
+  hasStatements,
   isNetwork,
+  noticeLine,
   proofHash,
   verifyProof,
   verifyProofGpu,
@@ -16,6 +19,7 @@ import {
   type CheckGroup,
   type Jwks,
   type OnChainProof,
+  type ProofBundleV2,
   type PublicProof,
   type TeeCheck,
 } from "@aftercall/core";
@@ -116,10 +120,16 @@ export function VerifyClient() {
           )}
           {state.kind === "missing" && (
             <Message title="Open a proof link" body="This page checks a meeting proof shared from the Aftercall app. The link carries the evidence after the # sign.">
-              <a href="/how-it-works#checks" className="arrow-link">
-                How the checks work
-                <Icon name="arrowRight" size={14} stroke={2.2} />
-              </a>
+              <span className={v.messageLinks}>
+                <a href="/how-it-works#checks" className="arrow-link">
+                  How the checks work
+                  <Icon name="arrowRight" size={14} stroke={2.2} />
+                </a>
+                <a href="/handling" className="arrow-link">
+                  How a call is handled
+                  <Icon name="arrowRight" size={14} stroke={2.2} />
+                </a>
+              </span>
             </Message>
           )}
           {state.kind === "bad-link" && <Message title="This link is damaged" body="The proof in the link can't be read. Ask the person who shared it to copy it again from Aftercall." />}
@@ -221,6 +231,9 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
         <p className="ink-2">This proof was made before Aftercall verified attestation quotes. The app checked the signature and that attestation evidence came back with a fresh nonce.</p>
       )}
 
+      {/* Proofs made before the app kept these have none: an empty notice there means "not kept", not "nobody was told". */}
+      {hasStatements(proof.bundle) && <Statements bundle={proof.bundle} />}
+
       <section aria-label="On-chain proof" className={`${v.onChain} enter`} style={vars({ d: "120ms" })}>
         <div className={v.onChainTop}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
@@ -282,6 +295,10 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
             );
           })}
         </ul>
+        <a href="/handling" className="arrow-link" style={{ alignSelf: "flex-start", marginTop: 4 }}>
+          How a call is handled
+          <Icon name="arrowRight" size={14} stroke={2.2} />
+        </a>
       </section>
 
       <div className={v.foot}>
@@ -399,6 +416,42 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
           );
         })}
       </div>
+    </section>
+  );
+}
+
+/**
+ * What the app wrote into the proof as statements: the items it dropped and the notice
+ * the person who recorded logged. The hash on NEAR covers them, but nobody can re-run
+ * them from the link (the transcript isn't in it), so they get a note mark, not a tick.
+ */
+function Statements({ bundle }: { bundle: ProofBundleV2 }) {
+  const dropped = droppedLine(bundle);
+  const rows: [string, string][] = [
+    ...(dropped ? ([["Items without a quote", dropped]] as [string, string][]) : []),
+    ["Notice before recording", noticeLine(bundle.notice)],
+  ];
+  return (
+    <section aria-labelledby="vs" className={`${v.block} enter`} style={vars({ d: "100ms" })}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <h2 id="vs" className="t-section">
+          Stated in the proof <span className="count">not re-run</span>
+        </h2>
+        <p className="ink-2" style={{ maxWidth: 640 }}>
+          The app wrote these into the proof when it made the notes. The proof hash covers them, so if it matches NEAR they haven&apos;t changed since. They aren&apos;t checks: the transcript isn&apos;t in the link, so nobody can re-run them.
+        </p>
+      </div>
+      <ul className={v.statements}>
+        {rows.map(([label, text]) => (
+          <li key={label} className={v.statement}>
+            <span className={v.statementMark}>
+              <Icon name="note" size={13} stroke={1.75} />
+            </span>
+            <span className={v.label}>{label}</span>
+            <span className={v.statementText}>{text}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -316,7 +316,7 @@ function Story() {
                 </span>
                 <span aria-hidden="true" className={l.mailFoot}>
                   <Icon name="shieldCheck" size={14} stroke={1.75} className="accent" />
-                  <span>Recorded with notice to everyone, processed in secure hardware.</span>
+                  <span>Notes made by Aftercall in secure hardware on NEAR AI Cloud.</span>
                 </span>
               </div>
             }
