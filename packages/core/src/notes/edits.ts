@@ -118,3 +118,23 @@ export function editsLine(edits: ItemEditSummary[]): string {
   const fields = FIELDS.filter((f) => edits.some((e) => e.fields.includes(f))).map((f) => FIELD_WORDS[f]);
   return `${edits.length} action ${edits.length === 1 ? "item" : "items"} (${fields.join(", ")})`;
 }
+
+/** Where the Action items board shows a row: under its due date or with the done items; on the Agents tab, under Claimed or Completed. */
+export type BoardPlace = "open" | "done" | "claimed" | "completed";
+
+/** What decides a row's place on the board. */
+export type BoardState = Pick<ActionItem, "done" | "completed">;
+
+/**
+ * Where the Action items board shows an item. `touched` keeps a row you ticked on this
+ * visit where it was, struck through. `held` is the item as it was when you opened its
+ * editor: while you edit, the row stays where it was, so an agent completing the item
+ * (the app picks that up from disk every few seconds) doesn't move the row and throw
+ * your draft away.
+ */
+export function boardPlace(item: BoardState, agentsTab: boolean, opts: { touched?: boolean; held?: BoardState } = {}): BoardPlace {
+  const a = opts.held ?? item;
+  const open = !a.done || opts.touched === true;
+  if (agentsTab) return !a.completed && open ? "claimed" : "completed";
+  return open ? "open" : "done";
+}

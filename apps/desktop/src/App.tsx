@@ -736,7 +736,7 @@ export default function App() {
             )}
             {view.name === "privacy" && <PrivacyScreen onBack={() => setView({ name: "settings" })} onOpenSettings={() => setView({ name: "settings" })} />}
             {view.name === "agents" && (
-              <AgentsScreen meetings={shownMeetings.filter((m) => saved[m.id])} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
+              <AgentsScreen meetings={isDesktop ? shownMeetings.filter((m) => saved[m.id]) : shownMeetings} onOpenMeeting={(id) => setView({ name: "meeting", id })} />
             )}
             {view.name === "search" && (
               <SearchScreen key={view.query ?? ""} meetings={shownMeetings} initialQuery={view.query} onOpen={openMeeting} />

@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
+  boardPlace,
   buildPeople,
   clockTime,
   dueGroup,
@@ -13,12 +14,13 @@ import {
   startOfDay,
   type ActionItem,
   type AgentMark,
+  type BoardState,
   type DueGroup,
   type ItemFields,
   type Meeting,
 } from "@aftercall/core";
 import { Avatar, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from "./ui";
-import { EditItemButton, EditedMark, ItemEditor, useItemEditing, type EditItem, type OriginalOf } from "./ActionItemEditor";
+import { EditItemButton, EditedMark, ItemEditor, editButtonId, focusEditButton, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
 import { plural } from "./library";
 
@@ -96,6 +98,12 @@ export function ActionItemsScreen({
   const [showDone, setShowDone] = useState(false);
   /** Items ticked or unticked on this visit stay where they were, struck through, until you leave. */
   const [touched, setTouched] = useState<Set<string>>(new Set());
+  /**
+   * The row being edited, with the item as it was when the editor opened. Kept here,
+   * not in the row, so the row keeps its place (and your draft) when an agent completes
+   * the item meanwhile; see `boardPlace`.
+   */
+  const [editing, setEditing] = useState<{ key: string; held: BoardState } | null>(null);
   const index = useMemo(() => buildPeople(meetings, { me, now }), [meetings, me, now]);
 
   const rows: Row[] = useMemo(
@@ -145,13 +153,22 @@ export function ActionItemsScreen({
     if (movedTo.current) document.getElementById(`actions-tab-${movedTo.current}`)?.focus();
   };
 
+  const openEditor = (r: Row) => setEditing({ key: r.key, held: { done: r.item.done, completed: r.item.completed } });
+  /** Closes the editor. An item an agent finished meanwhile stays where it was, struck through, like one you ticked. */
+  const closeEditor = (r: Row) => {
+    if (editing?.key === r.key && editing.held.done !== r.item.done) setTouched((s) => new Set(s).add(r.key));
+    setEditing(null);
+    focusEditButton(r.key, focusMoved);
+  };
+
   const list = byTab[tab];
-  const visible = (r: Row) => !r.item.done || touched.has(r.key);
+  const place = (r: Row) => boardPlace(r.item, tab === "agents", { touched: touched.has(r.key), held: editing?.key === r.key ? editing.held : undefined });
+  const visible = (r: Row) => place(r) === "open";
   const sections =
     tab === "agents"
       ? [
-          { id: "claimed", title: "Claimed", caution: false, rows: list.filter((r) => !r.item.completed && (!r.item.done || touched.has(r.key))) },
-          { id: "completed", title: "Completed", caution: false, rows: list.filter((r) => r.item.completed || (r.item.done && !touched.has(r.key))) },
+          { id: "claimed", title: "Claimed", caution: false, rows: list.filter((r) => place(r) === "claimed") },
+          { id: "completed", title: "Completed", caution: false, rows: list.filter((r) => place(r) === "completed") },
         ]
       : GROUPS.map((g) => ({
           id: g.id,
@@ -175,6 +192,7 @@ export function ActionItemsScreen({
           onChange={(t) => {
             setTab(t);
             setShowDone(false);
+            setEditing(null);
           }}
           items={[
             { id: "mine", label: "Mine", count: openOf(byTab.mine) },
@@ -234,7 +252,9 @@ export function ActionItemsScreen({
                   index={Math.min(n++, 10)}
                   onToggle={() => toggle(r)}
                   onEdit={onEditItem && ((fields) => edit(r, fields))}
-                  onEditGone={focusMoved}
+                  editing={editing?.key === r.key}
+                  onOpenEditor={() => openEditor(r)}
+                  onCloseEditor={() => closeEditor(r)}
                   original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                   onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                 />
@@ -265,7 +285,9 @@ export function ActionItemsScreen({
                     index={Math.min(i, 10)}
                     onToggle={() => toggle(r)}
                     onEdit={onEditItem && ((fields) => edit(r, fields))}
-                    onEditGone={focusMoved}
+                    editing={editing?.key === r.key}
+                    onOpenEditor={() => openEditor(r)}
+                    onCloseEditor={() => closeEditor(r)}
                     original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                     onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                   />
@@ -316,7 +338,9 @@ function ItemRow({
   index,
   onToggle,
   onEdit,
-  onEditGone,
+  editing,
+  onOpenEditor,
+  onCloseEditor,
   original,
   onOpenMeeting,
 }: {
@@ -326,13 +350,15 @@ function ItemRow({
   index: number;
   onToggle: () => void;
   onEdit?: (fields: ItemFields | null) => void;
-  /** After an edit moved the row off this tab. */
-  onEditGone?: () => void;
+  /** Whether this row's editor is open; the screen keeps that, so the row keeps its place while you edit. */
+  editing: boolean;
+  onOpenEditor: () => void;
+  /** Closes the editor and puts focus back on the row's Edit button, or on the tab the row moved to. */
+  onCloseEditor: () => void;
   original: ItemFields | null;
   onOpenMeeting: () => void;
 }) {
   const textId = useId();
-  const editing = useItemEditing(r.key, onEditGone);
   const a = r.item;
   const agent = a.completed?.agent ?? a.claimed?.agent;
   const line = agentLine(a, now);
@@ -343,7 +369,7 @@ function ItemRow({
   const unassigned = a.owner === "Unassigned";
   const quote = a.completed?.note;
 
-  if (editing.editing && onEdit) {
+  if (editing && onEdit) {
     return (
       <div className="flex border-b border-hairline py-3 pl-[34px]">
         <ItemEditor
@@ -351,13 +377,13 @@ function ItemRow({
           original={original}
           onSave={(fields) => {
             onEdit(fields);
-            editing.close();
+            onCloseEditor();
           }}
           onRestore={() => {
             onEdit(null);
-            editing.close();
+            onCloseEditor();
           }}
-          onCancel={editing.close}
+          onCancel={onCloseEditor}
         />
       </div>
     );
@@ -396,7 +422,7 @@ function ItemRow({
       </span>
       <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
         <span className="relative">
-          {onEdit && <EditItemButton id={editing.buttonId} text={a.text} onClick={editing.open} />}
+          {onEdit && <EditItemButton id={editButtonId(r.key)} text={a.text} onClick={onOpenEditor} />}
           {label}
         </span>
       </span>

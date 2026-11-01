@@ -22,17 +22,23 @@ export type OriginalOf = (meetingId: string, itemId: string) => ItemFields | nul
  */
 export function useItemEditing(rowKey: string, onGone?: () => void) {
   const [editing, setEditing] = useState(false);
-  const buttonId = `edit-item-${rowKey}`;
   const close = () => {
     setEditing(false);
-    // After React has drawn the saved row, wherever it now is.
-    requestAnimationFrame(() => {
-      const button = document.getElementById(buttonId);
-      if (button) button.focus();
-      else onGone?.();
-    });
+    focusEditButton(rowKey, onGone);
   };
-  return { editing, open: () => setEditing(true), close, buttonId };
+  return { editing, open: () => setEditing(true), close, buttonId: editButtonId(rowKey) };
+}
+
+/** The id of a row's Edit button, from the row's key. */
+export const editButtonId = (rowKey: string) => `edit-item-${rowKey}`;
+
+/** After React has drawn the saved row, wherever it now is, focus goes back to its Edit button, or to what `onGone` picks. */
+export function focusEditButton(rowKey: string, onGone?: () => void) {
+  requestAnimationFrame(() => {
+    const button = document.getElementById(editButtonId(rowKey));
+    if (button) button.focus();
+    else onGone?.();
+  });
 }
 
 /**

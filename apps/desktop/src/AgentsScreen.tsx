@@ -90,7 +90,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
     isDesktop ? change(() => agentsApi.setAllowWrites(allow)) : setInfo({ ...info, allowWrites: allow, readOnlySinceUpdate: false });
 
   const sample = !isDesktop;
-  const known = sample ? [syncWithAda, ...meetings] : meetings;
+  // In the preview the app passes its sample meeting as you edited it; the signed one stands in only if it's gone.
+  const known = sample && !meetings.some((m) => m.id === syncWithAda.id) ? [syncWithAda, ...meetings] : meetings;
   const claude = claudeCommand(info);
   const codex = codexConfig(info);
   const height = (on: boolean) => (still ? { opacity: on ? 1 : 0 } : { opacity: on ? 1 : 0, height: on ? "auto" : 0 });

@@ -567,10 +567,10 @@ mod tests {
         let draft = |text: &str| Some(notes_file::ItemDraft { text: text.into(), owner: "Ada".into(), due: Some("Friday".into()) });
         // One after another, each on the item another just changed.
         notes_file::edit_item(&file, "a1", draft("Send Ada the pilot plan and budget"), "t1").unwrap();
-        dispatch(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), &at("t2")).unwrap();
+        dispatch(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), true, &at("t2")).unwrap();
         notes_file::set_item_done(&file, "a2", true).unwrap();
         notes_file::edit_item(&file, "a2", draft("Share the signed term sheet"), "t3").unwrap();
-        dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex", "note": "Sent" }), &at("t4")).unwrap();
+        dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex", "note": "Sent" }), true, &at("t4")).unwrap();
         let items = read_notes(&dir)["meeting"]["actionItems"].clone();
         assert_eq!(items[0]["text"], "Send Ada the pilot plan and budget");
         assert_eq!(items[0]["edited"]["fields"], json!(["text", "owner", "due"]));
@@ -594,7 +594,7 @@ mod tests {
             });
             s.spawn(move || {
                 for _ in 0..10 {
-                    dispatch(dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a3", "agent": "Claude Code" }), &at("t5")).ok();
+                    dispatch(dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a3", "agent": "Claude Code" }), true, &at("t5")).ok();
                 }
             });
         });
@@ -607,7 +607,7 @@ mod tests {
         assert_eq!(items[0]["completed"]["agent"], "Codex");
         // The model's signed items never change, and agents see the edited items.
         assert_eq!(v["notes"]["action_items"][2]["text"], "Book the call");
-        let seen = dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), &at("x")).unwrap();
+        let seen = dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), false, &at("x")).unwrap();
         assert_eq!(seen["meeting"]["actionItems"][2]["text"], "Book the call #9");
         assert!(!seen.to_string().contains("Push for the pilot"));
         std::fs::remove_dir_all(dir).unwrap();

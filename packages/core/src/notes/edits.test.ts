@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyItemEdit, changedFields, cleanItemFields, editsLine, itemEdits, originalItem, restoreItem, signedIndex, type ItemFields } from "./edits.ts";
+import { applyItemEdit, boardPlace, changedFields, cleanItemFields, editsLine, itemEdits, originalItem, restoreItem, signedIndex, type ItemFields } from "./edits.ts";
 import { buildMeeting } from "./build.ts";
 import { notesSchema, type Notes } from "./schema.ts";
 import { sha256Hex } from "./verify.ts";
@@ -178,4 +178,22 @@ test("everything that reads action items gets the edited version; no edit makes 
     plain.followUps.map((f) => autopilotDecision(f, rules, limits)),
   );
   assert.ok(m.actionItems.every((a) => !("amount" in a)));
+});
+
+test("a row you are editing stays where it was when an agent completes the item", () => {
+  const open = { done: false };
+  const claimed = { done: false, completed: undefined };
+  const finished = { done: true, completed: { agent: "Codex", at: "2026-10-21T11:00:00.000Z", note: "Sent" } };
+  // Without an editor open, a finished item leaves the open list and Claimed.
+  assert.equal(boardPlace(finished, false), "done");
+  assert.equal(boardPlace(finished, true), "completed");
+  // Ticked on this visit: stays in the open list, struck through, as before.
+  assert.equal(boardPlace(finished, false, { touched: true }), "open");
+  // While the editor is open it keeps the place it had when the editor opened.
+  assert.equal(boardPlace(finished, false, { held: open }), "open");
+  assert.equal(boardPlace(finished, true, { held: claimed }), "claimed");
+  // Editing a done item doesn't pull it out of the done list or Completed.
+  assert.equal(boardPlace(finished, false, { held: finished }), "done");
+  assert.equal(boardPlace(finished, true, { held: finished }), "completed");
+  assert.equal(boardPlace(open, false, { held: open }), "open");
 });
