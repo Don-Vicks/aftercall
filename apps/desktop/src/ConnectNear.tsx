@@ -1,260 +1,258 @@
-import { useEffect, useState } from "react";
-import { accountFitsNetwork, exampleAccount } from "@aftercall/core";
-import { Check, Copy } from "lucide-react";
-import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
-import { Button, Pill, SectionLabel, Spinner, cx } from "./ui";
+import { useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Check, ChevronRight, ShieldCheck } from "lucide-react";
 import { AutopilotSettings } from "./AutopilotSettings";
 import { CalendarSettings } from "./CalendarSettings";
+import type { CalendarStatus } from "./calendar";
 import { NearAiSettings } from "./NearAiSettings";
+import { useNearSetup, type NearSetup } from "./nearSetup";
 import { isDesktop } from "./recorder";
-import { recovery, type RecoveryStatus } from "./recovery";
 import { RecoverySettings } from "./RecoveryPhrase";
+import { AccountFields, AccountNotes, SetupPayments, type SetupStep } from "./SetupPayments";
+import { IconDisc, Pop, Snippet, Why, rise } from "./SettingsParts";
+import { Button, Card, Pill, SectionTitle, Spinner, cx } from "./ui";
 
 /**
- * Connects the user's NEAR account. The app holds its own limited key; the user
- * authorises it once from their own wallet or near-cli, so the app can only
- * record proofs and pay within the contract's caps.
+ * Settings, in the order a new user needs them: notes (NEAR AI), this Mac's key
+ * (recovery phrase), the account it pays from, the two signatures, then extras.
+ * The index at the top ticks what's done and says what still needs a signature.
+ * `onOpenPrivacy` shows the "Privacy and your data" row; without it the row is hidden.
  */
-/** In the order a new user needs them: notes, this Mac's key, the account it pays from, then extras. */
-const SECTIONS = [
-  ["settings-near-ai", "NEAR AI"],
-  ["settings-key", "Recovery phrase"],
-  ["settings-account", "NEAR account"],
-  ["settings-authorise", "Authorise"],
-  ["settings-calendar", "Calendar"],
-  ["settings-autopilot", "Autopilot"],
-] as const;
+export function ConnectNear({ onOpenPrivacy }: { onOpenPrivacy?: () => void } = {}) {
+  const n = useNearSetup();
+  const [nearAi, setNearAi] = useState(false);
+  const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
+  /** Set up payments, open at a step ("auto": the first one not done). */
+  const [setup, setSetup] = useState<SetupStep | "auto" | null>(null);
 
-export function ConnectNear() {
-  const [config, setConfig] = useState<NearConfig>({ network: "testnet", account: "", contract: "" });
-  const [publicKey, setPublicKey] = useState("");
-  const [status, setStatus] = useState<NearStatus | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
-  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus | null>(null);
+  const toSign = n.saved && n.status && !n.connected ? 2 - n.signed : 0;
+  const index: { id: string; label: string; done?: boolean; pill?: string }[] = [
+    { id: "settings-near-ai", label: "NEAR AI", done: nearAi },
+    { id: "settings-key", label: "Recovery phrase", done: Boolean(n.recoveryStatus?.fromPhrase) },
+    { id: "settings-account", label: "NEAR account", done: n.accountDone },
+    { id: "settings-authorise", label: "Authorise", done: n.connected, pill: toSign ? `${toSign} to sign` : undefined },
+    { id: "settings-calendar", label: "Calendar", done: calendar === "granted" },
+    { id: "settings-autopilot", label: "Autopilot" },
+  ];
 
-  /** This Mac's key, which a new install only has once a recovery phrase is made or restored. */
-  const loadKey = async () => {
-    const r = await recovery.status();
-    setRecoveryStatus(r);
-    setPublicKey(r.publicKey ?? "");
-    return r;
+  const jump = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    // Keyboard and screen-reader users land in the section too, not just the eye.
+    el.focus({ preventScroll: true });
   };
 
-  useEffect(() => {
-    near.getConfig().then((c) => c && setConfig(c));
-    loadKey().catch((e) => setError(String(e)));
-    if (!isDesktop) return setError("Connecting NEAR works in the Mac app, not the browser preview.");
-  }, []);
-
-  /** After a new or restored key: check NEAR again, since the contract may already know it. */
-  const keyChanged = async () => {
-    setStatus(null);
-    const r = await loadKey().catch(() => null);
-    if (r?.hasKey && (await near.getConfig().catch(() => null))) near.status().then(setStatus).catch(() => {});
-  };
-
-  // A testnet account in a mainnet setup (or the other way round) can't work; say so before anything is signed.
-  const wrongNetwork = [config.account, config.contract].find((a) => a.length > 1 && !accountFitsNetwork(a, config.network));
-  const ready = config.account.length > 1 && config.contract.length > 1 && !wrongNetwork;
-  const commands = ready && publicKey ? setupCommands(config, publicKey) : null;
-
-  const check = async () => {
-    setError(null);
-    setChecking(true);
-    try {
-      await near.saveConfig(config);
-      if (publicKey) setStatus(await near.status());
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const copy = async (label: string, text: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 1600);
-  };
-
-  const connected = status?.registered && status.keyAdded;
-  const [waiting, setWaiting] = useState<string | null>(null);
-
-  /** Opens the signing page in the browser and checks NEAR until the step lands. */
-  const signStep = async (label: string, kind: "register" | "authorise-key") => {
-    setError(null);
-    try {
-      await near.saveConfig(config);
-      await signInWallet(kind === "register" ? { kind } : { kind, publicKey });
-      setWaiting(label);
-      const done = await waitFor(async () => {
-        const s = await near.status();
-        setStatus(s);
-        return kind === "register" ? s.registered : s.keyAdded;
-      });
-      if (!done) setError(`Didn't see "${label}" on NEAR yet. If you signed, press Save and check in a moment.`);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setWaiting(null);
-    }
-  };
+  const eyebrow = n.saved?.account ? `${n.saved.account} · NEAR ${n.saved.network}` : "Not connected to NEAR yet";
 
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
       <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
-      <div className="mx-auto flex max-w-[680px] flex-col gap-8 px-12 pb-16">
-        <header className="flex flex-col gap-3.5">
-          <div className="flex items-center justify-between">
-            <span className="t-label text-muted">Settings</span>
-            {connected && <Pill tone="verdigris">NEAR connected</Pill>}
-          </div>
-          <h1 className="t-display m-0">Settings</h1>
-          <p className="t-reading m-0 text-muted">
-            Private notes through NEAR AI, proofs and payments on NEAR, and what autopilot may do. Keys stay in your Keychain.
-          </p>
-        </header>
-
-        <nav aria-label="Settings sections" className="-mt-2 flex flex-wrap gap-x-4 gap-y-1">
-          {SECTIONS.map(([id, label]) => (
-            <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })} className="font-semibold text-verdigris hover:text-verdigris-hover">
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div id="settings-near-ai" className="scroll-mt-12">
-          <NearAiSettings />
-        </div>
-
-        <div id="settings-key" className="scroll-mt-12">
-          <RecoverySettings status={recoveryStatus} onKeyChanged={keyChanged} />
-        </div>
-
-        <section id="settings-account" className="flex scroll-mt-12 flex-col gap-3">
-          <SectionLabel>Your NEAR account</SectionLabel>
-          <Field label="NEAR account" value={config.account} placeholder={exampleAccount(config.network)} onChange={(account) => setConfig({ ...config, account: account.trim().toLowerCase() })} />
-          <Field label="Agent-wallet contract" value={config.contract} placeholder={exampleAccount(config.network, "aftercall-wallet")} onChange={(contract) => setConfig({ ...config, contract: contract.trim().toLowerCase() })} />
-          <div className="flex items-center justify-between">
-            <span className="text-muted">Network</span>
-            <select
-              value={config.network}
-              onChange={(e) => setConfig({ ...config, network: e.target.value as NearConfig["network"] })}
-              className="h-8 rounded-sm border border-border bg-well px-2.5 text-ink"
-            >
-              <option value="testnet">Testnet</option>
-              <option value="mainnet">Mainnet</option>
-            </select>
-          </div>
-          {wrongNetwork && (
-            <p className="m-0 text-caution">
-              <span className="t-mono">{wrongNetwork}</span> isn't a {config.network} account. Pick the network it lives on.
-            </p>
-          )}
-          {config.network === "mainnet" && <p className="m-0 text-muted">Mainnet moves real USDC. Keep the caps small.</p>}
-          <div className="flex flex-col gap-2">
-            {status?.keyProblem && <p className="m-0 text-caution">{status.keyProblem}</p>}
-            {error && <p className="selectable m-0 break-words text-record">{error}</p>}
-            <div className="flex justify-end">
-              <Button variant="primary" onClick={check} disabled={!ready || checking}>
-                {checking && <Spinner size={12} />}
-                Save and check
-              </Button>
+      <div className="px-12 pt-5 pb-18">
+        <div className="mx-auto flex max-w-[680px] flex-col gap-8">
+          <header className="flex flex-col gap-1.5" style={rise(0)}>
+            <span className="t-eyebrow text-muted">{eyebrow}</span>
+            <div className="flex items-end justify-between gap-4">
+              <h1 className="t-display m-0">Settings</h1>
+              {n.loaded && !n.connected && (
+                <Button variant="primary" onClick={() => setSetup("auto")} className="mb-1">
+                  Set up payments
+                </Button>
+              )}
             </div>
-          </div>
-        </section>
+            <p className="m-0 text-ink-2">Private notes through NEAR AI, proofs and payments on NEAR, and what autopilot may do.</p>
+          </header>
 
-        <section id="settings-authorise" className="flex scroll-mt-12 flex-col gap-3">
-          <SectionLabel>Authorise this Mac, once</SectionLabel>
-          <p className="m-0 text-muted">
-            Two signatures in your own NEAR wallet: one creates your agent wallet, the other lets this Mac's key call only{" "}
-            <span className="t-mono text-ink">pay</span> and <span className="t-mono text-ink">record_proof</span>. Any rule change still needs your wallet.
-          </p>
-          <div className="flex flex-col overflow-hidden rounded-md shadow-[inset_0_0_0_1px_var(--hairline)]">
-            <StepRow n={1} title="Create your agent wallet" done={status?.registered} disabled={!ready || !!waiting} onSign={() => signStep("Create wallet", "register")} />
-            <StepRow n={2} title="Authorise this Mac's key" done={status?.keyAdded} disabled={!ready || !!waiting || !publicKey} onSign={() => signStep("Authorise this Mac", "authorise-key")} last />
+          <nav
+            aria-label="Settings sections"
+            className="flex flex-wrap items-center gap-x-[18px] gap-y-2 rounded-md px-4 py-3 shadow-[inset_0_0_0_1px_var(--hairline)]"
+            style={rise(1)}
+          >
+            {index.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => jump(s.id)}
+                className="press inline-flex items-center gap-1.5 rounded-sm text-[13px] font-semibold text-ink hover:text-verdigris"
+              >
+                <Pop show={Boolean(s.done)}>
+                  <Check size={13} strokeWidth={2.5} aria-hidden="true" className="text-verdigris" />
+                </Pop>
+                {s.label}
+                {s.done && <span className="sr-only">, done</span>}
+                <Pop show={Boolean(s.pill)}>
+                  <Pill tone="caution" className="h-5 px-2">
+                    {s.pill}
+                  </Pill>
+                </Pop>
+              </button>
+            ))}
+          </nav>
+
+          <div id="settings-near-ai" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(2)}>
+            <NearAiSettings onChange={setNearAi} />
           </div>
-          {waiting && (
-            <p className="m-0 flex items-center gap-2 text-muted">
-              <Spinner size={12} /> Waiting for you to sign “{waiting}” in your browser…
-            </p>
-          )}
-          <div className="flex flex-col gap-1">
-            <span className="text-muted">This Mac's key</span>
-            <span className="t-mono selectable break-all rounded-sm bg-well px-3 py-2">{publicKey || (recoveryStatus && !recoveryStatus.hasKey ? "None yet: create or restore a recovery phrase above" : "…")}</span>
+
+          <div id="settings-key" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(3)}>
+            <RecoverySettings status={n.recoveryStatus} onKeyChanged={n.keyChanged} onCreatePhrase={() => setSetup("phrase")} />
           </div>
-          {commands ? (
-            <details className="flex flex-col gap-2">
-              <summary className="cursor-pointer font-semibold text-verdigris">Prefer near-cli?</summary>
-              <div className="mt-2 flex flex-col gap-2">
-                <Command n={1} text={commands.register} done={status?.registered} copied={copied === "register"} onCopy={() => copy("register", commands.register)} />
-                <Command n={2} text={commands.addKey} done={status?.keyAdded} copied={copied === "addKey"} onCopy={() => copy("addKey", commands.addKey)} />
+
+          <section id="settings-account" tabIndex={-1} aria-labelledby="h-account" className="flex scroll-mt-12 flex-col gap-3 outline-none" style={rise(4)}>
+            <SectionTitle id="h-account" count="proofs and payments">
+              NEAR account
+            </SectionTitle>
+            <Card pad="none">
+              <div className="p-5">
+                <AccountFields
+                  n={n}
+                  action={
+                    <Button variant="primary" loading={n.checking} disabled={!n.ready || !isDesktop} onClick={n.check}>
+                      Save and check
+                    </Button>
+                  }
+                />
               </div>
-            </details>
-          ) : (
-            <p className="m-0 text-muted">Save your NEAR account and contract above, then sign both steps.</p>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-hairline px-5 py-3.5 text-[13px] leading-[19px]">
+                <span className="text-ink-2">
+                  {n.config.network === "mainnet" ? "Mainnet moves real USDC. Keep the caps small." : "Testnet moves test USDC, not real money."}
+                </span>
+                <Pop show={n.found.account === true && n.found.contract === true}>
+                  <span className="inline-flex items-center gap-1.5 font-medium text-verdigris">
+                    <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+                    Both found on NEAR
+                  </span>
+                </Pop>
+              </div>
+            </Card>
+            <AccountNotes n={n} />
+            <Why>
+              Your agent wallet lives in this contract, and each meeting's proof is recorded there. A proof holds a hash and the model name, never what was
+              said.
+            </Why>
+          </section>
+
+          <Authorise n={n} />
+
+          <div id="settings-calendar" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(6)}>
+            <CalendarSettings onChange={setCalendar} />
+          </div>
+
+          <div id="settings-autopilot" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(7)}>
+            <AutopilotSettings />
+          </div>
+
+          {onOpenPrivacy && (
+            <Card as="button" interactive pad="none" onClick={onOpenPrivacy} className="w-full" style={rise(8)}>
+              <span className="flex items-center gap-3.5 px-5 py-4">
+                <IconDisc tone="verdigris">
+                  <ShieldCheck size={16} strokeWidth={1.75} />
+                </IconDisc>
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
+                  <span className="t-title text-ink">Privacy and your data</span>
+                  <span className="text-[13px] leading-[19px] text-ink-2">What stays on this Mac, what leaves it, and what each place keeps.</span>
+                </span>
+                <ChevronRight size={16} strokeWidth={2} aria-hidden="true" className="shrink-0 text-muted" />
+              </span>
+            </Card>
           )}
-        </section>
-
-        <div id="settings-calendar" className="scroll-mt-12">
-          <CalendarSettings />
-        </div>
-
-        <div id="settings-autopilot" className="scroll-mt-12">
-          <AutopilotSettings />
         </div>
       </div>
+
+      <AnimatePresence>
+        {setup && <SetupPayments key="setup" near={n} start={setup === "auto" ? undefined : setup} onClose={() => setSetup(null)} />}
+      </AnimatePresence>
     </main>
   );
 }
 
-function StepRow({ n, title, done, disabled, onSign, last }: { n: number; title: string; done?: boolean; disabled: boolean; onSign: () => void; last?: boolean }) {
+function Authorise({ n }: { n: NearSetup }) {
+  const registered = Boolean(n.status?.registered);
+  const keyAdded = Boolean(n.status?.keyAdded);
+  const busy = !n.ready || Boolean(n.waiting) || !isDesktop;
   return (
-    <div className={cx("flex items-center gap-4 px-5 py-4", !last && "border-b border-hairline")}>
-      <span className="font-mono text-xs text-muted">0{n}</span>
-      <span className={cx("t-title flex-1", done && "text-muted")}>{title}</span>
-      {done ? (
-        <span className="flex items-center gap-1.5 font-semibold text-verdigris">
-          <Check size={14} strokeWidth={2} aria-hidden="true" /> Done
-        </span>
-      ) : (
-        <Button variant="primary" disabled={disabled} onClick={onSign}>Sign in wallet</Button>
-      )}
-    </div>
-  );
-}
-
-function Field({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (v: string) => void }) {
-  return (
-    <label className="flex items-center justify-between gap-4">
-      <span className="text-muted">{label}</span>
-      <input
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-        className="selectable h-8 w-[300px] rounded-sm border border-border bg-well px-2.5 font-mono text-xs text-ink outline-none placeholder:text-muted"
-      />
-    </label>
-  );
-}
-
-function Command({ n, text, done, copied, onCopy }: { n: number; text: string; done?: boolean; copied: boolean; onCopy: () => void }) {
-  return (
-    <div className={cx("flex flex-col gap-2 rounded-md p-4 shadow-[inset_0_0_0_1px_var(--hairline)]", done && "bg-verdigris-tint/40")}>
-      <div className="flex items-center justify-between">
-        <span className="t-title">
-          {n === 1 ? "Create your agent wallet" : "Authorise this Mac's key"}
-          {done && <Check size={14} strokeWidth={2} className="ml-2 inline text-verdigris" aria-label="Done" />}
-        </span>
-        <button onClick={onCopy} className="inline-flex items-center gap-1.5 text-xs font-semibold text-verdigris hover:text-verdigris-hover">
-          <Copy size={12} aria-hidden="true" />
-          {copied ? "Copied" : "Copy"}
-        </button>
+    <section id="settings-authorise" tabIndex={-1} aria-labelledby="h-authorise" className="flex scroll-mt-12 flex-col gap-3 outline-none" style={rise(5)}>
+      <div className="flex flex-col gap-1">
+        <SectionTitle id="h-authorise" count="once, two signatures">
+          Authorise this Mac
+        </SectionTitle>
+        <p className="m-0 text-ink-2">Both are signed in your own NEAR wallet.</p>
       </div>
-      <code className="t-mono selectable block break-all text-muted">{text}</code>
-    </div>
+      <Card as="ol" pad="none" className="m-0 list-none p-0">
+        <AuthRow n={1} title="Create your agent wallet" done={registered} disabled={busy} onSign={() => n.signStep("Create wallet", "register")} />
+        <AuthRow
+          n={2}
+          title="Authorise this Mac's key"
+          detail={n.publicKey || (n.recoveryStatus && !n.recoveryStatus.hasKey ? "No key yet: create or restore a recovery phrase above." : "…")}
+          mono={Boolean(n.publicKey)}
+          done={keyAdded}
+          disabled={busy || !n.publicKey}
+          onSign={() => n.signStep("Authorise this Mac", "authorise-key")}
+          last
+        />
+      </Card>
+      {n.waiting && (
+        <p aria-live="polite" className="m-0 flex items-center gap-2 text-[13px] text-ink-2">
+          <Spinner size={12} /> Waiting for you to sign “{n.waiting}” in your browser…
+        </p>
+      )}
+      {n.status?.keyProblem && <p className="m-0 text-[13px] leading-[19px] text-caution">{n.status.keyProblem}</p>}
+      {n.error && n.errorFrom === "sign" && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{n.error}</p>}
+      {!n.ready && !registered && <p className="m-0 text-[13px] leading-[19px] text-ink-2">Save your NEAR account and contract above, then sign both.</p>}
+      <Why defaultOpen>
+        The first signature creates your agent wallet. The second lets this Mac's key call only <span className="font-mono text-ink">pay</span> and{" "}
+        <span className="font-mono text-ink">record_proof</span>, within your caps. Raising a cap, adding a payee or withdrawing still needs your wallet.
+      </Why>
+      <Why label="Prefer near-cli?">
+        {n.commands ? (
+          <span className="flex flex-col gap-3">
+            <span>Copy the two commands and run them in Terminal instead.</span>
+            <Snippet text={n.commands.register} label="Copy the command that creates your agent wallet" />
+            <Snippet text={n.commands.addKey} label="Copy the command that authorises this Mac's key" />
+          </span>
+        ) : (
+          "Save your NEAR account and contract above, and make this Mac's key; the two commands then appear here."
+        )}
+      </Why>
+    </section>
+  );
+}
+
+function AuthRow({
+  n,
+  title,
+  detail,
+  mono,
+  done,
+  disabled,
+  onSign,
+  last,
+}: {
+  n: number;
+  title: string;
+  detail?: string;
+  mono?: boolean;
+  done: boolean;
+  disabled: boolean;
+  onSign: () => void;
+  last?: boolean;
+}) {
+  return (
+    <li className={cx("flex items-center gap-4 px-5 py-4", !last && "border-b border-hairline")}>
+      <span className="w-5 font-mono text-[13px] text-muted">0{n}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className={cx("t-title", done ? "text-ink-2" : "text-ink")}>{title}</span>
+        {detail && <span className={cx("truncate text-ink-2", mono ? "selectable font-mono text-[12px] text-muted" : "text-[13px]")}>{detail}</span>}
+      </span>
+      <Pop show={done}>
+        <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>
+          Done
+        </Pill>
+      </Pop>
+      {!done && (
+        <Button variant="primary" disabled={disabled} onClick={onSign}>
+          Sign in wallet
+        </Button>
+      )}
+    </li>
   );
 }
