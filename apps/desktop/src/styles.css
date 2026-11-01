@@ -512,7 +512,9 @@
 }
 
 /* Printing (Export → Print or save as PDF): only the printable page in ExportMenu.tsx, ink on
-   white in the light tokens whatever the theme. Everything else in the window stays off the page. */
+   white in the light tokens whatever the theme, margins included. Everything else in the window
+   stays off the page, but only while a meeting's printable page is mounted, so printing any
+   other screen still prints it. */
 .print-only {
   display: none;
 }
@@ -520,13 +522,16 @@
   @page {
     margin: 18mm 20mm;
   }
+  :root {
+    color-scheme: light;
+  }
   html,
   body,
   #root {
     height: auto;
-    background: #fff;
+    background: #fff !important;
   }
-  body > :not(.print-only) {
+  body:has(> .print-only) > :not(.print-only) {
     display: none !important;
   }
   .print-only {

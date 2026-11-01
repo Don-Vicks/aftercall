@@ -1,5 +1,6 @@
 import { formatUsdc } from "./money.ts";
 import { formatClock, formatDuration, type ActionItem, type FollowUp, type Meeting } from "./meeting.ts";
+import type { Attendee } from "./calendar.ts";
 import { isYou, othersOn, speakerLabel } from "./people.ts";
 import { clockTime, longDate, meetingTime } from "./when.ts";
 
@@ -85,8 +86,15 @@ const SAMPLE_LINE: Record<NonNullable<ExportOptions["sample"]>, string> = {
   fictional: "Sample. A fictional call, made from Aftercall's sample audio and processed like a real one.",
 };
 
-/** "You and Ada", "You, Ada and Theo Moss": everyone, unlike the page's short line. */
-function peopleLine(names: string[]): string {
+/**
+ * "You and Ada", "You, Ada and Theo Moss": everyone, unlike the page's short line.
+ * People the calendar has no name for are counted ("You, Ada and 1 other"), never
+ * shown by their email.
+ */
+function peopleLine(others: readonly Attendee[]): string {
+  const names = others.map((a) => a.name.trim()).filter(Boolean);
+  const unnamed = others.length - names.length;
+  if (unnamed) names.push(unnamed === 1 ? (names.length ? "1 other" : "1 other person") : `${unnamed} others`);
   if (names.length === 0) return "";
   const all = ["You", ...names];
   return `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}`;
@@ -129,7 +137,7 @@ function verificationOf(meeting: Meeting, opts: ExportOptions): string[] {
         "To see the checks, open this meeting in Aftercall and choose Verified.",
       ]
     : ["Not verified. Not every secure-hardware check passed for this meeting.", "To see which, open this meeting in Aftercall and choose Not verified."];
-  if (opts.onNear) lines.push("The proof is also recorded on NEAR, and the Verified sheet can copy a link anyone can check.");
+  if (opts.onNear) lines.push("The proof is also recorded on NEAR, and that sheet can copy a link anyone can check.");
   const edited = meeting.actionItems.filter((a) => a.edited).length;
   if (edited) {
     lines.push(
@@ -144,6 +152,8 @@ export function meetingExport(meeting: Meeting, opts: ExportOptions = {}): Meeti
   const now = opts.now ?? Date.now();
   const t = meetingTime(meeting, now);
   const others = othersOn(meeting);
+  // Without their emails, so a transcript line is never shown under an address: someone with no name reads "Others".
+  const speakers = others.map((a) => ({ ...a, email: "" }));
   const yourNotes = opts.yourNotes && meeting.yourNotes?.trim() ? meeting.yourNotes.trim() : undefined;
   return {
     title: meeting.title,
@@ -151,7 +161,7 @@ export function meetingExport(meeting: Meeting, opts: ExportOptions = {}): Meeti
     date: t === null ? meeting.startedAt : `${longDate(t)}, ${clockTime(t)}`,
     length: formatDuration(meeting.durationSec),
     project: meeting.project,
-    people: peopleLine(others.map((a) => a.name || a.email)),
+    people: peopleLine(others),
     summary: meeting.summary,
     ...(yourNotes ? { yourNotes } : {}),
     decisions: meeting.decisions,
@@ -159,7 +169,7 @@ export function meetingExport(meeting: Meeting, opts: ExportOptions = {}): Meeti
     followUps: meeting.followUps.filter((f) => f.status !== "dismissed").map(followUpOf),
     verification: verificationOf(meeting, opts),
     ...(opts.transcript
-      ? { transcript: meeting.transcript.map((l) => ({ at: formatClock(l.at), speaker: speakerLabel(l.speaker, others), text: l.text })) }
+      ? { transcript: meeting.transcript.map((l) => ({ at: formatClock(l.at), speaker: speakerLabel(l.speaker, speakers), text: l.text })) }
       : {}),
     footer: `Exported from Aftercall on ${longDate(now)}.`,
   };
@@ -167,9 +177,10 @@ export function meetingExport(meeting: Meeting, opts: ExportOptions = {}): Meeti
 
 /**
  * Text from the model, the transcript or you, made safe to drop into Markdown: it reads
- * as the same words, never as formatting, a link or HTML. Inline marks are escaped
- * everywhere; block marks (#, >, -, 1.) only where they start a line. Leading spaces
- * go, so nothing turns into a code block.
+ * as the same words, never as formatting, link syntax or HTML. A bare web address is
+ * left as written, so the app you paste into may still make it a link. Inline marks
+ * are escaped everywhere; block marks (#, >, -, 1.) only where they start a line.
+ * Leading spaces go, so nothing turns into a code block.
  */
 export function escapeMarkdown(text: string): string {
   return text

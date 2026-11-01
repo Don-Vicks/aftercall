@@ -97,6 +97,24 @@ test("your notes and the transcript are left out unless you ask for them", () =>
   assert.match(meetingMarkdown({ ...meeting, transcript: [] }, { now, transcript: true }), /## Transcript\n\nThis meeting has no transcript\./);
 });
 
+test("someone the calendar has no name for is counted, never shown by their email", () => {
+  const alone = { ...meeting, attendees: [{ name: "", email: "theo@example.com" }] };
+  const md = meetingMarkdown(alone, { now, transcript: true });
+  assert.match(md, /- People: You and 1 other person\n/);
+  assert.match(md, /\*\*00:20 Others:\*\* And pay the designer fifty\./);
+  assert.doesNotMatch(md, /theo@example\.com/);
+
+  const mixed = { ...meeting, attendees: [{ name: "Ada", email: "ada@example.com" }, { name: " ", email: "theo@example.com" }, { name: "", email: "mo@example.com" }] };
+  const both = meetingMarkdown(mixed, { now, transcript: true });
+  assert.match(both, /- People: You, Ada and 2 others\n/);
+  assert.doesNotMatch(both, /@example\.com/);
+  assert.match(meetingMarkdown({ ...meeting, attendees: [{ name: "Ada", email: "" }, { name: "", email: "theo@example.com" }] }, { now }), /- People: You, Ada and 1 other\n/);
+
+  // Notes saved before `attendees` existed keep only the people with an email.
+  const old = { ...meeting, attendees: undefined, invited: [{ name: "", email: "theo@example.com" }] };
+  assert.doesNotMatch(meetingMarkdown(old, { now, transcript: true }), /theo@example\.com/);
+});
+
 test("with two or more people on the other side, transcript lines say Others, as on the page", () => {
   const two = { ...meeting, attendees: [{ name: "Ada", email: "" }, { name: "Theo Moss", email: "" }] };
   const md = meetingMarkdown(two, { now, transcript: true });
@@ -138,6 +156,7 @@ test("verification says what the app knows and nothing about the proof's interna
   const unverified = meetingMarkdown({ ...meeting, verified: false }, { now });
   assert.match(unverified, /Not verified\. Not every secure-hardware check passed for this meeting\./);
   assert.match(unverified, /choose Not verified\./);
+  assert.match(meetingMarkdown({ ...meeting, verified: false }, { now, onNear: true }), /choose Not verified\.\n\nThe proof is also recorded on NEAR, and that sheet can copy a link/);
   assert.match(meetingMarkdown(meeting, { now, onNear: true }), /The proof is also recorded on NEAR/);
   assert.doesNotMatch(meetingMarkdown(meeting, { now }), /recorded on NEAR/);
   for (const md of [unverified, meetingMarkdown(meeting, { now, onNear: true })]) {
@@ -171,6 +190,7 @@ test("Markdown in model, transcript and your text is escaped, so it reads as the
   assert.equal(escapeMarkdown("    not code"), "not code");
   assert.equal(escapeMarkdown("&amp; stays &amp;"), "\\&amp; stays \\&amp;");
   assert.equal(escapeMarkdown("R&D and 50 USDC - 10 #3"), "R&D and 50 USDC - 10 #3", "ordinary text is left alone");
+  assert.equal(escapeMarkdown("see https://example.com/a"), "see https://example.com/a", "a bare address is left as written; the app you paste into may link it");
 
   const nasty: Meeting = {
     ...meeting,
