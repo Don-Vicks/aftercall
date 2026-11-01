@@ -7,7 +7,7 @@ import type { Project } from "../projects";
 import { isDesktop } from "../recorder";
 import { sampleScripts } from "../sampleRecordings";
 import { Avatar, Button, Dialog, IconButton, Menu, Select, Tick, cx, toast } from "../ui";
-import { startRecording } from "./session";
+import { startRecording, useRecordShortcut } from "./session";
 
 const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted once the notes are made.";
 
@@ -126,18 +126,8 @@ export function RecordSheet({
     }
   };
 
-  // ⌘⇧R again starts it, once the box is ticked.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === "r") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        start();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  });
+  // ⌘⇧R again starts it, once the box is ticked (here or, in the Mac app, from any app).
+  useRecordShortcut(() => void start());
 
   const other = event?.attendees.find((a) => a.name || a.email);
   const otherName = other ? other.name || other.email.split("@")[0] : (event?.title ?? "");

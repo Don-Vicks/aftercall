@@ -6,7 +6,7 @@
 //! request per line:
 //!
 //! ```text
-//! → {"token":"…","op":"meetings"|"projects"|"notes"|"claim"|"complete", ...args}
+//! → {"token":"…","op":"meetings"|"projects"|"notes"|"access"|"claim"|"complete", ...args}
 //! ← {"ok":true,"result":…}  or  {"ok":false,"error":"…"}
 //! ```
 //!
@@ -14,9 +14,18 @@
 //! is made when the user turns agents on and dropped when they turn them off, so
 //! turning them back on needs the new setup command. With agents off there is no socket.
 //!
-//! What a request can do is fixed here: read processed meetings and projects, and
-//! claim or complete one action item. Nothing else in notes.json can be changed.
-//! Your notes (what you typed during the call) and their salt are never sent.
+//! What a request can do is fixed here: read processed meetings and projects, and,
+//! only while the user has turned on "Let agents claim and complete action items",
+//! claim or complete one action item. That switch is off by default and goes back off
+//! when agents are turned off. Nothing else in notes.json can be changed. Your notes
+//! (what you typed during the call) and their salt are never sent.
+//!
+//! Each read, claim and completion, and every refused request, is added to a short
+//! activity list, `agents-activity.json` (sealed like every other file): when, which agent
+//! by its own name, which request, the meeting and item ids, and whether it was allowed.
+//! Never meeting content. The newest 200 are kept. Allowed lookups of project names and
+//! of the write switch come with other requests and aren't listed; nor are lines that
+//! aren't JSON.
 //!
 //! Limits: the token sits in the agent's own config (e.g. ~/.claude.json), which other
 //! software running as the user could read. This keeps meetings away from apps that
@@ -27,7 +36,7 @@ use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -39,6 +48,10 @@ use crate::{at_rest, notes_file};
 const MAX_REQUEST: u64 = 64 * 1024;
 const NOTE_MAX: usize = 500;
 
+/// What an agent is told when it tries to claim or complete while agents may only read.
+pub const WRITES_OFF: &str =
+    "Aftercall lets agents read only. To let them claim and complete action items, turn that on in Settings → Connected agents.";
+
 pub fn socket_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("agents")
 }
@@ -49,12 +62,23 @@ pub fn socket_path(data_dir: &Path) -> PathBuf {
 
 // ---------- settings ----------
 
-/// Saved (encrypted) as `agents.json`: whether agents are on, and the current token.
+/// Saved (encrypted) as `agents.json`: whether agents are on, the current token, and
+/// whether they may claim and complete action items.
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Settings {
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    /// None in an agents.json from before this switch existed, when agents could always
+    /// claim and complete. It reads as off, and the screen says so until the user chooses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_writes: Option<bool>,
+}
+
+impl Settings {
+    pub fn writes_allowed(&self) -> bool {
+        self.allow_writes == Some(true)
+    }
 }
 
 fn settings_path(data_dir: &Path) -> PathBuf {
@@ -85,13 +109,15 @@ fn same_token(a: &str, b: &str) -> bool {
 
 pub struct Server {
     stop: Arc<AtomicBool>,
+    /// "Let agents claim and complete action items", read on every request.
+    writes: Arc<AtomicBool>,
     path: PathBuf,
     thread: Option<JoinHandle<()>>,
 }
 
 impl Server {
     /// Opens the socket and answers requests on a background thread until stopped.
-    pub fn start(data_dir: &Path, token: String) -> Result<Self, String> {
+    pub fn start(data_dir: &Path, token: String, allow_writes: bool) -> Result<Self, String> {
         let dir = socket_dir(data_dir);
         std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).map_err(|e| e.to_string())?;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
@@ -102,15 +128,18 @@ impl Server {
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
 
         let stop = Arc::new(AtomicBool::new(false));
-        let (flag, root) = (stop.clone(), data_dir.to_path_buf());
+        let writes = Arc::new(AtomicBool::new(allow_writes));
+        let (flag, root, can_write) = (stop.clone(), data_dir.to_path_buf(), writes.clone());
         let thread = std::thread::Builder::new()
             .name("agents".into())
             .spawn(move || {
                 while !flag.load(Ordering::Relaxed) {
                     match listener.accept() {
                         Ok((stream, _)) => {
-                            let (root, token) = (root.clone(), token.clone());
-                            let _ = std::thread::Builder::new().name("agents-conn".into()).spawn(move || serve(stream, &root, &token));
+                            let (root, token, can_write, closed) = (root.clone(), token.clone(), can_write.clone(), flag.clone());
+                            let _ = std::thread::Builder::new()
+                                .name("agents-conn".into())
+                                .spawn(move || serve(stream, &root, &token, &can_write, &closed));
                         }
                         Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(50)),
                         Err(_) => std::thread::sleep(Duration::from_millis(200)),
@@ -118,12 +147,20 @@ impl Server {
                 }
             })
             .map_err(|e| e.to_string())?;
-        Ok(Self { stop, path, thread: Some(thread) })
+        Ok(Self { stop, writes, path, thread: Some(thread) })
+    }
+
+    /// Applies the user's switch to the next request, without a new token or socket.
+    pub fn set_allow_writes(&self, on: bool) {
+        self.writes.store(on, Ordering::Relaxed);
     }
 }
 
+/// Turning agents off or making a new token drops the server. Connections that are
+/// still open end before their next request, and nothing more is written.
 impl Drop for Server {
     fn drop(&mut self) {
+        self.writes.store(false, Ordering::Relaxed);
         self.stop.store(true, Ordering::Relaxed);
         if let Some(t) = self.thread.take() {
             let _ = t.join();
@@ -132,8 +169,8 @@ impl Drop for Server {
     }
 }
 
-/// Answers each request line on one connection.
-fn serve(stream: UnixStream, data_dir: &Path, token: &str) {
+/// Answers each request line on one connection, until the server stops.
+fn serve(stream: UnixStream, data_dir: &Path, token: &str, writes: &AtomicBool, stop: &AtomicBool) {
     let _ = stream.set_nonblocking(false);
     let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let Ok(mut out) = stream.try_clone() else { return };
@@ -144,7 +181,10 @@ fn serve(stream: UnixStream, data_dir: &Path, token: &str) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
         }
-        let reply = match answer(data_dir, token, &line) {
+        if stop.load(Ordering::Relaxed) {
+            return;
+        }
+        let reply = match answer(data_dir, token, writes.load(Ordering::Relaxed), &line, &now_iso) {
             Ok(result) => json!({ "ok": true, "result": result }),
             Err(error) => json!({ "ok": false, "error": error }),
         };
@@ -158,23 +198,40 @@ fn serve(stream: UnixStream, data_dir: &Path, token: &str) {
     }
 }
 
-fn answer(data_dir: &Path, token: &str, line: &str) -> Result<Value, String> {
+/// Checks the token, runs the request and adds it to the activity list.
+fn answer(data_dir: &Path, token: &str, writes: bool, line: &str, now: &dyn Fn() -> String) -> Result<Value, String> {
     let req: Value = serde_json::from_str(line).map_err(|_| "Bad request".to_string())?;
-    if !req["token"].as_str().is_some_and(|t| same_token(t, token)) {
-        return Err("Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.".into());
+    let result = if req["token"].as_str().is_some_and(|t| same_token(t, token)) {
+        dispatch(data_dir, &req, writes, now)
+    } else {
+        Err(TOKEN_REFUSED.into())
+    };
+    if let Some(entry) = Activity::of(&req, &result, now) {
+        // The list is a record for the user; a failed write never fails the request.
+        if let Err(e) = record(data_dir, entry) {
+            eprintln!("agents: couldn't add to the activity list: {e}");
+        }
     }
-    dispatch(data_dir, &req, &now_iso)
+    result
 }
+
+const TOKEN_REFUSED: &str = "Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.";
 
 // ---------- what agents can do ----------
 
-/// Runs one request. `now` gives the time stamped on claims and completions.
-pub fn dispatch(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value, String> {
+/// Runs one request. `writes` is the user's "Let agents claim and complete action items"
+/// switch; `now` gives the time stamped on claims and completions.
+pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> String) -> Result<Value, String> {
     let str_arg = |k: &str| req[k].as_str().unwrap_or_default().to_string();
-    match req["op"].as_str().unwrap_or_default() {
+    let op = req["op"].as_str().unwrap_or_default();
+    if matches!(op, "claim" | "complete") && !writes {
+        return Err(WRITES_OFF.into());
+    }
+    match op {
         "projects" => Ok(projects(data_dir)),
         "meetings" => Ok(Value::Array(meetings(data_dir))),
         "notes" => notes(data_dir, &str_arg("id")),
+        "access" => Ok(json!({ "allowWrites": writes })),
         "claim" => claim(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), now),
         "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), now),
         _ => Err("Unknown request".into()),
@@ -300,6 +357,89 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
     })
 }
 
+// ---------- the activity list ----------
+
+const ACTIVITY_MAX: usize = 200;
+const NAME_MAX: usize = 60;
+
+/// One agent request as the user sees it on the Connected agents screen. Ids and names
+/// only: the meeting's title, the item's text and any note stay in notes.json.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Activity {
+    pub at: String,
+    /// What the agent calls itself: the name it gave a claim or completion, else its
+    /// MCP client name (e.g. "claude-code"). Neither is checked.
+    pub agent: String,
+    /// "meetings", "notes", "claim", "complete", "projects" or "access" (only when refused),
+    /// or "other" for a request Aftercall doesn't know.
+    pub op: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meeting_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+    pub allowed: bool,
+    /// Why it was refused: "token", "read-only", "unknown" (a request Aftercall doesn't
+    /// know), or "rules" (anything else: an unknown id, done, claimed by another agent, no
+    /// agent name, or the notes couldn't be read).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refused: Option<String>,
+}
+
+impl Activity {
+    /// The entry for one request, or None for allowed lookups that come with other
+    /// requests (project names, the write switch), which would only crowd the list.
+    /// Refused ones are listed, so a wrong or old token always leaves a trace.
+    fn of(req: &Value, result: &Result<Value, String>, now: &dyn Fn() -> String) -> Option<Self> {
+        let op = match req["op"].as_str().unwrap_or_default() {
+            "projects" | "access" if result.is_ok() => return None,
+            op @ ("meetings" | "notes" | "claim" | "complete" | "projects" | "access") => op,
+            _ => "other",
+        };
+        let short = |v: &Value| v.as_str().map(|s| s.trim().chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>()).filter(|s| !s.is_empty());
+        let meeting_id = req["meetingId"].as_str().or(req["id"].as_str()).filter(|id| valid_id(id)).map(str::to_string);
+        let item_id = req["itemId"].as_str().filter(|id| !id.is_empty() && id.len() <= 40 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        let refused = result.as_ref().err().map(|e| match e.as_str() {
+            TOKEN_REFUSED => "token",
+            WRITES_OFF => "read-only",
+            _ if op == "other" => "unknown",
+            _ => "rules",
+        });
+        Some(Self {
+            at: now(),
+            agent: short(&req["agent"]).or_else(|| short(&req["client"])).unwrap_or_else(|| "Unnamed agent".into()),
+            op: op.into(),
+            meeting_id,
+            item_id: item_id.map(str::to_string),
+            allowed: result.is_ok(),
+            refused: refused.map(str::to_string),
+        })
+    }
+}
+
+fn activity_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("agents-activity.json")
+}
+
+/// Connections are served on their own threads; one append at a time.
+static ACTIVITY_LOCK: Mutex<()> = Mutex::new(());
+
+fn record(data_dir: &Path, entry: Activity) -> Result<(), String> {
+    let _held = ACTIVITY_LOCK.lock().map_err(|e| e.to_string())?;
+    let path = activity_path(data_dir);
+    let mut list: Vec<Activity> = at_rest::read_json(&path).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    list.push(entry);
+    let drop = list.len().saturating_sub(ACTIVITY_MAX);
+    list.drain(..drop);
+    at_rest::write_json(&path, &serde_json::to_value(&list).map_err(|e| e.to_string())?)
+}
+
+/// The newest `limit` entries, newest first.
+pub fn read_activity(data_dir: &Path, limit: usize) -> Vec<Activity> {
+    let list: Vec<Activity> = at_rest::read_json(&activity_path(data_dir)).and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+    list.into_iter().rev().take(limit).collect()
+}
+
 /// Now as JavaScript's `toISOString()` writes it: `2026-10-26T12:00:00.000Z`.
 fn now_iso() -> String {
     let d = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
@@ -333,6 +473,11 @@ mod tests {
         dir
     }
 
+    /// Most tests are about the claim rules, so writes are allowed; the read-only default has its own tests.
+    fn dispatch_rw(dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value, String> {
+        dispatch(dir, req, true, now)
+    }
+
     fn at(t: &'static str) -> impl Fn() -> String {
         move || t.to_string()
     }
@@ -345,14 +490,14 @@ mod tests {
     fn reads_processed_meetings_and_projects() {
         let dir = data_dir("read");
         let now = at("x");
-        let list = dispatch(&dir, &json!({ "op": "meetings" }), &now).unwrap();
+        let list = dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap();
         assert_eq!(list.as_array().unwrap().len(), 1);
         assert_eq!(list[0]["id"], "1761000000");
         assert_eq!(list[0]["notes"]["meeting"]["title"], "Sync with Ada");
-        assert_eq!(dispatch(&dir, &json!({ "op": "projects" }), &now).unwrap()[0]["name"], "General");
-        assert!(dispatch(&dir, &json!({ "op": "notes", "id": "1761200000" }), &now).unwrap_err().contains("No processed meeting"));
-        assert!(dispatch(&dir, &json!({ "op": "notes", "id": "../../etc" }), &now).unwrap_err().contains("No processed meeting"));
-        assert!(dispatch(&dir, &json!({ "op": "delete" }), &now).is_err());
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "projects" }), &now).unwrap()[0]["name"], "General");
+        assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "1761200000" }), &now).unwrap_err().contains("No processed meeting"));
+        assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "../../etc" }), &now).unwrap_err().contains("No processed meeting"));
+        assert!(dispatch_rw(&dir, &json!({ "op": "delete" }), &now).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -360,9 +505,9 @@ mod tests {
     fn your_notes_and_their_salt_never_reach_agents() {
         let dir = data_dir("yours");
         let now = at("2026-10-26T12:00:00.000Z");
-        let list = dispatch(&dir, &json!({ "op": "meetings" }), &now).unwrap();
-        let one = dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), &now).unwrap();
-        let done = dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), &now).unwrap();
+        let list = dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap();
+        let one = dispatch_rw(&dir, &json!({ "op": "notes", "id": "1761000000" }), &now).unwrap();
+        let done = dispatch_rw(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), &now).unwrap();
         for v in [&list, &one, &done] {
             let text = v.to_string();
             assert!(!text.contains("Push for the pilot") && !text.contains("yourNotes") && !text.contains("5a5a"), "{text}");
@@ -382,19 +527,19 @@ mod tests {
     fn claim_then_complete_with_the_same_rules_as_before() {
         let dir = data_dir("claim");
         let claim_req = |agent: &str| json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": agent });
-        dispatch(&dir, &claim_req("Claude Code"), &at("2026-10-26T12:00:00.000Z")).unwrap();
+        dispatch_rw(&dir, &claim_req("Claude Code"), &at("2026-10-26T12:00:00.000Z")).unwrap();
         assert_eq!(read_notes(&dir)["meeting"]["actionItems"][0]["claimed"], json!({ "agent": "Claude Code", "at": "2026-10-26T12:00:00.000Z" }));
         // Same agent again: harmless, keeps the first time. Another agent: refused.
-        dispatch(&dir, &claim_req("Claude Code"), &at("later")).unwrap();
+        dispatch_rw(&dir, &claim_req("Claude Code"), &at("later")).unwrap();
         assert_eq!(read_notes(&dir)["meeting"]["actionItems"][0]["claimed"]["at"], "2026-10-26T12:00:00.000Z");
-        assert!(dispatch(&dir, &claim_req("Codex"), &at("x")).unwrap_err().contains("Already claimed by Claude Code"));
+        assert!(dispatch_rw(&dir, &claim_req("Codex"), &at("x")).unwrap_err().contains("Already claimed by Claude Code"));
         let complete = |agent: &str| json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": agent, "note": "  Sent the plan as a doc " });
-        assert!(dispatch(&dir, &complete("Codex"), &at("x")).unwrap_err().contains("Claimed by Claude Code"));
-        dispatch(&dir, &complete("Claude Code"), &at("2026-10-26T12:05:00.000Z")).unwrap();
+        assert!(dispatch_rw(&dir, &complete("Codex"), &at("x")).unwrap_err().contains("Claimed by Claude Code"));
+        dispatch_rw(&dir, &complete("Claude Code"), &at("2026-10-26T12:05:00.000Z")).unwrap();
         let item = &read_notes(&dir)["meeting"]["actionItems"][0];
         assert_eq!(item["done"], true);
         assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "2026-10-26T12:05:00.000Z", "note": "Sent the plan as a doc" }));
-        assert!(dispatch(&dir, &claim_req("Claude Code"), &at("x")).unwrap_err().contains("already done"));
+        assert!(dispatch_rw(&dir, &claim_req("Claude Code"), &at("x")).unwrap_err().contains("already done"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -402,7 +547,7 @@ mod tests {
     fn writes_change_only_the_one_item_and_stay_encrypted() {
         let dir = data_dir("only");
         let before = read_notes(&dir);
-        dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a2", "agent": "Codex" }), &at("t")).unwrap();
+        dispatch_rw(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a2", "agent": "Codex" }), &at("t")).unwrap();
         let mut after = read_notes(&dir);
         after["meeting"]["actionItems"][1] = before["meeting"]["actionItems"][1].clone();
         assert_eq!(after, before);
@@ -414,7 +559,7 @@ mod tests {
     fn bad_input_is_refused() {
         let dir = data_dir("bad");
         let now = at("t");
-        let r = |v: Value| dispatch(&dir, &v, &now).unwrap_err();
+        let r = |v: Value| dispatch_rw(&dir, &v, &now).unwrap_err();
         assert!(r(json!({ "op": "claim", "meetingId": "1761000000", "itemId": "zz", "agent": "Codex" })).contains("No action item \"zz\""));
         assert!(r(json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "  " })).contains("agent name"));
         assert!(r(json!({ "op": "claim", "meetingId": "1761200000", "itemId": "a1", "agent": "Codex" })).contains("No processed meeting"));
@@ -429,7 +574,7 @@ mod tests {
                 .iter()
                 .map(|agent| {
                     let dir = &dir;
-                    s.spawn(move || dispatch(dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": agent }), &at("t")).is_ok())
+                    s.spawn(move || dispatch_rw(dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": agent }), &at("t")).is_ok())
                 })
                 .collect();
             handles.into_iter().map(|h| h.join().unwrap() as usize).sum()
@@ -450,7 +595,7 @@ mod tests {
     fn the_socket_is_owner_only_needs_the_token_and_goes_away_when_stopped() {
         let dir = data_dir("sock");
         let token = new_token().unwrap();
-        let server = Server::start(&dir, token.clone()).unwrap();
+        let server = Server::start(&dir, token.clone(), false).unwrap();
         let path = socket_path(&dir);
         assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         assert_eq!(std::fs::metadata(socket_dir(&dir)).unwrap().permissions().mode() & 0o777, 0o700);
@@ -463,6 +608,18 @@ mod tests {
         assert_eq!(ok["ok"], true);
         assert_eq!(ok["result"][0]["notes"]["meeting"]["title"], "Sync with Ada");
 
+        // Read-only until the user flips the switch, which applies to the next request.
+        let claim = json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }).to_string();
+        assert_eq!(call(&path, &claim)["error"], WRITES_OFF);
+        server.set_allow_writes(true);
+        assert_eq!(call(&path, &claim)["ok"], true);
+        server.set_allow_writes(false);
+        assert_eq!(call(&path, &claim)["error"], WRITES_OFF);
+        // Every request above is in the activity list, newest first; bad JSON isn't.
+        let ops: Vec<(String, bool)> = read_activity(&dir, 20).into_iter().map(|a| (a.op, a.allowed)).collect();
+        let expected = [("claim", false), ("claim", true), ("claim", false), ("meetings", true), ("other", false), ("meetings", false)];
+        assert_eq!(ops, expected.map(|(o, ok)| (o.to_string(), ok)));
+
         drop(server);
         assert!(!path.exists());
         assert!(UnixStream::connect(&path).is_err());
@@ -470,15 +627,130 @@ mod tests {
     }
 
     #[test]
+    fn turning_agents_off_ends_connections_that_are_still_open() {
+        let dir = data_dir("open");
+        let token = new_token().unwrap();
+        let server = Server::start(&dir, token.clone(), true).unwrap();
+        let mut s = UnixStream::connect(socket_path(&dir)).unwrap();
+        let mut reader = BufReader::new(s.try_clone().unwrap());
+        writeln!(s, "{}", json!({ "token": token, "op": "meetings" })).unwrap();
+        let mut reply = String::new();
+        reader.read_line(&mut reply).unwrap();
+        assert_eq!(serde_json::from_str::<Value>(&reply).unwrap()["ok"], true);
+
+        // The user turns agents off while the connection stays open.
+        drop(server);
+        let claim = json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" });
+        let _ = writeln!(s, "{claim}");
+        let mut after = String::new();
+        assert_eq!(reader.read_line(&mut after).unwrap_or(0), 0, "no answer, the connection is closed: {after}");
+        assert!(read_notes(&dir)["meeting"]["actionItems"][0].get("claimed").is_none());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn settings_are_saved_encrypted() {
         let dir = data_dir("settings");
         assert!(!load_settings(&dir).enabled);
-        save_settings(&dir, &Settings { enabled: true, token: Some("t0k".into()) }).unwrap();
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k".into()), allow_writes: Some(true) }).unwrap();
         assert!(at_rest::is_sealed(&std::fs::read(dir.join("agents.json")).unwrap()));
         let s = load_settings(&dir);
-        assert!(s.enabled && s.token.as_deref() == Some("t0k"));
+        assert!(s.enabled && s.token.as_deref() == Some("t0k") && s.writes_allowed());
         assert!(same_token("abc", "abc") && !same_token("abc", "abd") && !same_token("abc", "ab"));
         assert_eq!(now_iso().len(), "2026-10-26T12:00:00.000Z".len());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agents_read_only_by_default_and_are_told_which_switch_to_turn_on() {
+        let dir = data_dir("ro");
+        let now = at("t");
+        let before = read_notes(&dir);
+        assert!(dispatch(&dir, &json!({ "op": "meetings" }), false, &now).is_ok());
+        assert!(dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), false, &now).is_ok());
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), false, &now).unwrap(), json!({ "allowWrites": false }));
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), true, &now).unwrap(), json!({ "allowWrites": true }));
+        for op in ["claim", "complete"] {
+            let err = dispatch(&dir, &json!({ "op": op, "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), false, &now).unwrap_err();
+            assert_eq!(err, WRITES_OFF);
+            assert!(err.contains("Settings → Connected agents"));
+        }
+        assert_eq!(read_notes(&dir), before, "nothing changed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn settings_from_before_the_switch_read_as_read_only() {
+        let dir = data_dir("old");
+        // agents.json as an earlier version wrote it: agents on, no write switch.
+        at_rest::write_json(&dir.join("agents.json"), &json!({ "enabled": true, "token": "t0k" })).unwrap();
+        let s = load_settings(&dir);
+        assert!(s.enabled && s.allow_writes.is_none() && !s.writes_allowed());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_activity_list_holds_ids_and_names_never_meeting_content() {
+        let dir = data_dir("log");
+        let token = "t0k";
+        let send = |v: Value, writes: bool| {
+            let _ = answer(&dir, token, writes, &v.to_string(), &at("2026-10-26T12:00:00.000Z"));
+        };
+        send(json!({ "token": token, "op": "meetings", "client": "claude-code" }), false);
+        send(json!({ "token": token, "op": "projects", "client": "claude-code" }), false);
+        send(json!({ "token": token, "op": "access", "client": "claude-code" }), false);
+        send(json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Claude Code", "client": "claude-code" }), false);
+        send(json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Claude Code" }), true);
+        send(json!({ "token": token, "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Claude Code", "note": "Sent the pilot plan" }), true);
+        send(json!({ "token": token, "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), true);
+        send(json!({ "token": "wrong", "op": "notes", "id": "1761000000", "client": "stale" }), true);
+        send(json!({ "token": token, "op": "notes", "id": "../../etc", "itemId": "<script>" }), true);
+        send(json!({ "token": "old", "op": "access", "client": "stale" }), true);
+        send(json!({ "token": token, "op": "delete", "meetingId": "1761000000" }), true);
+
+        let list = read_activity(&dir, 20);
+        fn row(a: &Activity) -> (&str, &str, bool, Option<&str>) {
+            (&a.op, &a.agent, a.allowed, a.refused.as_deref())
+        }
+        assert_eq!(
+            list.iter().map(row).collect::<Vec<_>>(),
+            [
+                ("other", "Unnamed agent", false, Some("unknown")),
+                ("access", "stale", false, Some("token")),
+                ("notes", "Unnamed agent", false, Some("rules")),
+                ("notes", "stale", false, Some("token")),
+                ("claim", "Codex", false, Some("rules")),
+                ("complete", "Claude Code", true, None),
+                ("claim", "Claude Code", true, None),
+                ("claim", "Claude Code", false, Some("read-only")),
+                ("meetings", "claude-code", true, None),
+            ],
+            "newest first; allowed project and switch lookups aren't listed, refused ones are"
+        );
+        assert_eq!(list[5].meeting_id.as_deref(), Some("1761000000"));
+        assert_eq!(list[5].item_id.as_deref(), Some("a1"));
+        assert_eq!(list[5].at, "2026-10-26T12:00:00.000Z");
+        assert_eq!((list[2].meeting_id.as_deref(), list[2].item_id.as_deref()), (None, None), "only well-formed ids are kept");
+
+        let bytes = std::fs::read(dir.join("agents-activity.json")).unwrap();
+        assert!(at_rest::is_sealed(&bytes));
+        let plain = String::from_utf8(at_rest::read_bytes(&dir.join("agents-activity.json")).unwrap().to_vec()).unwrap();
+        for content in ["Sync with Ada", "pilot plan", "Push for the pilot", "Sent the pilot plan", "General"] {
+            assert!(!plain.contains(content), "{content} in {plain}");
+        }
+        assert_eq!(read_activity(&dir, 2).len(), 2);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_activity_list_keeps_the_newest_200() {
+        let dir = data_dir("cap");
+        for i in 0..205 {
+            record(&dir, Activity { at: format!("{i:03}"), agent: "A".into(), op: "meetings".into(), meeting_id: None, item_id: None, allowed: true, refused: None }).unwrap();
+        }
+        let all = read_activity(&dir, 1000);
+        assert_eq!(all.len(), 200);
+        assert_eq!((all[0].at.as_str(), all[199].at.as_str()), ("204", "005"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

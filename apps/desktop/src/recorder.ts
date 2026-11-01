@@ -50,9 +50,17 @@ export interface Levels {
   seconds: number;
 }
 
+/** A stem went silent (exact zeros for 30 s, or for the mic no audio at all for 10 s), or came back. */
 export interface SilenceEvent {
   stem: "mic" | "system";
   silent: boolean;
+  /** The mic stream stopped delivering audio (AirPods switching, a mic unplugged), rather than sending zeros. */
+  stopped: boolean;
+}
+
+/** Both sides quiet for 2 minutes (true), or sound came back (false). */
+export interface QuietEvent {
+  quiet: boolean;
 }
 
 export const recorder = {
@@ -66,10 +74,11 @@ export const recorder = {
   saveLiveNotes: (text: string) => invoke<void>("save_live_notes", { text }),
   /** Your notes for a stopped recording; refused once its notes are made. */
   saveYourNotes: (id: string, text: string) => invoke<void>("save_your_notes", { id, text }),
-  /** System Settings → Privacy & Security → Screen & System Audio Recording. */
-  openAudioSettings: () => invoke<void>("open_audio_settings"),
+  /** System Settings → Privacy & Security → Screen & System Audio Recording, or Microphone. */
+  openAudioSettings: (pane: "call" | "mic" = "call") => invoke<void>("open_audio_settings", { pane }),
   onLevels: (fn: (l: Levels) => void): Promise<UnlistenFn> => listen<Levels>("recorder:levels", (e) => fn(e.payload)),
   onSilence: (fn: (s: SilenceEvent) => void): Promise<UnlistenFn> => listen<SilenceEvent>("recorder:silence", (e) => fn(e.payload)),
+  onQuiet: (fn: (q: QuietEvent) => void): Promise<UnlistenFn> => listen<QuietEvent>("recorder:quiet", (e) => fn(e.payload)),
   /** Every change of state: started, paused, resumed (a status), stopped (null). */
   onState: (fn: (s: RecorderStatus | null) => void): Promise<UnlistenFn> => listen<RecorderStatus | null>("recorder:state", (e) => fn(e.payload)),
   /** The saved recording, however it was stopped: a Stop button, the menu bar, the floating recorder. */
@@ -77,6 +86,10 @@ export const recorder = {
   /** The floating recorder's "Open notes", or "Add a note…" in the menu bar. */
   onOpenLive: (fn: () => void): Promise<UnlistenFn> => listen("recorder:open-live", () => fn()),
   onMenuNewRecording: (fn: () => void): Promise<UnlistenFn> => listen("menu:new-recording", () => fn()),
+  /** True when ⌘⇧R works from any app; false when another app holds it and it works only in Aftercall. */
+  shortcutEverywhere: () => invoke<boolean>("record_shortcut_everywhere"),
+  /** ⌘⇧R pressed in any app (the global shortcut). Aftercall is already in front. */
+  onShortcut: (fn: () => void): Promise<UnlistenFn> => listen("shortcut:record", () => fn()),
 };
 
 /** Calls the floating recorder makes; they bring the main window back. */

@@ -10,9 +10,12 @@ import { Button, Pill, StageList, cx, enter, type Stage, type StageState } from 
  * Verified seal at the end, and where it stopped when it fails.
  */
 
-/** The steps, in order: the pipeline's four stages, then the proof and the delete the app does. */
-export type StepId = "attest" | "transcribe" | "summarise" | "signature" | "proof" | "deleted";
-export const STEP_IDS: StepId[] = ["attest", "transcribe", "summarise", "signature", "proof", "deleted"];
+/**
+ * The steps, in the order they run: the pipeline's four stages, then the app deletes
+ * the audio as soon as the notes are saved, then records the proof on NEAR.
+ */
+export type StepId = "attest" | "transcribe" | "summarise" | "signature" | "deleted" | "proof";
+export const STEP_IDS: StepId[] = ["attest", "transcribe", "summarise", "signature", "deleted", "proof"];
 
 export interface StepsView {
   /** Index of the step running, or where it stopped; STEP_IDS.length once finished. */
@@ -251,6 +254,7 @@ export function explainFailure(error: string, step: StepId): { title: string; bo
 function safeLine(step: StepId): string {
   if (step === "attest") return "Nothing left this Mac: the check failed before any audio was sent. Your audio is still here.";
   if (step === "deleted") return "Your notes are saved. Some audio may still be on this Mac until the delete finishes.";
+  if (step === "proof") return "Your notes are saved and the audio is deleted. You can record the proof later from Verify.";
   return "Nothing ran after this step. Your audio is still on this Mac.";
 }
 

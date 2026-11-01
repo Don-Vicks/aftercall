@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * Aftercall's local MCP server, over stdio. Run it with Node 24:
+ * Aftercall's local MCP server, over stdio. The app ships it as one plain-JS file
+ * (`pnpm build` → dist/aftercall-mcp.mjs, Node 20 or later); from a checkout, Node 24
+ * runs this source directly:
  *
+ *   AFTERCALL_TOKEN=<token> node apps/mcp/dist/aftercall-mcp.mjs [--data-dir <path>] [--socket <path>]
  *   AFTERCALL_TOKEN=<token> node apps/mcp/src/main.ts [--data-dir <path>] [--socket <path>]
  *
  * Meetings are encrypted on disk, so this server asks the running Aftercall app for

@@ -3,13 +3,13 @@ import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, X } from "lucide-react";
 import { initials, type Meeting } from "@aftercall/core";
-import { PREVIEW_INFO, agentActivity, agentsApi, claudeCommand, codexConfig, type AgentEvent, type AgentsInfo } from "./agents";
+import { PREVIEW_INFO, agentsApi, claudeCommand, codexConfig, describeActivity, type AgentActivity, type AgentsInfo } from "./agents";
 import { isDesktop } from "./recorder";
 import { syncWithAda } from "./sample";
 import { Button, Card, Pill, SectionTitle, Toggle, enter, exit, springs } from "./ui";
 import { Snippet, Why, errorText, grow, rise } from "./SettingsParts";
 
-const CAN = ["Search and read your meetings", "Claim an action item, by name", "Mark an item they claimed as done, with a note"];
+const CAN = ["Search and read your meetings", "Claim an action item, if you allow it", "Mark it done with a note, if you allow it"];
 const CANNOT = [
   "Send email or recaps",
   "Pay, or touch the agent wallet",
@@ -21,31 +21,54 @@ const CANNOT = [
 /** The browser preview has no app to ask: a clearly fake token, so the commands read whole. */
 const PREVIEW_TOKEN = "preview-only-not-a-real-token";
 
-/** One sample event in the browser preview, on the sample meeting, so the list can be looked at. */
-function previewActivity(): AgentEvent[] {
-  const at = new Date();
-  at.setHours(14, 20, 0, 0);
-  return [{ kind: "claimed", agent: "Claude Code", at: at.toISOString(), meetingId: syncWithAda.id, meeting: syncWithAda.title, item: "Ship the API fix" }];
+/** How often the open screen asks the app for new activity. */
+const ACTIVITY_POLL_MS = 5000;
+
+/** Sample requests in the browser preview, on the sample meeting: refused while read-only, then allowed. */
+function previewActivity(): AgentActivity[] {
+  const at = (h: number, min: number) => {
+    const d = new Date();
+    d.setHours(h, min, 0, 0);
+    return d.toISOString();
+  };
+  const meetingId = syncWithAda.id;
+  return [
+    { at: at(14, 20), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: true },
+    { at: at(14, 19), agent: "claude-code", op: "notes", meetingId, allowed: true },
+    { at: at(14, 12), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: false, refused: "read-only" },
+    { at: at(14, 11), agent: "claude-code", op: "meetings", allowed: true },
+  ];
 }
 
 /**
  * Connects coding agents (Claude Code, Codex) to Aftercall through the local MCP
  * server in apps/mcp, so they can pick up action items from meetings. Meetings are
  * encrypted on disk, so the server asks the app over a local socket that is open
- * only while the switch here is on, and only with the token shown here.
+ * only while the switch here is on, and only with the token shown here. Agents only
+ * read unless the second switch lets them claim and complete action items.
  */
 export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[]; onOpenMeeting: (id: string) => void }) {
   const [info, setInfo] = useState<AgentsInfo>(PREVIEW_INFO);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [log, setLog] = useState<AgentActivity[]>(() => (isDesktop ? [] : previewActivity()));
   const still = useReducedMotion();
 
   useEffect(() => {
-    if (isDesktop)
+    if (!isDesktop) return;
+    agentsApi
+      .info()
+      .then(setInfo)
+      .catch(() => {});
+    // Agents act while you watch: refresh the list while this screen is open.
+    const load = () =>
       agentsApi
-        .info()
-        .then(setInfo)
+        .activity()
+        .then(setLog)
         .catch(() => {});
+    load();
+    const timer = window.setInterval(load, ACTIVITY_POLL_MS);
+    return () => window.clearInterval(timer);
   }, []);
 
   const change = async (fn: () => Promise<AgentsInfo>) => {
@@ -60,11 +83,14 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
     }
   };
   const toggle = (enabled: boolean) =>
-    isDesktop ? change(() => agentsApi.setEnabled(enabled)) : setInfo({ ...info, enabled, token: enabled ? PREVIEW_TOKEN : null });
+    isDesktop
+      ? change(() => agentsApi.setEnabled(enabled))
+      : setInfo({ ...info, enabled, allowWrites: false, token: enabled ? PREVIEW_TOKEN : null });
+  const toggleWrites = (allow: boolean) =>
+    isDesktop ? change(() => agentsApi.setAllowWrites(allow)) : setInfo({ ...info, allowWrites: allow, readOnlySinceUpdate: false });
 
-  const real = agentActivity(meetings);
-  const sample = !isDesktop && real.length === 0;
-  const activity = sample ? previewActivity() : real;
+  const sample = !isDesktop;
+  const known = sample ? [syncWithAda, ...meetings] : meetings;
   const claude = claudeCommand(info);
   const codex = codexConfig(info);
   const height = (on: boolean) => (still ? { opacity: on ? 1 : 0 } : { opacity: on ? 1 : 0, height: on ? "auto" : 0 });
@@ -102,6 +128,25 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                   animate={{ ...height(true), transition: still ? enter : grow }}
                   exit={{ ...height(false), transition: exit }}
                 >
+                  <div className="flex items-center gap-4 border-t border-hairline px-5 py-4">
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="font-semibold text-ink">
+                        Let agents claim and complete action items
+                      </span>
+                      <span className="text-[13px] leading-[19px] text-ink-2">
+                        {info.allowWrites
+                          ? "On. Agents can mark an item as theirs and as done. They still can't send, pay or change your rules."
+                          : "Off. Agents can only read. On, they can mark an item as theirs and as done; they still can't send, pay or change your rules."}
+                      </span>
+                      {info.readOnlySinceUpdate && (
+                        <span className="mt-1 text-[13px] leading-[19px] text-ink">
+                          Agents are read-only since this update. Before it, they could claim and complete items without asking; turn this on if you want
+                          that back.
+                        </span>
+                      )}
+                    </span>
+                    <Toggle aria-label="Let agents claim and complete action items" checked={info.allowWrites} disabled={busy} onChange={toggleWrites} />
+                  </div>
                   <div className="flex items-center gap-3 border-t border-hairline px-5 py-3">
                     <span className="text-[13px] font-semibold text-ink-2">Token</span>
                     <span className="flex min-w-0 flex-1">
@@ -143,7 +188,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                     <SectionTitle id="h-claude" count="in Terminal">
                       Claude Code
                     </SectionTitle>
-                    <p className="m-0 text-ink-2">Run this once. Run it again after a new token.</p>
+                    <p className="m-0 text-ink-2">Run this once. Run it again after a new token, or if you move Aftercall. It needs Node 20 or later.</p>
                   </div>
                   <Snippet text={claude} label="Copy the Claude Code command" />
                 </section>
@@ -153,7 +198,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                       Codex
                     </SectionTitle>
                     <p className="m-0 text-ink-2">
-                      Add this to <span className="t-mono text-ink">~/.codex/config.toml</span>, replacing an older Aftercall block, then restart Codex.
+                      Add this to <span className="t-mono text-ink">~/.codex/config.toml</span>, replacing an older Aftercall block, then restart Codex. It needs
+                      Node 20 or later.
                     </p>
                   </div>
                   <Snippet text={codex} label="Copy the Codex config" />
@@ -174,8 +220,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
 
           {isDesktop && !info.serverFound && (
             <p className="-mt-4 text-[13px] leading-[19px] text-caution">
-              The server isn't at <span className="t-mono">{info.serverPath}</span>. It ships in the Aftercall repo under apps/mcp; run pnpm install there
-              first.
+              The server isn't at <span className="t-mono">{info.serverPath}</span>. It ships inside Aftercall; reinstall the app, or in a checkout run{" "}
+              <span className="t-mono">pnpm --filter @aftercall/mcp build</span>.
             </p>
           )}
 
@@ -185,39 +231,22 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
           </section>
 
           <section aria-labelledby="h-activity" className="flex flex-col gap-1.5" style={rise(3)}>
-            <SectionTitle id="h-activity" count={activity.length || undefined} className="mb-2">
-              Recent activity
-            </SectionTitle>
-            {activity.length === 0 ? (
-              <p className="m-0 text-ink-2">No agent has claimed or completed an action item yet.</p>
+            <div className="mb-2 flex flex-col gap-1">
+              <SectionTitle id="h-activity" count={log.length || undefined}>
+                Recent agent activity
+              </SectionTitle>
+              <p className="m-0 text-[13px] leading-[19px] text-ink-2">
+                Each read, claim and completion, and every refused request, newest first, under the name the agent gives itself. The list holds times,
+                names and ids, never meeting content.
+              </p>
+            </div>
+            {log.length === 0 ? (
+              <p className="m-0 text-ink-2">No agent has asked Aftercall for anything yet.</p>
             ) : (
               <>
                 <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-                  {activity.map((e) => (
-                    <li key={`${e.meetingId}-${e.item}-${e.kind}-${e.at}`}>
-                      <button
-                        type="button"
-                        onClick={() => onOpenMeeting(e.meetingId)}
-                        className="press -mx-3 flex w-[calc(100%+24px)] items-center gap-3.5 rounded-[10px] p-3 text-left hover:bg-elevated"
-                      >
-                        <AgentAvatar name={e.agent} />
-                        <span className="flex min-w-0 flex-1 flex-col gap-px">
-                          <span className="truncate font-semibold text-ink">{e.item}</span>
-                          <span className="truncate text-[13px] text-ink-2">
-                            {e.agent} · {e.meeting}
-                            {e.note ? ` · “${e.note}”` : ""}
-                          </span>
-                        </span>
-                        {e.kind === "completed" ? (
-                          <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>
-                            Done
-                          </Pill>
-                        ) : (
-                          <Pill tone="muted">Claimed</Pill>
-                        )}
-                        <span className="w-11 shrink-0 text-right font-mono text-[12px] text-muted">{when(e.at)}</span>
-                      </button>
-                    </li>
+                  {log.map((a, i) => (
+                    <ActivityRow key={`${a.at}-${i}`} entry={a} meetings={known} onOpenMeeting={onOpenMeeting} />
                   ))}
                 </ul>
                 {sample && <p className="m-0 text-[13px] text-muted">Sample activity in the browser preview.</p>}
@@ -227,7 +256,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
 
           <Why label="Where the server and your meetings live" className="-mt-2">
             <span className="flex flex-col gap-3">
-              <Path label="Server (Node 24)" value={info.serverPath} />
+              <Path label="Server (Node 20 or later)" value={info.serverPath} />
               <Path label="Meetings folder (encrypted)" value={info.dataDir} />
               <Path label="Local channel, open only while agents are on" value={info.socketPath} />
               <span>
@@ -241,6 +270,45 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
         </div>
       </div>
     </main>
+  );
+}
+
+/** One request: what it was, by whom, on which meeting, and whether Aftercall allowed it. Opens the meeting when there is one. */
+function ActivityRow({ entry, meetings, onOpenMeeting }: { entry: AgentActivity; meetings: Meeting[]; onOpenMeeting: (id: string) => void }) {
+  const v = describeActivity(entry, meetings);
+  const body = (
+    <>
+      <AgentAvatar name={entry.agent} />
+      <span className="flex min-w-0 flex-1 flex-col gap-px">
+        <span className="truncate font-semibold text-ink">{v.what}</span>
+        <span className="truncate text-[13px] text-ink-2">{[entry.agent, v.meeting?.title, v.detail].filter(Boolean).join(" · ")}</span>
+      </span>
+      {v.status === "done" ? (
+        <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>
+          Done
+        </Pill>
+      ) : v.status === "claimed" ? (
+        <Pill tone="muted">Claimed</Pill>
+      ) : v.status === "refused" ? (
+        <Pill tone="caution">Refused</Pill>
+      ) : (
+        <Pill tone="muted">Read</Pill>
+      )}
+      <span className="w-11 shrink-0 text-right font-mono text-[12px] text-muted">{when(entry.at)}</span>
+    </>
+  );
+  const row = "-mx-3 flex w-[calc(100%+24px)] items-center gap-3.5 rounded-[10px] p-3 text-left";
+  const meeting = v.meeting;
+  return (
+    <li>
+      {meeting ? (
+        <button type="button" onClick={() => onOpenMeeting(meeting.id)} className={`press ${row} hover:bg-elevated`}>
+          {body}
+        </button>
+      ) : (
+        <div className={row}>{body}</div>
+      )}
+    </li>
   );
 }
 

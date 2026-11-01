@@ -3,6 +3,7 @@ import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { ArrowRight, AudioLines, Check, FileDown, KeyRound, Laptop, Mic, MonitorSpeaker, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { isDesktop, recorder } from "./recorder";
+import { useShortcutEverywhere } from "./recording/session";
 import { deleteRecording } from "./projects";
 import { restoredSummary } from "./recovery";
 import { CheckCircle } from "./primitives/Check";
@@ -496,12 +497,13 @@ function NearAiStep({ onNext }: { onNext: () => void }) {
 }
 
 function Ready({ onRecord, onLater }: { onRecord: () => void; onLater: () => void }) {
+  const everywhere = useShortcutEverywhere();
   const steps: [string, ReactNode, ReactNode][] = [
     [
       "Press New recording",
       <>
-        Or <kbd className="rounded-[4px] bg-well px-[5px] py-px font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">⌘⇧R</kbd> in Aftercall,
-        or use the menu bar.
+        Or <kbd className="rounded-[4px] bg-well px-[5px] py-px font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">⌘⇧R</kbd>{" "}
+        {everywhere ? "from any app" : "in Aftercall"}, or use the menu bar.
       </>,
       <span className="inline-flex h-[30px] items-center gap-2 rounded-sm bg-elevated px-2.5 text-[13px] font-semibold whitespace-nowrap text-ink shadow-1">
         <span className="size-2 rounded-full bg-record" />
