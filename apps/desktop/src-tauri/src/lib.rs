@@ -23,13 +23,15 @@ pub mod test_api {
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use recorder::{Events, Levels, Recording, RecordingInfo, RecordingResult, SilenceEvent};
+use recorder::{Events, Levels, QuietEvent, Recording, RecordingInfo, RecordingResult, SilenceEvent};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// The recording in progress: the recorder, what it was started for, and its clock.
 struct Live {
@@ -181,6 +183,9 @@ impl Events for AppEvents {
     fn silence(&self, event: SilenceEvent) {
         let _ = self.app.emit("recorder:silence", event);
     }
+    fn quiet(&self, event: QuietEvent) {
+        let _ = self.app.emit("recorder:quiet", event);
+    }
 }
 
 /// "12:34", or "1:02:03" past an hour.
@@ -218,6 +223,41 @@ fn set_tray_recording(app: &AppHandle, recording: Option<(u64, bool)>) {
     }
 }
 
+/// ⌘⇧R: new recording, or your notes while recording. Registered system-wide, so it
+/// works from the call's own app; the menu bar items show it too.
+const RECORD_SHORTCUT: &str = "CmdOrCtrl+Shift+R";
+
+/// Two triggers closer than this are one press.
+const PRESS_GAP: Duration = Duration::from_millis(400);
+
+/// One press, one action. With the menu bar menu open, ⌘⇧R can reach both the global
+/// shortcut and the menu item that shows it; whichever comes second is dropped.
+#[derive(Default)]
+struct PressGate(Mutex<Option<Instant>>);
+
+impl PressGate {
+    fn accept(&self, now: Instant) -> bool {
+        let mut last = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if last.is_some_and(|t| now.saturating_duration_since(t) < PRESS_GAP) {
+            return false;
+        }
+        *last = Some(now);
+        true
+    }
+}
+
+/// ⌘⇧R pressed in any app. Aftercall comes to the front and the main window does what
+/// ⌘⇧R does inside it: idle, the record sheet opens (and with the sheet open and the
+/// box ticked, recording starts); recording, your notes open. The window decides
+/// because only it knows whether the sheet is open.
+fn record_shortcut(app: &AppHandle) {
+    if !app.state::<PressGate>().accept(Instant::now()) {
+        return;
+    }
+    show_main(app);
+    let _ = app.emit_to("main", "shortcut:record", ());
+}
+
 /// Idle: New recording, Open, Quit. Recording: Add a note, Pause or Resume, Stop, Open, Quit.
 fn tray_menu(app: &AppHandle, recording: Option<bool>) -> tauri::Result<Menu<tauri::Wry>> {
     let open = MenuItem::with_id(app, "open", "Open Aftercall", true, None::<&str>)?;
@@ -225,11 +265,11 @@ fn tray_menu(app: &AppHandle, recording: Option<bool>) -> tauri::Result<Menu<tau
     let separator = PredefinedMenuItem::separator(app)?;
     match recording {
         None => {
-            let record = MenuItem::with_id(app, "record", "New recording…", true, Some("CmdOrCtrl+Shift+R"))?;
+            let record = MenuItem::with_id(app, "record", "New recording…", true, Some(RECORD_SHORTCUT))?;
             Menu::with_items(app, &[&record, &open, &separator, &quit])
         }
         Some(paused) => {
-            let note = MenuItem::with_id(app, "note", "Add a note…", true, Some("CmdOrCtrl+Shift+R"))?;
+            let note = MenuItem::with_id(app, "note", "Add a note…", true, Some(RECORD_SHORTCUT))?;
             let pause = MenuItem::with_id(app, "pause", if paused { "Resume" } else { "Pause" }, true, None::<&str>)?;
             let stop = MenuItem::with_id(app, "stop", "Stop and make notes", true, None::<&str>)?;
             let separator2 = PredefinedMenuItem::separator(app)?;
@@ -334,12 +374,14 @@ fn save_your_notes(app: AppHandle, id: String, text: String) -> Result<(), Strin
     your_notes::save(&recording_dir(&app, &id)?, &text, now_secs()?)
 }
 
-/// Opens System Settings at Screen & System Audio Recording, where the call's audio is allowed.
+/// Opens System Settings where Aftercall is allowed to hear: Screen & System Audio
+/// Recording for the call's audio, or Microphone (`pane` "mic").
 #[tauri::command]
-fn open_audio_settings(app: AppHandle) -> Result<(), String> {
+fn open_audio_settings(app: AppHandle, pane: Option<String>) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+    let anchor = if pane.as_deref() == Some("mic") { "Privacy_Microphone" } else { "Privacy_ScreenCapture" };
     app.opener()
-        .open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture", None::<&str>)
+        .open_url(format!("x-apple.systempreferences:com.apple.preference.security?{anchor}"), None::<&str>)
         .map_err(|e| e.to_string())
 }
 
@@ -898,7 +940,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // ⌘⇧R from any app. Registered in setup, where a clash is logged instead of
+        // stopping the app; it is then handled only inside Aftercall (App.tsx).
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        record_shortcut(app);
+                    }
+                })
+                .build(),
+        )
         .manage(RecorderState::default())
+        .manage(PressGate::default())
         .manage(AgentsState::default())
         .invoke_handler(tauri::generate_handler![
             start_recording,
@@ -984,6 +1038,9 @@ pub fn run() {
                     eprintln!("agents: {e}");
                 }
             }
+            if let Err(e) = app.global_shortcut().register(RECORD_SHORTCUT) {
+                eprintln!("shortcut: ⌘⇧R works only inside Aftercall: {e}");
+            }
             // Menu bar item: start a recording or open the app from anywhere. While
             // recording it shows the time and offers Add a note, Pause and Stop.
             let menu = tray_menu(app.handle(), None)?;
@@ -995,11 +1052,12 @@ pub fn run() {
                 .icon(glyph)
                 .icon_as_template(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "record" => {
+                    // These two show ⌘⇧R, so they share the global shortcut's gate.
+                    "record" if app.state::<PressGate>().accept(Instant::now()) => {
                         show_main(app);
                         let _ = app.emit("menu:new-recording", ());
                     }
-                    "note" => {
+                    "note" if app.state::<PressGate>().accept(Instant::now()) => {
                         show_main(app);
                         let _ = app.emit("recorder:open-live", ());
                     }
@@ -1106,6 +1164,17 @@ mod tests {
         assert_eq!(clock_text(3723), "1:02:03");
         assert_eq!(tray_title(754, false), "● 12:34");
         assert_eq!(tray_title(754, true), "Paused 12:34");
+    }
+
+    #[test]
+    fn one_press_of_the_shortcut_is_one_action() {
+        let gate = PressGate::default();
+        let t0 = Instant::now();
+        assert!(gate.accept(t0), "the first trigger acts");
+        assert!(!gate.accept(t0 + Duration::from_millis(5)), "the menu item seeing the same press is dropped");
+        assert!(!gate.accept(t0 + PRESS_GAP - Duration::from_millis(1)));
+        assert!(gate.accept(t0 + PRESS_GAP), "a second press acts");
+        assert!(!gate.accept(t0), "a clock that goes backwards counts as the same press");
     }
 
     #[test]

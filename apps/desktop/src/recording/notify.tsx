@@ -3,7 +3,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from "@tauri
 import type { Meeting } from "@aftercall/core";
 import { isDesktop } from "../recorder";
 import { toast } from "../primitives";
-import { requestOpenMeeting } from "./session";
+import { requestOpenMeeting, type RecordingWarning } from "./session";
 
 /** Recording pages on screen right now, by id: their notes open there, so no toast. */
 const onScreen = new Set<string>();
@@ -53,13 +53,43 @@ export async function notesReady(meeting: Meeting) {
     return;
   }
   missed = { id: meeting.id, title, detail: detailFor(meeting) };
+  await notify(`Notes ready: ${title}`, missed.detail);
+}
+
+/** A macOS notification, asking for permission the first time. Off or refused: nothing. */
+async function notify(title: string, body: string) {
   if (!isDesktop) return;
   try {
     const granted = (await isPermissionGranted()) || (await requestPermission()) === "granted";
-    if (granted) sendNotification({ title: `Notes ready: ${title}`, body: missed.detail });
+    if (granted) sendNotification({ title, body });
   } catch {
-    // Notifications off: the toast on return still says it.
+    // Notifications off: what they'd say is on screen when you come back.
   }
+}
+
+/** What a recording warning says in a notification: which side, and that recording goes on. */
+export function warningText(w: RecordingWarning): { title: string; body: string } {
+  switch (w.kind) {
+    case "mic":
+      return {
+        title: "Your mic has gone silent",
+        body: w.stopped ? "No audio from your mic for 10 s. Aftercall is still recording." : "Only silence from your mic for 30 s. Aftercall is still recording.",
+      };
+    case "call":
+      return { title: "No sound from the call", body: "Nothing from the call's audio for 30 s. Your mic is still recording." };
+    case "ended":
+      return { title: "Call ended?", body: "No sound from either side for 2 minutes. Aftercall is still recording until you stop it." };
+  }
+}
+
+/**
+ * A recording warning while you're in another app (most likely the call): a macOS
+ * notification saying which side went silent. In Aftercall the pill already shows it.
+ */
+export async function warnAway(w: RecordingWarning) {
+  if (await appFocused()) return;
+  const { title, body } = warningText(w);
+  await notify(title, body);
 }
 
 if (typeof window !== "undefined") {

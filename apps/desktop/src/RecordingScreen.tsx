@@ -125,13 +125,12 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     await recordingFiles.saveNotes(id, serializeNotes(saved));
     // The notes are saved, so the audio goes now, before the proof's NEAR transaction:
     // quitting during that step mustn't leave it behind (the app also sweeps at launch).
+    moveTo("deleted");
     await recordingFiles.deleteAudio(id);
 
     moveTo("proof");
     // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
     if (await nearReady()) saved = await recordProof(id, saved).catch(() => saved);
-
-    moveTo("deleted");
     times[STEP_IDS.length - 1] = (performance.now() - since) / 1000;
 
     const notes = serializeNotes(saved);

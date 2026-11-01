@@ -1,13 +1,15 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { ArrowUpRight, Pause, PenLine, Play, VolumeX, X } from "lucide-react";
+import { ArrowUpRight, MicOff, Pause, PenLine, PhoneOff, Play, VolumeX, X } from "lucide-react";
 import { formatClock } from "@aftercall/core";
 import { isDesktop, recorder } from "../recorder";
 import { Button, IconButton, Meter, RollingNumber, cx, enter, exit, springs, toast, useLayer } from "../ui";
 import { NOTES_HELP, NotesArea, SavedLabel } from "./YourNotes";
 import {
   closeNotes,
+  dismissCallEnded,
+  dismissMicWarning,
   dismissSilentWarning,
   isLive,
   levels,
@@ -29,7 +31,8 @@ const pause = () => togglePause().catch(fail("pause"));
  * page. Your mic and the call as two meters, the time, Pause and Stop. On the
  * recording's own page it says "Stop and make notes"; elsewhere it adds Note, which
  * opens your notes in a drawer above it, and the time opens the recording's page.
- * When the call goes silent it grows a warning (V2Silent).
+ * When a side goes silent it grows a warning saying which (V2Silent), and when both
+ * have been quiet for 2 minutes it asks "Call ended?". One at a time, the question first.
  */
 export function LivePill({ onOpenLive }: { onOpenLive: () => void }) {
   const s = useRecordingSession();
@@ -54,7 +57,7 @@ export function LivePill({ onOpenLive }: { onOpenLive: () => void }) {
     };
   }, [live]);
 
-  const warning = live && !s.warningDismissed && (s.callSilent || !s.systemAudio) ? (s.systemAudio ? "silent" : "unavailable") : null;
+  const warning = warningFor(s);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-8 z-40 flex flex-col items-center gap-3 px-6">
@@ -72,12 +75,32 @@ export function LivePill({ onOpenLive }: { onOpenLive: () => void }) {
             className="pointer-events-auto flex max-w-full flex-col rounded-[26px] bg-elevated shadow-pill"
           >
             <PillRow s={s} onOpenLive={onOpenLive} />
-            <AnimatePresence initial={false}>{warning && <SilentWarning key="warning" kind={warning} />}</AnimatePresence>
+            <AnimatePresence initial={false} mode="wait">
+              {warning === "ended" ? (
+                <CallEndedPrompt key="ended" stopping={s.phase === "stopping"} />
+              ) : warning === "mic" ? (
+                <MicWarning key="mic" s={s} />
+              ) : warning ? (
+                <SilentWarning key={warning} kind={warning} />
+              ) : null}
+            </AnimatePresence>
           </m.div>
         )}
       </AnimatePresence>
     </div>
   );
+}
+
+type Warning = "ended" | "mic" | "silent" | "unavailable";
+
+/** The one warning the pill shows, if any. "Keep recording" hides each until it starts again. */
+function warningFor(s: RecordingSession): Warning | null {
+  if (!isLive(s)) return null;
+  // Not while paused: a paused call is quiet on purpose.
+  if (s.callEnded && !s.callEndedDismissed && s.phase !== "paused") return "ended";
+  if (s.micSilent && !s.micWarningDismissed) return "mic";
+  if (!s.warningDismissed && (s.callSilent || !s.systemAudio)) return s.systemAudio ? "silent" : "unavailable";
+  return null;
 }
 
 function PillRow({ s, onOpenLive }: { s: RecordingSession; onOpenLive: () => void }) {
@@ -103,7 +126,11 @@ function PillRow({ s, onOpenLive }: { s: RecordingSession; onOpenLive: () => voi
       >
         <RollingNumber value={formatClock(s.seconds)} />
       </span>
-      <Meter levelRef={levels.mic} bars={full ? 6 : 5} height={full ? 24 : 22} tone="verdigris" label="Your mic" />
+      {s.micSilent ? (
+        <Meter level={0} bars={full ? 6 : 5} height={full ? 24 : 22} tone="caution" label="Your mic, silent" />
+      ) : (
+        <Meter levelRef={levels.mic} bars={full ? 6 : 5} height={full ? 24 : 22} tone="verdigris" label="Your mic" />
+      )}
       {callSilent ? (
         <Meter level={0} bars={full ? 6 : 5} height={full ? 24 : 22} tone="caution" label="The call, silent" />
       ) : (
@@ -163,10 +190,11 @@ function PillRow({ s, onOpenLive }: { s: RecordingSession; onOpenLive: () => voi
   );
 }
 
-/** V2Silent: no sound from the call (or no access to it at all), and how to allow it. */
-function SilentWarning({ kind }: { kind: "silent" | "unavailable" }) {
-  const openSettings = () =>
-    isDesktop ? recorder.openAudioSettings().catch(fail("open System Settings")) : toast({ text: "System Settings opens from the Mac app", tone: "caution" });
+const openSettings = (pane: "call" | "mic") => () =>
+  isDesktop ? recorder.openAudioSettings(pane).catch(fail("open System Settings")) : toast({ text: "System Settings opens from the Mac app", tone: "caution" });
+
+/** A warning or question growing out of the bottom of the pill: an icon, what happened, then what you can do. */
+function PillPanel({ icon, title, eyebrow, children }: { icon: ReactNode; title: string; eyebrow: string; children: ReactNode }) {
   return (
     <m.div
       initial={{ height: 0, opacity: 0 }}
@@ -182,44 +210,118 @@ function SilentWarning({ kind }: { kind: "silent" | "unavailable" }) {
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-caution-tint text-caution"
             style={{ animation: "ac-pop 320ms 160ms var(--ease) both" }}
           >
-            <VolumeX size={18} strokeWidth={2} />
+            {icon}
           </span>
           <span className="flex min-w-0 flex-col gap-px">
-            <span className="t-title text-ink">{kind === "silent" ? "No sound from the call for 30 s" : "Aftercall can't hear the call"}</span>
-            <span className="t-eyebrow text-muted">Your mic is still recording</span>
+            <span className="t-title text-ink">{title}</span>
+            <span className="t-eyebrow text-muted">{eyebrow}</span>
           </span>
         </div>
-        <p className="m-0 text-ink-2">
-          {kind === "silent"
-            ? "If others are talking, macOS may be keeping the call's audio from Aftercall. Allow it here:"
-            : "macOS didn't give Aftercall the call's audio, so only your side is recorded. Allow it here, then start a new recording:"}
-        </p>
-        <div className="rounded-[10px] px-3 py-2.5 text-[13px] leading-5 text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">
-          System Settings{" "}
-          <span aria-hidden="true" className="text-muted">
-            ›
-          </span>{" "}
-          Privacy &amp; Security{" "}
-          <span aria-hidden="true" className="text-muted">
-            ›
-          </span>{" "}
-          <span className="font-semibold">Screen &amp; System Audio Recording</span>
-        </div>
-        <div className="flex gap-5 text-[12px] leading-4 text-muted">
-          <Legend tone="bg-verdigris">You (mic) · live</Legend>
-          <Legend tone="bg-caution">{kind === "silent" ? "The call · silent" : "The call · not recorded"}</Legend>
-        </div>
-        <div className="mt-0.5 flex gap-2.5">
-          <Button variant="primary" className="flex-1" onClick={openSettings}>
+        {children}
+      </div>
+    </m.div>
+  );
+}
+
+/** Where in System Settings Aftercall is allowed to hear. */
+const SettingsPath = ({ pane }: { pane: string }) => (
+  <div className="rounded-[10px] px-3 py-2.5 text-[13px] leading-5 text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">
+    System Settings{" "}
+    <span aria-hidden="true" className="text-muted">
+      ›
+    </span>{" "}
+    Privacy &amp; Security{" "}
+    <span aria-hidden="true" className="text-muted">
+      ›
+    </span>{" "}
+    <span className="font-semibold">{pane}</span>
+  </div>
+);
+
+/** V2Silent: no sound from the call (or no access to it at all), and how to allow it. */
+function SilentWarning({ kind }: { kind: "silent" | "unavailable" }) {
+  return (
+    <PillPanel
+      icon={<VolumeX size={18} strokeWidth={2} />}
+      title={kind === "silent" ? "No sound from the call for 30 s" : "Aftercall can't hear the call"}
+      eyebrow="Your mic is still recording"
+    >
+      <p className="m-0 text-ink-2">
+        {kind === "silent"
+          ? "If others are talking, macOS may be keeping the call's audio from Aftercall. Allow it here:"
+          : "macOS didn't give Aftercall the call's audio, so only your side is recorded. Allow it here, then start a new recording:"}
+      </p>
+      <SettingsPath pane="Screen & System Audio Recording" />
+      <div className="flex gap-5 text-[12px] leading-4 text-muted">
+        <Legend tone="bg-verdigris">You (mic) · live</Legend>
+        <Legend tone="bg-caution">{kind === "silent" ? "The call · silent" : "The call · not recorded"}</Legend>
+      </div>
+      <div className="mt-0.5 flex gap-2.5">
+        <Button variant="primary" className="flex-1" onClick={openSettings("call")}>
+          Open System Settings
+          <ArrowUpRight size={13} strokeWidth={2.2} aria-hidden="true" />
+        </Button>
+        <Button variant="secondary" onClick={dismissSilentWarning}>
+          Keep recording
+        </Button>
+      </div>
+    </PillPanel>
+  );
+}
+
+/**
+ * Your side went silent: only zeros from the mic for 30 s (muted, or macOS keeping it
+ * from Aftercall), or no audio at all for 10 s (the mic went away).
+ */
+function MicWarning({ s }: { s: RecordingSession }) {
+  const mic = isDesktop && s.microphone ? s.microphone : "your mic";
+  const callLive = s.systemAudio && !s.callSilent;
+  return (
+    <PillPanel
+      icon={<MicOff size={18} strokeWidth={2} />}
+      title="Your mic has gone silent"
+      eyebrow={callLive ? "The call is still recording" : "Aftercall is still recording"}
+    >
+      <p className="m-0 text-ink-2">
+        {s.micStopped
+          ? `No audio from ${mic} for 10 s. That happens when AirPods switch to another device or a mic is unplugged. A new recording uses the mic macOS has now.`
+          : `Only silence from ${mic} for 30 s. Check it isn't muted. If it isn't, macOS may be keeping the mic from Aftercall. Allow it here:`}
+      </p>
+      {!s.micStopped && <SettingsPath pane="Microphone" />}
+      <div className="flex gap-5 text-[12px] leading-4 text-muted">
+        <Legend tone="bg-caution">{s.micStopped ? "You (mic) · stopped" : "You (mic) · silent"}</Legend>
+        <Legend tone={callLive ? "bg-ink" : "bg-caution"}>{callLive ? "The call · live" : s.systemAudio ? "The call · silent" : "The call · not recorded"}</Legend>
+      </div>
+      <div className="mt-0.5 flex gap-2.5">
+        {!s.micStopped && (
+          <Button variant="primary" className="flex-1" onClick={openSettings("mic")}>
             Open System Settings
             <ArrowUpRight size={13} strokeWidth={2.2} aria-hidden="true" />
           </Button>
-          <Button variant="secondary" onClick={dismissSilentWarning}>
-            Keep recording
-          </Button>
-        </div>
+        )}
+        <Button variant="secondary" className={s.micStopped ? "flex-1" : undefined} onClick={dismissMicWarning}>
+          Keep recording
+        </Button>
       </div>
-    </m.div>
+    </PillPanel>
+  );
+}
+
+/** Both sides quiet for 2 minutes. Only a question: the recording goes on until you stop it. */
+function CallEndedPrompt({ stopping }: { stopping: boolean }) {
+  return (
+    <PillPanel icon={<PhoneOff size={18} strokeWidth={2} />} title="Call ended?" eyebrow="No sound from either side for 2 min">
+      <p className="m-0 text-ink-2">Aftercall keeps recording until you stop it.</p>
+      <div className="mt-0.5 flex gap-2.5">
+        <Button variant="record" className="flex-1" onClick={stop} loading={stopping}>
+          {!stopping && <span aria-hidden="true" className="size-2.5 rounded-[2px] bg-white" />}
+          Stop and make notes
+        </Button>
+        <Button variant="secondary" onClick={dismissCallEnded} disabled={stopping}>
+          Keep recording
+        </Button>
+      </div>
+    </PillPanel>
   );
 }
 

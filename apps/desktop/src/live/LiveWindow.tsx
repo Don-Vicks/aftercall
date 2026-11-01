@@ -7,7 +7,8 @@ import { isLive, levels, stopRecording, togglePause, useRecordingSession } from 
 /**
  * The floating recorder (V2Floating, "In a call"): a 320×64 pill on top of the call
  * while the main window is in the background. The time, your mic and the call,
- * Open notes, Pause and Stop. Drag it anywhere but the buttons.
+ * Open notes, Pause and Stop. Drag it anywhere but the buttons. A side that goes
+ * silent turns its meter to caution; the notification says which.
  */
 export function LiveWindow() {
   const s = useRecordingSession();
@@ -43,7 +44,11 @@ export function LiveWindow() {
         <span role="timer" className={cx("min-w-[46px] shrink-0 font-mono text-[15px] font-medium tracking-[-0.01em]", paused ? "text-muted" : "text-ink")}>
           <RollingNumber value={formatClock(s.seconds)} />
         </span>
-        <Meter levelRef={levels.mic} bars={5} tone="verdigris" label="Your mic" />
+        {s.micSilent ? (
+          <Meter level={0} bars={5} tone="caution" label="Your mic, silent" />
+        ) : (
+          <Meter levelRef={levels.mic} bars={5} tone="verdigris" label="Your mic" />
+        )}
         {callSilent ? (
           <Meter level={0} bars={5} tone="caution" label="The call, silent" className="-ml-0.5" />
         ) : (

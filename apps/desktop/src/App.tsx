@@ -9,7 +9,8 @@ import { ProcessingScreen } from "./ProcessingScreen";
 import { RecordSheet } from "./recording/RecordSheet";
 import { LivePill } from "./recording/LivePill";
 import { LiveScreen } from "./recording/LiveScreen";
-import { getSession, openNotes, useRecordingEvents, useRecordingSession } from "./recording/session";
+import { getSession, openNotes, pressRecordShortcut, useRecordShortcut, useRecordingEvents, useRecordingSession } from "./recording/session";
+import { warnAway } from "./recording/notify";
 import { syncWithAda, syncWithAdaCost, syncWithAdaDropped } from "./sample";
 import { spendOf } from "./costs";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
@@ -318,13 +319,17 @@ export default function App() {
 
   const paletteBlocked = useRef(false);
   paletteBlocked.current = onboarding || recordOpen;
+  // ⌘⇧R, here or (Mac app) from any app. While recording it opens your notes instead.
+  // The open record sheet takes it over to start.
+  useRecordShortcut(() => {
+    if (getSession().phase === "idle") setRecordOpen(true);
+    else openNotes();
+  });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === "r") {
         e.preventDefault();
-        // While recording, ⌘⇧R opens your notes instead.
-        if (getSession().phase === "idle") setRecordOpen(true);
-        else openNotes();
+        pressRecordShortcut();
       }
       if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -339,9 +344,11 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     // "New recording…" in the menu bar item opens the panel.
     const offMenu = isDesktop ? recorder.onMenuNewRecording(newRecording) : null;
+    const offShortcut = isDesktop ? recorder.onShortcut(pressRecordShortcut) : null;
     return () => {
       window.removeEventListener("keydown", onKey);
       offMenu?.then((f) => f());
+      offShortcut?.then((f) => f());
     };
   }, []);
 
@@ -521,6 +528,7 @@ export default function App() {
     },
     onOpenLive: () => setView({ name: "live" }),
     onOpenMeeting: (id) => setView(meetings[id] ? { name: "meeting", id } : { name: "recording", id }),
+    onWarning: (w) => void warnAway(w),
   });
 
   const openRecording = view.name === "recording" ? recordings.find((r) => r.id === view.id) : undefined;

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react";
-import { Check, Monitor } from "lucide-react";
+import { Check, MicOff, Monitor, VolumeX } from "lucide-react";
 import { isDesktop } from "../recorder";
 import { AvatarStack, Pill, SectionTitle } from "../ui";
 import { NOTES_HELP, NotesArea, SavedLabel } from "./YourNotes";
@@ -60,15 +60,28 @@ export function LiveScreen() {
         <header className="flex flex-col gap-2.5" style={{ animation: "ac-in 320ms var(--ease) both" }}>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="t-eyebrow text-muted">{eyebrow}</span>
-            {paused ? (
-              <Pill tone="record" icon={<span aria-hidden="true" className="size-1.5 rounded-full bg-current opacity-60" />}>
-                Paused
-              </Pill>
-            ) : (
-              <Pill tone="record" live>
-                Recording
-              </Pill>
-            )}
+            <span className="flex flex-wrap items-center gap-2" role="status">
+              {/* Which side went silent stays here after "Keep recording" hides the pill's warning. */}
+              {s.micSilent && (
+                <Pill tone="caution" icon={<MicOff size={12} strokeWidth={2.2} aria-hidden="true" />}>
+                  {s.micStopped ? "Mic stopped" : "Mic silent"}
+                </Pill>
+              )}
+              {(s.callSilent || !s.systemAudio) && (
+                <Pill tone="caution" icon={<VolumeX size={12} strokeWidth={2.2} aria-hidden="true" />}>
+                  {s.systemAudio ? "Call silent" : "Call not recorded"}
+                </Pill>
+              )}
+              {paused ? (
+                <Pill tone="record" icon={<span aria-hidden="true" className="size-1.5 rounded-full bg-current opacity-60" />}>
+                  Paused
+                </Pill>
+              ) : (
+                <Pill tone="record" live>
+                  Recording
+                </Pill>
+              )}
+            </span>
           </div>
           <h1 className="t-display m-0 text-ink">{title}</h1>
           <div className="flex flex-wrap items-center gap-2.5">
@@ -114,7 +127,7 @@ export function LiveScreen() {
           <Monitor size={18} strokeWidth={1.75} className="shrink-0 text-faint" aria-hidden="true" />
           <span className="flex-1 text-ink-2">
             {isDesktop
-              ? "Switch to your call: a small recorder stays on top, and the menu bar shows the time."
+              ? "Switch to your call: a small recorder stays on top, the menu bar shows the time, and ⌘⇧R from any app brings back your notes."
               : "In the Mac app, switching to your call shows a small recorder on top, and the menu bar shows the time."}
           </span>
         </section>

@@ -500,7 +500,7 @@ function Ready({ onRecord, onLater }: { onRecord: () => void; onLater: () => voi
     [
       "Press New recording",
       <>
-        Or <kbd className="rounded-[4px] bg-well px-[5px] py-px font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">⌘⇧R</kbd> in Aftercall,
+        Or <kbd className="rounded-[4px] bg-well px-[5px] py-px font-mono text-[12px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">⌘⇧R</kbd> from any app,
         or use the menu bar.
       </>,
       <span className="inline-flex h-[30px] items-center gap-2 rounded-sm bg-elevated px-2.5 text-[13px] font-semibold whitespace-nowrap text-ink shadow-1">

@@ -3,7 +3,7 @@ import { formatDuration } from "@aftercall/core";
 import { ProcessHeader, ProcessingSteps, STEP_IDS, VerifiedSeal } from "./recording/processing";
 
 /** How long each step takes in the walk-through, in ms. */
-const PACE = [900, 2200, 2600, 700, 1200, 400];
+const PACE = [900, 2200, 2600, 700, 400, 1200];
 
 /**
  * The browser preview's stand-in for processing (pnpm dev:ui has no recorder and no

@@ -29,6 +29,16 @@ export interface RecordingSession {
   callSilent: boolean;
   /** "Keep recording" on the warning; it comes back if the call goes silent again. */
   warningDismissed: boolean;
+  /** Your mic has been exact zeros for 30 s, or has sent no audio at all for 10 s. */
+  micSilent: boolean;
+  /** The second kind: the mic stream stopped (AirPods switching, a mic unplugged). */
+  micStopped: boolean;
+  /** "Keep recording" on the mic warning; it comes back if the mic goes silent again. */
+  micWarningDismissed: boolean;
+  /** Both sides quiet for 2 minutes: "Call ended?". Only a question; nothing stops by itself. */
+  callEnded: boolean;
+  /** "Keep recording" on that prompt; it asks again only after sound returns and goes quiet again. */
+  callEndedDismissed: boolean;
   /** The calendar event this call is probably for. */
   event: CalendarEvent | null;
   /** True for the made-up event the browser preview shows. */
@@ -62,6 +72,11 @@ const idle = (): RecordingSession => ({
   systemAudio: true,
   callSilent: false,
   warningDismissed: false,
+  micSilent: false,
+  micStopped: false,
+  micWarningDismissed: false,
+  callEnded: false,
+  callEndedDismissed: false,
   event: null,
   eventIsSample: false,
   notes: "",
@@ -127,6 +142,9 @@ export const levels = { mic: new LevelBuffer(), call: new LevelBuffer() };
 
 // ---------- what the app does when the recording changes ----------
 
+/** Something the recording needs you to see: which side went silent, or the call may have ended. */
+export type RecordingWarning = { kind: "mic"; stopped: boolean } | { kind: "call" } | { kind: "ended" };
+
 export interface RecordingHandlers {
   /** A recording stopped, however it was stopped. Show its page. */
   onStopped?: (s: Stopped) => void;
@@ -134,6 +152,8 @@ export interface RecordingHandlers {
   onOpenLive?: () => void;
   /** "Open" on the Notes ready toast. */
   onOpenMeeting?: (id: string) => void;
+  /** A warning just started; away from Aftercall it becomes a notification. */
+  onWarning?: (w: RecordingWarning) => void;
 }
 
 let handlers: RecordingHandlers = {};
@@ -147,6 +167,7 @@ export function useRecordingEvents(h: RecordingHandlers) {
       onStopped: (s) => ref.current.onStopped?.(s),
       onOpenLive: () => ref.current.onOpenLive?.(),
       onOpenMeeting: (id) => ref.current.onOpenMeeting?.(id),
+      onWarning: (w) => ref.current.onWarning?.(w),
     };
     handlers = live;
     start();
@@ -173,9 +194,11 @@ function start() {
     if (l.seconds !== state.seconds) set({ seconds: l.seconds });
   });
   recorder.onSilence((s) => {
-    if (s.stem !== "system") return;
-    set(s.silent ? { callSilent: true } : { callSilent: false, warningDismissed: false });
+    if (!isLive()) return;
+    if (s.stem === "mic") setMicSilent(s.silent, s.stopped);
+    else setCallSilent(s.silent);
   });
+  recorder.onQuiet((q) => isLive() && setCallEnded(q.quiet));
   recorder.onState(applyStatus);
   recorder.onStopped((r) => void stopped(r));
   recorder.onOpenLive(() => handlers.onOpenLive?.());
@@ -183,6 +206,23 @@ function start() {
     .status()
     .then(applyStatus)
     .catch(() => {});
+}
+
+// Each warning goes away by itself when the sound comes back, and "Keep recording"
+// only hides it until the next time it starts.
+function setCallSilent(silent: boolean) {
+  set(silent ? { callSilent: true } : { callSilent: false, warningDismissed: false });
+  if (silent) handlers.onWarning?.({ kind: "call" });
+}
+
+function setMicSilent(silent: boolean, stopped: boolean) {
+  set(silent ? { micSilent: true, micStopped: stopped } : { micSilent: false, micStopped: false, micWarningDismissed: false });
+  if (silent) handlers.onWarning?.({ kind: "mic", stopped });
+}
+
+function setCallEnded(quiet: boolean) {
+  set(quiet ? { callEnded: true } : { callEnded: false, callEndedDismissed: false });
+  if (quiet) handlers.onWarning?.({ kind: "ended" });
 }
 
 /** Unsaved notes when a recording stopped somewhere else; saved to the stopped recording. */
@@ -222,6 +262,11 @@ function applyStatus(s: RecorderStatus | null) {
           notesError: null,
           callSilent: false,
           warningDismissed: false,
+          micSilent: false,
+          micStopped: false,
+          micWarningDismissed: false,
+          callEnded: false,
+          callEndedDismissed: false,
         }
       : {}),
   });
@@ -363,6 +408,41 @@ export function openNotes() {
 
 export const closeNotes = () => set({ drawerOpen: false });
 export const dismissSilentWarning = () => set({ warningDismissed: true });
+export const dismissMicWarning = () => set({ micWarningDismissed: true });
+export const dismissCallEnded = () => set({ callEndedDismissed: true });
+
+// ---------- ⌘⇧R ----------
+
+/**
+ * ⌘⇧R, from a key press in Aftercall or (Mac app) from any app through the global
+ * shortcut, which reaches the main window as shortcut:record. The newest taker
+ * handles it: App's (the record sheet, or your notes while recording), or the open
+ * record sheet's (start).
+ */
+const shortcutTakers: (() => void)[] = [];
+let lastPress = -Infinity;
+
+export function pressRecordShortcut() {
+  const now = performance.now();
+  // One press can arrive twice (the key and the global shortcut), or repeat while held: act once.
+  if (now - lastPress < 400) return;
+  lastPress = now;
+  shortcutTakers[shortcutTakers.length - 1]?.();
+}
+
+/** Takes ⌘⇧R while mounted; the last component to mount wins. */
+export function useRecordShortcut(fn: () => void) {
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    const take = () => ref.current();
+    shortcutTakers.push(take);
+    return () => {
+      const i = shortcutTakers.lastIndexOf(take);
+      if (i >= 0) shortcutTakers.splice(i, 1);
+    };
+  }, []);
+}
 
 /** The live page tells the store while it's on screen (it has the notes; the pill drops its Note). */
 export function useLivePage() {
@@ -376,22 +456,32 @@ export function useLivePage() {
 
 let sim: number[] = [];
 
-/** pnpm dev:ui has no recorder: a ticking clock and two voices taking turns. */
+/**
+ * pnpm dev:ui has no recorder: a ticking clock and two voices taking turns.
+ * ?simulate= previews a warning three seconds in: `silent` (the call, V2Silent),
+ * `mic-silent` (your mic sends only zeros), `mic-stopped` (your mic stops sending
+ * audio) or `call-ended` (both sides quiet, "Call ended?").
+ */
 function simulate() {
   stopSimulation();
   const t0 = performance.now();
-  // ?simulate=silent previews the silent-call warning (V2Silent) after three seconds.
-  if (new URLSearchParams(window.location.search).get("simulate") === "silent") {
-    sim.push(window.setTimeout(() => isLive() && set({ callSilent: true }), 3000));
-  }
+  const preview = new URLSearchParams(window.location.search).get("simulate");
+  const warn: Record<string, () => void> = {
+    silent: () => setCallSilent(true),
+    "mic-silent": () => setMicSilent(true, false),
+    "mic-stopped": () => setMicSilent(true, true),
+    "call-ended": () => setCallEnded(true),
+  };
+  if (preview && warn[preview]) sim.push(window.setTimeout(() => isLive() && warn[preview](), 3000));
   sim.push(
     window.setInterval(() => state.phase === "recording" && set({ seconds: state.seconds + 1 }), 1000),
     window.setInterval(() => {
       if (state.phase !== "recording") return;
       const turn = Math.sin((performance.now() - t0) / 2400);
       const voice = () => 0.25 + Math.random() * 0.55;
-      levels.mic.push(turn > 0.1 ? voice() : Math.random() * 0.08);
-      levels.call.push(turn < -0.1 && !state.callSilent ? voice() : 0);
+      const quiet = state.callEnded;
+      levels.mic.push(state.micSilent ? 0 : turn > 0.1 && !quiet ? voice() : Math.random() * 0.08);
+      levels.call.push(turn < -0.1 && !state.callSilent && !quiet ? voice() : 0);
     }, 80),
   );
 }
