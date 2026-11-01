@@ -438,6 +438,15 @@ fn set_action_item_done(app: AppHandle, id: String, item_id: String, done: bool)
     notes_file::set_item_done(&recording_dir(&app, &id)?.join("notes.json"), &item_id, done)
 }
 
+/// Changes one action item's text, owner and due date in notes.json, or with
+/// `restore` puts back what the model signed; returns the saved notes. The signed
+/// notes themselves never change (see notes_file::edit_item).
+#[tauri::command]
+fn edit_action_item(app: AppHandle, id: String, item_id: String, text: String, owner: String, due: Option<String>, restore: bool) -> Result<String, String> {
+    let draft = (!restore).then_some(notes_file::ItemDraft { text, owner, due });
+    notes_file::edit_item(&recording_dir(&app, &id)?.join("notes.json"), &item_id, draft, &agents::now_iso())
+}
+
 /// The agents socket while Connected agents is on (see agents.rs).
 #[derive(Default)]
 struct AgentsState(Mutex<Option<agents::Server>>);
@@ -857,6 +866,7 @@ pub fn run() {
             list_chunks,
             save_notes,
             set_action_item_done,
+            edit_action_item,
             agents_info,
             agents_set_enabled,
             agents_new_token,

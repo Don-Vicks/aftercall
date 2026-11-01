@@ -12,6 +12,7 @@ export * from "./notes/schema.ts";
 export * from "./notes/transcript.ts";
 export * from "./notes/verify.ts";
 export * from "./notes/proof.ts";
+export * from "./notes/edits.ts";
 export * from "./tee/checks.ts";
 export * from "./tee/nvidia.ts";
 export * from "./tee/e2ee.ts";

@@ -102,7 +102,8 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
       {
         id,
         project: recording.project,
-        startedAt: recordingStartedAt(recording),
+        // The real time, as ISO: every page formats it when it shows it, so it never goes stale.
+        startedAt: new Date(recording.startedAt * 1000).toISOString(),
         durationSec: recording.seconds,
         chunkSeconds: 300,
         chunks,

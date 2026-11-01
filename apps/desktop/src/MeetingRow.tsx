@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import type { Meeting } from "@aftercall/core";
+import { meetingLabel, type Meeting } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { AvatarStack, cx, type Surface } from "./ui";
@@ -38,7 +38,7 @@ export interface MeetingRowData {
 export function meetingRow(r: SavedRecording | undefined, m: Meeting | undefined, { withProject = true, long = true, sample = false } = {}): MeetingRowData {
   const title = m?.title ?? (r ? recordingTitle(r) : "Meeting");
   const project = m?.project ?? r?.project ?? "";
-  const when = r ? shortWhen(r.startedAt) : (m?.startedAt ?? "");
+  const when = r ? shortWhen(r.startedAt) : m ? meetingLabel(m) : "";
   const seconds = r?.seconds ?? m?.durationSec ?? 0;
   const meta = [withProject ? project : "", when, shortDuration(seconds), sample || r?.label ? "Sample" : ""].filter(Boolean).join(" · ");
   let status: MeetingRowData["status"];

@@ -301,7 +301,7 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
 }
 
 /// Now as JavaScript's `toISOString()` writes it: `2026-10-26T12:00:00.000Z`.
-fn now_iso() -> String {
+pub(crate) fn now_iso() -> String {
     let d = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let secs = d.as_secs();
     let (y, m, day) = crate::recovery::civil_date(secs);
@@ -325,6 +325,11 @@ mod tests {
             { "id": "a2", "text": "Share the term sheet", "owner": "Ada", "done": false },
             { "id": "a3", "text": "Book the call", "owner": "You", "done": true }
         ], "followUps": [{ "id": "f2", "amount": { "$bigint": "12500000" } }], "yourNotes": "Push for the pilot" },
+            "notes": { "action_items": [
+                { "text": "Send Ada the pilot plan", "owner": "You", "due": null, "evidence": "e1" },
+                { "text": "Share the term sheet", "owner": "Ada", "due": null, "evidence": "e2" },
+                { "text": "Book the call", "owner": "You", "due": null, "evidence": "e3" }
+            ] },
             "proof": { "notesHash": "abc", "notice": { "by": "you", "at": "2026-10-26T11:58:00.000Z", "how": "chat" } }, "yourNotesSalt": "5a5a",
             "cost": { "usd": 0.0042, "whisperSeconds": 384, "whisperUsd": 0.00000384, "pricesAsOf": "2026-11-01" } });
         at_rest::write_json(&rec.join("notes.json"), &notes).unwrap();
@@ -407,6 +412,59 @@ mod tests {
         after["meeting"]["actionItems"][1] = before["meeting"]["actionItems"][1].clone();
         assert_eq!(after, before);
         assert!(at_rest::is_sealed(&std::fs::read(dir.join("recordings/1761000000/notes.json")).unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn edits_ticks_and_agent_claims_interleaved_keep_each_other() {
+        let dir = data_dir("mix");
+        let file = dir.join("recordings/1761000000/notes.json");
+        let draft = |text: &str| Some(notes_file::ItemDraft { text: text.into(), owner: "Ada".into(), due: Some("Friday".into()) });
+        // One after another, each on the item another just changed.
+        notes_file::edit_item(&file, "a1", draft("Send Ada the pilot plan and budget"), "t1").unwrap();
+        dispatch(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), &at("t2")).unwrap();
+        notes_file::set_item_done(&file, "a2", true).unwrap();
+        notes_file::edit_item(&file, "a2", draft("Share the signed term sheet"), "t3").unwrap();
+        dispatch(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Codex", "note": "Sent" }), &at("t4")).unwrap();
+        let items = read_notes(&dir)["meeting"]["actionItems"].clone();
+        assert_eq!(items[0]["text"], "Send Ada the pilot plan and budget");
+        assert_eq!(items[0]["edited"]["fields"], json!(["text", "owner", "due"]));
+        assert_eq!((items[0]["claimed"]["at"].as_str(), items[0]["completed"]["note"].as_str(), items[0]["done"].as_bool()), (Some("t2"), Some("Sent"), Some(true)));
+        assert_eq!((items[1]["text"].as_str(), items[1]["done"].as_bool()), (Some("Share the signed term sheet"), Some(true)));
+
+        // At the same time, from many threads: every change lands.
+        notes_file::set_item_done(&file, "a3", false).unwrap();
+        std::thread::scope(|s| {
+            let file = &file;
+            let dir = &dir;
+            s.spawn(move || {
+                for i in 0..10 {
+                    notes_file::edit_item(file, "a3", Some(notes_file::ItemDraft { text: format!("Book the call #{i}"), owner: "You".into(), due: None }), "t").unwrap();
+                }
+            });
+            s.spawn(move || {
+                for i in 0..10 {
+                    notes_file::set_item_done(file, "a2", i % 2 == 1).unwrap();
+                }
+            });
+            s.spawn(move || {
+                for _ in 0..10 {
+                    dispatch(dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a3", "agent": "Claude Code" }), &at("t5")).ok();
+                }
+            });
+        });
+        let v = read_notes(&dir);
+        let items = &v["meeting"]["actionItems"];
+        assert_eq!(items[2]["text"], "Book the call #9");
+        assert_eq!(items[2]["claimed"]["agent"], "Claude Code");
+        assert_eq!(items[1]["done"], true);
+        assert_eq!(items[1]["text"], "Share the signed term sheet");
+        assert_eq!(items[0]["completed"]["agent"], "Codex");
+        // The model's signed items never change, and agents see the edited items.
+        assert_eq!(v["notes"]["action_items"][2]["text"], "Book the call");
+        let seen = dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), &at("x")).unwrap();
+        assert_eq!(seen["meeting"]["actionItems"][2]["text"], "Book the call #9");
+        assert!(!seen.to_string().contains("Push for the pilot"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

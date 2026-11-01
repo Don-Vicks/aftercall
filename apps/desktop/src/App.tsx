@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, autopilotDecision, type FollowUp, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, originalItem, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -10,7 +10,7 @@ import { RecordSheet } from "./recording/RecordSheet";
 import { LivePill } from "./recording/LivePill";
 import { LiveScreen } from "./recording/LiveScreen";
 import { getSession, openNotes, useRecordingEvents, useRecordingSession } from "./recording/session";
-import { syncWithAda, syncWithAdaCost, syncWithAdaDropped } from "./sample";
+import { syncWithAda, syncWithAdaCost, syncWithAdaDropped, syncWithAdaSigned } from "./sample";
 import { spendOf } from "./costs";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
@@ -366,6 +366,34 @@ export default function App() {
     }
   };
 
+  /** What the model signed for a meeting's action items: notes.json, or the sample's own in the preview. */
+  const originalOf = (meetingId: string, itemId: string): ItemFields | null =>
+    originalItem(saved[meetingId]?.notes ?? (meetingId === syncWithAda.id ? syncWithAdaSigned : undefined), itemId);
+
+  /**
+   * Your edit of an action item's text, owner and due date (null puts back what the
+   * model signed). Shown at once; for real meetings saved in notes.json, where search,
+   * people, recaps and agents read it. The signed notes and the proof never change.
+   */
+  const editItem = (meetingId: string, itemId: string, fields: ItemFields | null) => {
+    const item = meetings[meetingId]?.actionItems.find((a) => a.id === itemId);
+    const original = originalOf(meetingId, itemId);
+    if (!item || !original) return;
+    const next = fields ? applyItemEdit(item, original, fields, new Date().toISOString()) : restoreItem(item, original);
+    update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? { ...next, done: a.done, claimed: a.claimed, completed: a.completed } : a)) }));
+    if (isDesktop && saved[meetingId]) {
+      agentsApi
+        .editItem(meetingId, itemId, fields)
+        .then((notes) => applyDiskNotes(meetingId, notes))
+        .catch((e) => {
+          // Not saved: the item goes back, says why, and the meeting re-reads what is on disk.
+          update(meetingId, (m) => ({ ...m, actionItems: m.actionItems.map((a) => (a.id === itemId ? item : a)) }));
+          toast({ text: `Couldn't save your edit: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+          recorder.list().then((list) => list.forEach((r) => r.id === meetingId && r.notes && applyDiskNotes(r.id, r.notes)));
+        });
+    }
+  };
+
   /** Changes one follow-up and, for real meetings, saves it to the meeting's notes.json. */
   const patchFollowUp = (meetingId: string, fuId: string, patch: Patch) => {
     setMeetings((all) => {
@@ -603,6 +631,8 @@ export default function App() {
                 onOpenAutopilot={() => setView({ name: "settings" })}
                 leftToday={meeting.id === syncWithAda.id ? null : leftToday}
                 onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
+                onEditItem={(itemId, fields) => editItem(meeting.id, itemId, fields)}
+                originalOf={(itemId) => originalOf(meeting.id, itemId)}
                 handlers={handlersFor(meeting)}
                 onDelete={saved[meeting.id] ? () => removeRecording(meeting.id) : undefined}
                 onOpenVerify={() =>
@@ -688,7 +718,13 @@ export default function App() {
             )}
             {view.name === "meetings" && <MeetingsScreen meetings={library} recordings={shownRecordings} me={me} sampleIds={sampleIds} onOpen={(id) => openMeeting(id)} />}
             {view.name === "actions" && (
-              <ActionItemsScreen meetings={library} me={me} onToggleItem={toggleItem} onOpenMeeting={(id) => openMeeting(id)} onOpenAgents={() => setView({ name: "agents" })} />
+              <ActionItemsScreen
+                meetings={library}
+                me={me}
+                onToggleItem={toggleItem}
+                onEditItem={editItem}
+                originalOf={originalOf}
+                onOpenMeeting={(id) => openMeeting(id)} onOpenAgents={() => setView({ name: "agents" })} />
             )}
             {view.name === "privacy" && <PrivacyScreen onBack={() => setView({ name: "settings" })} onOpenSettings={() => setView({ name: "settings" })} />}
             {view.name === "agents" && (

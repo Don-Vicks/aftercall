@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Meeting } from "@aftercall/core";
+import type { ItemFields, Meeting } from "@aftercall/core";
 
 /** Connected agents state and paths, from the Mac app (`agents_info`, apps/desktop/src-tauri/src/agents.rs). */
 export interface AgentsInfo {
@@ -21,6 +21,9 @@ export const agentsApi = {
   newToken: () => invoke<AgentsInfo>("agents_new_token"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */
   setItemDone: (id: string, itemId: string, done: boolean) => invoke<string>("set_action_item_done", { id, itemId, done }),
+  /** Saves your edit of one action item in notes.json, or with null puts back what the model signed; returns the saved notes. */
+  editItem: (id: string, itemId: string, fields: ItemFields | null) =>
+    invoke<string>("edit_action_item", { id, itemId, text: fields?.text ?? "", owner: fields?.owner ?? "", due: fields?.due ?? null, restore: fields === null }),
 };
 
 /** Shown in the browser preview, where the app can't read its own paths. */

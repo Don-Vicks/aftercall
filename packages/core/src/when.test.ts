@@ -1,25 +1,48 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dueGroup, dueLabel, groupRows, longDate, meetingLabel, meetingTime, parseDue, relativeDay, shortDate, weekGroup } from "./when.ts";
+import { dayWord, dueGroup, dueLabel, groupRows, longDate, meetingIso, meetingLabel, meetingTime, parseDue, relativeDay, shortDate, weekGroup } from "./when.ts";
 
 // Local times, so the tests hold in any time zone. Wednesday 4 November 2026, noon.
 const at = (y: number, mo: number, d: number, h = 12, mi = 0) => new Date(y, mo - 1, d, h, mi).getTime();
 const NOW = at(2026, 11, 4);
 const day = (y: number, mo: number, d: number) => new Date(y, mo - 1, d).getTime();
 
-test("meetingTime reads a recording id (Unix seconds) or the sample's 'Today HH:MM'", () => {
+test("meetingTime reads an ISO startedAt, a recording id (Unix seconds) or the sample's 'Today HH:MM'", () => {
   assert.equal(meetingTime({ id: "1793006441", startedAt: "whatever" }), 1793006441_000);
+  assert.equal(meetingTime({ id: "1793006441", startedAt: new Date(at(2026, 11, 2, 9, 15)).toISOString() }), at(2026, 11, 2, 9, 15), "the ISO time wins");
+  assert.equal(meetingTime({ id: "sync-ada", startedAt: "2026-11-03T10:00:00.000Z" }), Date.UTC(2026, 10, 3, 10));
+  assert.equal(meetingTime({ id: "sync-ada", startedAt: "2026-13-45Tnonsense" }), null);
   assert.equal(meetingTime({ id: "sync-ada", startedAt: "Today 14:02" }, NOW), at(2026, 11, 4, 14, 2));
   assert.equal(meetingTime({ id: "sync-ada", startedAt: "3 Nov 10:00" }, NOW), null);
+  assert.equal(meetingIso({ id: "1793006441", startedAt: "Today 09:00" }), "2026-10-26T09:20:41.000Z");
+  assert.equal(meetingIso({ id: "x", startedAt: "Someday" }), null);
 });
 
-test("meetingLabel comes from the recording time, not the label stored when the notes were made", () => {
+test("meetingLabel: today, yesterday, a weekday within the last week, then the date", () => {
+  const iso = (ms: number) => new Date(ms).toISOString();
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2026, 11, 4, 8, 5)) }, NOW), "Today 08:05");
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2026, 11, 3, 23, 59)) }, NOW), "Yesterday 23:59");
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2026, 11, 2, 9, 30)) }, NOW), "Monday 09:30");
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2026, 10, 29, 16)) }, NOW), "Thursday 16:00", "six days ago");
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2026, 10, 28, 17)) }, NOW), "28 Oct 17:00", "a week ago");
+  assert.equal(meetingLabel({ id: "1", startedAt: iso(at(2025, 12, 30, 11)) }, NOW), "30 Dec 2025 11:00");
+  // The same meeting, read on later days: the label moves with the clock.
+  const m = { id: "1", startedAt: iso(at(2026, 11, 4, 14, 2)) };
+  assert.equal(meetingLabel(m, at(2026, 11, 5)), "Yesterday 14:02");
+  assert.equal(meetingLabel(m, at(2026, 11, 20)), "4 Nov 14:02");
+  assert.equal(dayWord(at(2026, 11, 4, 1), NOW), "Today");
+  assert.equal(longDate(NOW), "Wednesday 4 Nov 2026");
+});
+
+test("meetingLabel ignores the stale 'Today HH:MM' that older meetings saved and reads the recording id", () => {
   const id = String(at(2026, 10, 28, 17) / 1000);
   assert.equal(meetingLabel({ id, startedAt: "Today 17:00" }, NOW), "28 Oct 17:00");
+  assert.equal(meetingLabel({ id: String(at(2026, 11, 3, 9, 30) / 1000), startedAt: "Today 09:30" }, NOW), "Yesterday 09:30");
+  assert.equal(meetingLabel({ id: String(at(2026, 11, 1, 10) / 1000), startedAt: "Today 10:00" }, NOW), "Sunday 10:00");
   assert.equal(meetingLabel({ id: String(at(2026, 11, 3, 9, 30) / 1000), startedAt: "" }, NOW), "Yesterday 09:30");
+  // The built-in sample has no recording id: "Today" is always today.
   assert.equal(meetingLabel({ id: "sync-ada", startedAt: "Today 14:02" }, NOW), "Today 14:02");
   assert.equal(meetingLabel({ id: "x", startedAt: "Someday" }, NOW), "Someday");
-  assert.equal(longDate(NOW), "Wednesday 4 Nov 2026");
 });
 
 test("dates read as people say them", () => {
