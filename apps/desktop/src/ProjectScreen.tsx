@@ -1,9 +1,10 @@
-import { useId, useState, type CSSProperties } from "react";
-import type { ActionItem, Meeting } from "@aftercall/core";
+import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
+import type { ActionItem, Meeting, ProjectBrief } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import type { Project } from "./projects";
 import { MeetingRow, meetingRow, shortWhen } from "./MeetingRow";
-import { Avatar, Button, SectionTitle, Strike, Tick, cx, useIsYou } from "./ui";
+import { BriefFields, BriefPrivacy, briefFromDraft, draftFromBrief, type BriefDraft } from "./NewProjectSheet";
+import { Avatar, Button, Card, SectionTitle, Strike, Tick, cx, toast, useIsYou } from "./ui";
 
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
 const SHOWN = 5;
@@ -24,6 +25,7 @@ export function ProjectScreen({
   onOpenMeeting,
   onRecord,
   onRename,
+  onSaveBrief,
 }: {
   project: Project;
   /** This project's recordings, newest first. */
@@ -36,6 +38,8 @@ export function ProjectScreen({
   /** Opens the record sheet with this project picked. */
   onRecord: () => void;
   onRename: () => void;
+  /** Saves the project's brief (undefined clears it). */
+  onSaveBrief: (brief: ProjectBrief | undefined) => Promise<void>;
 }) {
   const [all, setAll] = useState(false);
   /** Items ticked on this page stay, struck through, until you leave it. */
@@ -90,13 +94,15 @@ export function ProjectScreen({
           </div>
         </header>
 
+        <BriefCard key={project.id} name={project.name} brief={project.brief} onSave={onSaveBrief} style={rise(1)} />
+
         {sorted.length === 0 ? (
-          <p className="m-0 text-ink-2" style={rise(1)}>
+          <p className="m-0 text-ink-2" style={rise(2)}>
             Meetings you record in {project.name} show up here, with their open action items and the people in them.
           </p>
         ) : (
           <>
-            <section aria-labelledby="h-open" className="flex flex-col gap-1.5" style={rise(1)}>
+            <section aria-labelledby="h-open" className="flex flex-col gap-1.5" style={rise(2)}>
               <SectionTitle id="h-open" className="mb-1" count={open.length ? `${open.length} across ${openMeetings} ${openMeetings === 1 ? "meeting" : "meetings"}` : undefined}>
                 Open action items
               </SectionTitle>
@@ -122,7 +128,7 @@ export function ProjectScreen({
               )}
             </section>
 
-            <section aria-labelledby="h-meet" className="flex flex-col gap-1.5" style={rise(2)}>
+            <section aria-labelledby="h-meet" className="flex flex-col gap-1.5" style={rise(3)}>
               <div className="mb-2 flex items-baseline justify-between gap-3">
                 <SectionTitle id="h-meet" count={sorted.length}>
                   Meetings
@@ -139,7 +145,7 @@ export function ProjectScreen({
             </section>
 
             {others.length > 0 && (
-              <section aria-labelledby="h-people" className="flex flex-col gap-3.5" style={rise(3)}>
+              <section aria-labelledby="h-people" className="flex flex-col gap-3.5" style={rise(4)}>
                 <SectionTitle id="h-people" count={others.length + 1}>
                   People in this project
                 </SectionTitle>
@@ -193,5 +199,126 @@ function Person({ name, detail, mono, you }: { name: string; detail: string; mon
         <span className={cx("truncate text-xs text-muted", mono && "font-mono")}>{detail}</span>
       </span>
     </li>
+  );
+}
+
+/**
+ * The project brief: what it's about, who's who, words to expect and what to watch for.
+ * Read here, edited in place. Everything about it stays on this Mac except what goes,
+ * encrypted, with a meeting's notes request (and words to expect, with the audio).
+ */
+function BriefCard({ name, brief, onSave, style }: { name: string; brief?: ProjectBrief; onSave: (b: ProjectBrief | undefined) => Promise<void>; style?: CSSProperties }) {
+  const [draft, setDraft] = useState<BriefDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const editing = draft !== null;
+  const save = async () => {
+    if (!draft || saving) return;
+    setSaving(true);
+    try {
+      await onSave(briefFromDraft(draft));
+      setDraft(null);
+    } catch (e) {
+      toast({ text: `Couldn't save the brief: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && e.metaKey) {
+      e.preventDefault();
+      void save();
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      setDraft(null);
+    }
+  };
+
+  return (
+    <section aria-labelledby="h-brief" style={style}>
+      <Card pad="lg" className="flex flex-col gap-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <SectionTitle id="h-brief">Project brief</SectionTitle>
+          {!editing && brief && (
+            <Button variant="quiet" size="sm" className="-my-1.5 -mr-2" onClick={() => setDraft(draftFromBrief(brief))}>
+              Edit
+            </Button>
+          )}
+        </div>
+        {editing ? (
+          <div className="flex flex-col gap-5" onKeyDown={onKeyDown}>
+            <BriefFields draft={draft} onChange={setDraft} autoFocus />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <BriefPrivacy className="max-w-[420px]" />
+              <span className="ml-auto flex gap-2">
+                <Button variant="ghost" onClick={() => setDraft(null)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" loading={saving} onClick={save}>
+                  Save brief
+                </Button>
+              </span>
+            </div>
+          </div>
+        ) : brief ? (
+          <>
+            <BriefView brief={brief} />
+            <BriefPrivacy />
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="m-0 max-w-[440px] text-ink-2">What {name} is about, who’s who and the words to expect. It helps the notes get names, terms and what matters right.</p>
+            <Button onClick={() => setDraft(draftFromBrief(undefined))}>Add a brief</Button>
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function BriefView({ brief }: { brief: ProjectBrief }) {
+  const row = "grid grid-cols-[136px_minmax(0,1fr)] items-baseline gap-4 border-t border-hairline py-3 first:border-t-0 first:pt-0 last:pb-0";
+  const label = "text-[13px] font-semibold text-ink-2";
+  return (
+    <div className="flex flex-col gap-4">
+      {brief.about && <p className="t-reading selectable m-0 text-ink">{brief.about}</p>}
+      {(brief.people?.length || brief.words?.length || brief.watchFor) && (
+        <dl className="m-0 flex flex-col">
+          {brief.people?.length ? (
+            <div className={row}>
+              <dt className={label}>People</dt>
+              <dd className="m-0 flex flex-col gap-2">
+                {brief.people.map((p) => (
+                  <span key={p.name} className="flex min-w-0 items-center gap-2">
+                    <Avatar name={p.name} size={22} decorative />
+                    <span className="selectable min-w-0 truncate">
+                      <span className="font-semibold">{p.name}</span>
+                      {p.role && <span className="text-ink-2"> · {p.role}</span>}
+                    </span>
+                  </span>
+                ))}
+              </dd>
+            </div>
+          ) : null}
+          {brief.words?.length ? (
+            <div className={row}>
+              <dt className={label}>Words to expect</dt>
+              <dd className="m-0 flex flex-wrap gap-1.5">
+                {brief.words.map((w) => (
+                  <span key={w} className="selectable rounded-full bg-well px-2.5 py-0.5 text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">
+                    {w}
+                  </span>
+                ))}
+              </dd>
+            </div>
+          ) : null}
+          {brief.watchFor ? (
+            <div className={row}>
+              <dt className={label}>What to watch for</dt>
+              <dd className="selectable m-0 text-ink">{brief.watchFor}</dd>
+            </div>
+          ) : null}
+        </dl>
+      )}
+    </div>
   );
 }

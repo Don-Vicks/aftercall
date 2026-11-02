@@ -24,7 +24,7 @@ import { proofErrorLine, proofMissLine, tryRecordProof } from "./proofs";
 import { isFirstProof } from "./firstProof";
 import { FirstTransaction } from "./FirstTransaction";
 import type { ProofOnChain } from "./near";
-import type { Payee } from "@aftercall/core";
+import type { Payee, ProjectBrief } from "@aftercall/core";
 import { Button, Pill, SectionTitle } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
 import { calendar } from "./calendar";
@@ -116,7 +116,7 @@ type OnProcessed = (id: string, notes: string, proofError?: string) => void;
 /** Open notes (or ↵, or leaving the done page): show the meeting. */
 type OnOpenNotes = (id: string) => void;
 
-async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: OnProcessed, onOpenNotes: OnOpenNotes) {
+async function makeNotes(recording: SavedRecording, payees: Payee[], brief: ProjectBrief | undefined, onProcessed: OnProcessed, onOpenNotes: OnOpenNotes) {
   const id = recording.id;
   const current = runs.get(id)?.state;
   if (current === "running" || current === "done") return;
@@ -195,6 +195,9 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         // Your "I've told everyone" tick goes into the proof as your statement. A sample is a made-up call: none.
         notice: recording.label ? undefined : recording.notice,
         participants: event?.attendees.map((a) => a.name).filter(Boolean),
+        // Your project brief: context inside the encrypted request; its words to expect also
+        // join Whisper's spelling prompt. A sample is a made-up call: none.
+        brief: recording.label ? undefined : brief,
       },
       (stage: PipelineStage, detail?: string, progress?: WritingProgress) => {
         if (stage === "summarise" && heard.length) {
@@ -279,12 +282,15 @@ const drafts = new YourNotesDrafts((id, text) => recorder.saveYourNotes(id, text
 export function RecordingScreen({
   recording,
   payees,
+  brief,
   onProcessed,
   onOpenNotes,
   onDelete,
 }: {
   recording: SavedRecording;
   payees: Payee[];
+  /** The brief of the recording's project, when you wrote one. */
+  brief?: ProjectBrief;
   /** Called once the notes are saved, even if the user has left this screen. */
   onProcessed: OnProcessed;
   onOpenNotes: OnOpenNotes;
@@ -298,7 +304,7 @@ export function RecordingScreen({
   const [auto] = useState(() => wantsAutoProcess(recording.id));
   const start = () => {
     forgetAutoProcess(recording.id);
-    void makeNotes(recording, payees, onProcessed, onOpenNotes);
+    void makeNotes(recording, payees, brief, onProcessed, onOpenNotes);
   };
 
   useEffect(() => {

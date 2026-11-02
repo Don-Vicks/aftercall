@@ -306,8 +306,22 @@ pub fn apply(data_dir: &Path, backup: Backup) -> Result<Restored, String> {
             if id.is_empty() || id.len() > 64 || name.trim().is_empty() || name.chars().count() > 60 || current.len() >= 200 {
                 continue;
             }
-            if !current.iter().any(|c| c["id"] == id || c["name"] == name) {
-                current.push(json!({ "id": id, "name": name }));
+            let brief = crate::projects::restored_brief(&p["brief"]);
+            if let Some(existing) = current.iter_mut().find(|c| c["id"] == id) {
+                // The same project: its brief comes back only if this Mac has none for it.
+                if existing.get("brief").is_none() {
+                    if let Some(b) = brief {
+                        existing["brief"] = b;
+                    }
+                }
+                continue;
+            }
+            if !current.iter().any(|c| c["name"] == name) {
+                let mut project = json!({ "id": id, "name": name });
+                if let Some(b) = brief {
+                    project["brief"] = b;
+                }
+                current.push(project);
                 projects += 1;
             }
         }
@@ -540,6 +554,40 @@ mod tests {
         let r = apply(&to, again).unwrap();
         assert_eq!((r.meetings, r.skipped, r.projects), (0, 1, 0));
 
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_backup_carries_project_briefs_and_restores_them_sealed() {
+        let root = std::env::temp_dir().join(format!("aftercall-recovery-brief-{}", std::process::id()));
+        let (from, to) = (root.join("old-mac"), root.join("new-mac"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&from).unwrap();
+        let brief = json!({ "about": "Seed round, close by March", "people": [{ "name": "Ada", "role": "lead investor" }], "words": ["Northwind"], "watchFor": "valuation" });
+        crate::at_rest::write_json(
+            &from.join("projects.json"),
+            &json!([{ "id": "general", "name": "General", "brief": { "about": "Everything else" } }, { "id": "fundraise-a1b", "name": "Fundraise", "brief": brief }, { "id": "bad-c2d", "name": "Bad", "brief": { "about": "x >>> y" } }]),
+        )
+        .unwrap();
+        let backup = collect(&from, BTreeMap::new(), 1_700_000_000);
+        assert_eq!(backup.projects.as_ref().unwrap()[1]["brief"], brief, "the backup holds the brief (the backup file itself is encrypted)");
+
+        // The new Mac already has "General" without a brief.
+        std::fs::create_dir_all(&to).unwrap();
+        crate::at_rest::write_json(&to.join("projects.json"), &json!([{ "id": "general", "name": "General" }])).unwrap();
+        let r = apply(&to, serde_json::from_str(&serde_json::to_string(&backup).unwrap()).unwrap()).unwrap();
+        assert_eq!(r.projects, 2);
+        let raw = std::fs::read(to.join("projects.json")).unwrap();
+        assert!(crate::at_rest::is_sealed(&raw) && !raw.windows(9).any(|w| w == b"Northwind"));
+        let restored = crate::projects::load(&to).unwrap();
+        assert_eq!(restored[0].brief.as_ref().unwrap().about, "Everything else", "a project here with no brief gets the backup's");
+        assert_eq!(restored[1].brief.as_ref().unwrap().words, ["Northwind"]);
+        assert_eq!(restored[2].brief, None, "a brief that fails the checks is left out");
+
+        // A brief already on this Mac is never overwritten.
+        crate::projects::save(&to, vec![crate::projects::Project { id: "general".into(), name: "General".into(), brief: Some(crate::projects::Brief { about: "Mine".into(), ..Default::default() }) }]).unwrap();
+        apply(&to, serde_json::from_str(&serde_json::to_string(&backup).unwrap()).unwrap()).unwrap();
+        assert_eq!(crate::projects::load(&to).unwrap()[0].brief.as_ref().unwrap().about, "Mine");
         std::fs::remove_dir_all(root).unwrap();
     }
 

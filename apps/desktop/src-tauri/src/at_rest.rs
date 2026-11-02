@@ -1,5 +1,6 @@
 //! Encryption at rest for everything Aftercall keeps about a meeting: audio chunks,
-//! cached chunk transcriptions, meeting.json, notes.json, your-notes.json and projects.json.
+//! cached chunk transcriptions, meeting.json, notes.json, your-notes.json and projects.json
+//! (which holds the project briefs).
 //!
 //! One random 32-byte data key is made on first use and kept in the macOS Keychain
 //! (service `dev.aftercall.app`, account `data-key`). Files are sealed with

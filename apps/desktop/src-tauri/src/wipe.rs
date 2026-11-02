@@ -1,5 +1,5 @@
 //! "Delete everything on this Mac": the app's data folder (meetings, notes,
-//! transcripts, audio, projects, NEAR settings, the agents socket, settings and
+//! transcripts, audio, projects and their briefs, NEAR settings, the agents socket, settings and
 //! activity list) and the Keychain items Aftercall keeps under the service
 //! `dev.aftercall.app`.
 //!
@@ -92,7 +92,8 @@ mod tests {
         std::fs::create_dir_all(dir.join("recordings/1793006441/transcripts")).unwrap();
         std::fs::write(dir.join("recordings/1793006441/notes.json"), b"sealed").unwrap();
         std::fs::write(dir.join("recordings/1793006441/mic-000.wav"), b"sealed").unwrap();
-        std::fs::write(dir.join("projects.json"), b"sealed").unwrap();
+        // Projects and their briefs, sealed in one file (projects.rs).
+        crate::projects::save(&dir, vec![crate::projects::Project { id: "general".into(), name: "General".into(), brief: Some(crate::projects::Brief { about: "Seed round".into(), ..Default::default() }) }]).unwrap();
         std::fs::write(dir.join("near.json"), b"{}").unwrap();
         // Coding agents: settings, the activity list and the socket's folder.
         std::fs::write(dir.join("agents.json"), b"sealed").unwrap();

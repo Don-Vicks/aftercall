@@ -1,12 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ProjectBrief } from "@aftercall/core";
 import { isDesktop } from "./recorder";
+import { fundraiseBrief } from "./sample";
 
 export interface Project {
   id: string;
   name: string;
+  /**
+   * What you wrote about the project, so the notes understand it. Saved in projects.json,
+   * sealed with the data key; absent in files from earlier versions.
+   */
+  brief?: ProjectBrief;
 }
 
-const PREVIEW: Project[] = [{ id: "general", name: "General" }];
+/** The browser preview: General, and the sample meeting's Fundraise with its brief. */
+const PREVIEW: Project[] = [
+  { id: "general", name: "General" },
+  { id: "fundraise", name: "Fundraise", brief: fundraiseBrief },
+];
 
 export const projectsApi = {
   list: () => (isDesktop ? invoke<Project[]>("list_projects") : Promise.resolve(PREVIEW)),

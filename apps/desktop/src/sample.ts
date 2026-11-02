@@ -1,4 +1,4 @@
-import { estimateCost, type Dropped, type Meeting, type Notes } from "@aftercall/core";
+import { estimateCost, type Dropped, type Meeting, type Notes, type ProjectBrief } from "@aftercall/core";
 
 /**
  * Sample data for building the interface before the capture and summary pipeline
@@ -29,6 +29,17 @@ export const projects: ProjectSummary[] = [
 ];
 
 export const account = "victor.near";
+
+/** The sample Fundraise project's brief, as someone might write it. */
+export const fundraiseBrief: ProjectBrief = {
+  about: "Raising a pre-seed round for Aftercall: a refreshed deck, a working demo for Ada, and a close before the new year.",
+  people: [
+    { name: "Ada", role: "angel investor, wants the demo first" },
+    { name: "Designer", role: "freelance, refreshing the deck" },
+  ],
+  words: ["Aftercall", "pre-seed", "API fix", "term sheet", "SAFE"],
+  watchFor: "Demo dates, deck deadlines, investor feedback, and any money we agree to pay.",
+};
 
 /** Payee list until payees come from the agent-wallet contract (M4). */
 export const payees = [{ name: "Designer", account: "designer.near" }];

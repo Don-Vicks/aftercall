@@ -25,7 +25,7 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
     icon: <Cpu size={14} strokeWidth={1.75} />,
     name: "NEAR AI",
     kind: "Secure hardware (TEE)",
-    sees: "Audio in chunks, then the transcript, with project and payee names for spelling. When you ask your meetings: the question and the few lines that match it.",
+    sees: "Audio in chunks, with project and payee names and your brief's words to expect for spelling, then the transcript and your project brief, end-to-end encrypted. When you ask your meetings: the question, the few lines that match it and their projects' briefs.",
     keeps: "Set by NEAR AI's policy, not by Aftercall.",
   },
   {

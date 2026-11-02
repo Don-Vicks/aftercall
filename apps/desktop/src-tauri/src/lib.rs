@@ -7,6 +7,7 @@ mod live_window;
 mod near;
 mod nearai;
 mod notes_file;
+mod projects;
 mod recorder;
 mod recovery;
 mod samples;
@@ -1055,39 +1056,16 @@ fn backup_import(app: AppHandle, file: String) -> Result<recovery::Restored, Str
     recovery::import(&data_dir(&app)?, &bytes)
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Project {
-    id: String,
-    name: String,
-}
-
-fn projects_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(data_dir(app)?.join("projects.json"))
-}
-
-/// The user's projects. A first run starts with one, "General".
+/// The user's projects, with their briefs. A first run starts with one, "General".
 #[tauri::command]
-fn list_projects(app: AppHandle) -> Result<Vec<Project>, String> {
-    match at_rest::read_string(&projects_path(&app)?) {
-        Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
-        Err(_) => Ok(vec![Project { id: "general".into(), name: "General".into() }]),
-    }
+fn list_projects(app: AppHandle) -> Result<Vec<projects::Project>, String> {
+    projects::load(&data_dir(&app)?)
 }
 
+/// Saves the projects and their briefs, sealed with the data key (`projects.rs`).
 #[tauri::command]
-fn save_projects(app: AppHandle, projects: Vec<Project>) -> Result<(), String> {
-    if projects.is_empty() || projects.len() > 200 {
-        return Err("Keep between 1 and 200 projects".into());
-    }
-    for p in &projects {
-        let name = p.name.trim();
-        if name.is_empty() || name.chars().count() > 60 || p.id.is_empty() || p.id.len() > 64 {
-            return Err("Project names are 1 to 60 characters".into());
-        }
-    }
-    let dir = data_dir(&app)?;
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    at_rest::write_string(&projects_path(&app)?, &serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?)
+fn save_projects(app: AppHandle, projects: Vec<projects::Project>) -> Result<(), String> {
+    projects::save(&data_dir(&app)?, projects)
 }
 
 /// Moves every recording filed under project `from` to project `to` (rename or delete
@@ -1129,7 +1107,7 @@ fn delete_recording(app: AppHandle, id: String) -> Result<(), String> {
 }
 
 /// Deletes everything Aftercall keeps on this Mac: the data folder (meetings, notes,
-/// transcripts, audio, projects, settings) and its Keychain items. The folder goes
+/// transcripts, audio, projects and their briefs, settings) and its Keychain items. The folder goes
 /// first; the keys go only once it's gone, so nothing is left that can't be read.
 /// Refused while a recording is running. Proofs and payments on NEAR stay.
 #[tauri::command]

@@ -14,6 +14,7 @@ import {
   type AskResult,
   type Excerpt,
   type Meeting,
+  type ProjectBriefs,
 } from "@aftercall/core";
 import { aboutCost } from "./costs";
 import { isDesktop } from "./recorder";
@@ -59,18 +60,21 @@ function suggestions(meetings: Meeting[], me: readonly string[]): string[] {
 
 /**
  * Ask your meetings. The question is searched on this Mac; only the matching lines
- * (at most 8, each cut to 400 characters) go to NEAR AI, end-to-end encrypted to a
- * Qwen TEE whose attestation is checked first. The answer shows the quotes it came from.
+ * (at most 8, each cut to 400 characters) and the briefs of their projects go to NEAR AI,
+ * end-to-end encrypted to a Qwen TEE whose attestation is checked first. The answer shows the quotes it came from.
  */
 export function AskScreen({
   meetings,
   me,
+  briefs,
   initialQuestion,
   onOpenMeeting,
   onOpenSettings,
 }: {
   meetings: Meeting[];
   me: readonly string[];
+  /** Your project briefs by name: those of the excerpts' projects go with the question, encrypted. */
+  briefs?: ProjectBriefs;
   /** Asked once on open (from "Ask about Ada"). */
   initialQuestion?: string;
   onOpenMeeting: (id: string, at?: number) => void;
@@ -108,7 +112,7 @@ export function AskScreen({
       if (!(await nearAiKey.has().catch(() => false))) return patch(id, { phase: "nokey" });
       const result = await askMeetings(
         nearAiTransport,
-        { question: q, excerpts: picked.excerpts },
+        { question: q, excerpts: picked.excerpts, briefs },
         {
           onStage: (s) => s !== "signature" && patch(id, { phase: s }),
           onAnswer: (answer) => patch(id, { phase: "answer", answer }),
@@ -217,7 +221,7 @@ export function AskScreen({
               Ask
             </Button>
           </div>
-          <Footnote lock>Only the excerpts needed leave this Mac</Footnote>
+          <Footnote lock>Only the excerpts needed, and their projects’ briefs, leave this Mac</Footnote>
         </form>
       </div>
     </main>

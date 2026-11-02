@@ -247,11 +247,9 @@ pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> St
     }
 }
 
+/// Ids and names: a project's brief is the user's private context, so agents never get it.
 fn projects(data_dir: &Path) -> Value {
-    match at_rest::read_json(&data_dir.join("projects.json")) {
-        Some(v @ Value::Array(_)) => v,
-        _ => json!([{ "id": "general", "name": "General" }]),
-    }
+    crate::projects::public_list(data_dir)
 }
 
 fn valid_id(id: &str) -> bool {
@@ -726,6 +724,9 @@ mod tests {
         assert_eq!(list[0]["id"], "1761000000");
         assert_eq!(list[0]["notes"]["meeting"]["title"], "Sync with Ada");
         assert_eq!(dispatch_rw(&dir, &json!({ "op": "projects" }), &now).unwrap()[0]["name"], "General");
+        // A project's brief never reaches an agent.
+        at_rest::write_json(&dir.join("projects.json"), &json!([{ "id": "general", "name": "General", "brief": { "about": "Secret plans", "words": ["Moonbeam"] } }])).unwrap();
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "projects" }), &now).unwrap(), json!([{ "id": "general", "name": "General" }]));
         assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "1761200000" }), &now).unwrap_err().contains("No processed meeting"));
         assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "../../etc" }), &now).unwrap_err().contains("No processed meeting"));
         assert!(dispatch_rw(&dir, &json!({ "op": "delete" }), &now).is_err());

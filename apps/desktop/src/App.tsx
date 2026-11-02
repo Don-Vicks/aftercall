@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -170,13 +170,26 @@ export default function App() {
     projectsApi.list().then(setProjects).catch(() => setProjects([{ id: "general", name: "General" }]));
   }, []);
 
-  const createProject = async (name: string) => {
-    const next = [...projects, { id: projectId(name), name }];
+  const createProject = async (name: string, brief?: ProjectBrief) => {
+    const next = [...projects, { id: projectId(name), name, ...(brief ? { brief } : {}) }];
     await projectsApi.save(next);
     setProjects(next);
     setCreatedProject(name);
     setNewProjectOpen(false);
   };
+
+  /** Saves one project's brief; undefined clears it. */
+  const saveBrief = async (id: string, brief: ProjectBrief | undefined) => {
+    const next = projects.map((p) => {
+      if (p.id !== id) return p;
+      const { brief: _old, ...rest } = p;
+      return brief ? { ...rest, brief } : rest;
+    });
+    await projectsApi.save(next);
+    setProjects(next);
+  };
+  /** Briefs by project name, for Ask and the notes of a recording in that project. */
+  const briefs = Object.fromEntries(projects.map((p) => [p.name, p.brief]));
 
   /** Meetings deleted in the last few seconds: hidden everywhere, still on disk until their Undo runs out. */
   const [hidden, setHidden] = useState<Record<string, true>>({});
@@ -729,6 +742,8 @@ export default function App() {
                 key={openRecording.id}
                 recording={openRecording}
                 payees={openRecording.label ? samplePayees : payees}
+                // A sample is a made-up call: it never takes your brief.
+                brief={openRecording.label ? undefined : briefs[openRecording.project]}
                 onDelete={() => removeRecording(openRecording.id)}
                 onProcessed={(id, notes, proofError) => onProcessedRef.current(id, notes, proofError)}
                 onOpenNotes={(id) => setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v))}
@@ -762,6 +777,7 @@ export default function App() {
                   setRecordOpen(true);
                 }}
                 onRename={() => setRenaming(openProject)}
+                onSaveBrief={(brief) => saveBrief(openProject.id, brief)}
               />
             )}
             {view.name === "wallet" && (
@@ -801,7 +817,7 @@ export default function App() {
               />
             )}
             {view.name === "ask" && (
-              <AskScreen meetings={library} me={me} initialQuestion={view.question} onOpenMeeting={openMeeting} onOpenSettings={() => setView({ name: "settings" })} />
+              <AskScreen meetings={library} me={me} briefs={briefs} initialQuestion={view.question} onOpenMeeting={openMeeting} onOpenSettings={() => setView({ name: "settings" })} />
             )}
             {view.name === "meetings" && <MeetingsScreen meetings={library} recordings={shownRecordings} me={me} sampleIds={sampleIds} onOpen={(id) => openMeeting(id)} />}
             {view.name === "actions" && (
