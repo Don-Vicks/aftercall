@@ -48,40 +48,10 @@
   gap: 14px 18px;
   margin-top: 6px;
 }
-.version {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-  line-height: 18px;
-}
-.checkCard {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
-  border-radius: var(--radius-md);
-  background: var(--elevated);
-  box-shadow: var(--sh1);
-}
-.copyField {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 5px 0 12px;
-  border-radius: var(--radius-sm);
-  background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-.copyField > span {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.platform {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ink-2);
 }
 @media (max-width: 900px) {
   .heroGrid {
@@ -197,13 +167,8 @@
   gap: 48px 64px;
   align-items: start;
 }
-.buildGrid {
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 32px 56px;
-}
 @media (max-width: 900px) {
-  .two,
-  .buildGrid {
+  .two {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -246,61 +211,6 @@
 .stepText > :last-child {
   color: var(--ink-2);
 }
-.warnHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
-}
-.placeholder {
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 1px var(--border);
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.tabs {
-  align-self: flex-start;
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--well);
-  box-shadow: inset 0 0 0 1px var(--hairline);
-}
-.tab {
-  height: 30px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-2);
-  font-weight: 600;
-  transition:
-    background-color 160ms var(--ease),
-    box-shadow 160ms var(--ease),
-    color 160ms var(--ease),
-    transform var(--dur-1) var(--ease);
-}
-.tab[aria-selected="true"] {
-  background: var(--elevated);
-  box-shadow: var(--sh1);
-  color: var(--ink);
-}
-.osSteps li {
-  padding: 11px 0;
-}
-.osSteps .stepNo {
-  line-height: 21px;
-  color: var(--muted);
-}
-
 .terminal {
   border-radius: var(--radius-md);
   background: var(--well);

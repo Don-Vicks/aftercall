@@ -24,7 +24,7 @@ import {
   type TeeCheck,
 } from "@aftercall/core";
 import { CopyButton } from "../client";
-import { AppHeader, Icon, Pill, Seal, Tick, vars } from "../ui";
+import { Icon, Pill, Seal, SiteFooter, SiteHeader, Tick, vars } from "../ui";
 import v from "./verify.module.css";
 
 /** NVIDIA publishes its NRAS keys to browsers (CORS allows any origin). */
@@ -106,11 +106,10 @@ export function VerifyClient() {
   }, [run]);
 
   const proof = state.kind === "checking" || state.kind === "done" ? state.proof : null;
-  const hash = proof ? proofHash(proof.bundle) : null;
 
   return (
     <>
-      <AppHeader width={760} tag={hash ? `proof ${hash.slice(0, 4)}…${hash.slice(-4)}` : "verify"} />
+      <SiteHeader current="verify" />
       <main className={v.main}>
         <div className={v.inner}>
           {state.kind === "loading" && (
@@ -119,10 +118,13 @@ export function VerifyClient() {
             </p>
           )}
           {state.kind === "missing" && (
-            <Message title="Open a proof link" body="This page checks a meeting proof shared from the Aftercall app. The link carries the evidence after the # sign.">
+            <Message
+              title="Open a proof link"
+              body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the model and its signature, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can."
+            >
               <span className={v.messageLinks}>
-                <a href="/how-it-works#checks" className="arrow-link">
-                  How the checks work
+                <a href="/how-it-works" className="arrow-link">
+                  How it works
                   <Icon name="arrowRight" size={14} stroke={2.2} />
                 </a>
                 <a href="/handling" className="arrow-link">
@@ -136,6 +138,7 @@ export function VerifyClient() {
           {proof && <Result proof={proof} done={state.kind === "done" ? state : null} onRerun={run} />}
         </div>
       </main>
+      <SiteFooter />
     </>
   );
 }

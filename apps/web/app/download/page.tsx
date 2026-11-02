@@ -1,33 +1,26 @@
 import { CopyButton } from "../client";
 import { Icon, Pill, REPO_URL, SiteFooter, SiteHeader, vars, type IconName } from "../ui";
-import { OsSteps } from "./OsSteps";
 import d from "./download.module.css";
 
 export const metadata = {
-  title: "Download · Aftercall",
-  description: "Download Aftercall for Mac: check the file, see what it asks for and why, or build it yourself.",
+  title: "Install · Aftercall",
+  description: "No signed build of Aftercall is published yet. Build it from source on your Mac, and see what it asks for and why.",
 };
 
 /**
- * The release. No build has been published yet, so these stay the board's placeholders
- * until one is: fill in the version, size, file name and SHA-256 when it is. The button
- * goes to the GitHub releases page, which lists whatever has been published.
+ * No signed build has been published, so this page offers none: it says so, and
+ * gives the README's Run it steps. When a release is published, it can link to it here.
  */
-const RELEASE = {
-  url: `${REPO_URL}/releases/latest`,
-  version: "[version]",
-  size: "[size]",
-  file: "[file]",
-  sha256: "[sha256 of the release file]",
-  /** Shown while builds aren't signed with a Developer ID. */
-  unsignedNote: "[Shown only for unsigned builds]",
-};
-
 const BUILD = `git clone ${REPO_URL}.git aftercall
 cd aftercall
 pnpm install
-pnpm verify
-pnpm --filter @aftercall/desktop tauri build --debug --bundles app`;
+pnpm verify --quick
+pnpm --filter @aftercall/desktop tauri build --debug --bundles app
+open apps/desktop/src-tauri/target/debug/bundle/macos/Aftercall.app`;
+
+const COMMENTS: Record<string, string> = {
+  "pnpm verify --quick": "# typecheck and tests",
+};
 
 const NEEDED = { pill: "Needed to record", tone: "muted" as const };
 const OPTIONAL = { pill: "Off by default", tone: "outline" as const };
@@ -41,7 +34,14 @@ const PERMS: { icon: IconName; name: string; where: string; lead?: string; why: 
   { icon: "key", name: "Keychain", where: "Your login keychain, on this Mac", why: "Holds the key that seals your recordings and notes, your NEAR AI key, and the app's limited NEAR key.", ...NEEDED },
 ];
 
-/** V2Download. */
+/** What building and running it takes (README, Run it). */
+const NEEDS: [string, string][] = [
+  ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only."],
+  ["Node 24, pnpm 10 and Rust stable", "To install, check and build the app from source."],
+  ["Your own NEAR AI key", "From cloud.near.ai. Notes run on it, and each run shows an estimated cost."],
+];
+
+/** V2Download, until a signed build is published. */
 export default function Download() {
   return (
     <>
@@ -50,41 +50,44 @@ export default function Download() {
         <section aria-labelledby="dh" className={d.hero}>
           <div className={d.heroGrid}>
             <div className={d.heroText}>
-              <span className={`${d.eyebrow} enter`}>Download · for Mac</span>
+              <span className={`${d.eyebrow} enter`}>Install · for Mac</span>
               <h1 id="dh" className={`${d.h1} enter`} style={vars({ d: "40ms", dur: "360ms" })}>
-                Download Aftercall
+                Build Aftercall on your Mac
               </h1>
               <p className={`${d.lede} enter`} style={vars({ d: "80ms", dur: "360ms" })}>
-                Private meeting notes made in NEAR AI&apos;s secure hardware. Open source, MIT.
+                No signed build is published yet. Until one is, you build the app from source. It&apos;s open source, MIT.
               </p>
               <div className={`${d.getRow} enter`} style={vars({ d: "120ms", dur: "360ms" })}>
-                <a href={RELEASE.url} className="btn btn-primary btn-xl press">
-                  <Icon name="download" size={19} />
-                  Download for Mac
+                <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
+                  <Icon name="laptop" size={19} />
+                  Build it on your Mac
                 </a>
-                <span className={d.version}>
-                  <span className="ink">
-                    Version {RELEASE.version} · {RELEASE.size}
-                  </span>
-                  <span className="muted">macOS 14.2 or later</span>
-                </span>
+                <a href={`${REPO_URL}#check-it-in-five-minutes`} className="arrow-link">
+                  Check it in five minutes
+                  <Icon name="external" size={12} />
+                </a>
               </div>
+              <span className={`${d.platform} enter`} style={vars({ d: "140ms", dur: "360ms" })}>
+                Mac only · macOS 14.2 or later · your own NEAR AI key
+              </span>
             </div>
 
-            <div className={`${d.checkCard} lift enter`} style={vars({ d: "160ms", dur: "360ms" })}>
-              <h2 className="t-section">
-                Check the download <span className="count">SHA-256</span>
-              </h2>
-              <div className={d.copyField}>
-                <span>{RELEASE.sha256}</span>
-                <CopyButton text={RELEASE.sha256} label="Copy the SHA-256" />
+            <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
+              <div className={d.terminalHead}>
+                <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                  Terminal
+                </span>
+                <CopyButton text={BUILD} label="Copy the build commands" />
               </div>
-              <span style={{ fontSize: 13, lineHeight: "18px", fontWeight: 600 }}>Then in Terminal</span>
-              <div className={d.copyField}>
-                <span>shasum -a 256 ~/Downloads/{RELEASE.file}</span>
-                <CopyButton text={`shasum -a 256 ~/Downloads/${RELEASE.file}`} label="Copy the shasum command" />
-              </div>
-              <span className="ink-2">The two should match. If they don&apos;t, don&apos;t open the file.</span>
+              <pre tabIndex={0} aria-label="Build commands">
+                {BUILD.split("\n").map((line) => (
+                  <span key={line}>
+                    {line}
+                    {COMMENTS[line] && <span className="muted">{`   ${COMMENTS[line]}`}</span>}
+                    {"\n"}
+                  </span>
+                ))}
+              </pre>
             </div>
           </div>
         </section>
@@ -125,8 +128,36 @@ export default function Download() {
           </div>
         </section>
 
-        <section aria-label="First run, and if macOS warns you" className={d.section}>
+        <section aria-label="What you need, and the first run" className={d.section} style={{ paddingBottom: 36 }}>
           <div className={`${d.wrap} ${d.two}`}>
+            <div className={d.col}>
+              <h2 className={d.h2}>What you need</h2>
+              <ul className={d.steps}>
+                {NEEDS.map(([lead, rest]) => (
+                  <li key={lead}>
+                    <span className={d.stepNo} aria-hidden="true">
+                      <Icon name="check" size={14} stroke={2.4} />
+                    </span>
+                    <span className={d.stepText}>
+                      <span>{lead}</span>
+                      <span>{rest}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="ink-2">
+                macOS only lets a bundled app capture system audio, so build the app to record, then open the{" "}
+                <span className="mono ink" style={{ fontSize: 13 }}>
+                  .app
+                </span>{" "}
+                it makes.
+              </p>
+              <a href={`${REPO_URL}#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
+                Run it, in the README
+                <Icon name="external" size={12} />
+              </a>
+            </div>
+
             <div className={d.col}>
               <h2 className={d.h2}>First run</h2>
               <ol className={d.steps}>
@@ -161,61 +192,6 @@ export default function Download() {
                   </span>
                 </li>
               </ol>
-            </div>
-
-            <div className={d.col}>
-              <div className={d.warnHead}>
-                <h2 className={d.h2}>If macOS warns you</h2>
-                <span className={d.placeholder}>{RELEASE.unsignedNote}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 10 }} className="ink-2">
-                <span>This build isn&apos;t notarized by Apple, so macOS stops it the first time you open it.</span>
-                <details className="why">
-                  <summary>Why?</summary>
-                  <span className="why-body" style={{ display: "block", marginTop: 6 }}>
-                    Apple notarizes apps signed with a Developer ID, and this build isn&apos;t signed with one, so macOS can&apos;t confirm who made it. Check the SHA-256 above, or build it yourself from the source below.
-                  </span>
-                </details>
-              </div>
-              <OsSteps />
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="bh" className={d.section} style={{ paddingBottom: 36 }}>
-          <div className={`${d.wrap} ${d.two} ${d.buildGrid}`}>
-            <div className={d.col} style={{ gap: 12 }}>
-              <h2 id="bh" className={d.h2}>
-                Build it yourself
-              </h2>
-              <p className="ink-2">
-                Needs Node 24, pnpm 10 and Rust stable. macOS only lets a bundled app capture system audio, so build the app to record, then open the{" "}
-                <span className="mono ink" style={{ fontSize: 13 }}>
-                  .app
-                </span>{" "}
-                it makes.
-              </p>
-              <a href={REPO_URL} className="arrow-link" style={{ alignSelf: "flex-start" }}>
-                Read the code on GitHub
-                <Icon name="external" size={12} />
-              </a>
-            </div>
-            <div className={d.terminal}>
-              <div className={d.terminalHead}>
-                <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
-                  Terminal
-                </span>
-                <CopyButton text={BUILD} label="Copy the build commands" />
-              </div>
-              <pre tabIndex={0} aria-label="Build commands">
-                {BUILD.split("\n").map((line) => (
-                  <span key={line}>
-                    {line}
-                    {line === "pnpm verify" && <span className="muted">{"      # every check"}</span>}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
             </div>
           </div>
         </section>

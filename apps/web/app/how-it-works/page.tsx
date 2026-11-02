@@ -54,7 +54,7 @@ export default function HowItWorks() {
                 Checked every time, before it’s sent and when it comes back
               </h2>
               <p className={h.intro}>
-                Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it before anything is sent, then checks the signed reply: 29 checks on a typical meeting, with one node per model.
+                Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it, then checks the signed reply: 24 checks before anything is sent and 5 on the signed reply, on a typical meeting with one node per model.
               </p>
             </div>
             <Checks />
@@ -180,8 +180,8 @@ export default function HowItWorks() {
               <div className={h.linkRows}>
                 <a href="/verify" className={h.linkRow}>
                   <span>
-                    <strong>Open a sample proof</strong>
-                    <span className="ink-2">re-run the checks in your browser</span>
+                    <strong>Verify a proof</strong>
+                    <span className="ink-2">open a proof link from the app to re-run its checks</span>
                   </span>
                   <Icon name="arrowRight" size={16} stroke={2.2} />
                 </a>

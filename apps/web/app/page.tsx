@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Avatar, Icon, OpenCircle, Pill, Seal, SiteFooter, SiteHeader, Tick, vars } from "./ui";
+import { Avatar, Icon, OpenCircle, Pill, REPO_URL, Seal, SiteFooter, SiteHeader, Tick, vars } from "./ui";
 import l from "./landing.module.css";
 
 /*
@@ -31,11 +31,12 @@ export default function Landing() {
                 Aftercall is a Mac app that makes private notes of your calls inside NEAR AI&apos;s secure hardware, then sends the recap and pays what you agreed, once you say so.
               </p>
               <div className={l.heroCta}>
-                <a href="/download" className="btn btn-primary btn-lg press">
-                  <Icon name="download" size={18} />
-                  Download for Mac
+                {/* No signed build is published yet, so the button says how to get the app today. */}
+                <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-lg press">
+                  <Icon name="laptop" size={18} />
+                  Build it on your Mac
                 </a>
-                <span className={l.note}>Built for NEAR HACKATHON</span>
+                <span className={l.note}>No signed build yet · Built for NEAR HACKATHON</span>
               </div>
             </div>
           </div>
@@ -54,12 +55,12 @@ export default function Landing() {
               Always
             </h2>
             <p className={l.closingStatement}>
-              Your words reach only secure hardware that has just proven itself, or <em>they never leave your Mac.</em> Our servers keep nothing about a meeting. Nothing said goes on chain.
+              Your words reach only secure hardware that has just proven itself, or <em>they never leave your Mac.</em> A recap stays a draft in your own Mail unless you choose Send through Aftercall, which hands it to Resend. Nothing said goes on chain.
             </p>
             <div className={l.closingCta}>
-              <a href="/download" className="btn btn-primary btn-lg press">
-                <Icon name="download" size={18} />
-                Download for Mac
+              <a href={`${REPO_URL}#check-it-in-five-minutes`} className="btn btn-primary btn-lg press">
+                <Icon name="check" size={18} />
+                Check it in five minutes
               </a>
               <span className="ink-2" style={{ fontSize: 14, lineHeight: "20px" }}>
                 Open source · MIT · Built for NEAR HACKATHON
@@ -424,17 +425,10 @@ function VerifiedLine({ size, children }: { size: number; children: ReactNode })
 
 // ---------- what it does for you ----------
 
-function Feature({ label, title, soon, text, visual, visualFirst, last }: { label: string; title: string; soon?: boolean; text: ReactNode; visual: ReactNode; visualFirst?: boolean; last?: boolean }) {
+function Feature({ label, title, text, visual, visualFirst, last }: { label: string; title: string; text: ReactNode; visual: ReactNode; visualFirst?: boolean; last?: boolean }) {
   const words = (
     <div className={l.featureText}>
-      <h3 className={l.featureTitle}>
-        {title}
-        {soon && (
-          <Pill tone="muted" className={l.soon}>
-            Coming soon
-          </Pill>
-        )}
-      </h3>
+      <h3 className={l.featureTitle}>{title}</h3>
       <p>{text}</p>
     </div>
   );
@@ -468,7 +462,7 @@ function WhatItDoes() {
           <h2 id="does-h" className={l.h2}>
             What it does for you
           </h2>
-          <p className={l.headNote}>Everything after the call, kept on your Mac. Two of these are still being built, and say so.</p>
+          <p className={l.headNote}>Everything after the call, kept on your Mac.</p>
         </div>
 
         <Feature
@@ -542,10 +536,9 @@ function WhatItDoes() {
         <Feature
           label="People"
           title="Who owes whom."
-          soon
-          text="Every action item already has an owner and a due date. Soon each person gets a page: what you owe them, and what they owe you."
+          text="Every action item has an owner and a due date, and each person gets a page: what you owe them, and what they owe you. It's worked out on your Mac from your calendar and the notes."
           visual={
-            <div role="img" aria-label="Coming soon, a page for Ines Rocha: you owe Ines the logo files and photos by Wednesday, the 40 USDC deposit is done; Ines owes you three style directions by Friday and a first home page draft" className={`${l.featureVisual} ${l.right} ${l.onRaised} ${l.cardPad}`}>
+            <div role="img" aria-label="A page for Ines Rocha: you owe Ines the logo files and photos by Wednesday, the 40 USDC deposit is done; Ines owes you three style directions by Friday and a first home page draft" className={`${l.featureVisual} ${l.right} ${l.onRaised} ${l.cardPad}`}>
               <span aria-hidden="true" className={l.owes}>
                 <span className={l.owesCol}>
                   <span className={l.owesHead}>
@@ -595,11 +588,10 @@ function WhatItDoes() {
         <Feature
           label="Ask"
           title="Ask your meetings."
-          soon
           visualFirst
-          text="Ask in plain words, and every answer shows the quotes it stands on. Search across all your meetings already works today, on your Mac."
+          text="Ask in plain words, and every answer shows the quotes it stands on. Your Mac finds the matching lines first, and only those go out, end-to-end encrypted to a checked Qwen TEE."
           visual={
-            <div role="img" aria-label="Coming soon, ask your meetings: What did Ines promise this week? The answer, three style directions by Friday, comes with the quote from the call" className={`${l.featureVisual} ${l.onRaised} ${l.cardPad}`} style={{ padding: "14px 18px", gap: 8 }}>
+            <div role="img" aria-label="Ask your meetings: What did Ines promise this week? The answer, three style directions by Friday, comes with the quote from the call" className={`${l.featureVisual} ${l.onRaised} ${l.cardPad}`} style={{ padding: "14px 18px", gap: 8 }}>
               <span aria-hidden="true" className={l.bubbleRow}>
                 <span className={l.bubble}>What did Ines promise this week?</span>
                 <Avatar name="You" size={22} decorative />
@@ -622,9 +614,9 @@ function WhatItDoes() {
           label="Agents"
           title="Hand the work to your own agents."
           last
-          text="Claude Code or Codex can read your meetings and pick up an action item, only through the app on your Mac. It's off until you turn it on."
+          text="Claude Code can read your meetings through the MCP server the app ships, only while the app runs on your Mac. Agents are off until you turn them on, and only read until you also let them claim and complete action items."
           visual={
-            <div role="img" aria-label="Connected agents, switched on: Claude Code claimed Ship the API fix at 14:20, and Codex finished Write the release notes at 14:41" className={`${l.featureVisual} ${l.right} ${l.onRaised} ${l.cardPad}`} style={{ gap: 8 }}>
+            <div role="img" aria-label="Connected agents, with both switches on: agents can reach your meetings, and claim and complete action items. Claude Code claimed Ship the API fix at 14:20" className={`${l.featureVisual} ${l.right} ${l.onRaised} ${l.cardPad}`} style={{ gap: 8 }}>
               <span aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 4 }}>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Let agents reach my meetings</span>
                 <span className="ink-2" style={{ fontSize: 12 }}>
@@ -632,17 +624,19 @@ function WhatItDoes() {
                 </span>
                 <span className={l.toggle} />
               </span>
-              <span aria-hidden="true" className={l.agentRow}>
+              <span aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 4 }}>
+                <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Let agents claim and complete action items</span>
+                <span className="ink-2" style={{ fontSize: 12 }}>
+                  You allowed it
+                </span>
+                <span className={l.toggle} />
+              </span>
+              <span aria-hidden="true" className={`${l.agentRow} ${l.agentRowLast}`}>
                 <OpenCircle />
                 <span>Ship the API fix</span>
                 <span className="accent" style={{ fontWeight: 600 }}>
                   Claude Code is on it · 14:20
                 </span>
-              </span>
-              <span aria-hidden="true" className={`${l.agentRow} ${l.agentRowLast}`}>
-                <Tick size={18} still decorative />
-                <span className={l.done}>Write the release notes</span>
-                <span className="ink-2">Codex finished it · 14:41</span>
               </span>
             </div>
           }
@@ -719,7 +713,7 @@ function Private() {
           <dl className={l.facts}>
             <div>
               <dt>Checked before it gets anything</dt>
-              <dd>On a typical meeting, 24 checks on the gateway, Whisper and Qwen against a fresh nonce, then 5 on the signed reply. One failure, and nothing is sent there.</dd>
+              <dd>The gateway, Whisper and Qwen are checked against a fresh nonce: 24 checks before anything is sent and 5 on the signed reply, on a typical meeting with one node per model. One failure, and nothing is sent there.</dd>
             </div>
             <div>
               <dt>End-to-end encrypted summaries</dt>
@@ -730,8 +724,8 @@ function Private() {
               <dd>Audio is sealed as it records and deleted once the notes are saved. Notes are sealed with a key in your Keychain.</dd>
             </div>
             <div>
-              <dt>Our servers keep nothing</dt>
-              <dd>Nothing about a meeting is kept after a response returns. A recap you draft in Mail never reaches them.</dd>
+              <dt>Our servers keep nothing about a meeting</dt>
+              <dd>Draft in Mail, the default, keeps the recap on your Mac. Send through Aftercall hands it to Resend, which keeps sent mail under its own policy; our backend keeps a count.</dd>
             </div>
           </dl>
           <aside aria-labelledby="cant-h" className={l.cant}>
@@ -844,8 +838,8 @@ function Verify() {
             Check any meeting
           </h2>
           <p className={l.reading}>Each proof sits on NEAR as a hash. Share the link, and anyone&apos;s browser re-checks what it can, without seeing a word of the meeting.</p>
-          <a href="/verify" className="arrow-link" style={{ alignSelf: "flex-start" }}>
-            Open a sample proof
+          <a href="/how-it-works#checks" className="arrow-link" style={{ alignSelf: "flex-start" }}>
+            See what a proof checks
             <Icon name="arrowRight" size={14} stroke={2.2} />
           </a>
         </div>
@@ -860,7 +854,7 @@ const FAQ: [string, string][] = [
   ["Does a bot join my call?", "No. Aftercall records on your Mac, from your mic and your Mac's audio. You tell people it's recorded, and the app asks you to confirm."],
   ["Who can read my notes?", "You. Notes stay on your Mac, sealed with a key in your Keychain. What NEAR AI keeps while making them is set by its own policy."],
   ["Which call apps work?", "Any app on your Mac, including calls in a browser. Aftercall records what your Mac plays and what your mic hears."],
-  ["What does it cost?", "Notes use NEAR AI on your own key, about [cost] per hour of calls. Aftercall is [price]. Payments use the USDC in your agent wallet."],
+  ["What does it cost?", "Notes run on your own NEAR AI key. Each run's cost is estimated from the tokens and Whisper seconds NEAR AI reports, at its public prices on 1 Nov 2026, and always labelled estimated; a sample run is typically well under a cent. Aftercall is open source, MIT. Payments use the USDC in your agent wallet."],
   ["What if a check fails?", "Nothing goes to hardware that failed. If the gateway or Whisper fails a check, your audio stays on your Mac."],
   ["Can I delete everything?", "Yes, on your Mac: deleting a meeting removes its notes and audio. A proof on NEAR stays, but holds only a hash."],
 ];

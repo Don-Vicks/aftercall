@@ -232,9 +232,13 @@ export function Seal({ size = 148, id, fine, className, style }: { size?: number
 
 // ---------- headers and footers ----------
 
-type Current = "how" | "handling" | "download" | null;
+type Current = "how" | "handling" | "verify" | "download" | null;
 
-/** The site header on the landing, How it works, Call handling and Download pages. */
+/**
+ * The site header on the landing, How it works, Call handling, Verify and Install pages.
+ * No signed build is published yet, so nothing here offers a download: Install says how
+ * to build the app from source.
+ */
 export function SiteHeader({ current = null }: { current?: Current }) {
   const here = (page: Current) => (current === page ? { "aria-current": "page" as const } : {});
   return (
@@ -251,21 +255,17 @@ export function SiteHeader({ current = null }: { current?: Current }) {
           <a href="/handling" className={`quiet ${s.navNarrowHide}`} {...here("handling")}>
             Call handling
           </a>
-          <a href="/verify" className="quiet">
+          <a href="/verify" className="quiet" {...here("verify")}>
             Verify a proof
           </a>
-          <a href="/download" className={`quiet ${s.navDownloadText}`} {...here("download")}>
-            Download
+          <a href="/download" className="quiet" {...here("download")}>
+            Install
           </a>
           <a href={REPO_URL} className={`quiet ${s.navExternal}`}>
             GitHub
             <Icon name="external" size={12} />
           </a>
         </nav>
-        <a href="/download" className={`btn btn-primary press ${s.navButton}`}>
-          <Icon name="download" size={15} />
-          Download for Mac
-        </a>
       </div>
     </header>
   );
@@ -290,7 +290,7 @@ export function SiteFooter() {
             Verify a proof
           </a>
           <a href="/download" className="quiet">
-            Download
+            Install
           </a>
           <a href={REPO_URL} className="quiet">
             GitHub
