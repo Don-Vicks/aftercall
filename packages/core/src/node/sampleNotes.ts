@@ -4,7 +4,7 @@ import { formatClock } from "../meeting.ts";
 import { costLine, formatCost } from "../cost.ts";
 import { formatUsdc } from "../money.ts";
 import { amountNote, type Payee } from "../notes/build.ts";
-import { processRecording, WHISPER_MODEL, type NearAiTransport, type ProcessResult } from "../notes/pipeline.ts";
+import { processRecording, WHISPER_MODEL, type NotesTransport, type ProcessResult } from "../notes/pipeline.ts";
 import { groupChecks, WHISPER_NOTE } from "../notes/proof.ts";
 
 /** samples/<id>/script.json, written by scripts/make-samples.mjs. */
@@ -22,7 +22,7 @@ export interface SampleScript {
  * check the Mac app runs. Nothing is written to disk.
  */
 export async function runSampleNotes(
-  transport: NearAiTransport,
+  transport: NotesTransport,
   sampleDir: string,
   onStage: (stage: string, detail?: string) => void = () => {},
   wait?: (ms: number) => Promise<void>,
@@ -82,7 +82,9 @@ export function formatSampleNotes(script: SampleScript, r: ProcessResult): strin
     ]),
     `- ${WHISPER_NOTE}`,
     `- Transcript end-to-end encrypted to the attested summary model: ${r.proof.e2ee.used ? "yes" : `no (${r.proof.e2ee.reason ?? "unavailable"})`}`,
-    `- Proof bundle: request ${r.proof.requestHash.slice(0, 16)}…, response ${r.proof.responseHash.slice(0, 16)}…, notes ${r.proof.notesHash.slice(0, 16)}…`,
+    r.proof.version === 3
+      ? `- Proof bundle: ${r.proof.calls.length} signed requests, notes ${r.proof.notesHash.slice(0, 16)}…`
+      : `- Proof bundle: request ${r.proof.requestHash.slice(0, 16)}…, response ${r.proof.responseHash.slice(0, 16)}…, notes ${r.proof.notesHash.slice(0, 16)}…`,
     "",
     "## Cost",
     costLine(r.cost),

@@ -104,3 +104,39 @@ export async function fakeNras() {
   };
   return { jwks, sign, answer, gpuClaims, now };
 }
+
+/**
+ * A streamed chat completion as NEAR AI's model proxy sends it under E2EE: one SSE
+ * event per piece, each piece's `delta.content` encrypted to the client on its own
+ * (`encrypt`), a role-only first chunk with empty content (sent as is), the finish
+ * reason and running usage in plaintext, then `data: [DONE]`.
+ */
+export function sseStream(
+  pieces: string[],
+  opts: { id?: string; finishReason?: string; usage?: object; encrypt?: (s: string) => string; done?: boolean; lineEnd?: string } = {},
+): string {
+  const id = opts.id ?? "chatcmpl-42";
+  const nl = opts.lineEnd ?? "\n";
+  const event = (o: object) => `data: ${JSON.stringify(o)}${nl}${nl}`;
+  const base = { id, object: "chat.completion.chunk", created: 1793006441, model: "Qwen/Qwen3.8-27B" };
+  let out = event({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }] });
+  pieces.forEach((p, i) => {
+    const last = i === pieces.length - 1;
+    out += event({
+      ...base,
+      choices: [{ index: 0, delta: { content: opts.encrypt ? opts.encrypt(p) : p }, finish_reason: last ? (opts.finishReason ?? "stop") : null }],
+      ...(opts.usage ? { usage: { ...opts.usage, completion_tokens: i + 1 } } : {}),
+    });
+  });
+  if (opts.usage) out += event({ ...base, choices: [], usage: opts.usage });
+  if (opts.done !== false) out += `data: [DONE]${nl}${nl}`;
+  return out;
+}
+
+/** `text` cut into pieces of about `size` characters, as a model streams it. */
+export function piecesOf(text: string, size = 7): string[] {
+  const chars = Array.from(text);
+  const out: string[] = [];
+  for (let i = 0; i < chars.length; i += size) out.push(chars.slice(i, i + size).join(""));
+  return out.length ? out : [""];
+}

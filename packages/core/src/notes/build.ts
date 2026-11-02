@@ -1,4 +1,4 @@
-import type { ActionItem, AmountProblemKind, Evidence, FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
+import type { ActionItem, AmountProblemKind, Evidence, FollowUp, LikelySpeaker, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
 import type { Notes } from "./schema.ts";
 import { findQuote } from "./transcript.ts";
@@ -66,6 +66,32 @@ export function amountNote(f: Pick<PaymentFollowUp, "amount" | "amountProblem" |
   return `“${f.heard}” doesn't read as one amount, so it wasn't filled in.`;
 }
 
+/** Names that say nobody in particular, so they never count as a speaker's name. */
+const NOT_A_NAME = /^(you|others?|unknown|someone|speaker( \d+)?|participant( \d+)?|guest|host|everyone)$/i;
+
+/**
+ * The model's speaker names as the meeting keeps them: line numbers (from 1) turned
+ * into transcript indexes, only "others" lines, names trimmed to at most 60 characters,
+ * and a line given two different names left unnamed. Model-inferred, never verified.
+ */
+export function likelySpeakersFrom(speakers: Notes["speakers"], transcript: TranscriptLine[]): LikelySpeaker[] {
+  const byLine = new Map<number, string | null>();
+  for (const s of speakers ?? []) {
+    const name = s.name.replace(/\s+/g, " ").trim();
+    if (!name || name.length > 60 || NOT_A_NAME.test(name)) continue;
+    for (const n of s.lines) {
+      const line = n - 1;
+      if (!Number.isInteger(line) || transcript[line]?.speaker !== "others") continue;
+      const seen = byLine.get(line);
+      byLine.set(line, seen === undefined || seen === name ? name : null);
+    }
+  }
+  return [...byLine]
+    .filter((e): e is [number, string] => e[1] !== null)
+    .sort(([a], [b]) => a - b)
+    .map(([line, name]) => ({ line, name }));
+}
+
 /**
  * Turns the model's notes into a meeting. Anything whose evidence quote isn't in
  * the transcript is dropped and reported, so the model can't invent a payment, and
@@ -127,6 +153,8 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
     ];
   });
 
+  const likelySpeakers = likelySpeakersFrom(notes.speakers, transcript);
+
   return {
     meeting: {
       id: input.id,
@@ -141,6 +169,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
       actionItems,
       followUps,
       transcript,
+      ...(likelySpeakers.length ? { likelySpeakers } : {}),
       ...(input.yourNotes ? { yourNotes: input.yourNotes } : {}),
     },
     dropped,

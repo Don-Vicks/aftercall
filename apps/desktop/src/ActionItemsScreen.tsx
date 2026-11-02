@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type FocusEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   boardPlace,
@@ -23,6 +23,7 @@ import { Avatar, Button, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from ".
 import { AllDone, QuoteReveal, useAllDone, useQuoteReveal } from "./Quote";
 import { EditItemButton, EditedMark, ItemEditor, editButtonId, focusEditButton, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
+import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { plural } from "./library";
 
 type Tab = "mine" | "others" | "agents";
@@ -184,6 +185,22 @@ export function ActionItemsScreen({
   const empty = sections.every((s) => s.rows.length === 0);
   let n = 0;
 
+  // j/k through the rows as they're shown, x ticks, e edits, ↵ shows the quote's moment.
+  const ordered = [...sections.flatMap((s) => s.rows), ...(showDone ? done : [])];
+  const byKey = new Map(ordered.map((r) => [r.key, r]));
+  const roving = useRovingList(
+    ordered.map((r) => r.key),
+    {
+      onTick: (k) => byKey.has(k) && toggle(byKey.get(k)!),
+      onEdit: onEditItem && ((k) => byKey.has(k) && openEditor(byKey.get(k)!)),
+      onOpen: (k) => {
+        const r = byKey.get(k);
+        if (r) onOpenMeeting(r.meeting.id, r.item.evidence?.at);
+      },
+    },
+    { enabled: editing === null, title: "Action items", words: { onOpen: "Open its moment in the transcript" } },
+  );
+
   return (
     <Page className="gap-7">
       <PageHeader eyebrow={`Across ${plural(meetings.length, "meeting")}`} title="Action items" intro="What your meetings said someone would do, and who's doing it." />
@@ -205,6 +222,9 @@ export function ActionItemsScreen({
             { id: "agents", label: "Agents", count: byTab.agents.filter((r) => r.item.claimed && !r.item.completed && !r.item.done).length },
           ]}
         />
+        <span className="mb-1 ml-auto flex items-center gap-1">
+          {!empty && <ShortcutsHint onClick={roving.openHelp} />}
+        </span>
         {projects.length > 1 && (
           <Menu
             label="Filter by project"
@@ -255,6 +275,7 @@ export function ActionItemsScreen({
                   original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                   onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                   onJump={(at) => onOpenMeeting(r.meeting.id, at)}
+                  roving={roving.row(r.key)}
                 />
               ))}
             </section>
@@ -295,6 +316,7 @@ export function ActionItemsScreen({
                     original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                     onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
                     onJump={(at) => onOpenMeeting(r.meeting.id, at)}
+                    roving={roving.row(r.key)}
                   />
                 ))}
               </section>
@@ -317,6 +339,8 @@ export function ActionItemsScreen({
           </p>
         )}
       </TabPanel>
+
+      {roving.sheet}
 
       {tab !== "agents" && rows.some((r) => r.item.due && r.due === null) && (
         <Footnote>Dates like “soon” can't be placed on a day, so those items sit under No date with the words that were said.</Footnote>
@@ -412,6 +436,7 @@ function ItemRow({
   original,
   onOpenMeeting,
   onJump,
+  roving,
 }: {
   row: Row;
   tab: Tab;
@@ -428,6 +453,8 @@ function ItemRow({
   onOpenMeeting: () => void;
   /** Opens the meeting's transcript at the item's quote. */
   onJump: (at: number) => void;
+  /** The keyboard focus row's props (useRovingList). */
+  roving?: ReturnType<ReturnType<typeof useRovingList>["row"]>;
 }) {
   const textId = useId();
   const quoteId = useId();
@@ -463,7 +490,16 @@ function ItemRow({
   }
 
   return (
-    <div className="group border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }} {...reveal.bind}>
+    <div
+      {...roving}
+      {...reveal.bind}
+      onFocus={(e: FocusEvent) => {
+        roving?.onFocus();
+        (reveal.bind as { onFocus?: (e: FocusEvent) => void }).onFocus?.(e);
+      }}
+      className={cx("group border-b border-hairline py-3", roving && rovingRowClass)}
+      style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }}
+    >
       <div className="flex items-center gap-3">
         <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} aria-describedby={a.evidence ? quoteId : undefined} />
         <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>

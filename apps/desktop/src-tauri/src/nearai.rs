@@ -91,9 +91,16 @@ pub fn clear_key() -> Result<(), String> {
     }
 }
 
-/// The notes for a long call can take NEAR AI several minutes to write, and the reply
-/// only comes once they're done (no streaming: the signature covers the whole body).
+/// Ask's reply comes in one piece, once it's written.
 const CHAT_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The notes are streamed (`chat_stream`): no total limit, only these two. NEAR AI sends
+/// the stream's headers with its first piece, after reading the whole transcript.
+pub const STREAM_FIRST_BYTE: Duration = Duration::from_secs(300);
+/// The longest silence between two pieces of the stream.
+pub const STREAM_IDLE: Duration = Duration::from_secs(60);
+/// A notes reply is tens of kilobytes; anything near this is not one.
+const STREAM_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 fn client() -> Result<reqwest::Client, String> {
     // Whisper on a 5-minute chunk can take a while; the gateway itself stops at 120 s.
@@ -210,6 +217,116 @@ pub async fn chat(body: String, e2ee: E2ee) -> Result<String, String> {
     body_text(res).await
 }
 
+/// How much of a streamed reply has arrived, for the "Writing the notes" step. Counts
+/// only: the content is encrypted to the web view's key and stays in `body` untouched.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StreamProgress {
+    pub bytes: u64,
+    /// `data:` events so far (each is about one token), not counting `[DONE]`.
+    pub events: u64,
+    /// The output tokens the stream itself reports (its plaintext `usage`), when it does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u64>,
+}
+
+/// Reads progress out of complete lines of an event stream, leaving the bytes alone.
+#[derive(Default)]
+struct ProgressCounter {
+    /// Up to where `body` has been read for line starts.
+    scanned: usize,
+    progress: StreamProgress,
+}
+
+impl ProgressCounter {
+    fn update(&mut self, body: &[u8]) -> StreamProgress {
+        while let Some(nl) = body[self.scanned..].iter().position(|&b| b == b'\n') {
+            let line = &body[self.scanned..self.scanned + nl];
+            self.scanned += nl + 1;
+            let Some(data) = line.strip_prefix(b"data:") else { continue };
+            let data = data.trim_ascii();
+            if data == b"[DONE]" {
+                continue;
+            }
+            self.progress.events += 1;
+            let tokens = serde_json::from_slice::<serde_json::Value>(data)
+                .ok()
+                .and_then(|v| v.get("usage")?.get("completion_tokens")?.as_u64());
+            if tokens.is_some() {
+                self.progress.output_tokens = tokens;
+            }
+        }
+        self.progress.bytes = body.len() as u64;
+        self.progress
+    }
+}
+
+/// The streamed notes request: always end-to-end encrypted (the keys are checked before
+/// anything is sent), with the same headers as `chat`. Returns every byte of the event
+/// stream exactly as received, once it has ended: the response signature covers them all.
+/// Instead of a total timeout, it waits `first_byte` for the stream to start and `idle`
+/// between pieces, reporting progress as pieces arrive.
+pub async fn chat_stream_with(
+    body: String,
+    e2ee: E2ee,
+    first_byte: Duration,
+    idle: Duration,
+    mut on_progress: impl FnMut(StreamProgress),
+) -> Result<String, String> {
+    let headers = e2ee_headers(&e2ee)?;
+    // No total timeout on this client: the idle limit below decides.
+    let client = reqwest::Client::builder().connect_timeout(Duration::from_secs(20)).build().map_err(|e| e.to_string())?;
+    let mut req = client
+        .post(format!("{}/chat/completions", base()))
+        .bearer_auth(api_key()?)
+        .header("content-type", "application/json")
+        .header("accept", "text/event-stream")
+        // The signature covers the exact response bytes, so no compression in between.
+        .header("accept-encoding", "identity")
+        .header("x-no-aliasing", "true");
+    for (name, value) in headers {
+        req = req.header(name, value);
+    }
+    let stopped = "NEAR AI stopped sending the notes, so Aftercall stopped waiting. Nothing was saved; try again.".to_string();
+    let mut res = tokio::time::timeout(first_byte, req.body(body).send())
+        .await
+        .map_err(|_| stopped.clone())?
+        .map_err(send_error)?;
+    if !res.status().is_success() {
+        return tokio::time::timeout(idle, body_text(res)).await.map_err(|_| stopped.clone())?;
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut counter = ProgressCounter::default();
+    let mut last_report = std::time::Instant::now();
+    loop {
+        match tokio::time::timeout(idle, res.chunk()).await {
+            Err(_) => return Err(stopped),
+            Ok(Err(e)) => return Err(format!("The notes stream broke off: {e}")),
+            Ok(Ok(None)) => break,
+            Ok(Ok(Some(chunk))) => {
+                bytes.extend_from_slice(&chunk);
+                if bytes.len() > STREAM_MAX_BYTES {
+                    return Err("NEAR AI's reply was far larger than notes can be, so Aftercall stopped reading it.".into());
+                }
+                let progress = counter.update(&bytes);
+                // About four updates a second is plenty for the screen.
+                if last_report.elapsed() >= Duration::from_millis(250) {
+                    on_progress(progress);
+                    last_report = std::time::Instant::now();
+                }
+            }
+        }
+    }
+    on_progress(counter.update(&bytes));
+    // Exact bytes matter: the response signature covers them.
+    String::from_utf8(bytes).map_err(|_| "NEAR AI returned a body that isn't UTF-8".to_string())
+}
+
+/// `chat_stream_with` with the app's limits.
+pub async fn chat_stream(body: String, e2ee: E2ee, on_progress: impl FnMut(StreamProgress)) -> Result<String, String> {
+    chat_stream_with(body, e2ee, STREAM_FIRST_BYTE, STREAM_IDLE, on_progress).await
+}
+
 /// GET for the two read-only verification endpoints.
 pub fn check_get_path(path: &str) -> Result<(), String> {
     let allowed = (path.starts_with("attestation/report?") || path.starts_with("signature/"))
@@ -252,6 +369,18 @@ mod tests {
         assert!(headers.contains(&("x-model-pub-key", "cd".repeat(32))));
         assert!(e2ee_headers(&E2ee { client_pub_key: key.clone(), model_pub_key: "ab".into() }).is_err());
         assert!(e2ee_headers(&E2ee { client_pub_key: format!("{key}\r\nx-evil: 1"), model_pub_key: key }).is_err());
+    }
+
+    #[test]
+    fn progress_counts_events_and_reads_the_tokens_the_stream_reports() {
+        let mut c = ProgressCounter::default();
+        let first = b"data: {\"id\":\"c\",\"choices\":[]}\n\ndata: {\"id\":\"c\",\"usage\":{\"completion_tokens\":7}}\n\nda";
+        assert_eq!(c.update(first), StreamProgress { bytes: first.len() as u64, events: 2, output_tokens: Some(7) });
+        // The rest of a line split across pieces is counted once it's complete; [DONE] isn't an event.
+        let mut all = first.to_vec();
+        all.extend_from_slice(b"ta: {\"id\":\"c\",\"usage\":{\"completion_tokens\":9}}\r\n\r\n: comment\n\ndata: [DONE]\n\n");
+        let p = c.update(&all);
+        assert_eq!((p.events, p.output_tokens, p.bytes), (3, Some(9), all.len() as u64));
     }
 
     #[test]

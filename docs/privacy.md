@@ -7,7 +7,7 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 | Data | Goes to | Kept there |
 | --- | --- | --- |
 | Meeting audio (two WAV stems) | NEAR AI Cloud, Whisper in a TEE | NEAR AI's policy; Aftercall deletes its copy on the Mac right after the notes are saved, or at the next launch if that didn't happen |
-| Transcript text, project and payee names | NEAR AI Cloud, Qwen in a TEE | NEAR AI's policy |
+| Transcript text, project and payee names, and the names (never the emails) of the people the calendar invited | NEAR AI Cloud, Qwen in a TEE, end-to-end encrypted. A call over 45 minutes goes in parts, each its own encrypted request, plus one encrypted request with only the parts' summaries | NEAR AI's policy |
 | Your notes (what you type during the call) | NEAR AI Cloud, Qwen in a TEE, in the same end-to-end encrypted request as the transcript | NEAR AI's policy. Never in a recap, never sent to connected agents; the proof holds only a salted hash |
 | A question you ask your meetings, with at most 8 matching transcript lines | NEAR AI Cloud, Qwen in a TEE, end-to-end encrypted | NEAR AI's policy |
 | Notes, transcript, your notes, your edits to action items, settings, the estimated cost of each run | Nowhere. They stay in the app's folder on the Mac | Until you delete the meeting |

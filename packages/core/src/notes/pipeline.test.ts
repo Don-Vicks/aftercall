@@ -1,15 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { edwardsToMontgomeryPriv } from "@noble/curves/ed25519";
-import { SUMMARY_MAX_TOKENS, YOUR_NOTES_MAX, cleanYourNotes, processRecording, type E2eeKeys, type NearAiTransport, type ProcessInput } from "./pipeline.ts";
+import { SUMMARY_MAX_TOKENS, YOUR_NOTES_MAX, cleanYourNotes, processRecording, type E2eeKeys, type NotesTransport, type ProcessInput, type WritingProgress } from "./pipeline.ts";
 import { droppedLine, encodePublicProof, noticeLine, proofHash, verifyProof, verifyProofGpu } from "./proof.ts";
 import { NOTES_SYSTEM_PROMPT } from "./schema.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { decryptWith, encryptTo } from "../tee/e2ee.ts";
-import { attestationFor, decodeQuote, fakeNras, teeKey, type TeeKey } from "../tee/testkit.ts";
+import { attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey, type TeeKey } from "../tee/testkit.ts";
+import type { StreamProgress } from "./stream.ts";
 
 interface FakeOpts {
-  notes: object;
+  /** The notes the model writes: fixed, or from the user message it read (a part of a long call, say). */
+  notes: object | ((user: string) => object);
+  /** The overall title and summary of a long call. */
+  overall?: object;
   /** The response bytes the signature covers differ from what we got. */
   tamper?: boolean;
   /** The summary is signed by a key that wasn't attested. */
@@ -35,6 +39,20 @@ interface FakeOpts {
   finishReason?: string;
   /** Whisper's `duration` in seconds; absent unless given. */
   whisperDuration?: number;
+  /** Whisper's segments for each file, instead of the two short lines (for long calls). */
+  segments?: (path: string) => { start: number; end: number; text: string }[];
+  /** The stream is cut before `data: [DONE]` (NEAR AI then signs nothing). */
+  cutStream?: boolean;
+  /** Bytes the proxy doesn't hash are added to the stream (a keep-alive comment). */
+  unsignedBytes?: string;
+  /** One reply piece's ciphertext is changed in transit. */
+  tamperPiece?: boolean;
+  /** NEAR AI sends this error event partway through the stream. */
+  streamError?: string;
+  /** Only the request with this 1-based number fails with `e2eeRefused`. */
+  refuseOnly?: number;
+  /** Each streamed reply takes this long, so requests overlap. */
+  delayMs?: number;
 }
 
 /**
@@ -51,11 +69,13 @@ async function fakeNearAi(opts: FakeOpts) {
   const seenByGateway: string[] = [];
   /** The user message as the summary TEE read it (decrypted when E2EE). */
   const seenByTee: string[] = [];
-  let lastChat = { request: "", response: "", signer: summaryNodes[0] as TeeKey };
+  const chats = new Map<string, { request: string; response: string; signer: TeeKey }>();
+  let inFlight = 0;
+  let maxInFlight = 0;
   let nonceCounter = 0;
   let rotated = false;
 
-  const transport: NearAiTransport = {
+  const transport: NotesTransport = {
     randomHex: () => (++nonceCounter).toString(16).padStart(64, "0"),
     async get(path) {
       calls.push(`get ${path.split("?")[0]}`);
@@ -73,9 +93,10 @@ async function fakeNearAi(opts: FakeOpts) {
           }),
         });
       }
-      const response = opts.tamper ? `${lastChat.response} ` : lastChat.response;
-      const signer = opts.rogueSigner ? teeKey("ed25519") : lastChat.signer;
-      const text = `Qwen/Qwen3.8-27B:${sha256Hex(lastChat.request)}:${sha256Hex(response)}`;
+      const chat = chats.get(decodeURIComponent(path.split("?")[0].replace("signature/", "")))!;
+      const response = opts.tamper ? `${chat.response} ` : chat.response;
+      const signer = opts.rogueSigner ? teeKey("ed25519") : chat.signer;
+      const text = `Qwen/Qwen3.8-27B:${sha256Hex(chat.request)}:${sha256Hex(response)}`;
       return JSON.stringify({ text, signature: signer.sign(text), signing_address: signer.address, signing_algo: "ed25519", signature_kind: "provider_tee" });
     },
     async verifyQuote(hex) {
@@ -89,46 +110,64 @@ async function fakeNearAi(opts: FakeOpts) {
     },
     async transcribe(path, _model, prompt) {
       calls.push(`transcribe ${path} [${prompt}]`);
+      if (opts.segments) {
+        const segments = opts.segments(path);
+        return JSON.stringify({ text: segments.map((x) => x.text).join(" "), segments });
+      }
       const text = path.includes("mic")
         ? "Send Ada the recap after this call, and pay the designer the fifty dollar deposit today."
         : "Great, I'll look out for the recap.";
       return JSON.stringify({ text, ...(opts.whisperDuration !== undefined ? { duration: opts.whisperDuration } : {}), segments: [{ start: path.includes("mic") ? 4 : 9, end: 8, text }] });
     },
-    async chat(body: string, e2ee?: E2eeKeys) {
-      calls.push(e2ee ? "chat e2ee" : "chat");
+    async chat() {
+      calls.push("chat (not streamed)");
+      throw new Error("the notes are always streamed");
+    },
+    async chatStream(body: string, e2ee: E2eeKeys, onProgress?: (p: StreamProgress) => void) {
+      calls.push("chat e2ee");
       seenByGateway.push(body);
-      let content = JSON.stringify(opts.notes);
-      let signer = summaryNodes[0];
-      if (e2ee) {
-        if (opts.e2eeRefused) throw new Error(opts.e2eeRefused === true ? HEADER_REFUSAL : opts.e2eeRefused);
-        if (opts.staleKey && (opts.staleKey === "always" || !rotated)) {
-          // New nodes take over; none serves the key the app pinned.
-          if (!rotated) summaryNodes.splice(0, summaryNodes.length, ...summaryNodes.map(() => teeKey("ed25519")));
-          rotated = true;
-          throw new Error(STALE_KEY);
-        }
-        // Routed to the node whose key was pinned; it decrypts inside the TEE.
-        signer = summaryNodes.find((k) => k.address === e2ee.modelPubKey)!;
-        const secret = edwardsToMontgomeryPriv(signer.seed!);
-        const user = (JSON.parse(body).messages as { content: string }[])[1].content;
-        const plain = decryptWith(user, secret);
-        assert.match(plain, /fifty dollar/, "the TEE can read the transcript");
-        seenByTee.push(plain);
-        content = encryptTo(content, e2ee.clientPubKey);
-      } else {
-        seenByTee.push((JSON.parse(body).messages as { content: string }[])[1].content);
+      const n = seenByGateway.length;
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
+      } finally {
+        inFlight--;
       }
-      // usage and finish_reason sit outside the encrypted content, as NEAR AI sends them.
-      const response = JSON.stringify({
-        id: "chatcmpl-42",
-        choices: [{ message: { content }, ...(opts.finishReason ? { finish_reason: opts.finishReason } : {}) }],
+      if (opts.e2eeRefused && (!opts.refuseOnly || opts.refuseOnly === n)) throw new Error(opts.e2eeRefused === true ? HEADER_REFUSAL : opts.e2eeRefused);
+      if (opts.staleKey && (opts.staleKey === "always" || !rotated)) {
+        // New nodes take over; none serves the key the app pinned.
+        if (!rotated) summaryNodes.splice(0, summaryNodes.length, ...summaryNodes.map(() => teeKey("ed25519")));
+        rotated = true;
+        throw new Error(STALE_KEY);
+      }
+      const req = JSON.parse(body);
+      assert.equal(req.stream, true, "the notes are streamed");
+      // Routed to the node whose key was pinned; it decrypts inside the TEE.
+      const signer = summaryNodes.find((k) => k.address === e2ee.modelPubKey)!;
+      const secret = edwardsToMontgomeryPriv(signer.seed!);
+      const user = decryptWith((req.messages as { content: string }[])[1].content, secret);
+      seenByTee.push(user);
+      const overall = req.response_format.json_schema.name === "meeting_summary";
+      const answer = overall ? (opts.overall ?? { title: "Long sync", summary: "Two parts, one plan." }) : typeof opts.notes === "function" ? opts.notes(user) : opts.notes;
+      const id = `chatcmpl-${n}`;
+      const pieces = piecesOf(JSON.stringify(answer), 9);
+      let response = sseStream(pieces, {
+        id,
+        encrypt: (p) => encryptTo(p, e2ee.clientPubKey),
+        finishReason: opts.finishReason ?? "stop",
         ...(opts.usage ? { usage: opts.usage } : {}),
+        done: !opts.cutStream,
       });
-      lastChat = { request: body, response, signer };
-      return response;
+      if (opts.tamperPiece) response = response.replace(/("content":")([0-9a-f]{80})([0-9a-f])/, (_m, a, b, c) => `${a}${b}${c === "0" ? "1" : "0"}`);
+      if (opts.streamError) response = response.replace("data: [DONE]", `data: ${JSON.stringify({ error: { message: opts.streamError, type: "upstream_error" } })}\n\ndata: [DONE]`);
+      // What the proxy hashed and signed: everything but what it doesn't hash.
+      chats.set(id, { request: body, response, signer });
+      pieces.forEach((_, i) => onProgress?.({ bytes: response.length, events: i + 1 }));
+      return opts.unsignedBytes ? `${opts.unsignedBytes}${response}` : response;
     },
   };
-  return { transport, calls, seenByGateway, seenByTee, summaryNodes, gateway };
+  return { transport, calls, seenByGateway, seenByTee, summaryNodes, gateway, maxInFlight: () => maxInFlight };
 }
 
 /** cloud-api's answer when no node serves the pinned model key (NoPubKeyProvider → 421), through the Rust transport. */
@@ -178,6 +217,7 @@ test("a recording becomes verified, end-to-end encrypted notes with only quote-b
   assert.equal(result.dropped[0].text, "Pay Designer five thousand");
   assert.ok(ai.calls.includes("transcribe /r/mic-000.wav [Ada, Designer, Fundraise]"), "names go to Whisper as the prompt");
   assert.ok(ai.calls.includes("chat e2ee"));
+  assert.match(ai.seenByTee[0], /fifty dollar/, "the TEE can read the transcript");
   assert.ok(!ai.seenByGateway.join().includes("fifty dollar"), "the gateway only sees ciphertext");
 
   // Panel groups, in order: gateway, Whisper TEE, Qwen TEE (both nodes), response.
@@ -318,7 +358,7 @@ test("a retry after the summary fails reuses the transcription instead of paying
   const ai = await fakeNearAi({ notes });
   const stored = new Map<string, string>();
   const cache = { get: async (c: { path: string }) => stored.get(c.path) ?? null, set: async (c: { path: string }, raw: string) => void stored.set(c.path, raw) };
-  const failingChat = { ...ai.transport, chat: async () => { throw new Error("gateway timeout"); } };
+  const failingChat = { ...ai.transport, chatStream: async () => { throw new Error("gateway timeout"); } };
 
   await assert.rejects(processRecording(failingChat, { ...input, transcriptCache: cache }, undefined, noWait), /gateway timeout/);
   assert.equal(stored.size, 2, "both chunks were kept");
@@ -492,4 +532,177 @@ test("a logged notice goes into the proof as your statement; without one the key
   const none = await processRecording((await fakeNearAi({ notes })).transport, input, undefined, noWait);
   assert.equal("notice" in none.proof, false);
   assert.equal(proofHash(none.proof), proofHash({ ...none.proof, notice: undefined }));
+});
+
+// ---------- streaming ----------
+
+test("the notes are streamed: one request, the signature checked over the exact stream received, progress reported", async () => {
+  const ai = await fakeNearAi({ notes, usage });
+  const progress: number[] = [];
+  const r = await processRecording(ai.transport, input, (stage, _d, p) => stage === "summarise" && p && progress.push(p.tokens), noWait);
+  assert.deepEqual(ai.calls.filter((c) => c.startsWith("chat")), ["chat e2ee"], "a short call is one request, streamed");
+  const body = JSON.parse(ai.seenByGateway[0]);
+  assert.equal(body.stream, true);
+  assert.deepEqual(body.stream_options, { include_usage: true });
+  assert.deepEqual(body.chat_template_kwargs, { enable_thinking: false });
+  assert.equal(body.max_tokens, SUMMARY_MAX_TOKENS);
+  assert.ok(progress.length > 2 && progress[progress.length - 1] > 0 && progress.every((n, i) => i === 0 || n >= progress[i - 1]), `progress ${progress}`);
+  assert.equal(r.meeting.verified, true);
+  assert.equal(r.proof.version, 2, "a one-request call keeps the version 2 proof");
+  assert.deepEqual(failed(verifyProof(r.proof, null, r.notes)), ["on-chain", "matches"]);
+  assert.equal(r.cost.chat?.completionTokens, 1_500, "usage from the stream's last usage chunk");
+});
+
+test("a stream cut before [DONE] is never parsed or saved; NEAR AI signs nothing for it", async () => {
+  const ai = await fakeNearAi({ notes, cutStream: true });
+  await assert.rejects(processRecording(ai.transport, input, undefined, noWait), { message: "The reply stopped before it was finished, so it wasn't signed. Nothing was saved." });
+  assert.ok(!ai.calls.some((c) => c.startsWith("get signature")));
+});
+
+test("bytes the signature doesn't cover fail the response check; nothing is stripped to make it pass", async () => {
+  const ai = await fakeNearAi({ notes, unsignedBytes: ": keep-alive\n\n" });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.deepEqual(failed(r.checks), ["response-response"]);
+  assert.equal(r.meeting.verified, false);
+});
+
+test("a changed piece of the encrypted reply, or an error event partway, stops processing", async () => {
+  await assert.rejects(processRecording((await fakeNearAi({ notes, tamperPiece: true })).transport, input, undefined, noWait));
+  await assert.rejects(processRecording((await fakeNearAi({ notes, streamError: "Upstream request failed" })).transport, input, undefined, noWait), {
+    message: "NEAR AI stopped the reply partway: Upstream request failed",
+  });
+});
+
+// ---------- speaker names ----------
+
+test("the model names Others lines in the same request; the meeting keeps them as likely, only for Others lines", async () => {
+  const ai = await fakeNearAi({ notes: { ...notes, speakers: [{ name: "Ada", lines: [2, 1, 7] }, { name: "Others", lines: [2] }] } });
+  const r = await processRecording(ai.transport, { ...input, participants: ["Ada Lovelace", " ada lovelace ", "Theo"] }, undefined, noWait);
+  assert.equal(ai.seenByGateway.length, 1, "no extra request");
+  assert.match(ai.seenByTee[0], /\nParticipants \(from the calendar invite, besides you\): \["Ada Lovelace","Theo"\]\n/);
+  assert.match(ai.seenByTee[0], /Transcript:\n#1 \[00:04\] You: .+\n#2 \[00:09\] Others: /);
+  assert.ok(!ai.seenByGateway[0].includes("Ada Lovelace"), "the names travel encrypted");
+  assert.deepEqual(r.meeting.likelySpeakers, [{ line: 1, name: "Ada" }], "line 1 is You and line 7 doesn't exist; a placeholder name is no name");
+  assert.deepEqual(JSON.parse(ai.seenByGateway[0]).response_format.json_schema.schema.required.at(-1), "speakers");
+
+  const none = await processRecording((await fakeNearAi({ notes })).transport, input, undefined, noWait);
+  assert.equal("likelySpeakers" in none.meeting, false, "nobody named: no key, as on older meetings");
+});
+
+// ---------- long calls ----------
+
+/** Two hours of call: a turn every 20 seconds, both sides taking turns, with a few things to find. */
+function longSegments(path: string) {
+  const mic = path.includes("mic");
+  const out: { start: number; end: number; text: string }[] = [];
+  for (let t = mic ? 0 : 20; t < 7200; t += 40) {
+    let text = `${mic ? "We talk" : "They answer"} about point ${t} of the plan and what comes next for it`;
+    if (mic && t === 40) text = "Send Ada the recap after this call, it matters.";
+    if (!mic && t === 60) text = "Hi everyone, I'm Ines from the design team.";
+    if (mic && t === 3000) text = "And pay the designer the fifty dollar deposit today please.";
+    out.push({ start: t, end: t + 15, text });
+  }
+  return out;
+}
+
+const longInput: ProcessInput = { ...input, durationSec: 7200, chunkSeconds: 7200 };
+
+/** A model that writes a part's notes from what it was sent, and (wrongly) repeats an item from the context. */
+function partNotes(user: string) {
+  const part = Number(/^Part (\d+) of (\d+)/.exec(user)?.[1]);
+  const has = (s: string) => user.includes(s);
+  const ines = /#(\d+) \[\d\d:\d\d\] Others: Hi everyone, I'm Ines/.exec(user);
+  return {
+    title: `Part ${part}`,
+    summary: `What part ${part} covered.`,
+    decisions: [],
+    action_items: has("Send Ada the recap") ? [{ text: "Send Ada the recap", owner: "You", due: null, evidence: "Send Ada the recap after this call" }] : [],
+    followups: [
+      ...(has("fifty dollar deposit") ? [{ type: "payment", payee_name: "Designer", amount_words: "fifty dollar", memo: "deposit", evidence: "pay the designer the fifty dollar deposit today" }] : []),
+      ...(part === 2 ? [{ type: "payment", payee_name: "Designer", amount_words: "nine hundred", memo: null, evidence: "nine hundred for the full brand book" }] : []),
+    ],
+    speakers: ines ? [{ name: "Ines", lines: [Number(ines[1])] }] : [],
+  };
+}
+
+test("a long call is written up in parts at once, then one short overall request; every one encrypted, capped, signed and checked", async () => {
+  const ai = await fakeNearAi({ notes: partNotes, segments: longSegments, usage, delayMs: 5, summaryNodes: 2 });
+  const writing: WritingProgress[] = [];
+  const r = await processRecording(ai.transport, longInput, (stage, _d, p) => stage === "summarise" && p && writing.push(p), noWait);
+
+  const bodies = ai.seenByGateway.map((b) => JSON.parse(b));
+  assert.equal(bodies.length, 6, "2 hours: 5 parts and the overall summary");
+  assert.deepEqual(bodies.map((b) => b.max_tokens), [4096, 4096, 4096, 4096, 4096, 512], "lower caps for parts, a small one for the summary");
+  assert.ok(bodies.every((b) => b.stream === true && b.messages.every((m: { content: string }) => /^[0-9a-f]+$/.test(m.content))), "every request streamed and encrypted");
+  assert.ok(!ai.seenByGateway.join().includes("Ines"), "the gateway only sees ciphertext");
+  assert.equal(ai.maxInFlight(), 4, "at most 4 parts at once");
+  assert.match(ai.seenByTee[1], /^Part 2 of 5 of the call, \d\d:\d\d to \d\d:\d\d\.\nProject: Fundraise/);
+  assert.match(ai.seenByTee[1], /Before this part \(context only\):\n/);
+  const overall = ai.seenByTee[5];
+  assert.ok(overall.includes("Summary: What part 3 covered.") && !overall.includes("We talk about point"), "the overall request reads the summaries, never the transcript");
+  assert.equal(bodies[5].response_format.json_schema.name, "meeting_summary");
+  assert.ok(writing.some((w) => w.sectionsDone === 2 && !w.overall), "parts are counted as their replies end");
+  assert.deepEqual(writing.at(-1), { sections: 5, sectionsDone: 5, tokens: writing.at(-1)!.tokens, overall: true }, "then the overall summary");
+
+  // Merged: the repeated item once, the invented payment dropped against the whole transcript.
+  assert.equal(r.meeting.title, "Long sync");
+  assert.equal(r.meeting.summary, "Two parts, one plan.");
+  assert.deepEqual(r.meeting.actionItems.map((a) => a.text), ["Send Ada the recap"]);
+  assert.deepEqual(r.meeting.followUps.map((f) => (f.kind === "payment" ? f.heard : f.kind)), ["fifty dollar"]);
+  assert.deepEqual(r.dropped.map((d) => d.text), ["Pay Designer nine hundred"]);
+  // The speaker named in part 1 maps to its line in the whole transcript.
+  const inesLine = r.meeting.transcript.findIndex((l) => l.text.startsWith("Hi everyone, I'm Ines"));
+  assert.deepEqual(r.meeting.likelySpeakers, [{ line: inesLine, name: "Ines" }]);
+
+  // Every reply's signature checked, each line saying which request.
+  assert.deepEqual(failed(r.checks), []);
+  assert.equal(r.meeting.verified, true);
+  const response = r.checks.filter((c) => c.scope === "response" && c.id !== "response-e2ee");
+  assert.equal(response.length, 6 * 4);
+  assert.ok(response.some((c) => c.id === "response-response-3" && c.label === "Signed over exactly what came back · part 3"));
+  assert.ok(response.some((c) => c.id === "response-signer-6" && c.label.endsWith("· overall summary")));
+
+  // The proof: version 3, every request's hashes and signature; it re-checks on its own.
+  const p = r.proof;
+  assert.equal(p.version, 3);
+  if (p.version !== 3) return;
+  assert.deepEqual(p.calls.map((c) => [c.role, c.part]), [["section", 1], ["section", 2], ["section", 3], ["section", 4], ["section", 5], ["overall", undefined]]);
+  assert.deepEqual(p.calls.map((c) => c.requestHash), ai.seenByGateway.map((b) => sha256Hex(b)));
+  assert.ok(!("signature" in p) && !("requestHash" in p));
+  assert.deepEqual(failed(verifyProof(p, null, r.notes)), ["on-chain", "matches"]);
+  assert.equal((await verifyProofGpu(p, JSON.parse(await ai.transport.nvidiaKeys())))?.ok, true);
+  assert.equal(r.notes.title, "Long sync", "notesHash covers the merged notes the app shows");
+  assert.equal(p.notesHash, sha256Hex(JSON.stringify(r.notes)));
+  assert.ok(!JSON.stringify(p).includes("Ines"), "the proof holds no meeting content");
+
+  // One changed request in the proof fails the signature line, which names it.
+  const swapped = { ...p, calls: p.calls.map((c, i) => (i === 2 ? { ...c, responseHash: "00".repeat(32) } : c)) };
+  const signed = verifyProof(swapped, null).find((c) => c.id === "signed")!;
+  assert.equal(signed.ok, false);
+  assert.equal(signed.detail, "The signature for part 3 doesn't cover its request and response");
+  assert.equal(verifyProof({ ...p, calls: [] }, null).find((c) => c.id === "signed")?.ok, false, "no requests, nothing verified");
+
+  // Usage over every request.
+  assert.equal(r.cost.chat?.promptTokens, 6 * 20_000);
+  assert.equal(r.cost.chat?.completionTokens, 6 * 1_500);
+});
+
+test("a long call that fails in one part stops with nothing saved; a stale key attests again and sends every part again", async () => {
+  const one = await fakeNearAi({ notes: partNotes, segments: longSegments, e2eeRefused: "NEAR AI 400 Bad Request: messages: too long", refuseOnly: 3 });
+  await assert.rejects(processRecording(one.transport, longInput, undefined, noWait), { message: "NEAR AI turned down the encrypted summary request (400: messages: too long). The transcript wasn't sent again." });
+  assert.equal(one.calls.filter((c) => c.startsWith("chat")).length, 5, "the parts in flight finish; no overall request");
+  assert.ok(!one.calls.some((c) => c.startsWith("get signature")));
+
+  const stale = await fakeNearAi({ notes: partNotes, segments: longSegments, staleKey: "once" });
+  const r = await processRecording(stale.transport, longInput, undefined, noWait);
+  assert.equal(stale.calls.filter((c) => c === "get attestation/report").length, 3, "attested again once");
+  assert.equal(stale.calls.filter((c) => c.startsWith("chat")).length, 5 + 6, "the first round's parts, then every request to the fresh key");
+  assert.equal(r.proof.e2ee.modelKey, stale.summaryNodes[0].address);
+  assert.deepEqual(failed(r.checks), []);
+  assert.deepEqual(failed(verifyProof(r.proof, null, r.notes)), ["on-chain", "matches"]);
+});
+
+test("a part cut off at its cap stops the long call in plain words", async () => {
+  const ai = await fakeNearAi({ notes: partNotes, segments: longSegments, finishReason: "length" });
+  await assert.rejects(processRecording(ai.transport, longInput, undefined, noWait), { message: "The model's reply hit the 4,096-token limit, so the notes would be incomplete. Nothing was saved." });
 });

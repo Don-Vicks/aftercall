@@ -9,6 +9,7 @@ import {
   droppedLine,
   explorerAccountUrl,
   groupChecks,
+  hasFullChecks,
   hasStatements,
   isNetwork,
   noticeLine,
@@ -20,6 +21,7 @@ import {
   type Jwks,
   type OnChainProof,
   type ProofBundleV2,
+  type ProofBundleV3,
   type PublicProof,
   type TeeCheck,
 } from "@aftercall/core";
@@ -146,13 +148,13 @@ export function VerifyClient() {
 function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | null; onRerun: () => void }) {
   const checks = done?.checks ?? [];
   const passed = checks.filter((c) => c.ok).length;
-  const recorded: TeeCheck[] | null = proof.bundle.version === 2 ? proof.bundle.checks : null;
+  const recorded: TeeCheck[] | null = hasFullChecks(proof.bundle) ? proof.bundle.checks : null;
   // E2EE has its own line; "processed privately" rests on attestation and signatures.
   const allOk = !!done && passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
   const dateOpts = { day: "numeric", month: "short", year: "numeric" } as const;
   const when = done?.onChain
     ? new Date(done.onChain.recorded_at / 1e6).toLocaleDateString([], dateOpts)
-    : proof.bundle.version === 2
+    : hasFullChecks(proof.bundle)
       ? new Date(proof.bundle.checkedAt).toLocaleDateString([], dateOpts)
       : null;
   const hash = proofHash(proof.bundle);
@@ -361,7 +363,7 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
   // Groups with a failure start open, so nothing that failed is hidden behind a click.
   const [open, setOpen] = useState<Record<string, boolean>>(() => Object.fromEntries(groups.map((g) => [g.key, g.checks.some((c) => !c.ok)])));
   const checkedAt =
-    proof.bundle.version === 2 ? new Date(proof.bundle.checkedAt).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+    hasFullChecks(proof.bundle) ? new Date(proof.bundle.checkedAt).toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
 
   return (
     <section aria-labelledby="vr" className={v.block}>
@@ -428,7 +430,7 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
  * the person who recorded logged. The hash on NEAR covers them, but nobody can re-run
  * them from the link (the transcript isn't in it), so they get a note mark, not a tick.
  */
-function Statements({ bundle }: { bundle: ProofBundleV2 }) {
+function Statements({ bundle }: { bundle: ProofBundleV2 | ProofBundleV3 }) {
   const dropped = droppedLine(bundle);
   const rows: [string, string][] = [
     ...(dropped ? ([["Items without a quote", dropped]] as [string, string][]) : []),

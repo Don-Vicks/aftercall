@@ -9,6 +9,7 @@ import {
   encodePublicProof,
   editsLine,
   groupChecks,
+  hasFullChecks,
   hasStatements,
   itemEdits,
   meetingLabel,
@@ -121,7 +122,7 @@ export function VerifySheet({
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const recorded: TeeCheck[] | null = saved.proof.version === 2 ? saved.proof.checks : null;
+  const recorded: TeeCheck[] | null = hasFullChecks(saved.proof) ? saved.proof.checks : null;
   const groups = recorded ? groupChecks(recorded, saved.proof) : [];
   // Before the proof is on NEAR, "recorded on NEAR" and "matches" can't pass yet; the footer says so instead.
   const edited = itemEdits(saved.meeting, saved.notes).length > 0;
@@ -133,7 +134,7 @@ export function VerifySheet({
   const passed = recorded?.filter((c) => c.ok).length ?? 0;
   const failing = (recorded?.length ?? 0) - passed + (again?.filter((c) => !c.ok).length ?? 0);
   const verified = saved.meeting.verified && (again === null || again.every((c) => c.ok || c.id === "e2ee"));
-  const checkedOn = saved.proof.version === 2 ? new Date(saved.proof.checkedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const checkedOn = hasFullChecks(saved.proof) ? new Date(saved.proof.checkedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   const longest = Math.max(0, ...groups.map((g) => g.checks.length));
   const first = Boolean(saved.onChain) && isFirstProof(recordingId);
 

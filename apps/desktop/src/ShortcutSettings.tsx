@@ -58,7 +58,7 @@ export function ShortcutSettings() {
               : taken
                 ? `${TAKEN} Quit that app, then turn this off and on again.`
                 : status.wanted
-                  ? "Open the record sheet, or your notes while recording, from any app. While Aftercall runs, other apps can't use ⌘⇧R."
+                  ? "Open the record sheet, or your notes while recording, from any app. While Aftercall runs, other apps can't use ⌘⇧R, or ⌘⇧M (mark the moment) while you record."
                   : "Off. ⌘⇧R works only in Aftercall's window, and other apps keep it."
           }
         >

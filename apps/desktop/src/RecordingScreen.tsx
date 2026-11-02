@@ -16,6 +16,7 @@ import {
   type TeeCheck,
   type TranscribedChunk,
   type TranscriptCache,
+  type WritingProgress,
 } from "@aftercall/core";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
@@ -65,6 +66,8 @@ type Run =
       parts?: { done: number; total: number };
       /** Counted on this Mac once Whisper is done. */
       transcript?: TranscriptStats;
+      /** While the notes are written: parts and tokens received so far. */
+      writing?: WritingProgress;
     }
   | {
       state: "done";
@@ -125,7 +128,8 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
   let part: string | undefined;
   let parts: { done: number; total: number } | undefined;
   let transcript: TranscriptStats | undefined;
-  const show = () => report(id, { state: "running", at, part, times: [...times], since: startedAt, parts, transcript });
+  let writing: WritingProgress | undefined;
+  const show = () => report(id, { state: "running", at, part, times: [...times], since: startedAt, parts, transcript, writing });
   const moveTo = (step: StepId, detail?: string) => {
     for (const next = STEP_IDS.indexOf(step); at < next; at++) {
       times[at] = (performance.now() - since) / 1000;
@@ -169,6 +173,10 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     const chunks = await recordingFiles.chunks(id);
     if (chunks.length === 0) throw new Error("This recording has no audio left to transcribe.");
     parts = { done: 0, total: chunks.length };
+    // The calendar event names the meeting and fills recap addresses afterwards; its
+    // guests' names (never their emails) also help the model spell who spoke, inside the
+    // encrypted request. A sample is a made-up call: it never takes a real event's guests.
+    const event = recording.label ? null : await calendar.eventFor(recording);
     const result = await processRecording(
       nearAiTransport,
       {
@@ -186,17 +194,22 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         yourNotes,
         // Your "I've told everyone" tick goes into the proof as your statement. A sample is a made-up call: none.
         notice: recording.label ? undefined : recording.notice,
+        participants: event?.attendees.map((a) => a.name).filter(Boolean),
       },
-      (stage: PipelineStage, detail?: string) => {
-        if (stage === "summarise" && heard.length) transcript = statsFromChunks(heard, 300);
+      (stage: PipelineStage, detail?: string, progress?: WritingProgress) => {
+        if (stage === "summarise" && heard.length) {
+          transcript = statsFromChunks(heard, 300);
+          heard.length = 0;
+        }
+        if (stage === "summarise" && progress) writing = progress;
+        // The notes report progress often; only a new step moves the list on.
+        if (stage === "summarise" && at === STEP_IDS.indexOf("summarise")) return show();
         moveTo(stage, detail);
       },
     );
     heard.length = 0;
     // The calendar event names the meeting and fills recap addresses. The proof
     // doesn't cover either, so this changes nothing on the Verify page.
-    // A sample is a made-up call: it never takes the name or guests of a real event.
-    const event = recording.label ? null : await calendar.eventFor(recording);
     const meeting = event ? applyCalendarEvent(result.meeting, event) : result.meeting;
     let saved: SavedNotes = { ...result, meeting, processedAt: new Date().toISOString() };
     await recordingFiles.saveNotes(id, serializeNotes(saved));
@@ -336,7 +349,7 @@ export function RecordingScreen({
         ) : run.state === "running" ? (
           <>
             <ProcessHeader eyebrow={eyebrow} title={title} lede="Making your notes in NEAR AI secure hardware. Every step is checked as it happens." />
-            <ProcessingSteps view={{ at: run.at, times: run.times, part: run.part, parts: run.parts, transcript: run.transcript, since: run.since, others: one }} />
+            <ProcessingSteps view={{ at: run.at, times: run.times, part: run.part, parts: run.parts, transcript: run.transcript, writing: run.writing, since: run.since, others: one }} />
             <p className="m-0 text-ink-2">You can leave this page. Aftercall tells you when your notes are ready.</p>
           </>
         ) : run.state === "done" ? (

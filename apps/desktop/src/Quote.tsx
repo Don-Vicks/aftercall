@@ -4,6 +4,7 @@ import * as m from "motion/react-m";
 import { ArrowLeft } from "lucide-react";
 import { formatClock, type Evidence } from "@aftercall/core";
 import { CheckCircle } from "./primitives/Check";
+import { findMoments } from "./moments";
 import { cx, ease, springs } from "./ui";
 
 /*
@@ -76,6 +77,24 @@ export function TimeChip({ at, onJump, id, className }: { at: number; onJump: ()
       {formatClock(at)}
     </button>
   );
+}
+
+/**
+ * Your notes with each "[12:40]" you marked during the call as a TimeChip that jumps to
+ * that moment in the transcript. Text without marks comes back as it is.
+ */
+export function withMoments(text: string, onJump: (at: number) => void): ReactNode {
+  const found = findMoments(text);
+  if (found.length === 0) return text;
+  const out: ReactNode[] = [];
+  let from = 0;
+  for (const mo of found) {
+    if (mo.index > from) out.push(text.slice(from, mo.index));
+    out.push(<TimeChip key={mo.index} at={mo.at} onJump={() => onJump(mo.at)} className="mx-0.5 align-[2px]" />);
+    from = mo.index + mo.length;
+  }
+  if (from < text.length) out.push(text.slice(from));
+  return out;
 }
 
 /**

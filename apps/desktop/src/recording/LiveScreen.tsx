@@ -3,6 +3,8 @@ import { Check, MicOff, Monitor, VolumeX } from "lucide-react";
 import { isDesktop } from "../recorder";
 import { AvatarStack, Pill, SectionTitle } from "../ui";
 import { NOTES_HELP, NotesArea, SavedLabel } from "./YourNotes";
+import { CallTimeline } from "./CallTimeline";
+import { NOTES_FIELD, type Moment } from "./marks";
 import { isLive, setNotes, useLivePage, useRecordingSession, useShortcutEverywhere } from "./session";
 
 const hhmm = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -32,6 +34,14 @@ export function LiveScreen() {
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
   }, [s.focusNotes]);
+
+  /** A tick on the timeline: the cursor goes to its "[12:40]" in your notes. */
+  const pickMark = (mo: Moment) => {
+    const el = notes.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(mo.index, mo.index + mo.length);
+  };
 
   if (!isLive(s) && s.phase !== "starting") {
     return (
@@ -102,7 +112,11 @@ export function LiveScreen() {
           </div>
         </header>
 
-        <section aria-labelledby={notesId} className="flex flex-col gap-3" style={{ animation: "ac-in 320ms 60ms var(--ease) both" }}>
+        <div style={{ animation: "ac-in 320ms 40ms var(--ease) both" }}>
+          <CallTimeline s={s} onPickMark={pickMark} />
+        </div>
+
+        <section aria-labelledby={notesId} className="flex flex-col gap-3" style={{ animation: "ac-in 320ms 80ms var(--ease) both" }}>
           <div className="flex items-baseline justify-between gap-3">
             <SectionTitle id={notesId}>
               Your notes <span className="font-medium text-muted">only you write here</span>
@@ -112,23 +126,26 @@ export function LiveScreen() {
           <NotesArea
             ref={notes}
             aria-labelledby={notesId}
-            aria-keyshortcuts="Meta+Shift+R"
+            aria-keyshortcuts="Meta+Shift+R Meta+Shift+M"
+            {...{ [NOTES_FIELD]: "" }}
             value={s.notes}
             onChange={(e) => setNotes(e.target.value)}
             className="min-h-[300px]"
             placeholder="Type what matters as it happens…"
           />
-          <p className="m-0 text-ink-2">{NOTES_HELP}</p>
+          <p className="m-0 text-ink-2">
+            {NOTES_HELP} ⌘⇧M adds the time, like <span className="font-mono text-[13px]">[12:40]</span>, so you can find that moment later.
+          </p>
         </section>
 
         <section
           className="flex items-center gap-3.5 rounded-md px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]"
-          style={{ animation: "ac-in 320ms 120ms var(--ease) both" }}
+          style={{ animation: "ac-in 320ms 160ms var(--ease) both" }}
         >
           <Monitor size={18} strokeWidth={1.75} className="shrink-0 text-faint" aria-hidden="true" />
           <span className="flex-1 text-ink-2">
             {isDesktop
-              ? `Switch to your call: a small recorder stays on top, the menu bar shows the time, and ⌘⇧R ${everywhere ? "from any app" : "in Aftercall"} brings back your notes.`
+              ? `Switch to your call: a small recorder stays on top, the menu bar shows the time, ⌘⇧R ${everywhere ? "from any app" : "in Aftercall"} brings back your notes and ⌘⇧M marks the moment.`
               : "In the Mac app, switching to your call shows a small recorder on top, and the menu bar shows the time."}
           </span>
         </section>

@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { createRequire } from "node:module";
-import type { NearAiTransport } from "../notes/pipeline.ts";
+import type { E2eeKeys, NotesTransport } from "../notes/pipeline.ts";
+import type { StreamProgress } from "../notes/stream.ts";
 import type { QuoteReport } from "../tee/checks.ts";
 
 /**
@@ -70,7 +71,21 @@ async function bodyText(res: Response): Promise<string> {
   return text;
 }
 
-export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fetch?: typeof fetch }): NearAiTransport {
+/** End-to-end encryption headers, as nearai.rs e2ee_headers sends them. There is no plaintext request. */
+const e2eeHeaders = (e2ee: E2eeKeys): Record<string, string> => ({
+  "x-signing-algo": "ed25519",
+  "x-client-pub-key": e2ee.clientPubKey.toLowerCase(),
+  "x-model-pub-key": e2ee.modelPubKey.toLowerCase(),
+  "x-encryption-version": "2",
+});
+
+/** As nearai.rs: the longest wait for the stream to start, and for each next piece of it. */
+export const STREAM_FIRST_BYTE_MS = 300_000;
+export const STREAM_IDLE_MS = 60_000;
+/** A streamed reply larger than this is refused (a notes reply is tens of kilobytes). */
+export const STREAM_MAX_BYTES = 32 * 1024 * 1024;
+
+export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fetch?: typeof fetch; idleMs?: number; firstByteMs?: number }): NotesTransport {
   const base = (opts.baseUrl ?? NEAR_AI_BASE).replace(/\/$/, "");
   const doFetch = opts.fetch ?? fetch;
   const auth = { authorization: `Bearer ${opts.apiKey}` };
@@ -85,16 +100,63 @@ export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fe
       return bodyText(await doFetch(`${base}/audio/transcriptions`, { method: "POST", headers: auth, body: form, signal: AbortSignal.timeout(180_000) }));
     },
     async chat(body, e2ee) {
-      // End-to-end encryption headers, as nearai.rs e2ee_headers sends them. There is no plaintext request.
-      const encrypted: Record<string, string> = { "x-signing-algo": "ed25519", "x-client-pub-key": e2ee.clientPubKey.toLowerCase(), "x-model-pub-key": e2ee.modelPubKey.toLowerCase(), "x-encryption-version": "2" };
       const res = await doFetch(`${base}/chat/completions`, {
         method: "POST",
         // The signature covers the exact response bytes, so no compression in between.
-        headers: { ...auth, ...encrypted, "content-type": "application/json", "accept-encoding": "identity", "x-no-aliasing": "true" },
+        headers: { ...auth, ...e2eeHeaders(e2ee), "content-type": "application/json", "accept-encoding": "identity", "x-no-aliasing": "true" },
         body,
         signal: AbortSignal.timeout(180_000),
       });
       return bodyText(res);
+    },
+    /** The streamed notes: every byte kept as received, stopped only when nothing arrives for `idleMs`. */
+    async chatStream(body, e2ee, onProgress?: (p: StreamProgress) => void) {
+      const abort = new AbortController();
+      let timer = setTimeout(() => abort.abort(), opts.firstByteMs ?? STREAM_FIRST_BYTE_MS);
+      const idle = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => abort.abort(), opts.idleMs ?? STREAM_IDLE_MS);
+      };
+      try {
+        const res = await doFetch(`${base}/chat/completions`, {
+          method: "POST",
+          headers: { ...auth, ...e2eeHeaders(e2ee), "content-type": "application/json", accept: "text/event-stream", "accept-encoding": "identity", "x-no-aliasing": "true" },
+          body,
+          signal: abort.signal,
+        });
+        if (!res.ok || !res.body) return await bodyText(res);
+        const reader = res.body.getReader();
+        const parts: Uint8Array[] = [];
+        let bytes = 0;
+        let events = 0;
+        let tail = "";
+        const decoder = new TextDecoder();
+        for (;;) {
+          idle();
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value);
+          bytes += value.length;
+          if (bytes > STREAM_MAX_BYTES) throw new Error("NEAR AI's reply was far larger than notes can be, so Aftercall stopped reading it.");
+          // Count events by the lines that start them; the bytes themselves are kept untouched.
+          const lines = (tail + decoder.decode(value, { stream: true })).split("\n");
+          tail = lines.pop() ?? "";
+          events += lines.filter((l) => l.startsWith("data:") && !l.startsWith("data: [DONE]")).length;
+          onProgress?.({ bytes, events });
+        }
+        const all = new Uint8Array(bytes);
+        let at = 0;
+        for (const p of parts) {
+          all.set(p, at);
+          at += p.length;
+        }
+        return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(all);
+      } catch (e) {
+        if (abort.signal.aborted) throw new Error("NEAR AI stopped sending the notes, so Aftercall stopped waiting. Nothing was saved; try again.");
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
     },
     async get(path) {
       if (!isAllowedGetPath(path)) throw new Error("Not an allowed NEAR AI path");

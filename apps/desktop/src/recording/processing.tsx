@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as m from "motion/react-m";
 import { Lock, ShieldAlert, X } from "lucide-react";
-import type { TeeCheck } from "@aftercall/core";
+import type { TeeCheck, WritingProgress } from "@aftercall/core";
 import type { NotesDigest, TranscriptStats } from "../notesDigest";
 import { Button, Pill, RollingNumber, StageList, anyLayerOpen, cx, springs, type Stage, type StageState } from "../ui";
 
@@ -30,6 +30,8 @@ export interface StepsView {
   parts?: { done: number; total: number };
   /** Once transcribed: how long the transcript is and who spoke how much (counted on this Mac). */
   transcript?: TranscriptStats;
+  /** While the notes are written: parts done and tokens streamed back so far. */
+  writing?: WritingProgress;
   /** When the running step started (Date.now()), for its time so far. */
   since?: number;
   /** Who was on the call, for "You and Ines kept apart". */
@@ -58,7 +60,9 @@ function detail(id: StepId, v: StepsView): string {
     case "transcribe":
       return `Whisper in secure hardware · You and ${v.others ?? "the call"} kept apart`;
     case "summarise":
-      return "Transcript sealed on this Mac for the attested Qwen TEE; each item needs a quote from the call";
+      return v.writing && v.writing.sections > 1
+        ? `A long call, so in ${v.writing.sections} parts at once, each sealed on this Mac for the attested Qwen TEE; each item needs a quote from the call`
+        : "Transcript sealed on this Mac for the attested Qwen TEE; each item needs a quote from the call";
     case "signature":
       return "Signed over the exact request and response by the attested key";
     case "proof":
@@ -191,6 +195,43 @@ function TranscriptFacts({ stats, others }: { stats: TranscriptStats; others?: s
   );
 }
 
+/**
+ * While the notes stream back: "About 1,240 tokens so far", and for a long call how many
+ * parts are done ("2 of 5 parts done") or that the overall summary is being written.
+ * Counts only; the reply itself is encrypted to this Mac and read once it's complete.
+ */
+function WritingFacts({ w }: { w: WritingProgress }) {
+  const parts = w.sections > 1 ? (w.overall ? "All parts done, writing the overall summary" : `${w.sectionsDone} of ${w.sections} parts done`) : null;
+  const pct = w.sections > 1 ? Math.round(((w.sectionsDone + (w.overall ? 0.5 : 0)) / (w.sections + 1)) * 100) : null;
+  return (
+    <span className="mt-1 flex items-center gap-3 text-[13px] leading-[18px] text-ink-2">
+      {pct !== null && (
+        <span
+          role="progressbar"
+          aria-label="Notes written"
+          aria-valuemin={0}
+          aria-valuemax={w.sections}
+          aria-valuenow={w.sectionsDone}
+          aria-valuetext={parts ?? undefined}
+          className="relative h-1.5 max-w-[240px] flex-1 overflow-hidden rounded-full bg-well shadow-[inset_0_0_0_1px_var(--hairline)]"
+        >
+          <span className="absolute inset-y-0 left-0 rounded-full bg-verdigris transition-[width] duration-500 ease-calm" style={{ width: `${pct}%` }} />
+        </span>
+      )}
+      <span>
+        {parts ? `${parts} · ` : ""}
+        {w.tokens > 0 ? (
+          <>
+            about <span className="t-mono text-[13px] text-ink">{w.tokens.toLocaleString()}</span> {w.tokens === 1 ? "token" : "tokens"} so far
+          </>
+        ) : (
+          "waiting for the first words"
+        )}
+      </span>
+    </span>
+  );
+}
+
 /** The running step's time so far, a second at a time. Not announced. */
 function Elapsed({ since }: { since: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -208,7 +249,14 @@ function extraFor(id: StepId, v: StepsView, state: StageState): ReactNode {
     const p = partOf(v);
     return p ? <PartsBar done={v.parts?.done ?? p.at - 1} total={p.total} /> : null;
   }
-  if (id === "summarise" && (state === "active" || state === "done") && v.transcript) return <TranscriptFacts stats={v.transcript} others={v.others} />;
+  if (id === "summarise" && (state === "active" || state === "done") && (v.transcript || v.writing)) {
+    return (
+      <span className="flex flex-col">
+        {v.transcript && <TranscriptFacts stats={v.transcript} others={v.others} />}
+        {state === "active" && v.writing && <WritingFacts w={v.writing} />}
+      </span>
+    );
+  }
   return chips(id, v.checks);
 }
 
@@ -400,6 +448,8 @@ export function explainFailure(error: string, step: StepId): { title: string; bo
   if (/secure hardware check failed|not every summary tee passed|didn't verify|attest/.test(e) && step === "attest")
     return { title: "A secure hardware check failed", body: "Aftercall stops before sending anything when a check fails. Try again in a while." };
   if (/no audio left/.test(e)) return { title: "No audio to transcribe", body: "This recording's audio is gone, so there is nothing to make notes from." };
+  if (/stopped sending the notes|stopped before it was finished|stopped the reply partway|notes stream broke off/.test(e))
+    return { title: "NEAR AI stopped partway", body: "The notes didn't finish coming back, so nothing was saved. Try again: the transcript is kept, so the audio isn't paid for twice." };
   if (/network|fetch|timed? ?out|connect|dns|offline|error sending request/.test(e))
     return { title: "Couldn't reach NEAR AI", body: "Check the connection, then try again. Nothing is lost." };
   if (/signature/.test(e) && step === "signature")

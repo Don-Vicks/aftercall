@@ -261,3 +261,7 @@ test("what the proof doesn't show includes NEAR AI's data policy and older meeti
   assert.ok(NOT_PROVEN.some((l) => /Whisper can mishear/.test(l)), "the existing items stay");
   for (const l of NOT_PROVEN) assert.equal(l.split(/\.\s/).length, 1, `one sentence: ${l}`);
 });
+
+test("who said what: a likely name from the model is listed as not proven", () => {
+  assert.ok(NOT_PROVEN.some((l) => /^Who said what/.test(l) && /“likely”, from the model/.test(l) && /isn't checked like quotes/.test(l)));
+});

@@ -17,7 +17,7 @@ mod your_notes;
 #[doc(hidden)]
 pub mod test_api {
     pub use crate::attest::{QuoteReport, decode_hex, nvidia_keys, verify_quote, verify_quote_with};
-    pub use crate::nearai::{E2ee, chat, check_key, transcribe};
+    pub use crate::nearai::{E2ee, StreamProgress, chat, chat_stream_with, check_key, transcribe};
 }
 
 use std::path::PathBuf;
@@ -31,7 +31,7 @@ use recorder::{Events, Levels, QuietEvent, Recording, RecordingInfo, RecordingRe
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 /// The recording in progress: the recorder, what it was started for, and its clock.
 struct Live {
@@ -207,6 +207,8 @@ fn set_tray_clock(app: &AppHandle, seconds: u64, paused: bool) {
 
 /// The menu bar item for idle (`None`) or a recording (`Some(paused)`): its title, tooltip and menu.
 fn set_tray_recording(app: &AppHandle, recording: Option<(u64, bool)>) {
+    // ⌘⇧M is Aftercall's only while there's a moment to mark.
+    apply_mark_shortcut(app, recording.is_some());
     let Some(tray) = app.tray_by_id("main") else { return };
     match recording {
         Some((seconds, paused)) => {
@@ -228,6 +230,10 @@ fn set_tray_recording(app: &AppHandle, recording: Option<(u64, bool)>) {
 /// show it too.
 const RECORD_SHORTCUT: &str = "CmdOrCtrl+Shift+R";
 
+/// ⌘⇧M: mark this moment in your notes. Held system-wide only while a recording runs
+/// (and only when ⌘⇧R is allowed from any app), so other apps keep it the rest of the time.
+const MARK_SHORTCUT: &str = "CmdOrCtrl+Shift+M";
+
 /// Two triggers closer than this are one press.
 const PRESS_GAP: Duration = Duration::from_millis(400);
 
@@ -235,6 +241,10 @@ const PRESS_GAP: Duration = Duration::from_millis(400);
 /// shortcut and the menu item that shows it; whichever comes second is dropped.
 #[derive(Default)]
 struct PressGate(Mutex<Option<Instant>>);
+
+/// ⌘⇧M's own gate, so a mark right after ⌘⇧R isn't dropped as the same press.
+#[derive(Default)]
+struct MarkGate(PressGate);
 
 impl PressGate {
     fn accept(&self, now: Instant) -> bool {
@@ -334,6 +344,37 @@ fn apply_record_shortcut(app: &AppHandle, on: bool) {
     let state = app.state::<RecordShortcut>();
     state.wanted.store(on, Ordering::Relaxed);
     state.registered.store(shortcuts.is_registered(RECORD_SHORTCUT), Ordering::Relaxed);
+    let recording = app.state::<RecorderState>().0.lock().map(|s| s.is_some()).unwrap_or(false);
+    apply_mark_shortcut(app, recording);
+}
+
+/// Takes ⌘⇧M system-wide while a recording runs and you allow shortcuts from any app;
+/// gives it back otherwise. A clash is logged: ⌘⇧M then works only inside Aftercall.
+fn apply_mark_shortcut(app: &AppHandle, recording: bool) {
+    let shortcuts = app.global_shortcut();
+    let want = recording && app.state::<RecordShortcut>().wanted.load(Ordering::Relaxed);
+    let held = shortcuts.is_registered(MARK_SHORTCUT);
+    if want && !held {
+        if let Err(e) = shortcuts.register(MARK_SHORTCUT) {
+            eprintln!("shortcut: ⌘⇧M works only inside Aftercall: {e}");
+        }
+    } else if !want && held && let Err(e) = shortcuts.unregister(MARK_SHORTCUT) {
+        eprintln!("shortcut: couldn't give ⌘⇧M back: {e}");
+    }
+}
+
+/// Which of Aftercall's global shortcuts was pressed.
+fn is_mark_shortcut(shortcut: &Shortcut) -> bool {
+    MARK_SHORTCUT.parse::<Shortcut>().is_ok_and(|mark| mark.id() == shortcut.id())
+}
+
+/// ⌘⇧M pressed in any app while recording. The main window types the time into your
+/// notes; Aftercall stays in the background, so marking never takes you out of the call.
+fn mark_shortcut(app: &AppHandle) {
+    if !app.state::<MarkGate>().0.accept(Instant::now()) {
+        return;
+    }
+    let _ = app.emit_to("main", "shortcut:mark", ());
 }
 
 /// ⌘⇧R pressed in any app. Aftercall comes to the front and the main window does what
@@ -834,6 +875,16 @@ async fn nearai_chat(body: String, e2ee: nearai::E2ee) -> Result<String, String>
     nearai::chat(body, e2ee).await
 }
 
+/// The notes request, streamed: the same keys as `nearai_chat`, and progress (counts only)
+/// sent to the web view on `on_progress` as the encrypted reply arrives.
+#[tauri::command]
+async fn nearai_chat_stream(body: String, e2ee: nearai::E2ee, on_progress: tauri::ipc::Channel<nearai::StreamProgress>) -> Result<String, String> {
+    nearai::chat_stream(body, e2ee, |p| {
+        let _ = on_progress.send(p);
+    })
+    .await
+}
+
 #[tauri::command]
 async fn nearai_get(path: String) -> Result<String, String> {
     nearai::get(path).await
@@ -1113,8 +1164,13 @@ pub fn run() {
         // inside Aftercall (App.tsx).
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
+                .with_handler(|app, shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    if is_mark_shortcut(shortcut) {
+                        mark_shortcut(app);
+                    } else {
                         record_shortcut(app);
                     }
                 })
@@ -1122,6 +1178,7 @@ pub fn run() {
         )
         .manage(RecorderState::default())
         .manage(PressGate::default())
+        .manage(MarkGate::default())
         .manage(RecordShortcut::default())
         .manage(AgentsState::default())
         .invoke_handler(tauri::generate_handler![
@@ -1157,6 +1214,7 @@ pub fn run() {
             nearai_check_key,
             nearai_transcribe,
             nearai_chat,
+            nearai_chat_stream,
             nearai_get,
             tee_verify_quote,
             tee_nvidia_attest,
@@ -1358,6 +1416,14 @@ mod tests {
         assert_eq!(clock_text(3723), "1:02:03");
         assert_eq!(tray_title(754, false), "● 12:34");
         assert_eq!(tray_title(754, true), "Paused 12:34");
+    }
+
+    #[test]
+    fn the_mark_shortcut_is_its_own_key() {
+        let mark: Shortcut = MARK_SHORTCUT.parse().unwrap();
+        let record: Shortcut = RECORD_SHORTCUT.parse().unwrap();
+        assert!(is_mark_shortcut(&mark));
+        assert!(!is_mark_shortcut(&record), "⌘⇧R still opens the record sheet or your notes");
     }
 
     #[test]

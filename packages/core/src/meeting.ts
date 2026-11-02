@@ -147,6 +147,22 @@ export interface CrossChainPayout {
 
 export type FollowUp = EmailFollowUp | PaymentFollowUp;
 
+/** A name the summary model put to one "others" line of the transcript. Not verified. */
+export interface LikelySpeaker {
+  /** Index of the line in `Meeting.transcript` (0-based). */
+  line: number;
+  name: string;
+}
+
+/** The model's likely name for each "others" line that has one, by line index. */
+export function likelySpeakerAt(m: Pick<Meeting, "transcript" | "likelySpeakers">): Map<number, string> {
+  const names = new Map<number, string>();
+  for (const s of m.likelySpeakers ?? []) {
+    if (Number.isInteger(s.line) && m.transcript[s.line]?.speaker === "others" && s.name) names.set(s.line, s.name);
+  }
+  return names;
+}
+
 export interface Meeting {
   id: string;
   project: string;
@@ -170,6 +186,14 @@ export interface Meeting {
    * them. Never in a recap and never sent to connected agents.
    */
   yourNotes?: string;
+  /**
+   * Who probably spoke some of the "others" lines, as the summary model read it from
+   * what was said (someone introduces themselves, is addressed by name, or answers a
+   * question put to them by name). Model-inferred, never checked like quotes: show it
+   * as a hint ("likely"), never as fact. Only lines the model was sure about; absent on
+   * meetings made before it existed and when the model named nobody.
+   */
+  likelySpeakers?: LikelySpeaker[];
   /** Everyone the calendar event invited except you, with or without an email. */
   attendees?: Attendee[];
   /** The invited people who have an email address: where a recap can go. */

@@ -1,14 +1,20 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { AudioChunk, CostEstimate, Meeting, NearAiTransport, ProcessResult, ProofBundle, QuoteReport, TeeCheck, TranscriptCache } from "@aftercall/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import type { AudioChunk, CostEstimate, Meeting, NotesTransport, ProcessResult, ProofBundle, QuoteReport, StreamProgress, TeeCheck, TranscriptCache } from "@aftercall/core";
 import type { ProofOnChain } from "./near";
 
 /**
  * NEAR AI, Intel PCS and NVIDIA NRAS through the Rust side, which holds the key
  * in the Keychain and can reach services that don't allow browser requests.
  */
-export const nearAiTransport: NearAiTransport = {
+export const nearAiTransport: NotesTransport = {
   transcribe: (path, model, prompt) => invoke<string>("nearai_transcribe", { path, model, prompt }),
   chat: (body, e2ee) => invoke<string>("nearai_chat", { body, e2ee }),
+  // The notes, streamed: Rust keeps every byte for the signature check and sends counts as they arrive.
+  chatStream: (body, e2ee, onProgress) => {
+    const onProgressChannel = new Channel<StreamProgress>();
+    if (onProgress) onProgressChannel.onmessage = onProgress;
+    return invoke<string>("nearai_chat_stream", { body, e2ee, onProgress: onProgressChannel });
+  },
   get: (path) => invoke<string>("nearai_get", { path }),
   verifyQuote: (quote) => invoke<QuoteReport>("tee_verify_quote", { quote }),
   nvidiaAttest: (payload) => invoke<string>("tee_nvidia_attest", { payload }),

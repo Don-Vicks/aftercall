@@ -1,16 +1,19 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
-import { ArrowUpRight, MicOff, Pause, PenLine, PhoneOff, Play, VolumeX, X } from "lucide-react";
+import { ArrowUpRight, Flag, MicOff, Pause, PenLine, PhoneOff, Play, VolumeX, X } from "lucide-react";
 import { formatClock } from "@aftercall/core";
 import { isDesktop, recorder } from "../recorder";
 import { Button, IconButton, Meter, RollingNumber, cx, enter, exit, springs, toast, useLayer } from "../ui";
 import { NOTES_HELP, NotesArea, SavedLabel } from "./YourNotes";
+import { useTraceSampler } from "./CallTimeline";
+import { NOTES_FIELD, mark, onMark, useMarkShortcut } from "./marks";
 import {
   closeNotes,
   dismissCallEnded,
   dismissMicWarning,
   dismissSilentWarning,
+  getSession,
   isLive,
   levels,
   openNotes,
@@ -58,6 +61,20 @@ export function LivePill({ onOpenLive }: { onOpenLive: () => void }) {
   }, [live]);
 
   const warning = warningFor(s);
+
+  // ⌘⇧M and the timeline work on every page while recording.
+  useMarkShortcut();
+  useTraceSampler(live);
+  // Away from the live page, with your notes closed, a mark says where it went.
+  useEffect(
+    () =>
+      onMark((at) => {
+        const now = getSession();
+        if (now.onLivePage || now.drawerOpen) return;
+        toast({ id: "mark", text: `Marked ${formatClock(at)} in your notes`, tone: "verdigris", action: { label: "Show", onClick: openNotes } });
+      }),
+    [],
+  );
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-8 z-40 flex flex-col items-center gap-3 px-6">
@@ -168,6 +185,17 @@ function PillRow({ s, onOpenLive }: { s: RecordingSession; onOpenLive: () => voi
         </>
       ) : (
         <>
+          <IconButton
+            aria-label="Mark this moment"
+            shortcut="⌘⇧M"
+            className="rounded-full! bg-well text-ink!"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={mark}
+            disabled={stopping}
+            aria-keyshortcuts="Meta+Shift+M"
+          >
+            <Flag size={14} strokeWidth={2} aria-hidden="true" />
+          </IconButton>
           <Button
             variant="ghost"
             size="sm"
@@ -381,6 +409,8 @@ function NotesDrawer({ s }: { s: RecordingSession }) {
       <NotesArea
         ref={area}
         aria-labelledby={titleId}
+        aria-keyshortcuts="Meta+Shift+M"
+        {...{ [NOTES_FIELD]: "" }}
         value={s.notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={6}

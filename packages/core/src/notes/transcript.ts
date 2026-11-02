@@ -52,6 +52,31 @@ export function transcriptForPrompt(lines: TranscriptLine[]): string {
 }
 
 /**
+ * The transcript as the notes model reads it, each line numbered from 1 so the model
+ * can say which "Others" lines it can put a name to: "#3 [02:14] Others: ...".
+ * `context` lines (the end of the previous part of a long call) come first, unnumbered.
+ */
+export function numberedTranscript(lines: TranscriptLine[], context: TranscriptLine[] = []): string {
+  const own = lines.map((l, i) => `#${i + 1} ${transcriptForPrompt([l])}`).join("\n");
+  return context.length ? `Before this part (context only):\n${transcriptForPrompt(context)}\n\nThis part:\n${own}` : own;
+}
+
+/**
+ * About how many tokens `text` is for Qwen: one per four characters, and one per
+ * letter of Chinese, Japanese, Thai and the other scripts written without spaces.
+ * An estimate for deciding when to split a long call, never a bill.
+ */
+export function estimateTokens(text: string): number {
+  let spaceless = 0;
+  let other = 0;
+  for (const ch of text) {
+    if (SPACELESS_LETTER.test(ch)) spaceless++;
+    else other++;
+  }
+  return spaceless + Math.ceil(other / 4);
+}
+
+/**
  * Scripts written without spaces between words: Chinese, Japanese, Thai, Lao, Khmer
  * and Myanmar. In these a word can start or end at any letter.
  */

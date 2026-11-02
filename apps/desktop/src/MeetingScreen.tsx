@@ -1,15 +1,19 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
 import { decisionEvidence, formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type Evidence, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
 import { ExportMenu } from "./ExportMenu";
-import { EditItemButton, EditedMark, ItemEditor, useItemEditing } from "./ActionItemEditor";
+import { EditItemButton, EditedMark, ItemEditor, editButtonId, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
 import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, RollingNumber, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
-import { AllDone, BackPill, QuoteReveal, flashLine, useAllDone, useQuoteReveal } from "./Quote";
+import { AllDone, BackPill, QuoteReveal, flashLine, useAllDone, useQuoteReveal, withMoments } from "./Quote";
+import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { grow } from "./SettingsParts";
 import { freshKey, useFresh } from "./freshItems";
+// For the transcript's model-inferred speaker names.
+import { likelySpeakerAt } from "@aftercall/core";
+import { Tooltip } from "./ui";
 
 type Tab = "notes" | "transcript";
 
@@ -268,6 +272,20 @@ function Notes({
   const allDone = useAllDone(open, meeting.actionItems.length);
   const r = (i: number) => (entrance ? rise(i) : undefined);
   const jump = (e: Evidence, focusId: string) => handlers.onJumpTo(e.at, e.quote, focusId);
+  // j/k move through the action items; x ticks, e edits, ↵ shows the item's moment in the transcript.
+  const byId = new Map(meeting.actionItems.map((a) => [a.id, a]));
+  const roving = useRovingList(
+    meeting.actionItems.map((a) => a.id),
+    {
+      onTick: (id) => onToggleItem(id),
+      onEdit: onEditItem && ((id) => document.getElementById(editButtonId(`${meeting.id}:${id}`))?.click()),
+      onOpen: (id) => {
+        const e = byId.get(id)?.evidence;
+        if (e) jump(e, `action-${id}`);
+      },
+    },
+    { title: "Action items", words: { onOpen: "Show its moment in the transcript" } },
+  );
   // Items new since the notes were made keep a verdigris edge for a few seconds on screen, then it fades.
   const fresh = useFresh(meeting.id);
   useEffect(() => {
@@ -295,7 +313,7 @@ function Notes({
             <Avatar name="You" you size={22} decorative />
             Your notes <span className="font-medium text-muted">typed during the call</span>
           </h2>
-          <div className="selectable py-1 pl-[30px] font-serif text-[17px] leading-[27px] whitespace-pre-line text-ink">{meeting.yourNotes}</div>
+          <div className="selectable py-1 pl-[30px] font-serif text-[17px] leading-[27px] whitespace-pre-line text-ink">{withMoments(meeting.yourNotes, (at) => handlers.onJumpTo(at, "", "your-notes"))}</div>
         </section>
       )}
 
@@ -325,12 +343,16 @@ function Notes({
             >
               Action items
             </SectionTitle>
-            {agents && onOpenAgents && (
-              <button type="button" onClick={onOpenAgents} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
-                Coding agents
-              </button>
-            )}
+            <span className="flex items-center gap-4">
+              <ShortcutsHint onClick={roving.openHelp} />
+              {agents && onOpenAgents && (
+                <button type="button" onClick={onOpenAgents} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+                  Coding agents
+                </button>
+              )}
+            </span>
           </div>
+          {roving.sheet}
           <ul className="m-0 flex list-none flex-col border-t border-hairline p-0">
             {meeting.actionItems.map((item) => (
               <ActionRow
@@ -341,6 +363,7 @@ function Notes({
                 onEdit={onEditItem && ((fields) => onEditItem(item.id, fields))}
                 original={originalOf?.(item.id) ?? null}
                 fresh={fresh.isNew(freshKey.action(item.id))}
+                roving={roving.row(item.id)}
                 onJump={(e) => jump(e, `action-${item.id}`)}
               />
             ))}
@@ -447,6 +470,7 @@ function ActionRow({
   onEdit,
   original,
   fresh = false,
+  roving,
   onJump,
 }: {
   rowKey: string;
@@ -456,6 +480,8 @@ function ActionRow({
   original: ItemFields | null;
   /** New since the notes were made and not seen yet. */
   fresh?: boolean;
+  /** The keyboard focus row's props (j/k on the meeting page). */
+  roving?: ReturnType<ReturnType<typeof useRovingList>["row"]>;
   /** Shows the item's quote in the transcript. */
   onJump: (e: Evidence) => void;
 }) {
@@ -509,7 +535,17 @@ function ActionRow({
   }
 
   return (
-    <li id={`action-${item.id}`} tabIndex={-1} className={cx("group border-b border-hairline py-[13px] outline-none transition-shadow duration-[1200ms] ease-calm", fresh && "shadow-[inset_2px_0_0_var(--verdigris)]")} {...quote.bind}>
+    <li
+      {...roving}
+      {...quote.bind}
+      id={`action-${item.id}`}
+      tabIndex={-1}
+      onFocus={(e: FocusEvent) => {
+        roving?.onFocus();
+        (quote.bind as { onFocus?: (e: FocusEvent) => void }).onFocus?.(e);
+      }}
+      className={cx("group border-b border-hairline py-[13px] outline-none transition-shadow duration-[1200ms] ease-calm", fresh && "shadow-[inset_2px_0_0_var(--verdigris)]", roving && rovingRowClass)}
+    >
       <div className="flex items-center gap-3">
         <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} aria-describedby={item.evidence ? quoteId : undefined} />
         <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
@@ -616,7 +652,21 @@ function Transcript({
 
   const q = query.trim().toLowerCase();
   const lines = meeting.transcript.filter((l) => !q || l.text.toLowerCase().includes(q));
-  const turns = turnsOf(lines);
+  // Names the model put to some of the call's lines (by line index), never checked: a hint.
+  const likelyAt = likelySpeakerAt(meeting);
+  const likelyOf = new Map(meeting.transcript.map((l, i) => [l, likelyAt.get(i)] as const));
+  // A run of the call's lines splits where the likely name changes.
+  const turns = turnsOf(lines).flatMap((t): (Turn & { likely?: string })[] => {
+    if (t.speaker === "you" || likelyAt.size === 0) return [t];
+    const out: (Turn & { likely?: string })[] = [];
+    for (const l of t.lines) {
+      const likely = likelyOf.get(l);
+      const last = out[out.length - 1];
+      if (last && last.likely === likely) last.lines.push(l);
+      else out.push({ speaker: t.speaker, lines: [l], likely });
+    }
+    return out;
+  });
 
   return (
     <>
@@ -629,7 +679,7 @@ function Transcript({
         <details className="text-[13px] text-ink-2">
           <summary className="cursor-pointer font-semibold text-ink-2 hover:text-ink">How are names shown?</summary>
           <p className="m-0 mt-1.5 max-w-[320px]">
-            Your mic is You. The other side gets a name only when your calendar invited exactly one other person. Aftercall never identifies voices.
+            Your mic is You. The other side gets a name when your calendar invited exactly one other person, or, marked likely, when the model could tell from what was said (someone introduced themselves or was addressed by name). Likely names aren&apos;t checked like quotes. Aftercall never identifies voices.
           </p>
         </details>
       </div>
@@ -638,7 +688,8 @@ function Transcript({
         {turns.length === 0 && <p className="m-0 text-ink-2">{q ? `Nothing in this call matches “${query.trim()}”.` : "This meeting has no transcript."}</p>}
         {turns.map((turn, ti) => {
           const you = turn.speaker === "you";
-          const label = you ? "You" : them;
+          const likely = you ? undefined : turn.likely;
+          const label = you ? "You" : (likely ?? them);
           return (
             <div key={`${turn.lines[0].at}-${ti}`} className={cx("flex flex-col gap-1.5", you ? "items-end" : "items-start")} style={target ? undefined : rise(ti, 280)}>
               <span className="inline-flex items-center gap-2 text-[12px] text-muted">
@@ -650,9 +701,18 @@ function Transcript({
                   </>
                 ) : (
                   <>
-                    {named ? <Avatar name={label} size={24} decorative /> : <OthersMark />}
+                    {named && !likely ? <Avatar name={label} size={24} decorative /> : <OthersMark />}
                     <span className="font-semibold text-ink-2">{label}</span>
-                    {named && <span>from your calendar</span>}
+                    {likely ? (
+                      <Tooltip content="Named by the model from what was said; not checked like quotes">
+                        <span tabIndex={0} className="rounded-sm text-faint underline decoration-dotted decoration-1 underline-offset-[3px]">
+                          likely
+                          <span className="sr-only">: named by the model from what was said; not checked like quotes</span>
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      named && <span>from your calendar</span>
+                    )}
                     <span className="font-mono">{formatClock(turn.lines[0].at)}</span>
                   </>
                 )}

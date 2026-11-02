@@ -1,5 +1,6 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
-import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
+import { hasFullChecks, type ProofBundle, type ProofBundleV2, type ProofBundleV3 } from "./pipeline.ts";
+import type { SignatureResponse } from "../tee/checks.ts";
 import type { NoticeLog } from "../meeting.ts";
 import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
@@ -81,7 +82,7 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
       ok: onChain !== null && onChain.proof_hash === hash,
       detail: onChain ? (onChain.proof_hash === hash ? `sha256 ${hash.slice(0, 16)}…` : "The hash on NEAR is different") : "Nothing on NEAR to compare",
     },
-    ...(bundle.version === 2 ? signatureChecksV2(bundle) : signatureChecksV1(bundle)),
+    ...(bundle.version === 3 ? signatureChecksV3(bundle) : bundle.version === 2 ? signatureChecksV2(bundle) : signatureChecksV1(bundle)),
     {
       id: "confidential",
       label: "Private model",
@@ -109,7 +110,7 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
  * the bundle's `yourNotesHash`. No check when neither the proof nor the meeting has any.
  */
 function yourNotesCheck(bundle: ProofBundle, shown: ShownYourNotes): Check | null {
-  const recorded = bundle.version === 2 ? bundle.yourNotesHash : undefined;
+  const recorded = hasFullChecks(bundle) ? bundle.yourNotesHash : undefined;
   const label = "Your notes unchanged since signing";
   if (!recorded) {
     return shown.text ? { id: "your-notes", label, ok: false, detail: "Your notes aren't in the signed proof; they were added afterwards" } : null;
@@ -124,7 +125,7 @@ function yourNotesCheck(bundle: ProofBundle, shown: ShownYourNotes): Check | nul
   };
 }
 
-function signatureChecksV1(bundle: Exclude<ProofBundle, ProofBundleV2>): Check[] {
+function signatureChecksV1(bundle: Exclude<ProofBundle, ProofBundleV2 | ProofBundleV3>): Check[] {
   const sig = bundle.signature;
   const signer = sig.text && sig.signature ? recoverPersonalSign(sig.text, sig.signature) : null;
   const signedParts = sig.text?.split(":") ?? [];
@@ -151,12 +152,12 @@ function signatureChecksV1(bundle: Exclude<ProofBundle, ProofBundleV2>): Check[]
   ];
 }
 
-function signatureChecksV2(bundle: ProofBundleV2): Check[] {
-  const sig = bundle.signature;
+/** One signed request of a v2 or v3 proof: who signed, whether it covers the recorded hashes, and the TEE that binds the signer. */
+function signedCall(bundle: ProofBundleV2 | ProofBundleV3, sig: SignatureResponse, requestHash: string, responseHash: string) {
   const signer = signerOf(sig, bundle.signingAlgo);
   const parts = signedParts(sig.text ?? "");
   const kind = signatureKind(sig);
-  const coversExchange = parts.request === bundle.requestHash && parts.response === bundle.responseHash && (parts.model === null || parts.model === bundle.summaryModel);
+  const coversExchange = parts.request === requestHash && parts.response === responseHash && (parts.model === null || parts.model === bundle.summaryModel);
   // The signer must be a TEE of the right kind whose recorded report data binds its key and our nonce.
   const scope = kind === "gateway" ? "gateway" : kind === "provider_tee" ? "model" : null;
   const tee = bundle.evidence.find(
@@ -168,7 +169,39 @@ function signatureChecksV2(bundle: ProofBundleV2): Check[] {
       e.nonce === bundle.attestationNonce.summary &&
       e.reportData === expectedReportData(e.signingAddress, e.nonce),
   );
-  const algo = bundle.signingAlgo === "ed25519" ? "Ed25519" : "ECDSA";
+  return { signer, coversExchange, tee };
+}
+
+const algoName = (b: ProofBundleV2 | ProofBundleV3) => (b.signingAlgo === "ed25519" ? "Ed25519" : "ECDSA");
+
+/** "Signer ran the attested software", for one TEE that signed. */
+function composeCheck(tee: ProofBundleV2["evidence"][number]): Check {
+  return {
+    id: "compose",
+    label: "Signer ran the attested software",
+    ok: tee.composeHash.length === 64 && tee.mrConfigId === expectedMrConfig(tee.composeHash),
+    detail: `Recorded mr_config is 01 + sha256 of the attested compose (${tee.composeHash.slice(0, 12)}…)`,
+  };
+}
+
+/** "Transcript encrypted to the attested model": the key recorded is bound in the summary TEE's recorded report data. */
+function e2eeCheck(bundle: ProofBundleV2 | ProofBundleV3): Check {
+  const e2eeTee = bundle.e2ee.used ? bundle.evidence.find((e) => e.scope === "model" && e.model === bundle.summaryModel && e.signingAddress === strip0x(bundle.e2ee.modelKey ?? "")) : undefined;
+  return {
+    id: "e2ee",
+    label: "Transcript encrypted to the attested model",
+    ok: !!e2eeTee && e2eeTee.reportData === expectedReportData(e2eeTee.signingAddress, e2eeTee.nonce),
+    detail: bundle.e2ee.used
+      ? e2eeTee
+        ? "The key the app encrypted to is bound in the summary TEE's recorded report data"
+        : "The key the app encrypted to isn't one the app recorded"
+      : `Not end to end: ${bundle.e2ee.reason ?? "unavailable"}`,
+  };
+}
+
+function signatureChecksV2(bundle: ProofBundleV2): Check[] {
+  const { signer, coversExchange, tee } = signedCall(bundle, bundle.signature, bundle.requestHash, bundle.responseHash);
+  const algo = algoName(bundle);
   const checks: Check[] = [
     {
       id: "signed",
@@ -185,25 +218,57 @@ function signatureChecksV2(bundle: ProofBundleV2): Check[] {
         : "The signer isn't bound in any quote the app recorded",
     },
   ];
-  if (tee) {
-    checks.push({
-      id: "compose",
-      label: "Signer ran the attested software",
-      ok: tee.composeHash.length === 64 && tee.mrConfigId === expectedMrConfig(tee.composeHash),
-      detail: `Recorded mr_config is 01 + sha256 of the attested compose (${tee.composeHash.slice(0, 12)}…)`,
-    });
+  if (tee) checks.push(composeCheck(tee));
+  checks.push(e2eeCheck(bundle));
+  return checks;
+}
+
+/**
+ * A long call's proof: the same checks as version 2, each over every request. One
+ * failing request fails the line, and the line says which.
+ */
+function signatureChecksV3(bundle: ProofBundleV3): Check[] {
+  const calls = Array.isArray(bundle.calls) ? bundle.calls : [];
+  const name = (c: ProofBundleV3["calls"][number]) => (c.role === "overall" ? "the overall summary" : `part ${c.part ?? "?"}`);
+  const results = calls.map((c) => ({ c, ...signedCall(bundle, c.signature, c.requestHash, c.responseHash) }));
+  const algo = algoName(bundle);
+  const n = calls.length;
+  const unsigned = results.find((r) => !r.signer);
+  const uncovered = results.find((r) => r.signer && !r.coversExchange);
+  const unbound = results.find((r) => !r.tee);
+  const failedTee = results.find((r) => r.tee && !r.tee.verified);
+  const signers = [...new Set(results.map((r) => r.signer).filter((s): s is string => !!s))];
+  const checks: Check[] = [
+    {
+      id: "signed",
+      label: "Summary signed inside secure hardware",
+      ok: n > 0 && !unsigned && !uncovered,
+      detail:
+        n === 0
+          ? "The proof lists no signed requests"
+          : unsigned
+            ? `The ${algo} signature for ${name(unsigned.c)} didn't verify`
+            : uncovered
+              ? `The signature for ${name(uncovered.c)} doesn't cover its request and response`
+              : `${algo} signatures by ${signers.map((s) => `${s.slice(0, 10)}…`).join(", ")} over the exact request and response of all ${n} requests`,
+    },
+    {
+      id: "attested",
+      label: "Signer was attested",
+      ok: n > 0 && !unbound && !failedTee,
+      detail: unbound
+        ? `The signer of ${name(unbound.c)} isn't bound in any quote the app recorded`
+        : failedTee
+          ? `The signer of ${name(failedTee.c)} is in a quote the app recorded a failed check for`
+          : `Every signing key is in the report data of a TEE quote, next to this meeting's nonce`,
+    },
+  ];
+  const tees = [...new Map(results.filter((r) => r.tee).map((r) => [r.tee!.signingAddress, r.tee!])).values()];
+  if (tees.length) {
+    const bad = tees.find((t) => !composeCheck(t).ok);
+    checks.push(bad ? composeCheck(bad) : composeCheck(tees[0]));
   }
-  const e2eeTee = bundle.e2ee.used ? bundle.evidence.find((e) => e.scope === "model" && e.model === bundle.summaryModel && e.signingAddress === strip0x(bundle.e2ee.modelKey ?? "")) : undefined;
-  checks.push({
-    id: "e2ee",
-    label: "Transcript encrypted to the attested model",
-    ok: !!e2eeTee && e2eeTee.reportData === expectedReportData(e2eeTee.signingAddress, e2eeTee.nonce),
-    detail: bundle.e2ee.used
-      ? e2eeTee
-        ? "The key the app encrypted to is bound in the summary TEE's recorded report data"
-        : "The key the app encrypted to isn't one the app recorded"
-      : `Not end to end: ${bundle.e2ee.reason ?? "unavailable"}`,
-  });
+  checks.push(e2eeCheck(bundle));
   return checks;
 }
 
@@ -213,7 +278,7 @@ function signatureChecksV2(bundle: ProofBundleV2): Check[] {
  * expired an hour after the meeting, but it is still NVIDIA's signed statement.
  */
 export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null): Promise<Check | null> {
-  if (bundle.version !== 2) return null;
+  if (!hasFullChecks(bundle)) return null;
   const tee = bundle.evidence.find((e) => e.nvidiaToken);
   if (!tee?.nvidiaToken) return null;
   const label = "NVIDIA attested the signer's GPUs";
@@ -231,9 +296,9 @@ export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null): Pr
   };
 }
 
-/** The app's own checks from a v2 proof, as recorded when the meeting was processed. */
+/** The app's own checks from a v2 or v3 proof, as recorded when the meeting was processed. */
 export function recordedChecks(bundle: ProofBundle): TeeCheck[] | null {
-  return bundle.version === 2 ? bundle.checks : null;
+  return hasFullChecks(bundle) ? bundle.checks : null;
 }
 
 export interface CheckGroup {
@@ -263,7 +328,7 @@ export const NOT_PROVEN = [
   "That the transcript is accurate: Whisper can mishear names and numbers.",
   "That this transcription came from the attested Whisper TEE: NEAR AI signs chat responses, not transcriptions.",
   "That everyone on the call agreed to be recorded: Aftercall asks you to confirm it, and can't check it.",
-  "Who said what: “You” is your microphone and the rest is the call's audio, and a name on the call's side comes from your calendar, not the voice.",
+  "Who said what: “You” is your microphone and the rest is the call's audio; a name on the call's side comes from your calendar or, marked “likely”, from the model reading what was said (an introduction, someone addressed by name), never from the voice, and isn't checked like quotes.",
   "When your notes were typed: the proof shows they haven't changed since the notes were made, not that you typed them during the call.",
   "What NEAR AI keeps or trains on: that is set by NEAR AI's own policy, not shown by these checks.",
   "That every older meeting's transcript was end-to-end encrypted: earlier versions of the app could send it over TLS when encryption wasn't available, and such a meeting's proof says so.",
@@ -275,7 +340,7 @@ export const NOT_PROVEN = [
  * re-run (the transcript isn't public). Null for bundles made before it was recorded.
  */
 export function droppedLine(bundle: ProofBundle): string | null {
-  if (bundle.version !== 2 || !bundle.dropped) return null;
+  if (!hasFullChecks(bundle) || !bundle.dropped) return null;
   const { decisions, actionItems, followUps } = bundle.dropped;
   const total = decisions + actionItems + followUps;
   if (total === 0) return "Every item the model proposed had an exact quote in the transcript.";
@@ -318,8 +383,8 @@ export function noticeLine(notice: NoticeLog | undefined, opts: { timeZone?: str
  * when one was logged). Proofs made before Aftercall recorded them have neither, so
  * their missing notice means "not kept then", not "nobody was told".
  */
-export function hasStatements(bundle: ProofBundle): bundle is ProofBundleV2 {
-  return bundle.version === 2 && (bundle.dropped !== undefined || bundle.notice !== undefined);
+export function hasStatements(bundle: ProofBundle): bundle is ProofBundleV2 | ProofBundleV3 {
+  return hasFullChecks(bundle) && (bundle.dropped !== undefined || bundle.notice !== undefined);
 }
 
 /** Public link payload: everything the Verify page needs, base64url in the URL fragment. */

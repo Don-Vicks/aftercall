@@ -10,6 +10,8 @@ export * from "./notes/build.ts";
 export * from "./notes/rematch.ts";
 export * from "./notes/pipeline.ts";
 export * from "./notes/schema.ts";
+export * from "./notes/sections.ts";
+export * from "./notes/stream.ts";
 export * from "./notes/transcript.ts";
 export * from "./notes/verify.ts";
 export * from "./notes/proof.ts";

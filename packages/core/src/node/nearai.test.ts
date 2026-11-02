@@ -10,10 +10,10 @@ import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
 import { MissingKeyError, apiKeyFrom, isAllowedGetPath, nodeNearAiTransport } from "./nearai.ts";
 import { formatSampleNotes, runSampleNotes } from "./sampleNotes.ts";
-import type { NearAiTransport } from "../notes/pipeline.ts";
+import type { NotesTransport } from "../notes/pipeline.ts";
 import { sha256Hex } from "../notes/verify.ts";
 import { encryptTo } from "../tee/e2ee.ts";
-import { attestationFor, decodeQuote, fakeNras, teeKey } from "../tee/testkit.ts";
+import { attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey } from "../tee/testkit.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..", "..");
@@ -100,12 +100,44 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
   }
 });
 
+test("the Node transport streams the notes: exact bytes, the same headers, progress, and an idle limit instead of a total one", async () => {
+  const stream = sseStream(["a", "b", "c"], { id: "chatcmpl-9" }).replace("\n\n", "\r\n\r\n");
+  let stall = false;
+  const server = createServer(async (req, res) => {
+    const sent = await body(req);
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    if (stall) return res.write(stream.slice(0, 20)); // then nothing more
+    if (req.headers["x-encryption-version"] !== "2" || req.headers["accept-encoding"] !== "identity" || sent.toString() !== "{}") return res.end("wrong");
+    // In three writes with pauses, the way a stream arrives.
+    const thirds = [stream.slice(0, 40), stream.slice(40, 200), stream.slice(200)];
+    for (const part of thirds) {
+      res.write(part);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    res.end();
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address() as { port: number };
+  try {
+    const t = nodeNearAiTransport({ apiKey: "sk-test", baseUrl: `http://127.0.0.1:${port}/v1`, idleMs: 300 });
+    const seen: number[] = [];
+    const got = await t.chatStream("{}", { clientPubKey: "a1".repeat(32), modelPubKey: "b2".repeat(32) }, (p) => seen.push(p.events));
+    assert.equal(got, stream, "every byte back as received, CRLF and all");
+    assert.ok(seen.length >= 2 && seen.at(-1) === 4, `events seen: ${seen}`);
+    stall = true;
+    await assert.rejects(t.chatStream("{}", { clientPubKey: "a1".repeat(32), modelPubKey: "b2".repeat(32) }), /stopped sending the notes, so Aftercall stopped waiting/);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
+});
+
 /**
  * A fake NEAR AI that "transcribes" each stem from the sample's script and otherwise
  * behaves like the real API: real keys bound in quotes, GPU tokens signed by a fake
  * NRAS, the reply encrypted to our key, the exchange signed (see tee/testkit.ts).
  */
-async function fakeNearAi(notes: object): Promise<NearAiTransport> {
+async function fakeNearAi(notes: object): Promise<NotesTransport> {
   const nv = await fakeNras();
   const gateway = teeKey("ed25519");
   const summary = teeKey("ed25519");
@@ -120,9 +152,11 @@ async function fakeNearAi(notes: object): Promise<NearAiTransport> {
       const segments = script.lines.filter((l) => l.speaker === speaker).map((l) => ({ start: l.at, end: l.at + 3, text: ` ${l.text}` }));
       return JSON.stringify({ text: segments.map((s) => s.text).join(""), segments });
     },
-    async chat(request, e2ee) {
-      const content = e2ee ? encryptTo(JSON.stringify(notes), e2ee.clientPubKey) : JSON.stringify(notes);
-      const response = JSON.stringify({ id: "chatcmpl-sample", choices: [{ message: { content } }] });
+    async chat() {
+      throw new Error("the notes are always streamed");
+    },
+    async chatStream(request, e2ee) {
+      const response = sseStream(piecesOf(JSON.stringify(notes), 11), { id: "chatcmpl-sample", encrypt: (p) => encryptTo(p, e2ee.clientPubKey) });
       last = { request, response };
       return response;
     },

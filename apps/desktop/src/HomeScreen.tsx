@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
-import { ArrowRight, Check, KeyRound, Link2, Mic, ShieldCheck } from "lucide-react";
-import { formatClock, formatUsdc, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
+import { ArrowRight, CalendarClock, Check, KeyRound, Link2, Mic, ShieldCheck } from "lucide-react";
+import { formatClock, formatUsdc, meetingTime, startOfDay, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { isDesktop } from "./recorder";
@@ -12,6 +12,9 @@ import { calendar } from "./calendar";
 import { MeetingRow, meetingRow, shortWhen } from "./MeetingRow";
 import { Avatar, AvatarStack, Button, Card, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, deferred, enter, exit, springs, type DeferredHandle } from "./ui";
 import { sampleScripts, type SampleScript } from "./sampleRecordings";
+import { preselectEvent, previewEvent } from "./recording/RecordSheet";
+import { ShortcutsHint, rovingCardClass, useRovingList } from "./primitives/useRovingList";
+import { plural } from "./library";
 
 /** A recording in progress, for the live card. Wired by the live-recording work. */
 export interface HomeLive {
@@ -39,6 +42,9 @@ function greeting(): string {
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
 
 const hhmm = (unix: number) => new Date(unix * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+/** An event this close (or under way) takes the Record card's place as Next up. */
+const NEXT_UP_SECONDS = 60 * 60;
 
 export function HomeScreen({
   meetings,
@@ -71,6 +77,8 @@ export function HomeScreen({
   const [setup, setSetup] = useState<{ nearAi: boolean; near: boolean } | null>(null);
   const [upcoming, setUpcoming] = useState<CalendarEvent[]>([]);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  // The browser preview has no calendar: the same labelled sample event the record sheet shows.
+  const [sampleEvent] = useState(() => (isDesktop ? null : previewEvent()));
 
   useEffect(() => {
     if (!isDesktop) return setSetup({ nearAi: false, near: false });
@@ -141,24 +149,37 @@ export function HomeScreen({
   const nudge = setup && !setup.nearAi ? "nearAi" : setup && !setup.near ? "near" : null;
   let section = 0;
 
+  const events = sampleEvent ? [sampleEvent] : upcoming;
+  const next = live ? undefined : events.find((e) => e.end > now && e.start <= now + NEXT_UP_SECONDS);
+  const later = events.filter((e) => e !== next);
+  /** Record for one event: the sheet opens with it picked. */
+  const recordFor = (e: CalendarEvent) => {
+    preselectEvent(e);
+    onNewRecording();
+  };
+  const week = weekOf(meetings, sampleId, Date.now());
+
   return (
     <Page>
-      <header className="flex flex-wrap items-end justify-between gap-6" style={rise(section++)}>
+      <header className="flex flex-col gap-4" style={rise(section++)}>
         <div className="flex flex-col gap-1.5">
           <span className="t-eyebrow text-muted">{today}</span>
           <h1 className="t-display m-0">{greeting()}</h1>
         </div>
-        {allVerified && (
-          <span className="flex items-center gap-2 text-[13px] text-ink-2">
-            <ShieldCheck size={14} strokeWidth={2} className="text-verdigris" aria-hidden="true" />
-            Every meeting this week verified
-          </span>
-        )}
+        {week.meetings > 0 && <ThisWeek week={week} allVerified={allVerified} />}
       </header>
 
-      {live ? <LiveCard live={live} onOpen={onOpenLive} style={rise(section++)} /> : <RecordCard onClick={onNewRecording} style={rise(section++)} />}
+      {live ? (
+        <LiveCard live={live} onOpen={onOpenLive} style={rise(section++)} />
+      ) : next ? (
+        <NextUpCard event={next} sample={Boolean(sampleEvent)} onRecord={() => recordFor(next)} style={rise(section++)} />
+      ) : (
+        <RecordCard onClick={onNewRecording} style={rise(section++)} />
+      )}
 
-      {upcoming.length > 0 && <ComingUp events={upcoming} now={now} recording={Boolean(live)} onRecord={onNewRecording} style={rise(section++)} />}
+      {later.length > 0 && (
+        <ComingUp events={later} now={now} recording={Boolean(live)} title={next ? "Later today" : "Coming up"} onRecord={recordFor} style={rise(section++)} />
+      )}
 
       <NeedsYou meetings={meetings} recordings={recordings} sampleId={sampleId} handlersFor={handlersFor} onOpenMeeting={onOpenMeeting} onOpenWallet={onOpenWallet} style={rise(section++)} />
 
@@ -258,11 +279,25 @@ function LiveCard({ live, onOpen, style }: { live: HomeLive; onOpen?: () => void
   );
 }
 
-function ComingUp({ events, now, recording, onRecord, style }: { events: CalendarEvent[]; now: number; recording: boolean; onRecord: () => void; style?: CSSProperties }) {
+function ComingUp({
+  events,
+  now,
+  recording,
+  title,
+  onRecord,
+  style,
+}: {
+  events: CalendarEvent[];
+  now: number;
+  recording: boolean;
+  title: string;
+  onRecord: (e: CalendarEvent) => void;
+  style?: CSSProperties;
+}) {
   return (
     <section aria-labelledby="h-upcoming" className="flex flex-col gap-3.5" style={style}>
       <SectionTitle id="h-upcoming" count="from your calendar">
-        Coming up
+        {title}
       </SectionTitle>
       <div className="flex flex-col">
         {events.map((e, i) => {
@@ -270,14 +305,14 @@ function ComingUp({ events, now, recording, onRecord, style }: { events: Calenda
           const people = e.attendees.map((a) => a.name || a.email).filter(Boolean);
           return (
             <div key={`${e.title}-${e.start}`} className="flex items-center gap-4 border-b border-hairline px-1 py-3.5">
-              <span className={cx("w-[52px] shrink-0 font-mono text-[13px]", i === 0 ? "text-ink" : "text-ink-2")}>{hhmm(e.start)}</span>
+              <span className={cx("w-16 shrink-0 font-mono text-[13px] whitespace-nowrap", i === 0 ? "text-ink" : "text-ink-2")}>{hhmm(e.start)}</span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate font-semibold">{e.title || "Untitled event"}</span>
                 <span className={cx("text-[13px]", soon ? "font-medium text-verdigris" : "text-muted")}>{soon ?? `Until ${hhmm(e.end)}`}</span>
               </span>
               {people.length > 0 && <AvatarStack people={people} max={3} size={28} ring="raised" />}
               {!recording && (
-                <Button size="sm" variant={i === 0 && soon ? "primary" : "secondary"} onClick={onRecord} icon={<span aria-hidden="true" className="size-[7px] rounded-full bg-current" />}>
+                <Button size="sm" variant={i === 0 && soon ? "primary" : "secondary"} onClick={() => onRecord(e)} icon={<span aria-hidden="true" className="size-[7px] rounded-full bg-current" />}>
                   Record
                 </Button>
               )}
@@ -285,6 +320,253 @@ function ComingUp({ events, now, recording, onRecord, style }: { events: Calenda
           );
         })}
       </div>
+    </section>
+  );
+}
+
+/** "Starts in 6 min", "Starting now", "Started 4 min ago", with the minutes rolling. */
+function Countdown({ start }: { start: number }) {
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now() / 1000), 5000);
+    return () => clearInterval(t);
+  }, []);
+  const ahead = start - now;
+  if (ahead > 30) {
+    const min = Math.ceil(ahead / 60);
+    return (
+      <>
+        Starts in <RollingNumber value={min} /> min
+      </>
+    );
+  }
+  if (ahead > -60) return <>Starting now</>;
+  const ago = Math.floor(-ahead / 60);
+  return (
+    <>
+      Started <RollingNumber value={ago} /> min ago
+    </>
+  );
+}
+
+/**
+ * Next up: the calendar event starting within the hour (or under way), in the Record
+ * card's place. One tap opens the record sheet with this event already picked; consent
+ * is still asked there, every time.
+ */
+function NextUpCard({ event, sample, onRecord, style }: { event: CalendarEvent; sample: boolean; onRecord: () => void; style?: CSSProperties }) {
+  const people = event.attendees.map((a) => a.name || a.email.split("@")[0]).filter(Boolean);
+  return (
+    <Card as="button" interactive pad="none" onClick={onRecord} style={style} className="flex w-full items-center gap-5 px-6 py-[22px]" aria-label={`Record ${event.title || "the next event"}`}>
+      <span aria-hidden="true" className="inline-flex shrink-0">
+        {people.length > 0 ? (
+          <AvatarStack people={people} max={2} size={44} ring="elevated" />
+        ) : (
+          <span className="inline-flex size-[52px] items-center justify-center rounded-full bg-verdigris-tint text-verdigris">
+            <CalendarClock size={22} strokeWidth={1.75} />
+          </span>
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="t-eyebrow text-muted">Next up · {sample ? "a sample event, browser preview" : "from your calendar"}</span>
+        <span className="t-heading truncate">{event.title || "Untitled event"}</span>
+        <span className="truncate text-ink-2">
+          <span className="font-medium text-verdigris">
+            <Countdown start={event.start} />
+          </span>
+          <span className="text-muted"> · </span>
+          <span className="font-mono text-[13px]">
+            {hhmm(event.start)}–{hhmm(event.end)}
+          </span>
+          {people.length > 0 && (
+            <>
+              <span className="text-muted"> · </span>
+              {people.length === 1 ? people[0] : `${people[0]} and ${plural(people.length - 1, "other")}`}
+            </>
+          )}
+        </span>
+      </span>
+      <span className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] bg-record px-4 font-semibold text-white">
+        <span aria-hidden="true" className="size-2 rounded-full bg-white" />
+        Record
+      </span>
+    </Card>
+  );
+}
+
+interface WeekDay {
+  /** Midnight, ms. */
+  day: number;
+  meetings: number;
+  items: number;
+  closed: number;
+  future: boolean;
+  today: boolean;
+}
+
+interface Week {
+  meetings: number;
+  items: number;
+  closed: number;
+  paid: number;
+  sent: number;
+  days: WeekDay[];
+  /** True when the only meeting this week is the sample. */
+  sample: boolean;
+}
+
+/**
+ * This week, Monday to Sunday, from the meetings' own notes: how many meetings, how
+ * many of their action items are ticked, and what was paid or sent from them. The
+ * sample meeting counts only when it's the only one, and the line says so.
+ */
+function weekOf(meetings: Meeting[], sampleId: string | undefined, now: number): Week {
+  const monday = new Date(startOfDay(now));
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const days: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const day = d.getTime();
+    return { day, meetings: 0, items: 0, closed: 0, future: day > startOfDay(now), today: day === startOfDay(now) };
+  });
+  const inWeek = (mt: Meeting) => {
+    const t = meetingTime(mt, now);
+    return t !== null && t >= monday.getTime() && t < days[6].day + 86_400_000;
+  };
+  const real = meetings.filter((mt) => mt.id !== sampleId && inWeek(mt));
+  const sampleOnly = real.length === 0;
+  const counted = sampleOnly ? meetings.filter((mt) => mt.id === sampleId && inWeek(mt)) : real;
+  const week: Week = { meetings: counted.length, items: 0, closed: 0, paid: 0, sent: 0, days, sample: sampleOnly && counted.length > 0 };
+  for (const mt of counted) {
+    const day = days.find((d) => d.day === startOfDay(meetingTime(mt, now) ?? now));
+    const closed = mt.actionItems.filter((a) => a.done).length;
+    week.items += mt.actionItems.length;
+    week.closed += closed;
+    week.paid += mt.followUps.filter((f) => f.kind === "payment" && f.status === "paid").length;
+    week.sent += mt.followUps.filter((f) => f.kind === "email" && f.status === "sent").length;
+    if (day) {
+      day.meetings += 1;
+      day.items += mt.actionItems.length;
+      day.closed += closed;
+    }
+  }
+  return week;
+}
+
+const DAY_LETTER = ["M", "T", "W", "T", "F", "S", "S"];
+
+/** What each day's dot last showed, so coming back to Today after ticking elsewhere fills it from there. */
+const dotMemory = new Map<number, number>();
+
+/** One day: empty ring, filling clockwise as that day's action items are ticked. */
+function DayDot({ d }: { d: WeekDay }) {
+  const r = 5.5;
+  const c = 2 * Math.PI * (r / 2);
+  const share = d.items ? d.closed / d.items : d.meetings ? 1 : 0;
+  const [shown, setShown] = useState(() => dotMemory.get(d.day) ?? share);
+  useEffect(() => {
+    dotMemory.set(d.day, share);
+    if (shown === share) return;
+    // After the page has arrived, so the fill is seen moving.
+    const t = setTimeout(() => setShown(share), 320);
+    return () => clearTimeout(t);
+  }, [share, shown, d.day]);
+  const name = new Date(d.day).toLocaleDateString([], { weekday: "long" });
+  const label = d.meetings === 0 ? `${name}: no meetings` : `${name}: ${plural(d.meetings, "meeting")}${d.items ? `, ${d.closed} of ${d.items} action items closed` : ""}`;
+  return (
+    <span role="img" aria-label={label} title={label} className="flex flex-col items-center gap-1">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        {d.meetings > 0 ? (
+          <>
+            <circle cx="7" cy="7" r={r} fill="none" stroke="var(--verdigris)" strokeWidth="1.5" opacity="0.55" />
+            <circle
+              cx="7"
+              cy="7"
+              r={r / 2}
+              fill="none"
+              stroke="var(--verdigris)"
+              strokeWidth={r}
+              strokeDasharray={`${shown * c} ${c}`}
+              transform="rotate(-90 7 7)"
+              style={{ transition: "stroke-dasharray 520ms var(--ease)" }}
+            />
+          </>
+        ) : (
+          <circle cx="7" cy="7" r={d.future ? 4.5 : 2} fill={d.future ? "none" : "var(--faint)"} stroke={d.future ? "var(--hairline)" : "none"} strokeWidth="1.25" />
+        )}
+      </svg>
+      <span className={cx("font-mono text-[10px] leading-none", d.today ? "font-medium text-ink" : "text-muted")}>{DAY_LETTER[(new Date(d.day).getDay() + 6) % 7]}</span>
+    </span>
+  );
+}
+
+/** "This week: 3 meetings · 4 of 7 action items closed · 1 payment sent", with a dot per day. */
+function ThisWeek({ week, allVerified }: { week: Week; allVerified: boolean }) {
+  const parts: ReactNode[] = [
+    <span key="m">
+      <span className="font-mono text-ink">
+        <RollingNumber value={week.meetings} />
+      </span>{" "}
+      {week.meetings === 1 ? "meeting" : "meetings"}
+      {week.sample && <span className="text-muted"> (the sample)</span>}
+    </span>,
+  ];
+  if (week.items > 0) {
+    parts.push(
+      <span key="a">
+        <span className="font-mono text-ink">
+          <RollingNumber value={week.closed} remember="today-week-closed" />
+        </span>{" "}
+        of <span className="font-mono text-ink">{week.items}</span> action {week.items === 1 ? "item" : "items"} closed
+      </span>,
+    );
+  }
+  if (week.paid > 0) {
+    parts.push(
+      <span key="p">
+        <span className="font-mono text-ink">
+          <RollingNumber value={week.paid} remember="today-week-paid" />
+        </span>{" "}
+        {week.paid === 1 ? "payment" : "payments"} sent
+      </span>,
+    );
+  }
+  if (week.sent > 0) {
+    parts.push(
+      <span key="r">
+        <span className="font-mono text-ink">
+          <RollingNumber value={week.sent} remember="today-week-sent" />
+        </span>{" "}
+        {week.sent === 1 ? "recap" : "recaps"} sent
+      </span>,
+    );
+  }
+  if (allVerified) {
+    parts.push(
+      <span key="v" className="inline-flex items-center gap-1.5">
+        <ShieldCheck size={13} strokeWidth={2} className="text-verdigris" aria-hidden="true" />
+        all verified
+      </span>,
+    );
+  }
+  return (
+    <section aria-label="This week" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+      <span className="flex items-center gap-2.5">
+        <span className="t-eyebrow text-muted">This week</span>
+        <span className="flex gap-1.5">
+          {week.days.map((d) => (
+            <DayDot key={d.day} d={d} />
+          ))}
+        </span>
+      </span>
+      <p className="m-0 text-[13px] leading-5 text-ink-2">
+        {parts.map((p, i) => (
+          <span key={i}>
+            {i > 0 && <span className="text-muted"> · </span>}
+            {p}
+          </span>
+        ))}
+      </p>
     </section>
   );
 }
@@ -349,6 +631,7 @@ function NeedsYou({
   const order = (n: Need) => (n.kind === "notes" ? 2 : n.f.status === "blocked" ? 1 : 0);
   for (const r of recordings) if (!r.notes) items.push({ key: `notes:${r.id}`, kind: "notes", recording: r });
   const shown = items.filter((n) => held[n.key] !== "dismiss").sort((a, b) => order(a) - order(b));
+  const rows = shown.slice(0, 6);
 
   const approve = (n: Extract<Need, { kind: "followup" }>) => {
     const h = handlersFor(n.meeting);
@@ -379,11 +662,37 @@ function NeedsYou({
     });
   };
 
+  const open = (n: Need) =>
+    n.kind === "notes" ? onOpenMeeting(n.recording.id) : n.f.status === "blocked" && !n.sample ? onOpenWallet() : onOpenMeeting(n.meeting.id);
+  /** What the row's own buttons would do; a key does nothing a button there doesn't offer. */
+  const canAct = (n: Need): n is Extract<Need, { kind: "followup" }> => n.kind === "followup" && n.f.status !== "sending" && n.f.status !== "blocked" && !held[n.key];
+  const byKey = new Map(rows.map((n) => [n.key, n]));
+  // j/k through the rows, ↵ opens, a approves (5 s to undo, as the button), ⌫ dismisses (with undo).
+  const roving = useRovingList(
+    rows.map((n) => n.key),
+    {
+      onOpen: (k) => byKey.has(k) && open(byKey.get(k)!),
+      onApprove: (k) => {
+        const n = byKey.get(k);
+        if (n && canAct(n) && approvable(n.f, handlersFor(n.meeting))) approve(n);
+      },
+      onDismiss: (k) => {
+        const n = byKey.get(k);
+        if (n && canAct(n)) dismiss(n);
+      },
+    },
+    { title: "Needs you", words: { onOpen: "Open it" } },
+  );
+
   return (
     <section aria-labelledby="h-needs" className="flex flex-col gap-3.5" style={style}>
-      <SectionTitle id="h-needs" count={shown.length ? <RollingNumber value={shown.length} /> : undefined}>
-        Needs you
-      </SectionTitle>
+      <div className="flex items-center justify-between gap-3">
+        <SectionTitle id="h-needs" count={shown.length ? <RollingNumber value={shown.length} /> : undefined}>
+          Needs you
+        </SectionTitle>
+        {rows.length > 0 && <ShortcutsHint onClick={roving.openHelp} />}
+      </div>
+      {roving.sheet}
       <LayoutMotion>
         <div className="flex flex-col gap-2.5">
           {/* Not on first render: the clear line folds in only when the last item is handled here. */}
@@ -403,9 +712,11 @@ function NeedsYou({
                 </span>
               </m.p>
             ) : (
-              shown.slice(0, 6).map((n) => (
+              rows.map((n) => (
                 <m.div
                   key={n.key}
+                  {...roving.row(n.key)}
+                  className={rovingCardClass}
                   layout
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0, transition: springs.gentle }}
@@ -433,7 +744,7 @@ function NeedsYou({
                       onApprove={() => approve(n)}
                       onUndo={() => handles.current[n.key]?.cancel()}
                       onDismiss={() => dismiss(n)}
-                      onOpen={() => (n.f.status === "blocked" && !n.sample ? onOpenWallet() : onOpenMeeting(n.meeting.id))}
+                      onOpen={() => open(n)}
                     />
                   )}
                 </m.div>

@@ -25,7 +25,7 @@ export async function currentEvent(now = Math.floor(Date.now() / 1000)): Promise
 }
 
 /** The browser preview has no calendar: a made-up event, labelled as one. */
-function previewEvent(now = Math.floor(Date.now() / 1000)): CalendarEvent {
+export function previewEvent(now = Math.floor(Date.now() / 1000)): CalendarEvent {
   return {
     title: "Website kickoff with Ines",
     start: now + 120,
@@ -34,6 +34,20 @@ function previewEvent(now = Math.floor(Date.now() / 1000)): CalendarEvent {
     attendees: [{ name: "Ines Rocha", email: "ines@example.com" }],
   };
 }
+
+/**
+ * An event picked elsewhere (Record on Home's Next up): the next sheet to open starts
+ * with it instead of looking one up. Good for a few seconds, so a later ⌘⇧R doesn't
+ * reuse a stale pick.
+ */
+let picked: { event: CalendarEvent; at: number } | null = null;
+const PICK_MS = 5000;
+
+export function preselectEvent(event: CalendarEvent) {
+  picked = { event, at: Date.now() };
+}
+
+const pickedEvent = () => (picked && Date.now() - picked.at < PICK_MS ? picked.event : null);
 
 /** The optional "How?" after the tick, in the words the sheet shows. */
 const HOW: { value: NonNullable<NoticeLog["how"]>; label: string }[] = [
@@ -82,9 +96,12 @@ export function RecordSheet({
     if (projects.length && !projects.some((p) => p.name === project)) setProject(projects[0].name);
   }, [projects, project]);
 
-  const [event, setEvent] = useState<CalendarEvent | null>(isDesktop ? null : previewEvent);
+  // Read during the first render (an effect would run twice under StrictMode), then used up.
+  const [chosen] = useState(pickedEvent);
+  const [event, setEvent] = useState<CalendarEvent | null>(chosen ?? (isDesktop ? null : previewEvent));
   useEffect(() => {
-    if (isDesktop) currentEvent().then(setEvent);
+    picked = null;
+    if (isDesktop && !chosen) currentEvent().then(setEvent);
   }, []);
 
   const [consent, setConsentState] = useState(false);
@@ -167,7 +184,8 @@ export function RecordSheet({
       {event && (
         <div className="flex flex-col gap-2" style={{ animation: "ac-in 280ms 80ms var(--ease) both" }}>
           <span className="text-[13px] leading-[18px] font-semibold text-ink">
-            From your calendar <span className="font-medium text-muted">{isDesktop ? "picked automatically" : "a sample, in the browser preview"}</span>
+            From your calendar{" "}
+            <span className="font-medium text-muted">{!isDesktop ? "a sample, in the browser preview" : chosen ? "picked from Today" : "picked automatically"}</span>
           </span>
           <div className="flex items-center gap-3 rounded-[12px] bg-well py-3 pr-3.5 pl-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
             <Avatar name={otherName || "?"} size={32} decorative={!otherName} />

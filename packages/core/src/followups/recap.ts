@@ -1,5 +1,5 @@
 import type { EmailFollowUp, Meeting, NoticeLog } from "../meeting.ts";
-import type { ProofBundle } from "../notes/pipeline.ts";
+import { hasFullChecks, type ProofBundle } from "../notes/pipeline.ts";
 
 export interface Recap {
   to: string;
@@ -57,7 +57,7 @@ export function recapFooter(facts: RecapFacts): string {
 
 /** The footer's facts from a saved meeting and its proof, so every caller reads them the same way. */
 export function recapFactsFrom(meeting: Meeting, proof: ProofBundle | undefined, handlingUrl: string, verifyUrl?: string): RecapFacts {
-  const v2 = proof?.version === 2 ? proof : undefined;
+  const v2 = hasFullChecks(proof) ? proof : undefined;
   return {
     verified: meeting.verified,
     e2ee: v2 ? v2.e2ee.used : null,
