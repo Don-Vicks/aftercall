@@ -3,7 +3,8 @@ import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, X } from "lucide-react";
 import { initials, type Meeting } from "@aftercall/core";
-import { PREVIEW_INFO, agentsApi, claudeCommand, codexConfig, describeActivity, type AgentActivity, type AgentsInfo } from "./agents";
+import { PREVIEW_INFO, agentLabel, agentsApi, codexConfig, describeActivity, lastHeard, type AgentActivity, type AgentsInfo, type ClaudeOutcome } from "./agents";
+import { ConnectedCard, StartSteps } from "./AgentsStart";
 import { isDesktop } from "./recorder";
 import { syncWithAda } from "./sample";
 import { Button, Card, Pill, SectionTitle, Toggle, enter, exit, springs } from "./ui";
@@ -24,21 +25,24 @@ const PREVIEW_TOKEN = "preview-only-not-a-real-token";
 /** How often the open screen asks the app for new activity. */
 const ACTIVITY_POLL_MS = 5000;
 
+/** In the browser preview, how long the pretend Claude Code takes to send its first request after Connect. */
+const PREVIEW_FIRST_REQUEST_MS = 3500;
+
 /** Sample requests in the browser preview, on the sample meeting: refused while read-only, then allowed. */
 function previewActivity(): AgentActivity[] {
-  const at = (h: number, min: number) => {
-    const d = new Date();
-    d.setHours(h, min, 0, 0);
-    return d.toISOString();
-  };
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
   const meetingId = syncWithAda.id;
   return [
-    { at: at(14, 20), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: true },
-    { at: at(14, 19), agent: "claude-code", op: "notes", meetingId, allowed: true },
-    { at: at(14, 12), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: false, refused: "read-only" },
-    { at: at(14, 11), agent: "claude-code", op: "meetings", allowed: true },
+    { at: at(2), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: true },
+    { at: at(3), agent: "claude-code", op: "notes", meetingId, allowed: true },
+    { at: at(10), agent: "Claude Code", op: "claim", meetingId, itemId: "a2", allowed: false, refused: "read-only" },
+    { at: at(11), agent: "claude-code", op: "meetings", allowed: true },
   ];
 }
+
+/** One line on what agents can and can't do, above everything else. */
+const SCOPE =
+  "Agents can read your meetings, and claim or complete action items only if you allow it. They can never send, pay, record proofs or change anything else.";
 
 /**
  * Connects coding agents (Claude Code, Codex) to Aftercall through the local MCP
@@ -51,8 +55,17 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
   const [info, setInfo] = useState<AgentsInfo>(PREVIEW_INFO);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [log, setLog] = useState<AgentActivity[]>(() => (isDesktop ? [] : previewActivity()));
+  const [log, setLog] = useState<AgentActivity[]>([]);
+  const [claudeBusy, setClaudeBusy] = useState<"connect" | "disconnect" | null>(null);
+  const [outcome, setOutcome] = useState<(ClaudeOutcome & { connect: boolean }) | null>(null);
+  // "2 min ago" moves on while the screen is open: this re-renders it.
+  const [, setTick] = useState(0);
   const still = useReducedMotion();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick((t) => t + 1), 20_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -82,18 +95,54 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
       setBusy(false);
     }
   };
-  const toggle = (enabled: boolean) =>
-    isDesktop
-      ? change(() => agentsApi.setEnabled(enabled))
-      : setInfo({ ...info, enabled, allowWrites: false, token: enabled ? PREVIEW_TOKEN : null });
+  const toggle = (enabled: boolean) => {
+    setOutcome(null);
+    if (isDesktop) return change(() => agentsApi.setEnabled(enabled));
+    // As the app does: off forgets the token, so Claude Code is left with an old one.
+    setInfo({ ...info, enabled, allowWrites: false, token: enabled ? PREVIEW_TOKEN : null, claudeCode: info.claudeCode === "none" ? "none" : "stale" });
+    if (!enabled) setLog([]);
+  };
+  const claudeSetup = async (connect: boolean) => {
+    setClaudeBusy(connect ? "connect" : "disconnect");
+    setOutcome(null);
+    try {
+      if (isDesktop) {
+        const result = await agentsApi.claude(connect);
+        setOutcome({ ...result, connect });
+        setInfo(await agentsApi.info());
+      } else {
+        // The preview has no claude to run: it pretends, then a pretend first request arrives.
+        await new Promise((r) => window.setTimeout(r, 900));
+        setOutcome({
+          ok: true,
+          connect,
+          message: connect ? "Claude Code can now reach Aftercall. Start a new Claude Code session to use it." : "Claude Code can no longer reach Aftercall.",
+        });
+        setInfo((i) => ({ ...i, claudeCode: connect ? "connected" : "none" }));
+        if (connect) window.setTimeout(() => setLog(previewActivity()), PREVIEW_FIRST_REQUEST_MS);
+      }
+    } catch (e) {
+      setOutcome({ ok: false, connect, message: `Couldn't ${connect ? "connect" : "disconnect"} Claude Code: ${errorText(e)}` });
+    } finally {
+      setClaudeBusy(null);
+    }
+  };
   const toggleWrites = (allow: boolean) =>
     isDesktop ? change(() => agentsApi.setAllowWrites(allow)) : setInfo({ ...info, allowWrites: allow, readOnlySinceUpdate: false });
 
   const sample = !isDesktop;
   // In the preview the app passes its sample meeting as you edited it; the signed one stands in only if it's gone.
   const known = sample && !meetings.some((m) => m.id === syncWithAda.id) ? [syncWithAda, ...meetings] : meetings;
-  const claude = claudeCommand(info);
   const codex = codexConfig(info);
+  const heard = lastHeard(log, info);
+  // The newest request carried an old token: an agent set up before a new token, or before agents were turned off and on.
+  const oldToken = info.enabled && log[0]?.refused === "token" ? log[0] : undefined;
+  const start = { info, busy, claudeBusy, outcome, onToggle: toggle, onClaude: claudeSetup };
+  // Once the first request arrives, the card that said "Connect" gives way: its message has been answered.
+  const connected = Boolean(heard);
+  useEffect(() => {
+    if (connected) setOutcome(null);
+  }, [connected]);
   const height = (on: boolean) => (still ? { opacity: on ? 1 : 0 } : { opacity: on ? 1 : 0, height: on ? "auto" : 0 });
 
   return (
@@ -105,35 +154,48 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
             <span className="t-eyebrow text-muted">On this Mac only</span>
             <h1 className="t-display m-0">Coding agents</h1>
             <p className="m-0 text-ink-2">Let Claude Code or Codex pick up action items from your meetings.</p>
+            <p className="m-0 mt-1 text-[13px] leading-[19px] text-ink-2">{SCOPE}</p>
             <Why className="mt-0.5">
               Agents reach a small server on this Mac, which asks Aftercall over a local channel only while this is on. What an agent reads then goes wherever
               that agent runs.
             </Why>
           </header>
 
-          <Card as="section" aria-label="Agent access" pad="none" className="overflow-hidden" style={rise(1)}>
-            <div className="flex items-center gap-4 px-5 py-4">
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="t-title">Let agents reach my meetings</span>
-                <span className="text-[13px] leading-[19px] text-ink-2">
-                  {info.enabled ? "On while Aftercall is open. Agents need the token below." : "Off. No agent can reach your meetings."}
+          <div className="flex flex-col gap-3" style={rise(1)}>
+            {heard ? <ConnectedCard {...start} heard={heard} now={Date.now()} /> : <StartSteps {...start} />}
+            {oldToken && (
+              <p className="m-0 text-[13px] leading-[19px] text-caution">
+                The newest request, from {oldToken.agent}, carried an old token and was refused. Reconnect Claude Code, or copy the Codex config again.
+              </p>
+            )}
+            {error && <p className="m-0 text-[13px] leading-[19px] text-caution">Couldn't change agent access: {error}</p>}
+            <Why label="Using Codex?" className="px-1">
+              {info.enabled ? (
+                <span className="flex flex-col gap-2">
+                  <span>
+                    Add this to <span className="t-mono text-ink">~/.codex/config.toml</span>, replacing an older Aftercall block, then restart Codex. It needs
+                    Node 20 or later.
+                  </span>
+                  <Snippet text={codex} label="Copy the Codex config" />
                 </span>
-              </span>
-              <Toggle aria-label="Let agents reach my meetings" checked={info.enabled} disabled={busy} onChange={toggle} />
-            </div>
-            <AnimatePresence initial={false}>
-              {info.enabled && (
-                <m.div
-                  key="token"
-                  initial={height(false)}
-                  animate={{ ...height(true), transition: still ? enter : grow }}
-                  exit={{ ...height(false), transition: exit }}
-                >
-                  <div className="flex items-center gap-4 border-t border-hairline px-5 py-4">
+              ) : (
+                "Turn on \u201cLet agents read your meetings\u201d first. Then a config block for ~/.codex/config.toml appears here, with your token."
+              )}
+            </Why>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {info.enabled && (
+              <m.div
+                key="access"
+                initial={height(false)}
+                animate={{ ...height(true), transition: still ? enter : grow }}
+                exit={{ ...height(false), transition: exit }}
+              >
+                <Card as="section" aria-label="What agents may do" pad="none" className="overflow-hidden">
+                  <div className="flex items-center gap-4 px-5 py-4">
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="font-semibold text-ink">
-                        Let agents claim and complete action items
-                      </span>
+                      <span className="font-semibold text-ink">Let agents claim and complete action items</span>
                       <span className="text-[13px] leading-[19px] text-ink-2">
                         {info.allowWrites
                           ? "On. Agents can mark an item as theirs and as done. They still can't send, pay or change your rules."
@@ -167,60 +229,13 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                       New token
                     </Button>
                   </div>
-                </m.div>
-              )}
-            </AnimatePresence>
-            {error && (
-              <p className="m-0 border-t border-hairline px-5 py-3 text-[13px] leading-[19px] text-caution">Couldn't change agent access: {error}</p>
-            )}
-          </Card>
-
-          <AnimatePresence mode="wait" initial={false}>
-            {info.enabled ? (
-              <m.div
-                key="on"
-                className="flex flex-col gap-6"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0, transition: { ...enter, delay: 0.04 } }}
-                exit={{ opacity: 0, transition: exit }}
-              >
-                <section aria-labelledby="h-claude" className="flex flex-col gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <SectionTitle id="h-claude" count="in Terminal">
-                      Claude Code
-                    </SectionTitle>
-                    <p className="m-0 text-ink-2">Run this once. Run it again after a new token, or if you move Aftercall. It needs Node 20 or later.</p>
-                  </div>
-                  <Snippet text={claude} label="Copy the Claude Code command" />
-                </section>
-                <section aria-labelledby="h-codex" className="flex flex-col gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <SectionTitle id="h-codex" count="config file">
-                      Codex
-                    </SectionTitle>
-                    <p className="m-0 text-ink-2">
-                      Add this to <span className="t-mono text-ink">~/.codex/config.toml</span>, replacing an older Aftercall block, then restart Codex. It needs
-                      Node 20 or later.
-                    </p>
-                  </div>
-                  <Snippet text={codex} label="Copy the Codex config" />
-                </section>
+                </Card>
               </m.div>
-            ) : (
-              <m.p
-                key="off"
-                className="m-0 text-ink-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1, transition: enter }}
-                exit={{ opacity: 0, transition: exit }}
-              >
-                Turn this on to get setup commands for Claude Code and Codex, with a fresh token.
-              </m.p>
             )}
           </AnimatePresence>
 
           {isDesktop && !info.serverFound && (
-            <p className="-mt-4 text-[13px] leading-[19px] text-caution">
+            <p className="m-0 -mt-4 text-[13px] leading-[19px] text-caution">
               The server isn't at <span className="t-mono">{info.serverPath}</span>. It ships inside Aftercall; reinstall the app, or in a checkout run{" "}
               <span className="t-mono">pnpm --filter @aftercall/mcp build</span>.
             </p>
@@ -282,7 +297,7 @@ function ActivityRow({ entry, meetings, onOpenMeeting }: { entry: AgentActivity;
       <AgentAvatar name={entry.agent} />
       <span className="flex min-w-0 flex-1 flex-col gap-px">
         <span className="truncate font-semibold text-ink">{v.what}</span>
-        <span className="truncate text-[13px] text-ink-2">{[entry.agent, v.meeting?.title, v.detail].filter(Boolean).join(" · ")}</span>
+        <span className="truncate text-[13px] text-ink-2">{[agentLabel(entry.agent), v.meeting?.title, v.detail].filter(Boolean).join(" · ")}</span>
       </span>
       {v.status === "done" ? (
         <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>

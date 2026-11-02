@@ -14,7 +14,19 @@ export interface AgentsInfo {
   readOnlySinceUpdate: boolean;
   /** What agents must send; only while enabled. */
   token: string | null;
+  /** When that token was made; requests before it carried another. Null for an older token. */
+  tokenSince: string | null;
+  /** Whether "Connect Claude Code" gave Claude Code this token: "stale" means an older one, so reconnect. */
+  claudeCode: "none" | "connected" | "stale";
   socketPath: string;
+}
+
+/** What "Connect Claude Code" or "Disconnect Claude Code" did (agents.rs, `ClaudeOutcome`). */
+export interface ClaudeOutcome {
+  ok: boolean;
+  /** That tool couldn't be found on this Mac, so the screen offers the copy command. */
+  missing?: "claude" | "node";
+  message: string;
 }
 
 export const agentsApi = {
@@ -25,6 +37,11 @@ export const agentsApi = {
   newToken: () => invoke<AgentsInfo>("agents_new_token"),
   /** "Let agents claim and complete action items". Applies to the next request. */
   setAllowWrites: (allow: boolean) => invoke<AgentsInfo>("agents_set_allow_writes", { allow }),
+  /**
+   * Connect (true) runs `claude mcp add --scope user` for you, replacing an older Aftercall
+   * entry; disconnect (false) runs `claude mcp remove`. Agents must be on to connect.
+   */
+  claude: (connect: boolean) => invoke<ClaudeOutcome>("agents_claude", { connect }),
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */
@@ -43,6 +60,8 @@ export const PREVIEW_INFO: AgentsInfo = {
   allowWrites: false,
   readOnlySinceUpdate: false,
   token: null,
+  tokenSince: null,
+  claudeCode: "none",
   socketPath: "~/Library/Application Support/dev.aftercall.app/agents/aftercall.sock",
 };
 
@@ -53,11 +72,47 @@ export function shellQuote(s: string): string {
   return /^[\w./:@-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-/** `claude mcp add`, available in every project (user scope), with this session's token. */
+/**
+ * `claude mcp add`, available in every project (user scope), with this session's token.
+ * "Connect Claude Code" runs the same arguments (agents.rs, `claude_add_args`), with node's
+ * full path. The name goes before `--env`, which takes several values and would swallow it.
+ */
 export function claudeCommand(info: AgentsInfo): string {
   const token = info.token ?? TOKEN_PLACEHOLDER;
   // Removing first replaces a setup made with an older token; it's harmless when there is none.
-  return `claude mcp remove --scope user aftercall 2>/dev/null; claude mcp add --scope user --env AFTERCALL_TOKEN=${shellQuote(token)} aftercall -- node ${shellQuote(info.serverPath)} --data-dir ${shellQuote(info.dataDir)}`;
+  return `claude mcp remove --scope user aftercall 2>/dev/null; claude mcp add --scope user aftercall --env AFTERCALL_TOKEN=${shellQuote(token)} -- node ${shellQuote(info.serverPath)} --data-dir ${shellQuote(info.dataDir)}`;
+}
+
+/** Undoes `claudeCommand`, for when the app can't find the claude command itself. */
+export const CLAUDE_REMOVE_COMMAND = "claude mcp remove --scope user aftercall";
+
+/** Step 3 on the Coding agents screen: something to ask in a new Claude Code session. */
+export const TRY_PROMPT = "Using the aftercall MCP server, list my recent meetings and the open action items.";
+
+/** An agent's own name as people say it: Claude Code's MCP client calls itself "claude-code". */
+export function agentLabel(name: string): string {
+  return /^claude[-_ ]?code$/i.test(name) ? "Claude Code" : /^codex/i.test(name) ? "Codex" : name;
+}
+
+/**
+ * The newest request that reached Aftercall with the current token, or none: proof an
+ * agent is connected. One refused for its token doesn't count, nor one from before the token.
+ */
+export function lastHeard(log: AgentActivity[], info: AgentsInfo): AgentActivity | undefined {
+  if (!info.enabled) return undefined;
+  const since = info.tokenSince ? Date.parse(info.tokenSince) : Number.NEGATIVE_INFINITY;
+  return log.find((a) => a.refused !== "token" && Date.parse(a.at) >= since);
+}
+
+/** "just now", "2 min ago", "3 h ago", else the date. */
+export function ago(iso: string, now: number): string {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return "";
+  const min = Math.floor((now - t) / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60) return `${Math.floor(min / 60)} h ago`;
+  return `on ${new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
 }
 
 /** The block for ~/.codex/config.toml. JSON strings are valid TOML basic strings. */

@@ -1,7 +1,7 @@
-//! Connected agents: the local channel the MCP server (apps/mcp) uses to reach meetings.
+//! Coding agents: the local channel the MCP server (apps/mcp) uses to reach meetings.
 //!
 //! Meetings are encrypted at rest, so the MCP server can't read files. Instead, while
-//! the user has "Connected agents" turned on, the app listens on a Unix domain socket,
+//! the user has "Coding agents" turned on, the app listens on a Unix domain socket,
 //! `<data dir>/agents/aftercall.sock` (folder 0700, socket 0600), and answers one JSON
 //! request per line:
 //!
@@ -10,7 +10,7 @@
 //! ← {"ok":true,"result":…}  or  {"ok":false,"error":"…"}
 //! ```
 //!
-//! Every request must carry the token shown on the Connected agents screen. The token
+//! Every request must carry the token shown on the Coding agents screen. The token
 //! is made when the user turns agents on and dropped when they turn them off, so
 //! turning them back on needs the new setup command. With agents off there is no socket.
 //!
@@ -38,7 +38,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -50,7 +51,7 @@ const NOTE_MAX: usize = 500;
 
 /// What an agent is told when it tries to claim or complete while agents may only read.
 pub const WRITES_OFF: &str =
-    "Aftercall lets agents read only. To let them claim and complete action items, turn that on in Settings → Connected agents.";
+    "Aftercall lets agents read only. To let them claim and complete action items, turn that on under Coding agents in Aftercall's sidebar.";
 
 pub fn socket_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("agents")
@@ -73,6 +74,14 @@ pub struct Settings {
     /// claim and complete. It reads as off, and the screen says so until the user chooses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allow_writes: Option<bool>,
+    /// When the current token was made, so the screen counts only requests sent with it.
+    /// None for a token from before this was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_since: Option<String>,
+    /// The fingerprint of the token Aftercall gave Claude Code ("Connect Claude Code").
+    /// Kept when agents are turned off, so the screen can ask to reconnect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_code: Option<String>,
 }
 
 impl Settings {
@@ -215,7 +224,7 @@ fn answer(data_dir: &Path, token: &str, writes: bool, line: &str, now: &dyn Fn()
     result
 }
 
-const TOKEN_REFUSED: &str = "Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.";
+const TOKEN_REFUSED: &str = "Aftercall refused the token. Reconnect Claude Code from Coding agents in Aftercall's sidebar.";
 
 // ---------- what agents can do ----------
 
@@ -362,7 +371,7 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
 const ACTIVITY_MAX: usize = 200;
 const NAME_MAX: usize = 60;
 
-/// One agent request as the user sees it on the Connected agents screen. Ids and names
+/// One agent request as the user sees it on the Coding agents screen. Ids and names
 /// only: the meeting's title, the item's text and any note stay in notes.json.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -447,6 +456,223 @@ pub(crate) fn now_iso() -> String {
     let (y, m, day) = crate::recovery::civil_date(secs);
     let t = secs % 86_400;
     format!("{y:04}-{m:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z", t / 3600, t / 60 % 60, t % 60, d.subsec_millis())
+}
+
+// ---------- Claude Code ----------
+//
+// "Connect Claude Code" runs the same `claude mcp add` the screen offers to copy, so the
+// user doesn't have to open Terminal. An app opened from the Finder gets a minimal PATH
+// (/usr/bin:/bin:/usr/sbin:/sbin), so the claude CLI and node are looked for in the
+// folders they are usually installed in, then in the login shell's PATH. node's full
+// path goes into the command, so Claude Code doesn't depend on its own PATH either.
+
+/// Aftercall's server needs Node 20 or later, as the screen and docs/agents-demo.md say.
+const NODE_MIN: u32 = 20;
+/// How long one `claude` or shell call may take before it is stopped.
+const TOOL_LIMIT: Duration = Duration::from_secs(30);
+
+/// Removes Aftercall from Claude Code's user config. It fails, harmlessly, when there is none.
+pub const CLAUDE_REMOVE: [&str; 5] = ["mcp", "remove", "--scope", "user", "aftercall"];
+
+/// `claude mcp add` for every project (user scope): the command `claudeCommand` in
+/// agents.ts shows, with node's full path. The name comes before `--env`, which takes
+/// several values and would swallow it otherwise.
+pub fn claude_add_args(token: &str, node: &Path, server: &Path, data_dir: &Path) -> Vec<String> {
+    let mut args: Vec<String> = ["mcp", "add", "--scope", "user", "aftercall", "--env"].map(String::from).to_vec();
+    args.push(format!("AFTERCALL_TOKEN={token}"));
+    args.push("--".into());
+    args.extend([node, server].map(|p| p.display().to_string()));
+    args.push("--data-dir".into());
+    args.push(data_dir.display().to_string());
+    args
+}
+
+/// A short hash of the token: enough to tell which token Claude Code was given.
+fn fingerprint(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(token.as_bytes()).iter().take(8).map(|b| format!("{b:02x}")).collect()
+}
+
+/// What the screen shows for Claude Code: "none", "connected" (Aftercall added itself
+/// with the current token) or "stale" (with an older token, or agents are off: reconnect).
+pub fn claude_link(s: &Settings) -> &'static str {
+    match (&s.claude_code, &s.token) {
+        (None, _) => "none",
+        (Some(f), Some(t)) if *f == fingerprint(t) => "connected",
+        _ => "stale",
+    }
+}
+
+/// The folders a tool is usually installed in, in the order they are tried.
+pub fn tool_dirs(name: &str, home: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![home.join(".local/bin")];
+    if name == "claude" {
+        dirs.push(home.join(".claude/local"));
+    }
+    dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
+    dirs
+}
+
+fn is_executable(p: &Path) -> bool {
+    std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+/// Every copy of `name` found, in order: in `dirs`, then the paths `login_shell` printed
+/// for it (only full paths to an executable of that name; aliases and other lines are skipped).
+pub fn find_tool(name: &str, dirs: &[PathBuf], login_shell: &dyn Fn(&str) -> Option<String>) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = dirs.iter().map(|d| d.join(name)).filter(|p| is_executable(p)).collect();
+    for line in login_shell(name).unwrap_or_default().lines().map(str::trim) {
+        let p = PathBuf::from(line);
+        if p.is_absolute() && p.file_name().is_some_and(|f| f == name) && is_executable(&p) && !found.contains(&p) {
+            found.push(p);
+        }
+    }
+    found
+}
+
+/// Asks the user's login shell where `name` is, as Terminal would find it.
+fn login_shell_lookup(name: &str) -> Option<String> {
+    let out = run(Command::new("/bin/zsh").args(["-lc", &format!("command -v {name}")]), Duration::from_secs(5)).ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The major version in `node --version`'s answer: "v24.10.0" is 24.
+fn node_major(version: &str) -> Option<u32> {
+    version.trim().strip_prefix('v')?.split('.').next()?.parse().ok()
+}
+
+/// The first node that is new enough, or why there is none.
+pub fn pick_node(found: &[PathBuf], major: &dyn Fn(&Path) -> Option<u32>) -> Result<PathBuf, String> {
+    let mut old = None;
+    for p in found {
+        match major(p) {
+            Some(v) if v >= NODE_MIN => return Ok(p.clone()),
+            Some(v) if old.is_none() => old = Some((v, p)),
+            _ => {}
+        }
+    }
+    Err(match old {
+        Some((v, p)) => format!("Aftercall's server needs Node {NODE_MIN} or later, and this Mac has Node {v} at {}. Update Node, then try again.", p.display()),
+        None => format!("Aftercall couldn't find Node on this Mac. Install Node {NODE_MIN} or later from nodejs.org, then try again."),
+    })
+}
+
+fn node_version(node: &Path) -> Option<u32> {
+    let out = run(Command::new(node).arg("--version"), Duration::from_secs(5)).ok()?;
+    node_major(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// The claude CLI and a node that is new enough, looked for as described above.
+pub fn find_claude_and_node(home: &Path) -> (Option<PathBuf>, Result<PathBuf, String>) {
+    let claude = find_tool("claude", &tool_dirs("claude", home), &login_shell_lookup).into_iter().next();
+    let node = pick_node(&find_tool("node", &tool_dirs("node", home), &login_shell_lookup), &node_version);
+    (claude, node)
+}
+
+/// Runs a command with no input, stopping it after `limit`. Its output is small, so it
+/// is read once it has finished.
+fn run(cmd: &mut Command, limit: Duration) -> Result<Output, String> {
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    let started = Instant::now();
+    loop {
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            return child.wait_with_output().map_err(|e| e.to_string());
+        }
+        if started.elapsed() > limit {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(format!("it didn't finish within {} seconds", limit.as_secs()));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// A `claude` call with the tools' folders first on PATH: an npm install of claude starts with `#!/usr/bin/env node`.
+fn claude_call(claude: &Path, node: Option<&Path>, args: &[String]) -> Result<Output, String> {
+    let mut path: Vec<PathBuf> = [Some(claude), node].into_iter().flatten().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
+    path.extend(std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect::<Vec<_>>()).unwrap_or_default());
+    let path = std::env::join_paths(path).map_err(|e| e.to_string())?;
+    run(Command::new(claude).args(args).env("PATH", path), TOOL_LIMIT)
+}
+
+/// What claude printed, on one line, with the token taken out.
+fn said(out: &Output, token: &str) -> String {
+    let text = format!("{}\n{}", String::from_utf8_lossy(&out.stderr), String::from_utf8_lossy(&out.stdout));
+    let line = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("no message");
+    let line = if token.is_empty() { line.to_string() } else { line.replace(token, "<token>") };
+    line.chars().take(300).collect()
+}
+
+/// The result of Connect or Disconnect Claude Code, as the screen shows it.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeOutcome {
+    pub ok: bool,
+    /// "claude" or "node" when that couldn't be found: the screen offers the copy command.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<&'static str>,
+    pub message: String,
+    /// What to save as `Settings::claude_code` after this: Some(None) forgets it.
+    #[serde(skip)]
+    pub link: Option<Option<String>>,
+}
+
+impl ClaudeOutcome {
+    fn failed(message: String) -> Self {
+        Self { ok: false, missing: None, message, link: None }
+    }
+}
+
+pub const CLAUDE_CONNECTED: &str = "Claude Code can now reach Aftercall. Start a new Claude Code session to use it.";
+const NO_CLAUDE: &str = "Aftercall couldn't find the claude command on this Mac. Run this in Terminal instead.";
+
+/// "Connect Claude Code": replaces any Aftercall entry in Claude Code's user config
+/// with one that runs `server` with the current token. Agents must be on.
+pub fn connect_claude(data_dir: &Path, server: &Path, claude: Option<&Path>, node: Result<PathBuf, String>) -> ClaudeOutcome {
+    let settings = load_settings(data_dir);
+    let Some(token) = settings.token.filter(|_| settings.enabled) else {
+        return ClaudeOutcome::failed("Turn on \u{201c}Let agents read your meetings\u{201d} first.".into());
+    };
+    if !server.exists() {
+        return ClaudeOutcome::failed(format!("Aftercall's server isn't at {}. Reinstall Aftercall, then try again.", server.display()));
+    }
+    let Some(claude) = claude else {
+        return ClaudeOutcome { ok: false, missing: Some("claude"), message: NO_CLAUDE.into(), link: None };
+    };
+    let node = match node {
+        Ok(n) => n,
+        Err(message) => return ClaudeOutcome { ok: false, missing: Some("node"), message, link: None },
+    };
+    // Replace an entry made with an older token or path. Failing only means there was none.
+    let _ = claude_call(claude, Some(&node), &CLAUDE_REMOVE.map(String::from));
+    match claude_call(claude, Some(&node), &claude_add_args(&token, &node, server, data_dir)) {
+        Ok(out) if out.status.success() => ClaudeOutcome { ok: true, missing: None, message: CLAUDE_CONNECTED.into(), link: Some(Some(fingerprint(&token))) },
+        Ok(out) => ClaudeOutcome::failed(format!("Claude Code didn't add Aftercall: {}", said(&out, &token))),
+        Err(e) => ClaudeOutcome::failed(format!("Claude Code didn't answer: {e}.")),
+    }
+}
+
+/// "Disconnect Claude Code": removes Aftercall from Claude Code's user config.
+pub fn disconnect_claude(claude: Option<&Path>) -> ClaudeOutcome {
+    let Some(claude) = claude else {
+        return ClaudeOutcome { ok: false, missing: Some("claude"), message: NO_CLAUDE.into(), link: None };
+    };
+    match claude_call(claude, None, &CLAUDE_REMOVE.map(String::from)) {
+        Ok(out) if out.status.success() => ClaudeOutcome { ok: true, missing: None, message: "Claude Code can no longer reach Aftercall.".into(), link: Some(None) },
+        Ok(out) if said(&out, "").contains("No MCP server named") => {
+            ClaudeOutcome { ok: true, missing: None, message: "Claude Code had no Aftercall entry, so there was nothing to remove.".into(), link: Some(None) }
+        }
+        Ok(out) => ClaudeOutcome::failed(format!("Claude Code didn't remove Aftercall: {}", said(&out, ""))),
+        Err(e) => ClaudeOutcome::failed(format!("Claude Code didn't answer: {e}.")),
+    }
+}
+
+/// Saves what Connect or Disconnect left behind.
+pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), String> {
+    let Some(link) = &outcome.link else { return Ok(()) };
+    let mut s = load_settings(data_dir);
+    s.claude_code = link.clone();
+    save_settings(data_dir, &s)
 }
 
 #[cfg(test)]
@@ -710,7 +936,7 @@ mod tests {
     fn settings_are_saved_encrypted() {
         let dir = data_dir("settings");
         assert!(!load_settings(&dir).enabled);
-        save_settings(&dir, &Settings { enabled: true, token: Some("t0k".into()), allow_writes: Some(true) }).unwrap();
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k".into()), allow_writes: Some(true), ..Default::default() }).unwrap();
         assert!(at_rest::is_sealed(&std::fs::read(dir.join("agents.json")).unwrap()));
         let s = load_settings(&dir);
         assert!(s.enabled && s.token.as_deref() == Some("t0k") && s.writes_allowed());
@@ -731,7 +957,7 @@ mod tests {
         for op in ["claim", "complete"] {
             let err = dispatch(&dir, &json!({ "op": op, "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), false, &now).unwrap_err();
             assert_eq!(err, WRITES_OFF);
-            assert!(err.contains("Settings → Connected agents"));
+            assert!(err.contains("Coding agents in Aftercall's sidebar"));
         }
         assert_eq!(read_notes(&dir), before, "nothing changed");
         std::fs::remove_dir_all(dir).unwrap();
@@ -809,6 +1035,129 @@ mod tests {
         let all = read_activity(&dir, 1000);
         assert_eq!(all.len(), 200);
         assert_eq!((all[0].at.as_str(), all[199].at.as_str()), ("204", "005"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// An executable shell script at `path`.
+    fn script(path: &Path, body: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn tools_are_looked_for_where_they_are_installed_then_in_the_login_shell() {
+        let home = PathBuf::from("/Users/ada");
+        assert_eq!(
+            tool_dirs("claude", &home),
+            ["/Users/ada/.local/bin", "/Users/ada/.claude/local", "/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from)
+        );
+        assert_eq!(tool_dirs("node", &home), ["/Users/ada/.local/bin", "/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
+
+        let dir = data_dir("tools");
+        let (local, claude_local, shell_bin) = (dir.join("home/.local/bin"), dir.join("home/.claude/local"), dir.join("nvm/bin"));
+        // Not executable, so skipped; the next folder's copy is found first.
+        std::fs::create_dir_all(&local).unwrap();
+        std::fs::write(local.join("claude"), "not a program").unwrap();
+        script(&claude_local.join("claude"), "exit 0");
+        script(&shell_bin.join("claude"), "exit 0");
+        let dirs = [local.clone(), claude_local.clone(), dir.join("missing")];
+        let shell_line = shell_bin.join("claude").display().to_string();
+        let shell = |name: &str| {
+            assert_eq!(name, "claude");
+            // A login shell can print other things first; aliases and repeats are skipped.
+            Some(format!("Welcome back\nclaude: aliased to npx claude\n{shell_line}\n{}\n/usr/bin/false\n", claude_local.join("claude").display()))
+        };
+        assert_eq!(find_tool("claude", &dirs, &shell), vec![claude_local.join("claude"), shell_bin.join("claude")]);
+        assert!(find_tool("claude", &[local], &|_| None).is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn node_must_be_20_or_later() {
+        assert_eq!((node_major("v24.10.0\n"), node_major("v20.0.1"), node_major("18.2.0"), node_major("")), (Some(24), Some(20), None, None));
+        let (old, new) = (PathBuf::from("/usr/local/bin/node"), PathBuf::from("/opt/homebrew/bin/node"));
+        let major = |p: &Path| Some(if p == old { 18 } else { 24 });
+        assert_eq!(pick_node(&[old.clone(), new.clone()], &major).unwrap(), new);
+        let err = pick_node(std::slice::from_ref(&old), &major).unwrap_err();
+        assert!(err.contains("Node 20 or later") && err.contains("Node 18 at /usr/local/bin/node"), "{err}");
+        assert!(pick_node(&[], &major).unwrap_err().contains("couldn't find Node"));
+    }
+
+    #[test]
+    fn the_add_command_names_the_server_before_its_env() {
+        let args = claude_add_args("t0k", Path::new("/opt/homebrew/bin/node"), Path::new("/A/mcp/aftercall-mcp.mjs"), Path::new("/Users/ada/Library/Application Support/dev.aftercall.app"));
+        assert_eq!(
+            args,
+            [
+                "mcp", "add", "--scope", "user", "aftercall", "--env", "AFTERCALL_TOKEN=t0k", "--", "/opt/homebrew/bin/node", "/A/mcp/aftercall-mcp.mjs", "--data-dir",
+                "/Users/ada/Library/Application Support/dev.aftercall.app"
+            ]
+        );
+    }
+
+    #[test]
+    fn connect_replaces_the_entry_and_remembers_which_token_it_gave() {
+        let dir = data_dir("claude");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+        let (claude, node, log) = (dir.join("bin/claude"), dir.join("bin/node"), dir.join("claude.log"));
+        // A stand-in claude that writes down each call, one argument per line.
+        script(&claude, &format!("for a in \"$@\"; do echo \"$a\"; done >> '{}'; echo --- >> '{}'", log.display(), log.display()));
+        script(&node, "echo v24.0.0");
+
+        let off = connect_claude(&dir, &server, Some(&claude), Ok(node.clone()));
+        assert!(!off.ok && off.message.contains("Let agents read your meetings") && !log.exists(), "agents off: nothing runs");
+
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k".into()), allow_writes: Some(false), ..Default::default() }).unwrap();
+        assert_eq!(claude_link(&load_settings(&dir)), "none");
+        let missing = connect_claude(&dir, &server, None, Ok(node.clone()));
+        assert_eq!((missing.ok, missing.missing), (false, Some("claude")));
+        let no_node = connect_claude(&dir, &server, Some(&claude), Err("no node".into()));
+        assert_eq!((no_node.missing, no_node.message.as_str()), (Some("node"), "no node"));
+
+        let done = connect_claude(&dir, &server, Some(&claude), Ok(node.clone()));
+        assert!(done.ok && done.message == CLAUDE_CONNECTED, "{done:?}");
+        remember_claude(&dir, &done).unwrap();
+        let calls = std::fs::read_to_string(&log).unwrap();
+        let calls: Vec<Vec<&str>> = calls.split("---\n").filter(|c| !c.is_empty()).map(|c| c.lines().collect()).collect();
+        let add = claude_add_args("t0k", &node, &server, &dir);
+        assert_eq!(calls, vec![CLAUDE_REMOVE.to_vec(), add.iter().map(String::as_str).collect()]);
+        let s = load_settings(&dir);
+        assert_eq!(claude_link(&s), "connected");
+        assert!(at_rest::is_sealed(&std::fs::read(dir.join("agents.json")).unwrap()));
+
+        // A new token, or agents turned off, leaves Claude Code with the old one.
+        save_settings(&dir, &Settings { token: Some("n3w".into()), ..s.clone() }).unwrap();
+        assert_eq!(claude_link(&load_settings(&dir)), "stale");
+        save_settings(&dir, &Settings { claude_code: s.claude_code.clone(), ..Default::default() }).unwrap();
+        assert_eq!(claude_link(&load_settings(&dir)), "stale");
+
+        let gone = disconnect_claude(Some(&claude));
+        assert!(gone.ok);
+        remember_claude(&dir, &gone).unwrap();
+        assert_eq!(claude_link(&load_settings(&dir)), "none");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn what_claude_says_on_failure_never_carries_the_token() {
+        let dir = data_dir("claudefail");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+        let claude = dir.join("bin/claude");
+        // Fails every call, echoing its arguments the way a CLI error might.
+        script(&claude, "echo \"Invalid environment variable format: $*\" >&2; exit 1");
+        save_settings(&dir, &Settings { enabled: true, token: Some("s3cr3t-token".into()), ..Default::default() }).unwrap();
+        let out = connect_claude(&dir, &server, Some(&claude), Ok(PathBuf::from("/bin/sh")));
+        assert!(!out.ok && out.link.is_none());
+        assert!(out.message.starts_with("Claude Code didn't add Aftercall: Invalid environment variable format"), "{}", out.message);
+        assert!(!out.message.contains("s3cr3t-token") && out.message.contains("AFTERCALL_TOKEN=<token>"), "{}", out.message);
+        assert_eq!(claude_link(&load_settings(&dir)), "none");
+
+        // Removing when there's nothing to remove counts as done.
+        script(&claude, "echo 'No MCP server named \"aftercall\" in user scope' >&2; exit 1");
+        assert!(disconnect_claude(Some(&claude)).ok);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

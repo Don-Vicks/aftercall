@@ -94,7 +94,7 @@ mod tests {
         std::fs::write(dir.join("recordings/1793006441/mic-000.wav"), b"sealed").unwrap();
         std::fs::write(dir.join("projects.json"), b"sealed").unwrap();
         std::fs::write(dir.join("near.json"), b"{}").unwrap();
-        // Connected agents: settings, the activity list and the socket's folder.
+        // Coding agents: settings, the activity list and the socket's folder.
         std::fs::write(dir.join("agents.json"), b"sealed").unwrap();
         std::fs::write(dir.join("agents-activity.json"), b"sealed").unwrap();
         std::fs::create_dir_all(dir.join("agents")).unwrap();

@@ -579,7 +579,7 @@ fn edit_action_item(app: AppHandle, id: String, item_id: String, text: String, o
     notes_file::edit_item(&recording_dir(&app, &id)?.join("notes.json"), &item_id, draft, &agents::now_iso())
 }
 
-/// The agents socket while Connected agents is on (see agents.rs).
+/// The agents socket while Coding agents is on (see agents.rs).
 #[derive(Default)]
 struct AgentsState(Mutex<Option<agents::Server>>);
 
@@ -591,7 +591,7 @@ struct AgentsInfo {
     /// The MCP server agents run with `node` (see `mcp_server_path`).
     server_path: String,
     server_found: bool,
-    /// Connected agents is on and the socket is open.
+    /// Coding agents is on and the socket is open.
     enabled: bool,
     /// Agents may claim and complete action items. Off by default.
     allow_writes: bool,
@@ -600,6 +600,10 @@ struct AgentsInfo {
     read_only_since_update: bool,
     /// The token agents must send; only while enabled.
     token: Option<String>,
+    /// When that token was made; requests before it were sent with another.
+    token_since: Option<String>,
+    /// "none", "connected" or "stale": whether "Connect Claude Code" gave Claude Code this token.
+    claude_code: &'static str,
     socket_path: String,
 }
 
@@ -641,11 +645,13 @@ fn agents_snapshot(app: &AppHandle, state: &AgentsState) -> Result<AgentsInfo, S
         enabled: running,
         allow_writes: running && settings.writes_allowed(),
         read_only_since_update: running && settings.allow_writes.is_none(),
+        claude_code: agents::claude_link(&settings),
+        token_since: if running { settings.token_since.clone() } else { None },
         token: if running { settings.token } else { None },
     })
 }
 
-/// What the Connected agents screen needs to show the switch and the exact setup commands.
+/// What the Coding agents screen needs to show the switch and the exact setup commands.
 #[tauri::command]
 fn agents_info(app: AppHandle, state: State<AgentsState>) -> Result<AgentsInfo, String> {
     agents_snapshot(&app, &state)
@@ -658,6 +664,7 @@ fn agents_start(dir: &std::path::Path, state: &AgentsState, fresh_token: bool) -
     let mut settings = agents::load_settings(dir);
     if fresh_token || settings.token.is_none() {
         settings.token = Some(agents::new_token()?);
+        settings.token_since = Some(agents::now_iso());
     }
     settings.enabled = true;
     agents::save_settings(dir, &settings)?;
@@ -665,7 +672,7 @@ fn agents_start(dir: &std::path::Path, state: &AgentsState, fresh_token: bool) -
     Ok(())
 }
 
-/// Turns Connected agents on or off. Off closes the socket, forgets the token and puts
+/// Turns Coding agents on or off. Off closes the socket, forgets the token and puts
 /// agents back to read-only; on starts read-only unless the user allowed writes since.
 #[tauri::command]
 fn agents_set_enabled(app: AppHandle, state: State<AgentsState>, enabled: bool) -> Result<AgentsInfo, String> {
@@ -679,7 +686,9 @@ fn agents_set_enabled(app: AppHandle, state: State<AgentsState>, enabled: bool) 
         agents_start(&dir, &state, false)?;
     } else {
         state.0.lock().map_err(|e| e.to_string())?.take();
-        agents::save_settings(&dir, &agents::Settings { allow_writes: Some(false), ..Default::default() })?;
+        // Claude Code keeps the old token, so the screen asks to reconnect next time.
+        let claude_code = agents::load_settings(&dir).claude_code;
+        agents::save_settings(&dir, &agents::Settings { allow_writes: Some(false), claude_code, ..Default::default() })?;
     }
     agents_snapshot(&app, &state)
 }
@@ -690,7 +699,7 @@ fn agents_set_allow_writes(app: AppHandle, state: State<AgentsState>, allow: boo
     let dir = data_dir(&app)?;
     {
         let slot = state.0.lock().map_err(|e| e.to_string())?;
-        let Some(server) = slot.as_ref() else { return Err("Turn on Connected agents first".into()) };
+        let Some(server) = slot.as_ref() else { return Err("Turn on Coding agents first".into()) };
         let mut settings = agents::load_settings(&dir);
         settings.allow_writes = Some(allow);
         agents::save_settings(&dir, &settings)?;
@@ -709,10 +718,31 @@ fn agents_activity(app: AppHandle) -> Result<Vec<agents::Activity>, String> {
 #[tauri::command]
 fn agents_new_token(app: AppHandle, state: State<AgentsState>) -> Result<AgentsInfo, String> {
     if state.0.lock().map_err(|e| e.to_string())?.is_none() {
-        return Err("Turn on Connected agents first".into());
+        return Err("Turn on Coding agents first".into());
     }
     agents_start(&data_dir(&app)?, &state, true)?;
     agents_snapshot(&app, &state)
+}
+
+/// "Connect Claude Code" (on) or "Disconnect Claude Code" (off): runs `claude mcp add`
+/// or `claude mcp remove` for the user, off the main thread (see agents.rs).
+#[tauri::command]
+async fn agents_claude(app: AppHandle, connect: bool) -> Result<agents::ClaudeOutcome, String> {
+    let dir = data_dir(&app)?;
+    let server = mcp_server_path(&app);
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let run_dir = dir.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        let (claude, node) = agents::find_claude_and_node(&home);
+        if connect { agents::connect_claude(&run_dir, &server, claude.as_deref(), node) } else { agents::disconnect_claude(claude.as_deref()) }
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    // One settings write at a time with the switches.
+    let state = app.state::<AgentsState>();
+    let _held = state.0.lock().map_err(|e| e.to_string())?;
+    agents::remember_claude(&dir, &outcome)?;
+    Ok(outcome)
 }
 
 /// The cached transcription of one audio chunk, e.g. "mic-000".
@@ -1093,6 +1123,7 @@ pub fn run() {
             agents_new_token,
             agents_set_allow_writes,
             agents_activity,
+            agents_claude,
             delete_audio,
             nearai_set_key,
             nearai_has_key,
@@ -1152,7 +1183,7 @@ pub fn run() {
                     0 => {}
                     n => eprintln!("audio: deleted {n} chunks left beside saved notes"),
                 });
-                // Connected agents stays on across restarts, with the same token.
+                // Coding agents stays on across restarts, with the same token.
                 if agents::load_settings(&dir).enabled
                     && let Err(e) = agents_start(&dir, &app.state::<AgentsState>(), false)
                 {

@@ -126,20 +126,26 @@ Reads carry the MCP client's own name (`claude-code`); the claim carries the age
 
 ## Try it with the real app
 
-This part was not recorded; it is the same server and setup, pointed at the Mac app instead of the stand-in. It needs Node 20 or later and the `claude` CLI.
+This part was not recorded; it is the same server, pointed at the Mac app instead of the stand-in. It needs Node 20 or later and the `claude` CLI. Open Aftercall and open Coding agents in the sidebar. Until an agent has reached Aftercall, the screen shows three steps, and each one ticks when it's done:
 
-1. Open Aftercall and open Coding agents in the sidebar.
-2. Turn on "Let agents reach my meetings". A token appears. Agents can now read your processed meetings, and nothing else.
-3. To let agents claim and complete action items, also turn on "Let agents claim and complete action items". Leave it off to keep them read-only.
-4. Under Claude Code, press Copy and run the command in Terminal. It registers the server for every project (`claude mcp add --scope user …`), running the `aftercall-mcp.mjs` that ships inside Aftercall with your token.
-5. In any folder, run:
+1. **Let agents read your meetings.** Turn the switch on. A token is made and the local channel opens. Agents can now read your processed meetings, and nothing else. To let them claim and complete action items too, turn on "Let agents claim and complete action items" in the card below the steps; leave it off to keep them read-only.
+2. **Connect Claude Code.** Press the button. Aftercall finds the `claude` CLI (in `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin`, then your login shell's PATH) and a Node 20 or later the same way, then runs, for every project:
 
    ```sh
-   claude -p "List my Aftercall meetings, then claim the open action item about the API fix as Claude Code." \
+   claude mcp remove --scope user aftercall          # replaces an older entry; fails harmlessly when there is none
+   claude mcp add --scope user aftercall --env AFTERCALL_TOKEN=<token> -- <full path to node> <Aftercall.app>/Contents/Resources/mcp/aftercall-mcp.mjs --data-dir ~/Library/Application\ Support/dev.aftercall.app
+   ```
+
+   The screen then says "Claude Code can now reach Aftercall. Start a new Claude Code session to use it.", or shows Claude Code's error with the token taken out. If Aftercall can't find `claude`, it shows the same command to copy and run in Terminal; "Or run the command yourself" shows it too. "Disconnect Claude Code" runs the `claude mcp remove` line.
+3. **Try it.** Start a new Claude Code session in any folder and ask the prompt shown there (Copy puts it on the clipboard): "Using the aftercall MCP server, list my recent meetings and the open action items." Or headless:
+
+   ```sh
+   claude -p "Using the aftercall MCP server, list my recent meetings and the open action items." \
      --allowedTools "mcp__aftercall__*" --max-turns 8 --output-format text
    ```
 
-   or start `claude` and ask in your own words.
-6. Each read, claim and completion, and every refused request, shows under "Recent agent activity" on the same screen. Allowed lookups of project names and of the write switch come with other requests and aren't listed. A claim shows on the meeting's action item.
+Once a request reaches Aftercall with the current token, the steps give way to "Connected · Last request 2 min ago from Claude Code", with the switch and Disconnect. Each read, claim and completion, and every refused request, shows under "Recent agent activity" on the same screen. Allowed lookups of project names and of the write switch come with other requests and aren't listed. A claim shows on the meeting's action item. For Codex, "Using Codex?" holds the block for `~/.codex/config.toml`.
 
-Turning agents off closes the local channel and forgets the token; turning them on again needs the new setup command, and agents start read-only again. A new token, or moving Aftercall to another folder, also needs the command run again.
+The token stays the same when Aftercall restarts, so the entry in Claude Code keeps working. Turning agents off closes the local channel and forgets the token; turning them on again makes a new one, and agents start read-only again. A new token does the same. Either way Claude Code still has the old token, so the screen shows "Reconnect Claude Code", and a request that arrives with the old token is refused and listed. Moving Aftercall to another folder also needs Connect (or the command) again.
+
+How this was checked (2 November 2026, Claude Code 2.1.316): the Rust tests (`cargo test agents`) cover where the CLI and Node are looked for, the Node version check, the exact arguments, remove-then-add against a stand-in `claude`, and that an error never carries the token. Once, by hand and not in the test suite, the same code ran against the real `claude` with `HOME` set to an empty temporary folder: `claude mcp list` there showed `aftercall: /opt/homebrew/bin/node …/aftercall-mcp.mjs --data-dir … - ✔ Connected` against a live socket, Disconnect removed it, and the folder was deleted. Before this change the copy command put `aftercall` after `--env`, which takes several values, and Claude Code 2.1.316 refused it ("Invalid environment variable format"); the name now comes first.
