@@ -9,6 +9,7 @@ import {
   UNDO_SECONDS,
   amountNote,
   amountProblem as whyNoAmount,
+  capsCrossed,
   currencyIn,
   formatClock,
   formatUsdc,
@@ -21,6 +22,7 @@ import {
   type PayeeDestination,
   type PaymentFollowUp,
   type PayoutPreview,
+  type WalletLimits,
 } from "@aftercall/core";
 import { useChanged } from "./primitives/Check";
 import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, deferred, ease, enter, exit, springs, toast, useDeferred } from "./ui";
@@ -68,7 +70,7 @@ const shortAddress = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 export function FollowUps({
   meetingId,
   followUps,
-  leftToday,
+  limits,
   invited = [],
   autopilotOn = false,
   onOpenAutopilot,
@@ -76,7 +78,8 @@ export function FollowUps({
 }: {
   meetingId: string;
   followUps: FollowUp[];
-  leftToday: bigint | null;
+  /** The agent wallet's per-payment cap and what it can still pay today, when connected. */
+  limits: WalletLimits | null;
   /** Invited people with an email: offered as recap addresses. */
   invited?: Attendee[];
   /** Whether any autopilot rule is on (Settings). */
@@ -98,7 +101,7 @@ export function FollowUps({
       undo: () => h.onRestore(f.id, before),
     });
   };
-  const ctx: RowContext = { meetingId, h, leftToday, invited, network, dismiss };
+  const ctx: RowContext = { meetingId, h, limits, invited, network, dismiss };
 
   return (
     <section aria-labelledby="followups" className="flex flex-col gap-3">
@@ -140,7 +143,7 @@ export function FollowUps({
 interface RowContext {
   meetingId: string;
   h: FollowUpHandlers;
-  leftToday: bigint | null;
+  limits: WalletLimits | null;
   invited: Attendee[];
   network: "testnet" | "mainnet" | null;
   dismiss: (f: FollowUp) => void;
@@ -276,7 +279,7 @@ function HeldNote() {
 
 /**
  * The "done" pill. It pops in, and its check draws, when the state changed on screen.
- * `upper` is the status-pill style (SENT 14:06); a payment's pill reads "50.00 USDC paid 14:21".
+ * `upper` is the status-pill style (SENT 14:06); a payment's pill reads "50.00 USDC paid 14:07".
  */
 function DonePill({ play, upper, children }: { play: boolean; upper?: boolean; children: ReactNode }) {
   return (
@@ -501,6 +504,18 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
   const first = firstName(f.payeeName);
   const amount = f.amount === null ? null : formatUsdc(f.amount);
   const amountId = `amount-${c.meetingId}-${f.id}`;
+  // The per-payment cap holds for every payment, approved here or by autopilot, so say before Approve when it (or today's cap) won't let this through.
+  const crossed = c.limits && f.amount !== null ? capsCrossed(f.amount, c.limits) : null;
+  const overWhat = !crossed
+    ? null
+    : crossed.perPayment && crossed.today
+      ? "your per-payment cap and what's left today"
+      : crossed.perPayment
+        ? `your per-payment cap of ${formatUsdc(c.limits!.perPaymentCap)} USDC`
+        : crossed.today
+          ? "what's left today"
+          : null;
+  const overNote = overWhat && `Over ${overWhat}, so ${route ? `paying on ${CHAIN_NAME[route.chain]} would be refused` : "it will wait for your wallet after you approve"}.`;
 
   const pay = () =>
     deferred({
@@ -529,7 +544,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
               Pay {f.payeeName} <span className="font-mono font-medium">{amount ?? "?"} USDC</span>
             </>
           }
-          sub={<span className="text-caution">Over your limits. Only your wallet can approve it.</span>}
+          sub={<span className="text-caution">Over your caps. Only your wallet can approve it.</span>}
         >
           <Button className="border-caution text-caution hover:bg-transparent" onClick={() => h.onReviewBlocked(f.id)}>
             Review
@@ -619,7 +634,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
           <Body key="paid" className="gap-1.5 pt-2 text-[13px] text-ink-2">
             <span className="flex flex-wrap items-center gap-x-1.5">
               <span>From your agent wallet</span>
-              {c.leftToday !== null && !f.crossChain && <span>· {formatUsdc(c.leftToday)} left today</span>}
+              {c.limits && !f.crossChain && <span>· {formatUsdc(c.limits.leftToday)} left today</span>}
               {f.ref && (
                 <>
                   <span aria-hidden="true">·</span>
@@ -663,11 +678,12 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
                   {f.payeeName} {f.payeeListed ? <span className="text-verdigris">· on your list</span> : <span className="text-caution">· not on your list</span>}
                 </dd>
               </div>
-              {f.payeeListed && c.leftToday !== null && (
+              {f.payeeListed && c.limits && (
                 <div className="flex items-baseline gap-2.5">
                   <dt className="w-14 shrink-0 text-[12px] text-muted">Today</dt>
                   <dd className="m-0">
-                    <span className="t-mono">{formatUsdc(c.leftToday)}</span> <span className="text-ink-2">left to pay today</span>
+                    <span className="t-mono">{formatUsdc(c.limits.leftToday)}</span> <span className="text-ink-2">left to pay today</span>
+                    {overNote && <span className="mt-0.5 block text-[13px] leading-[19px] text-caution">{overNote}</span>}
                   </dd>
                 </div>
               )}

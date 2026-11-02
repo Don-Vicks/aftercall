@@ -19,6 +19,7 @@ export * from "./tee/nvidia.ts";
 export * from "./tee/e2ee.ts";
 export * from "./tee/attest.ts";
 export * from "./wallet/actions.ts";
+export * from "./wallet/caps.ts";
 export * from "./followups/recap.ts";
 export * from "./followups/autopilot.ts";
 export * from "./search/search.ts";

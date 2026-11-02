@@ -123,7 +123,7 @@ function followUpOf(f: FollowUp): ExportFollowUp {
   if (f.status === "paid") return { title, status: `${at("Paid")}${auto}` };
   if (f.status === "sending") return { title, status: "Paying" };
   if (f.status === "failed") return { title, status: "Didn't go through" };
-  if (f.status === "blocked") return { title, status: "Over your limits, waiting for your wallet" };
+  if (f.status === "blocked") return { title, status: "Over your caps, waiting for your wallet" };
   if (f.autopilotAt) return { title, status: "Waiting for autopilot to pay it" };
   if (!f.payeeListed) return { title, status: "Proposed, not paid. Not on your payee list yet" };
   return { title, status: "Proposed, not paid" };

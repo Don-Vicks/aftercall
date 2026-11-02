@@ -73,13 +73,13 @@ CORS: the API answers `access-control-allow-origin: *` (tested with a preflight)
 
 The contract can't verify that a deposit address really pays the payee's Solana or Base address. That promise sits in 1Click's off-chain quote, which the contract never sees. So the guarantees are weaker than for a NEAR payee:
 
-- A NEAR payment can only reach an account the owner listed. A cross-chain payment can reach any implicit account the app's key names. Someone holding a stolen app key could get a quote to their own address, or pass an implicit account they control as the "deposit address", and take up to the daily cap (and per-payment cap) each day, as long as the owner has opted at least one payee in.
+- A NEAR payment can only reach an account the owner listed. A cross-chain payment can reach any implicit account the app's key names. Someone holding a stolen app key could get a quote to their own address, or pass an implicit account they control as the "deposit address", and take up to the daily cap each day, in payments no bigger than the per-payment cap if one is set, as long as the owner has opted at least one payee in.
 - What limits that: opting in is per payee and owner-signed, and it's off unless set. The caps and pause apply unchanged. Only 64-hex implicit accounts are accepted, never named accounts. Every payment is recorded on chain with its deposit address and quote id, so it can be checked against 1Click's explorer and status API afterwards.
 - The app checks that the quote's `quoteRequest.recipient`, `destinationAsset` and `amount` match what was asked for, and that the deposit address has the implicit-account shape. It doesn't yet verify 1Click's quote `signature` (`verifyQuoteSignature` in `@defuse-protocol/one-click-sdk-typescript`). That would guard against a tampered response in transit, not against a stolen key.
 - Refunds go to `refundTo`, the owner's own NEAR account, not back into the agent wallet: a plain `ft_transfer` from 1Click can't credit the contract's per-user balance. The contract doesn't see refunds, so a refunded payment stays counted against that day's cap and marked paid.
 - The 0.00125 NEAR used to register a deposit address isn't returned, even if the token reports the address was already registered (that refund goes to the contract).
 
-If the owner wants a lower ceiling for cross-chain payments, the per-payment cap is the lever today. A separate cross-chain cap would be a later contract change.
+If the owner wants a lower ceiling for cross-chain payments, the per-payment cap is the lever today. It limits every payment, so NEAR payments over it also wait for the owner's wallet. A separate cross-chain cap would be a later contract change.
 
 ## Storage layout
 

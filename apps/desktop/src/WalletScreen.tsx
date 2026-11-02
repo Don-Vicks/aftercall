@@ -6,6 +6,7 @@ import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, meetingLa
 import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast } from "./ui";
 import { isDesktop } from "./recorder";
+import { dailyCap as sampleDailyCap, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 
 /** "12.5" -> 12500000n base units; null if it isn't a plain positive amount. */
 export function parseUsdcInput(text: string): bigint | null {
@@ -30,18 +31,21 @@ const short = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)
  */
 export function WalletScreen({
   blocked,
+  samplePaid,
   onOpenSettings,
   onResolved,
   onChanged,
 }: {
   blocked: BlockedPayment[];
+  /** What the sample meeting has paid: the browser preview's sample wallet counts it as spent today. */
+  samplePaid: bigint;
   onOpenSettings: () => void;
   /** A blocked payment was paid (approved) or dismissed (declined) on NEAR. */
   onResolved: (meetingId: string, followUpId: string, status: "paid" | "dismissed") => void;
   /** A signed change landed: the balance, payees or caps may be different now. */
   onChanged?: () => void;
 }) {
-  const [view, setView] = useState<WalletView | null>(null);
+  const [loaded, setView] = useState<WalletView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [network, setNetwork] = useState<Network>("testnet");
@@ -56,9 +60,8 @@ export function WalletScreen({
     if (!isDesktop) {
       // The browser preview shows a sample wallet, like the sample meeting, so the page can be seen.
       setConnected(true);
-      setView(SAMPLE_WALLET);
-      setCapText(plain(BigInt(SAMPLE_WALLET.wallet!.daily_cap)));
-      setPaymentCapText(plain(BigInt(SAMPLE_WALLET.wallet!.per_payment_cap)));
+      setCapText(plain(sampleDailyCap));
+      setPaymentCapText(plain(samplePerPaymentCap));
       return;
     }
     try {
@@ -112,6 +115,8 @@ export function WalletScreen({
   };
 
   const eyebrow = !isDesktop ? "Sample wallet · browser preview" : contract ? `${contract} · NEAR ${network}` : "NEAR";
+  // The preview's wallet follows the sample meeting: what it paid is spent, and what is blocked waits.
+  const view = isDesktop ? loaded : connected ? sampleWallet(samplePaid, blocked.length) : null;
 
   if (connected === false) {
     return (
@@ -166,6 +171,8 @@ export function WalletScreen({
   const left = cap > spentToday ? cap - spentToday : 0n;
   const pct = cap > 0n ? Number((spentToday * 1000n) / cap) / 10 : 0;
   const busy = Boolean(waiting);
+  // A payment on Solana or Base over a cap is refused, not parked: its quote would expire before your wallet approved it.
+  const crossChain = (view.destinations ?? []).length > 0;
 
   return (
     <Shell eyebrow={eyebrow} sample={!isDesktop} onRefresh={load}>
@@ -207,7 +214,13 @@ export function WalletScreen({
         <div className="flex flex-wrap gap-x-6 gap-y-4">
           <CapField
             label="Daily cap"
-            hint="Everything Aftercall pays in a day, together."
+            hint={
+              cap > 0n
+                ? "Everything Aftercall pays in a day, together."
+                : crossChain
+                  ? "At 0.00, every payment waits for your wallet, or is refused on Solana or Base."
+                  : "At 0.00, every payment waits in the contract for your wallet."
+            }
             value={capText}
             saved={cap}
             busy={busy}
@@ -217,18 +230,25 @@ export function WalletScreen({
             }
           />
           <CapField
-            label="Per payment, for autopilot"
-            hint="Bigger payments wait for you to approve."
+            label="Per payment"
+            // The contract applies it to every payment, approved here or by autopilot; 0 means none.
+            hint={
+              perCap === 0n
+                ? "No per-payment cap. Autopilot pays nothing until you set one."
+                : crossChain
+                  ? "Bigger payments wait for your wallet, or are refused on Solana or Base."
+                  : "Bigger payments wait in the contract for your wallet."
+            }
             value={paymentCapText}
             saved={perCap}
             busy={busy}
             onChange={setPaymentCapText}
             onSave={(v) =>
               signAndWait(
-                "Set per-payment limit",
+                "Set per-payment cap",
                 { kind: "set-payment-cap", perPaymentCap: v.toString() },
                 (x) => x.wallet?.per_payment_cap === v.toString(),
-                () => `Autopilot pays up to ${formatUsdc(v)} USDC each`,
+                () => (v === 0n ? "Per-payment cap removed on NEAR. Autopilot pays nothing until you set one." : `Per-payment cap is ${formatUsdc(v)} USDC on NEAR`),
               )
             }
           />
@@ -240,7 +260,7 @@ export function WalletScreen({
           Waiting for you
         </SectionTitle>
         {blocked.length === 0 ? (
-          <p className="m-0 text-ink-2">Nothing waiting. Payments over your caps wait here for your wallet.</p>
+          <p className="m-0 text-ink-2">Nothing waiting. {crossChain ? "NEAR payments" : "Payments"} over your caps wait here for your wallet.</p>
         ) : (
           blocked.map(({ meeting, followUp: f }) => {
             const id = contractFollowupId(meeting.id, f.id);
@@ -252,7 +272,7 @@ export function WalletScreen({
                   <span className="font-semibold">
                     Pay {f.payeeName} <span className="font-mono font-medium">{amount} USDC</span>
                   </span>
-                  <span className="text-caution">Over your limits. Approving signs in your wallet and pays past the cap once.</span>
+                  <span className="text-caution">Over your caps. Approving in your wallet pays it once, and it counts towards today's spending.</span>
                 </span>
                 <Pill tone="caution" className="bg-raised">
                   Blocked
@@ -271,7 +291,7 @@ export function WalletScreen({
                       ).then((ok) => ok && onResolved(meeting.id, f.id, "dismissed"))
                     }
                   >
-                    Reject
+                    Decline
                   </Button>
                   <Button
                     size="sm"
@@ -455,32 +475,39 @@ export function WalletScreen({
   );
 }
 
-/** What the browser preview shows: a wallet part-way through a day, with one payee on Solana. */
-const SAMPLE_WALLET: WalletView = {
-  wallet: {
-    balance: "412500000",
-    daily_cap: "100000000",
-    spent_today: "50000000",
-    day: Math.floor(Date.now() / 86_400_000),
-    paused: false,
-    pending_count: 1,
-    storage_credit: "0",
-    per_payment_cap: "25000000",
-  },
-  payees: [
-    { account: "designer.near", label: "Designer" },
-    { account: "ada.near", label: "Ada" },
-  ],
-  destinations: [{ payee: "ada.near", chain: "solana", address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }],
-};
+/**
+ * What the browser preview shows: the sample wallet in sample.ts, less what the sample meeting
+ * has paid today (so paying the designer's 50.00 deposit leaves 50.00 of 200.00 spent), with
+ * the sample meeting's blocked payments parked for your wallet and one payee on Solana.
+ */
+function sampleWallet(paid: bigint, parked: number): WalletView {
+  return {
+    wallet: {
+      balance: (sampleBalance - paid).toString(),
+      daily_cap: sampleDailyCap.toString(),
+      spent_today: paid.toString(),
+      day: Math.floor(Date.now() / 86_400_000),
+      paused: false,
+      pending_count: parked,
+      storage_credit: "0",
+      per_payment_cap: samplePerPaymentCap.toString(),
+    },
+    payees: [
+      { account: "designer.near", label: "Designer" },
+      { account: "ada.near", label: "Ada" },
+    ],
+    destinations: [{ payee: "ada.near", chain: "solana", address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }],
+  };
+}
 
 function Shell({ eyebrow, sample, onRefresh, children }: { eyebrow: string; sample?: boolean; onRefresh?: () => void; children: ReactNode }) {
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
       <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
       <div className="mx-auto flex max-w-[760px] flex-col gap-10 px-12 pt-5 pb-24">
-        <header className="flex flex-wrap items-end justify-between gap-6" style={rise(0)}>
-          <div className="flex max-w-[560px] flex-col gap-1.5">
+        {/* No wrap: at the window's narrowest the intro wraps, and Refresh stays beside it. */}
+        <header className="flex items-end justify-between gap-6" style={rise(0)}>
+          <div className="flex min-w-0 max-w-[560px] flex-col gap-1.5">
             <span className="t-eyebrow text-muted">{eyebrow}</span>
             <div className="flex items-center gap-3">
               <h1 className="t-display m-0">Agent wallet</h1>
@@ -772,8 +799,8 @@ function PayeeSheet({
                   <details className="inline">
                     <summary className="inline cursor-pointer font-semibold text-verdigris">Why?</summary>
                     <span className="mt-1 block">
-                      USDC leaves your agent wallet on NEAR, within your caps, and NEAR Intents pays it out on {CHAIN_NAME[paidOn]}. Aftercall can't prove where NEAR Intents sends it. NEAR
-                      mainnet only.
+                      USDC leaves your agent wallet on NEAR, within your caps, and NEAR Intents pays it out on {CHAIN_NAME[paidOn]}. Over a cap, it's refused rather than waiting for
+                      your wallet. Aftercall can't prove where NEAR Intents sends it. NEAR mainnet only.
                     </span>
                   </details>
                 </>

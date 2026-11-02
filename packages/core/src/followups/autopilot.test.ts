@@ -24,11 +24,11 @@ test("a listed payee within both limits is paid; recaps go to your team's domain
 });
 
 test("any failing rule leaves it for a person, and says why", () => {
-  assert.deepEqual(autopilotDecision({ ...payment, amount: usdc(60) }, on, limits).reasons, ["Over your per-payment limit"]);
+  assert.deepEqual(autopilotDecision({ ...payment, amount: usdc(60) }, on, limits).reasons, ["Over your per-payment cap"]);
   assert.deepEqual(autopilotDecision(payment, on, { ...limits, leftToday: usdc(10) }).reasons, ["Over what's left today"]);
   assert.deepEqual(autopilotDecision({ ...payment, payeeListed: false }, on, limits).reasons, ["Payee isn't on your list"]);
   assert.deepEqual(autopilotDecision({ ...payment, amount: null }, on, limits).reasons, ["Amount unclear"]);
-  assert.deepEqual(autopilotDecision(payment, on, { ...limits, perPaymentCap: 0n }).reasons, ["No per-payment limit set"]);
+  assert.deepEqual(autopilotDecision(payment, on, { ...limits, perPaymentCap: 0n }).reasons, ["No per-payment cap set"]);
   assert.deepEqual(autopilotDecision(payment, on, null).reasons, ["Agent wallet not connected"]);
 });
 

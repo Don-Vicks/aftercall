@@ -47,9 +47,12 @@ test("authorising the Mac adds a key limited to pay and record_proof on the cont
 test("the approve page shows the amount, payee, meeting and the words heard", () => {
   const d = describe({
     ...base,
-    action: { kind: "approve", followupId: "m1-f3", payee: "designer.testnet", amount: "5000000000", context: { payeeName: "Designer", meeting: "Sync with Ada", heard: "the full five thousand", leftToday: "150.00" } },
+    action: { kind: "approve", followupId: "m1-f3", payee: "designer.testnet", amount: "5000000000", context: { payeeName: "Designer", meeting: "Sync with Ada", heard: "the full five thousand", leftToday: "150.00 of 200.00" } },
   });
-  assert.deepEqual(d.rows.map((r) => r.value), ["5,000.00 USDC", "Designer · designer.testnet", "Sync with Ada", "“the full five thousand”", "150.00 left; this goes past it once"]);
+  assert.deepEqual(d.rows.map((r) => r.value), ["5,000.00 USDC", "Designer · designer.testnet", "Sync with Ada", "“the full five thousand”", "150.00 of 200.00 USDC"]);
+  assert.deepEqual(d.rows.at(-1), { label: "Left today", value: "150.00 of 200.00 USDC", mono: true });
+  // Parked over either cap; approving pays it once and still counts towards the day (lib.rs approve_pending).
+  assert.match(d.intro, /Approving pays it once over your caps, and it counts towards today's spending\./);
 });
 
 test("links round-trip, and tampered or malformed requests are refused", () => {

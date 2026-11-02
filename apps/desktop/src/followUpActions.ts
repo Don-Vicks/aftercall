@@ -2,6 +2,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   buildRecap,
   CHAIN_NAME,
+  crossChainCapRefusal,
   recapFactsFrom,
   claimLink,
   encodePublicProof,
@@ -133,8 +134,12 @@ export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: 
     route = { chain: dest.chain, address: dest.address, depositAddress: q.quote.depositAddress!, quoteId: q.correlationId, amountOut: q.quote.amountOut, swapStatus: "PENDING_DEPOSIT" };
     const out = await near.payCrossChain(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id), route.depositAddress, route.quoteId);
     if (out.status === "blocked") {
-      // Nothing is parked: the quote would expire before the owner could approve it.
-      return apply({ status: "proposed", error: "Over your caps. A payment on another chain can't wait for approval; raise the cap in your agent wallet, then try again." });
+      // Nothing is parked: the quote would expire before the owner could approve it. The daily
+      // cap says whether waiting for the next day could ever let it through.
+      const w = await near.wallet().catch(() => null);
+      const dailyCap = w?.wallet ? BigInt(w.wallet.daily_cap) : null;
+      const leftToday = out.leftToday === null ? null : BigInt(out.leftToday);
+      return apply({ status: "proposed", error: crossChainCapRefusal(f.amount, out.reason, leftToday, dailyCap) });
     }
     if (out.status === "failed") {
       return apply({ status: "failed", ref: out.txHash, error: "The transfer to NEAR Intents bounced and the amount went back to your agent wallet." });

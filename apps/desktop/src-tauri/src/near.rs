@@ -146,7 +146,8 @@ const PAY_GAS: u64 = 100_000_000_000_000;
 #[serde(rename_all = "camelCase")]
 pub struct PayOutcome {
     pub tx_hash: String,
-    /// "paid", "failed" (the transfer bounced and was refunded) or "blocked".
+    /// "paid", "failed" (the transfer bounced and was refunded) or "blocked" (over a cap: parked for
+    /// the owner's wallet, or for a cross-chain payment refused with nothing parked).
     pub status: String,
     /// OVER_CAP or OVER_PAYMENT_CAP when blocked.
     pub reason: Option<String>,
@@ -176,8 +177,9 @@ pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, fol
 }
 
 /// Pays a listed payee on Solana or Base: the USDC goes to the 1Click deposit address
-/// of the quote the person approved. Same limited key, same `pay` method and caps;
-/// the contract refuses payees the owner hasn't opted in and records the route.
+/// of the quote the person approved. Same limited key, same `pay` method and caps, but over a cap
+/// it's refused and nothing is parked (the quote would expire); the contract refuses payees the
+/// owner hasn't opted in and records the route.
 pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str, deposit_address: &str, quote_id: &str) -> Result<PayOutcome, String> {
     if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
         return Err("Bad amount".into());

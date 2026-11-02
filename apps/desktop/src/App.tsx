@@ -24,7 +24,7 @@ import { WalletScreen, type BlockedPayment } from "./WalletScreen";
 import { near } from "./near";
 import { recordingFiles } from "./nearai";
 import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, payCrossChain, previewCrossChain, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
-import { payees as samplePayees } from "./sample";
+import { dailyCap as sampleDailyCap, paidBySample, payees as samplePayees, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
 import { Onboarding, needsOnboarding } from "./Onboarding";
@@ -229,7 +229,6 @@ export default function App() {
       toast({ text: `Couldn't open the sample: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
     }
   };
-  const leftToday = limits?.leftToday ?? null;
 
   const refreshWallet = useCallback(async () => {
     const config = isDesktop ? await near.getConfig().catch(() => null) : null;
@@ -448,9 +447,22 @@ export default function App() {
       onApprove: (id: string) => {
         const f = find(id);
         if (sample) {
-          // The sample meeting only simulates the round trip.
-          apply(id)({ status: "sending" });
-          setTimeout(() => apply(id)({ status: f.kind === "email" ? "sent" : "paid", doneAt: nowHHMM() }), 1600);
+          // The sample meeting only simulates the round trip, under the sample wallet's rules, as
+          // the contract would: more than the balance is refused, and a payment over the
+          // per-payment cap or past today's cap waits for your wallet. What the sample already
+          // paid comes off the balance and counts towards today.
+          const amount = f.kind === "payment" ? f.amount : null;
+          const paid = paidBySample(meeting);
+          const outcome: Patch =
+            f.kind === "email"
+              ? { status: "sent", doneAt: nowHHMM() }
+              : amount !== null && amount > sampleBalance - paid
+                ? { status: "proposed", error: "Not enough USDC in your agent wallet. Deposit some first." }
+                : amount !== null && (amount > samplePerPaymentCap || paid + amount > sampleDailyCap)
+                  ? { status: "blocked" }
+                  : { status: "paid", doneAt: nowHHMM() };
+          apply(id)({ status: "sending", error: undefined });
+          setTimeout(() => apply(id)(outcome), 1600);
           return;
         }
         if (f.kind === "email") sendRecap(meeting, f, apply(id), saved[meeting.id]);
@@ -543,7 +555,8 @@ export default function App() {
   });
 
   const blocked: BlockedPayment[] = meetingList
-    .filter((m) => saved[m.id] && !hidden[m.id])
+    // The browser preview has no saved notes: there, the sample wallet's parked payment is the sample meeting's.
+    .filter((m) => (saved[m.id] || (!isDesktop && m.id === syncWithAda.id)) && !hidden[m.id])
     .flatMap((m) => m.followUps.filter((f) => f.kind === "payment" && f.status === "blocked").map((f) => ({ meeting: m, followUp: f as BlockedPayment["followUp"] })));
 
   const finishProcessing = useCallback(() => setView({ name: "meeting", id: syncWithAda.id }), []);
@@ -668,7 +681,7 @@ export default function App() {
                 autopilotOn={autopilotOn}
                 onOpenAgents={() => setView({ name: "agents" })}
                 onOpenAutopilot={() => setView({ name: "settings" })}
-                leftToday={meeting.id === syncWithAda.id ? null : leftToday}
+                limits={meeting.id === syncWithAda.id ? null : limits}
                 onToggleItem={(itemId) => toggleItem(meeting.id, itemId)}
                 onEditItem={(itemId, fields) => editItem(meeting.id, itemId, fields)}
                 originalOf={(itemId) => originalOf(meeting.id, itemId)}
@@ -723,6 +736,7 @@ export default function App() {
             {view.name === "wallet" && (
               <WalletScreen
                 blocked={blocked}
+                samplePaid={paidBySample(meetings[syncWithAda.id])}
                 onOpenSettings={() => setView({ name: "settings" })}
                 onResolved={(meetingId, fuId, status) => {
                   patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });

@@ -32,9 +32,24 @@ export const account = "victor.near";
 
 /** Payee list until payees come from the agent-wallet contract (M4). */
 export const payees = [{ name: "Designer", account: "designer.near" }];
-export const walletBalance = 180_000_000n; // 180.00 USDC
+
+/*
+ * The sample agent wallet at the start of the day, before the sample meeting's payments. The
+ * browser preview's Agent wallet shows it minus what the sample meeting has paid, and approving
+ * the sample's payments follows it as the contract would (lib.rs `pay`): a payment bigger than
+ * the balance is refused before the caps are checked; one over the per-payment cap or past the
+ * daily cap waits for the owner's wallet. The designer's 50.00 deposit fits both caps; once it
+ * is paid, 5,180.00 is left, with 50.00 of 200.00 spent and 150.00 left today. The 5,000.00 is
+ * covered by the balance but over both caps, so it waits for the owner's wallet.
+ */
+export const walletBalance = 5_230_000_000n; // 5,230.00 USDC
 export const dailyCap = 200_000_000n; // 200.00 USDC
-export const spentToday = 50_000_000n;
+export const perPaymentCap = 100_000_000n; // 100.00 USDC
+
+/** What the sample meeting's paid payments took from the sample wallet, all of it today. */
+export function paidBySample(m: Meeting | undefined): bigint {
+  return (m?.followUps ?? []).reduce((sum, f) => (f.kind === "payment" && f.status === "paid" && f.amount !== null ? sum + f.amount : sum), 0n);
+}
 
 /** Today at hh:mm, as an ISO time (when the sample's agent claimed its item). */
 function todayAt(h: number, m: number): string {

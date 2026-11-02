@@ -271,21 +271,21 @@ async fn one_yocto_rule_holds_even_if_key_lists_owner_methods() -> anyhow::Resul
 async fn per_payment_cap_parks_big_single_payments() -> anyhow::Result<()> {
     let e = setup().await?;
     let app = limited_key(&e).await?;
-    // Autopilot limit: 50 USDC per payment (daily cap is 200).
+    // Per-payment cap: 50 USDC (daily cap is 200). It limits every payment the app's key sends, approved in the app or by autopilot.
     e.victor.call(e.wallet.id(), "set_payment_cap").args_json(json!({ "per_payment_cap": (50 * USDC).to_string() }))
         .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
 
-    let small = pay(&e, &app, 50 * USDC, "auto-1").await?;
+    let small = pay(&e, &app, 50 * USDC, "pp-1").await?;
     assert_eq!(small.json::<serde_json::Value>()?["status"], "sending");
 
     // 60 is under the daily cap but over the per-payment cap: parked, not paid.
-    let big = pay(&e, &app, 60 * USDC, "auto-2").await?;
+    let big = pay(&e, &app, 60 * USDC, "pp-2").await?;
     let out: serde_json::Value = big.json()?;
     assert_eq!(out["status"], "blocked");
     assert_eq!(out["reason"], "OVER_PAYMENT_CAP");
     assert_eq!(ft_balance(&e, &e.designer).await?, 50 * USDC);
 
-    // The limited key can't raise its own limit.
+    // The limited key can't raise or turn off its own cap (0 would turn it off).
     let raise = app.call(e.wallet.id(), "set_payment_cap").args_json(json!({ "per_payment_cap": "0" }))
         .deposit(NearToken::from_yoctonear(1)).transact().await;
     assert!(raise.is_err() || raise.unwrap().is_failure());

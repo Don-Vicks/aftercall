@@ -159,11 +159,12 @@ export function describe(r: SignRequest): Description {
       return { title: "Change your daily cap", intro: "The most Aftercall can pay in one day without your wallet.", rows: [{ label: "New daily cap", value: usdc(a.dailyCap), mono: true }], walletNote: note("set_cap"), confirm: "Set cap" };
     case "set-payment-cap":
       return {
-        title: "Change your per-payment limit",
-        intro: "The largest single payment Aftercall can send without your wallet. 0 turns the limit off.",
-        rows: [{ label: "New limit", value: usdc(a.perPaymentCap), mono: true }],
+        title: "Change your per-payment cap",
+        intro:
+          "The biggest single payment Aftercall can send without your wallet, whether you approve it in the app or autopilot does. Bigger ones wait for your wallet, or are refused if paid on Solana or Base. 0 means no per-payment cap, and autopilot then pays nothing.",
+        rows: [{ label: "New per-payment cap", value: usdc(a.perPaymentCap), mono: true }],
         walletNote: note("set_payment_cap"),
-        confirm: "Set limit",
+        confirm: "Set cap",
       };
     case "add-payee":
       return {
@@ -182,7 +183,7 @@ export function describe(r: SignRequest): Description {
       return a.destination
         ? {
             title: `Pay ${a.label} on ${CHAIN_NAME[a.destination.chain]}`,
-            intro: "Lets Aftercall pay this payee outside NEAR through NEAR Intents, within the same caps.",
+            intro: "Lets Aftercall pay this payee outside NEAR through NEAR Intents, within the same caps. A payment over a cap is refused, not held for your wallet, because the quote would expire.",
             rows: [{ label: "Payee", value: `${a.label} · ${a.account}` }, ...destinationRows(a.destination)],
             walletNote: note("set_payee_destination"),
             confirm: "Allow in wallet",
@@ -209,7 +210,8 @@ export function describe(r: SignRequest): Description {
     case "approve":
       return {
         title: "Approve a payment your agent wallet blocked",
-        intro: "Aftercall's key can't pay this; only your wallet can. Check every line, then sign.",
+        // Parked over the daily cap or over the per-payment cap: the intro is true for either.
+        intro: "Aftercall's key can't pay this; only your wallet can. Approving pays it once over your caps, and it counts towards today's spending. Check every line, then sign.",
         rows: [
           { label: "Amount", value: usdc(a.amount), mono: true },
           { label: "To", value: a.context ? `${a.context.payeeName} · ${a.payee}` : a.payee },
@@ -217,7 +219,7 @@ export function describe(r: SignRequest): Description {
             ? [
                 { label: "From", value: a.context.meeting },
                 { label: "Heard", value: `“${a.context.heard}”` },
-                { label: "Cap today", value: `${a.context.leftToday} left; this goes past it once` },
+                { label: "Left today", value: `${a.context.leftToday} USDC`, mono: true },
               ]
             : []),
         ],

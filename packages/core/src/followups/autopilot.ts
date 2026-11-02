@@ -2,7 +2,7 @@ import type { AmountProblemKind, FollowUp, Meeting } from "../meeting.ts";
 
 /** What the person allows to happen without a tap. Off unless they turn it on. */
 export interface AutopilotRules {
-  /** Pay listed payees within the per-payment limit. */
+  /** Pay listed payees within the per-payment cap and what's left today. With no per-payment cap set, nothing is paid. */
   payments: boolean;
   /** Send recaps to these email domains (your own team). Empty: never. */
   recapDomains: string[];
@@ -74,8 +74,8 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
   if (f.amount === null) reasons.push(AMOUNT_PROBLEM_REASONS[f.amountProblem ?? "unclear"]);
   if (!limits) reasons.push("Agent wallet not connected");
   else if (f.amount !== null) {
-    if (limits.perPaymentCap === 0n) reasons.push("No per-payment limit set");
-    else if (f.amount > limits.perPaymentCap) reasons.push("Over your per-payment limit");
+    if (limits.perPaymentCap === 0n) reasons.push("No per-payment cap set");
+    else if (f.amount > limits.perPaymentCap) reasons.push("Over your per-payment cap");
     if (f.amount > limits.leftToday) reasons.push("Over what's left today");
   }
   return { run: reasons.length === 0, reasons };

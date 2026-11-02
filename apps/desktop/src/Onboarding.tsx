@@ -104,7 +104,7 @@ export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => vo
 const POINTS: [string, string, ReactNode][] = [
   ["Private", "Made inside NEAR AI's secure hardware, and anyone can check it.", <ShieldCheck size={18} strokeWidth={1.75} />],
   ["Yours", "Notes stay on this Mac. The audio is deleted once it's transcribed.", <Laptop size={18} strokeWidth={1.75} />],
-  ["Done", "Recaps and payments go out after one approval, under your limits.", <Send size={18} strokeWidth={1.75} />],
+  ["Done", "Recaps and payments within your caps go out after one approval.", <Send size={18} strokeWidth={1.75} />],
 ];
 
 function Welcome({ onNext, onRestore }: { onNext: () => void; onRestore: () => void }) {
@@ -521,7 +521,7 @@ function Ready({ onRecord, onLater }: { onRecord: () => void; onLater: () => voi
     ],
     [
       "Approve what you want",
-      "Recaps and payments go out after one approval.",
+      "Recaps and payments within your caps go out after one approval.",
       <span className="inline-flex h-[30px] items-center rounded-sm bg-verdigris px-3 text-[13px] font-semibold text-on-verdigris">Approve</span>,
     ],
   ];

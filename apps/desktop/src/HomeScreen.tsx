@@ -477,7 +477,7 @@ function FollowUpRow({
 
   if (f.status === "blocked") {
     return (
-      <NeedRow tone="caution" avatar={avatar} title={needTitle(f)} detail={<span className="text-caution">Over your limits. Only your wallet can approve it.</span>}>
+      <NeedRow tone="caution" avatar={avatar} title={needTitle(f)} detail={<span className="text-caution">Over your caps. Only your wallet can approve it.</span>}>
         <Pill tone="caution" className="bg-raised">
           Blocked
         </Pill>

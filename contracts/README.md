@@ -8,13 +8,13 @@ One shared NEAR contract that holds each user's USDC under rules only the user's
 | The user's wallet (full-access key, 1 yoctoNEAR) | `set_cap`, `set_payment_cap`, `set_paused`, `add_payee`, `remove_payee`, `set_payee_destination`, `withdraw`, `approve_pending`, `cancel_pending` |
 | Only the USDC contract | `ft_on_transfer` (deposits) |
 | Only this contract | `on_pay_complete` (refunds a failed transfer) |
-| Anyone (view) | `get_wallet`, `get_payees`, `get_payee_label`, `is_paid`, `get_pending`, `get_proof`, `get_usdc`, `get_stats` |
+| Anyone (view) | `get_wallet`, `get_payees`, `get_payee_label`, `get_payee_destinations`, `is_paid`, `get_pending`, `get_cross_chain_payment`, `get_proof`, `get_usdc`, `get_stats` |
 
 `get_stats` returns counts across all users and nothing else: `{ "wallets", "proofs", "payments", "parked" }`. `payments` counts payments to payees that were sent and not refunded (withdrawals don't count); `parked` counts payments held over a cap. The counters live under their own storage key (`stats`), outside the contract's state struct, and the contract pays for their few bytes.
 
-`pay` sends a payment only to a listed payee, within the daily cap and the per-payment cap. Anything over a cap is parked; only the owner's wallet can approve or decline it. A function-call key can't attach the 1 yoctoNEAR the owner methods require, so a stolen app key can't change the rules. There is no admin method that moves user funds, and each user's storage is paid from their own registration deposit.
+`pay` sends a payment only to a listed payee, within the daily cap and the per-payment cap. Anything over a cap is parked; only the owner's wallet can approve or decline it. Approving pays it once and still counts towards that day's spending. A per-payment cap of 0 means no per-payment limit. A function-call key can't attach the 1 yoctoNEAR the owner methods require, so a stolen app key can't change the rules. There is no admin method that moves user funds, and each user's storage is paid from their own registration deposit.
 
-Cross-chain payouts: the owner can opt a payee in to being paid on Solana or Base (`set_payee_destination`). The app then calls the same `pay` with a `cross_chain` route, and the USDC goes to a NEAR Intents 1Click deposit address (a 64-hex implicit account) under the same caps and pause. Each payment is recorded (`get_cross_chain_payment`). The contract can't verify that a deposit address pays the payee's address; see [docs/near-intents-1click.md](../docs/near-intents-1click.md) for that trust gap.
+Cross-chain payouts: the owner can opt a payee in to being paid on Solana or Base (`set_payee_destination`). The app then calls the same `pay` with a `cross_chain` route, and the USDC goes to a NEAR Intents 1Click deposit address (a 64-hex implicit account) under the same caps and pause. Over a cap it is refused, not parked, because the quote would expire before the owner could approve it. Each payment is recorded (`get_cross_chain_payment`). The contract can't verify that a deposit address pays the payee's address; see [docs/near-intents-1click.md](../docs/near-intents-1click.md) for that trust gap.
 
 ## Test
 

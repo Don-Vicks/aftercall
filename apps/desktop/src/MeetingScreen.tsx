@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine } from "@aftercall/core";
+import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
 import { ExportMenu } from "./ExportMenu";
 import { EditItemButton, EditedMark, ItemEditor, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
@@ -18,7 +18,7 @@ export function MeetingScreen({
   meeting,
   dropped = [],
   me = [],
-  leftToday,
+  limits,
   onToggleItem,
   onEditItem,
   originalOf,
@@ -41,8 +41,8 @@ export function MeetingScreen({
   dropped?: Dropped[];
   /** Your names (NEAR account, name): action items owned by these show as "You". */
   me?: readonly string[];
-  /** What the agent wallet can still pay today, when connected. */
-  leftToday: bigint | null;
+  /** The agent wallet's per-payment cap and what it can still pay today, when connected. */
+  limits: WalletLimits | null;
   onToggleItem: (id: string) => void;
   /** Saves your edit of an item's text, owner and due date; null restores what the model signed. */
   onEditItem?: (id: string, fields: ItemFields | null) => void;
@@ -121,7 +121,7 @@ export function MeetingScreen({
               <Notes
                 meeting={meeting}
                 dropped={dropped}
-                leftToday={leftToday}
+                limits={limits}
                 onToggleItem={onToggleItem}
                 onEditItem={onEditItem}
                 originalOf={originalOf}
@@ -176,7 +176,7 @@ function People({ others }: { others: Attendee[] }) {
 function Notes({
   meeting,
   dropped,
-  leftToday,
+  limits,
   onToggleItem,
   onEditItem,
   originalOf,
@@ -188,7 +188,7 @@ function Notes({
 }: {
   meeting: Meeting;
   dropped: Dropped[];
-  leftToday: bigint | null;
+  limits: WalletLimits | null;
   onToggleItem: (id: string) => void;
   onEditItem?: (id: string, fields: ItemFields | null) => void;
   originalOf?: (id: string) => ItemFields | null;
@@ -267,7 +267,7 @@ function Notes({
         <FollowUps
           meetingId={meeting.id}
           followUps={meeting.followUps}
-          leftToday={leftToday}
+          limits={limits}
           invited={meeting.invited}
           autopilotOn={autopilotOn}
           onOpenAutopilot={onOpenAutopilot}

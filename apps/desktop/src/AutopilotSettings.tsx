@@ -39,9 +39,9 @@ export function AutopilotSettings() {
 
   const payDetail =
     cap === null ? (
-      "Only people on your list, up to your per-payment limit, when the amount heard is clear."
+      "Only people on your list, up to your per-payment cap, when the amount heard is clear."
     ) : cap === 0n ? (
-      "Your per-payment limit is 0.00 USDC, so nothing is paid by itself until you set one in Agent wallet."
+      "No per-payment cap is set, so autopilot pays nothing. Set one in Agent wallet."
     ) : (
       <>
         Only people on your list, up to <span className="font-mono">{formatUsdc(cap)} USDC</span> each, when the amount heard is clear.

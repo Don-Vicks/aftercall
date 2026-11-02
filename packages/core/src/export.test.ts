@@ -145,7 +145,7 @@ test("follow-up statuses read in plain words", () => {
   assert.match(status({ ...email, draftedAt: "14:08" }).status, /Opened as a draft in Mail at 14:08\. Aftercall can't tell whether it was sent/);
   assert.equal(status({ ...email, toName: "" }).title, "Recap to someone");
   assert.equal(status({ ...pay, status: "proposed" }).status, "Proposed, not paid");
-  assert.equal(status({ ...pay, status: "blocked" }).status, "Over your limits, waiting for your wallet");
+  assert.equal(status({ ...pay, status: "blocked" }).status, "Over your caps, waiting for your wallet");
   assert.equal(status({ ...pay, status: "failed" }).status, "Didn't go through");
   assert.equal(status({ ...pay, status: "proposed", autopilotAt: now }).status, "Waiting for autopilot to pay it");
   assert.match(status({ ...pay, status: "proposed", payeeListed: false }).status, /Not on your payee list yet/);

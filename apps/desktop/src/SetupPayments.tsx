@@ -56,7 +56,7 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
 
   const finish = (capsSet: boolean) => {
     toast({
-      text: capsSet ? "This Mac can now pay within your caps" : "This Mac is authorised. Set your caps in Agent wallet to start paying.",
+      text: capsSet ? "This Mac can now pay within your caps" : "This Mac is authorised. Set a daily cap in Agent wallet to start paying.",
       tone: "verdigris",
     });
     close();
@@ -193,7 +193,9 @@ function WalletStep({ n, onLater, onDone }: { n: NearSetup; onLater: () => void;
   }, [registered]);
 
   const sign = () => (next === "register" ? n.signStep("Create wallet", "register") : n.signStep("Authorise this Mac", "authorise-key"));
-  const capsSet = Boolean(caps && caps.daily > 0n && caps.payment > 0n);
+  // A daily cap of 0 parks every payment for your wallet; a per-payment cap of 0 means none
+  // (only autopilot needs one), so the daily cap alone decides whether this Mac can pay.
+  const capsSet = Boolean(caps && caps.daily > 0n);
 
   return (
     <>
@@ -248,19 +250,29 @@ function WalletStep({ n, onLater, onDone }: { n: NearSetup; onLater: () => void;
               ["Daily cap", caps?.daily],
               ["Per payment", caps?.payment],
             ] as const
-          ).map(([label, value]) => (
-            <div key={label} className="flex flex-col gap-1 rounded-md px-4 py-3 shadow-[inset_0_0_0_1px_var(--hairline)]">
-              <dt className="text-[13px] leading-[18px] font-semibold text-ink-2">{label}</dt>
-              <dd className="m-0 font-mono text-[15px] leading-[22px] text-ink">
-                {formatUsdc(value ?? 0n)} <span className="text-xs text-muted">USDC</span>
-              </dd>
-            </div>
-          ))}
+          ).map(([label, value]) => {
+            // A per-payment cap read as 0 means there is none (lib.rs `pay`); not read yet shows 0.00 like the daily cap.
+            const noCap = label === "Per payment" && value === 0n;
+            return (
+              <div key={label} className="flex flex-col gap-1 rounded-md px-4 py-3 shadow-[inset_0_0_0_1px_var(--hairline)]">
+                <dt className="text-[13px] leading-[18px] font-semibold text-ink-2">{label}</dt>
+                <dd className={cx("m-0 text-[15px] leading-[22px] text-ink", !noCap && "font-mono")}>
+                  {noCap ? (
+                    "No cap"
+                  ) : (
+                    <>
+                      {formatUsdc(value ?? 0n)} <span className="text-xs text-muted">USDC</span>
+                    </>
+                  )}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
         <p className="m-0 text-[13px] leading-[19px] text-ink-2">
           {capsSet
             ? "Change them in Agent wallet; your wallet signs each change."
-            : "A new agent wallet starts at 0.00, so nothing is paid until you set caps in Agent wallet."}
+            : "A new agent wallet starts with a 0.00 daily cap, so every payment waits for your wallet until you set one in Agent wallet."}
         </p>
       </section>
 
