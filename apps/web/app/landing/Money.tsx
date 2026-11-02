@@ -4,29 +4,32 @@ import { Face, SectionHead } from "./bits";
 import { Moment } from "./motion";
 
 /*
- * Section 5: the agent wallet (WalletScreen.tsx strings, the app's sample balance and daily
- * cap). Moment 5: Deposit is pressed, "+25.00 USDC" rises and the balance rolls from 180.00
- * to 205.00 right to left. A deposit doesn't change what was spent, so the spent bar stays
- * still. Rendered finished; the roll is CSS on data-state.
+ * Section 5: the agent wallet (WalletScreen.tsx strings, and the app's sample wallet in
+ * apps/desktop/src/sample.ts once the designer is paid). Moment 5: Deposit is pressed,
+ * "+25.00 USDC" rises and the balance rolls from 5,180.00 to 5,205.00 right to left. A deposit
+ * doesn't change what was spent, so the spent bar stays still. Rendered finished; the roll is
+ * CSS on data-state.
  *
- * The caps are set so the sample agrees with the contract (lib.rs: a payment over the
- * per-payment cap or past the daily cap parks for the owner's wallet): the 50.00 deposit is
- * inside both, the 5,000.00 payment is over both.
+ * The figures agree with the contract (lib.rs): a payment bigger than the balance is refused
+ * (LOW_BALANCE) before the caps are checked, and one over the per-payment cap or past the daily
+ * cap parks for the owner's wallet. So the balance covers the 5,000.00, which is over both caps,
+ * and the 50.00 deposit is inside both.
  */
 
-const FROM = "180.00";
-const TO = "205.00";
+const FROM = "5,180.00";
+const TO = "5,205.00";
 
 function Balance() {
   const digits = TO.split("");
-  const order = digits.map((_, i) => digits.slice(i + 1).filter((c) => c !== ".").length);
+  const still = (c: string) => c === "." || c === ",";
+  const order = digits.map((_, i) => digits.slice(i + 1).filter((c) => !still(c)).length);
   return (
     <span className={l.balance}>
       <span className="sr-only">Balance {TO} USDC</span>
       <span aria-hidden="true" className={l.balanceDigits}>
         {digits.map((c, i) =>
-          c === "." ? (
-            <span key={i}>.</span>
+          still(c) ? (
+            <span key={i}>{c}</span>
           ) : (
             <span key={i} className={l.bDigit}>
               <span className={l.bCol} style={vars({ from: Number(FROM[i]), to: Number(c), ri: order[i] })} />

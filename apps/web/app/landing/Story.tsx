@@ -276,7 +276,7 @@ function PaymentScreen() {
           <p className={l.payTitle}>
             Pay Designer <span className={l.mono}>5,000.00 USDC</span>
           </p>
-          <p className={l.blockedLine}>Over your limits. Only your wallet can approve it.</p>
+          <p className={l.blockedLine}>Over your caps. Only your wallet can approve it.</p>
           <Said at="02:30" className={l.blockedSaid}>
             the full five thousand when the deck is done
           </Said>

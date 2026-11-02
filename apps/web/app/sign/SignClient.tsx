@@ -162,7 +162,7 @@ export function SignClient() {
       <main className={g.main}>
         <div className={g.inner}>
           <section aria-labelledby="ah" className={`${g.intro} enter`}>
-            {a.kind === "approve" && <Pill tone="caution">Over your limits</Pill>}
+            {a.kind === "approve" && <Pill tone="caution">Over your caps</Pill>}
             {a.kind === "cancel" && <Pill tone="muted">Decline</Pill>}
             <h1 id="ah" className="t-display">
               {d.title}
@@ -323,15 +323,6 @@ function Row({ label, value, mono, request }: { label: string; value: string; mo
     );
   } else if (a.kind === "approve" && label === "Heard") {
     cls = g.heard;
-  } else if (a.kind === "approve" && label === "Cap today" && a.context) {
-    body = (
-      <>
-        <span className="mono" style={{ fontSize: 13 }}>
-          {a.context.leftToday}
-        </span>{" "}
-        <span className="ink-2">left; this goes past it once</span>
-      </>
-    );
   }
   return (
     <>
