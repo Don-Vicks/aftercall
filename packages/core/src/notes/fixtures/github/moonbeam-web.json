@@ -1,0 +1,21 @@
+{
+  "repo": "moonbeam/web",
+  "via": "gh",
+  "name": "web",
+  "description": "Booking site for Moonbeam Bikes: bikes, time slots and Stripe payments",
+  "homepage": "https://moonbeam.bike",
+  "topics": ["booking", "stripe", "nextjs", "hacktoberfest", "typescript", "booking-flow"],
+  "language": "TypeScript",
+  "private": true,
+  "readme": "see moonbeam-web.README.md",
+  "contributors": [
+    { "login": "olamide-a", "name": "Olamide Adebayo", "contributions": 212, "bot": false },
+    { "login": "dependabot[bot]", "name": "", "contributions": 140, "bot": true },
+    { "login": "jkim", "name": "John Kim", "contributions": 87, "bot": false },
+    { "login": "renovate-bot", "name": "", "contributions": 30, "bot": false },
+    { "login": "ada-o", "name": "", "contributions": 4, "bot": false }
+  ],
+  "codeowners": "# Owners of everything\n*       @olamide-a @moonbeam/web-team\n/docs/  docs@moonbeam.bike @sam-r\n",
+  "packageJson": "{\n  \"name\": \"@moonbeam/booking-web\",\n  \"version\": \"0.4.0\",\n  \"private\": true\n}\n",
+  "cargoToml": ""
+}

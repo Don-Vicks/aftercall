@@ -1,9 +1,11 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { ActionItem, Meeting, ProjectBrief } from "@aftercall/core";
+import { RefreshCw } from "lucide-react";
+import { briefFromGithub, draftBrief, draftFromBrief, emptyDraft, refreshDraft, seenFrom, type ActionItem, type BriefDraft, type BriefSource, type Meeting, type ProjectBrief } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import type { Project } from "./projects";
 import { MeetingRow, meetingRow, shortWhen } from "./MeetingRow";
-import { BriefFields, BriefPrivacy, briefFromDraft, draftFromBrief, type BriefDraft } from "./NewProjectSheet";
+import { BriefPrivacy, BriefReview } from "./BriefReview";
+import { githubApi } from "./github";
 import { Avatar, Button, Card, SectionTitle, Strike, Tick, cx, toast, useIsYou } from "./ui";
 
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
@@ -26,6 +28,7 @@ export function ProjectScreen({
   onRecord,
   onRename,
   onSaveBrief,
+  payees = [],
 }: {
   project: Project;
   /** This project's recordings, newest first. */
@@ -38,8 +41,10 @@ export function ProjectScreen({
   /** Opens the record sheet with this project picked. */
   onRecord: () => void;
   onRename: () => void;
-  /** Saves the project's brief (undefined clears it). */
-  onSaveBrief: (brief: ProjectBrief | undefined) => Promise<void>;
+  /** Saves the project's brief (undefined clears it) and where it came from (undefined keeps it, null drops it). */
+  onSaveBrief: (brief: ProjectBrief | undefined, source?: BriefSource | null) => Promise<void>;
+  /** Payee names, for the preview of Whisper's spelling prompt. */
+  payees?: string[];
 }) {
   const [all, setAll] = useState(false);
   /** Items ticked on this page stay, struck through, until you leave it. */
@@ -94,7 +99,7 @@ export function ProjectScreen({
           </div>
         </header>
 
-        <BriefCard key={project.id} name={project.name} brief={project.brief} onSave={onSaveBrief} style={rise(1)} />
+        <BriefCard key={project.id} name={project.name} brief={project.brief} source={project.briefSource} payees={payees} onSave={onSaveBrief} style={rise(1)} />
 
         {sorted.length === 0 ? (
           <p className="m-0 text-ink-2" style={rise(2)}>
@@ -202,21 +207,51 @@ function Person({ name, detail, mono, you }: { name: string; detail: string; mon
   );
 }
 
+/** "2 Nov", or "2 Nov 2025" in another year. */
+const dayLabel = (unix: number) => {
+  const d = new Date(unix * 1000);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }) });
+};
+
 /**
  * The project brief: what it's about, who's who, words to expect and what to watch for.
- * Read here, edited in place. Everything about it stays on this Mac except what goes,
- * encrypted, with a meeting's notes request (and words to expect, with the audio).
+ * Read here, edited with the same review as New project. A brief filled from GitHub says
+ * so, with Refresh: it looks the repo up again and shows only what changed there, keeping
+ * what you edited. Everything about it stays on this Mac except what goes, encrypted,
+ * with a meeting's notes request (and words to expect, with the audio).
  */
-function BriefCard({ name, brief, onSave, style }: { name: string; brief?: ProjectBrief; onSave: (b: ProjectBrief | undefined) => Promise<void>; style?: CSSProperties }) {
+function BriefCard({
+  name,
+  brief,
+  source,
+  payees,
+  onSave,
+  style,
+}: {
+  name: string;
+  brief?: ProjectBrief;
+  source?: BriefSource;
+  payees: string[];
+  onSave: (b: ProjectBrief | undefined, source?: BriefSource | null) => Promise<void>;
+  style?: CSSProperties;
+}) {
   const [draft, setDraft] = useState<BriefDraft | null>(null);
+  /** On Refresh: what changed, and the source to save with it. */
+  const [refresh, setRefresh] = useState<{ changes: string[]; source: BriefSource } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
   const editing = draft !== null;
+  const close = () => {
+    setDraft(null);
+    setRefresh(null);
+  };
   const save = async () => {
     if (!draft || saving) return;
     setSaving(true);
     try {
-      await onSave(briefFromDraft(draft));
-      setDraft(null);
+      const next = draftBrief(draft);
+      await onSave(next, next ? refresh?.source : null);
+      close();
     } catch (e) {
       toast({ text: `Couldn't save the brief: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
     } finally {
@@ -229,45 +264,86 @@ function BriefCard({ name, brief, onSave, style }: { name: string; brief?: Proje
       void save();
     } else if (e.key === "Escape") {
       e.stopPropagation();
-      setDraft(null);
+      close();
     }
   };
+  const lookAgain = async () => {
+    if (!source || checking) return;
+    setChecking(true);
+    try {
+      const fresh = briefFromGithub(await githubApi.repo(source.repo));
+      const next: BriefSource = { ...source, fetchedAt: Math.floor(Date.now() / 1000), seen: seenFrom(fresh) };
+      const r = refreshDraft(brief, source, fresh);
+      if (r.changes.length === 0) {
+        // Only the date changes; the brief itself is as it was.
+        await onSave(brief, next);
+        toast({ text: `Brief is up to date with ${source.repo}`, tone: "verdigris" });
+      } else {
+        setRefresh({ changes: r.changes, source: next });
+        setDraft(r.draft);
+      }
+    } catch (e) {
+      toast({ text: `Couldn't refresh from GitHub: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+    } finally {
+      setChecking(false);
+    }
+  };
+  // "With your edits": GitHub's About changed by you, or something GitHub suggested taken out. Additions aren't edits.
+  const seen = source?.seen;
+  const has = (list: string[] | undefined, v: string) => Boolean(list?.some((x) => x.toLowerCase() === v.toLowerCase()));
+  const yours =
+    Boolean(source && brief) &&
+    ((Boolean(seen?.about) && brief?.about !== seen?.about) ||
+      Boolean(seen?.people?.some((n) => !has(brief?.people?.map((p) => p.name), n))) ||
+      Boolean(seen?.words?.some((w) => !has(brief?.words, w))));
 
   return (
     <section aria-labelledby="h-brief" style={style}>
       <Card pad="lg" className="flex flex-col gap-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <SectionTitle id="h-brief">Project brief</SectionTitle>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <SectionTitle id="h-brief">{refresh ? "Refresh from GitHub" : "Project brief"}</SectionTitle>
+            {source && brief && (
+              <span className="text-xs text-muted">
+                Brief from <span className="font-mono">github.com/{source.repo}</span> · refreshed {dayLabel(source.fetchedAt)}
+                {yours && " · with your edits"}
+              </span>
+            )}
+          </div>
           {!editing && brief && (
-            <Button variant="quiet" size="sm" className="-my-1.5 -mr-2" onClick={() => setDraft(draftFromBrief(brief))}>
-              Edit
-            </Button>
+            <span className="-my-1.5 -mr-2 flex gap-1">
+              {source && (
+                <Button variant="quiet" size="sm" loading={checking} icon={<RefreshCw size={13} />} onClick={lookAgain}>
+                  Refresh
+                </Button>
+              )}
+              <Button variant="quiet" size="sm" onClick={() => setDraft(draftFromBrief(brief, source))}>
+                Edit
+              </Button>
+            </span>
           )}
         </div>
         {editing ? (
           <div className="flex flex-col gap-5" onKeyDown={onKeyDown}>
-            <BriefFields draft={draft} onChange={setDraft} autoFocus />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <BriefPrivacy className="max-w-[420px]" />
-              <span className="ml-auto flex gap-2">
-                <Button variant="ghost" onClick={() => setDraft(null)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" loading={saving} onClick={save}>
-                  Save brief
-                </Button>
-              </span>
+            <BriefReview draft={draft} onChange={setDraft} project={name} payees={payees} changes={refresh?.changes} autoFocus={!refresh} />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button variant="ghost" onClick={close}>
+                Cancel
+              </Button>
+              <Button variant="primary" loading={saving} onClick={save}>
+                Save brief
+              </Button>
             </div>
           </div>
         ) : brief ? (
           <>
             <BriefView brief={brief} />
-            <BriefPrivacy />
+            <BriefPrivacy project={name} words={brief.words?.length ?? 0} />
           </>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="m-0 max-w-[440px] text-ink-2">What {name} is about, who’s who and the words to expect. It helps the notes get names, terms and what matters right.</p>
-            <Button onClick={() => setDraft(draftFromBrief(undefined))}>Add a brief</Button>
+            <Button onClick={() => setDraft(emptyDraft())}>Add a brief</Button>
           </div>
         )}
       </Card>

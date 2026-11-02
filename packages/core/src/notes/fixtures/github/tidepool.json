@@ -1,0 +1,15 @@
+{
+  "repo": "tidepool-dev/tidepool",
+  "via": "web",
+  "name": "tidepool",
+  "description": "",
+  "homepage": "",
+  "topics": ["rust", "tides", "sailing", "noaa"],
+  "language": "Rust",
+  "private": false,
+  "readme": "see tagline.README.md",
+  "contributors": [{ "login": "mira-h", "name": "Mira Halvorsen", "contributions": 301, "bot": false }],
+  "codeowners": "",
+  "packageJson": "",
+  "cargoToml": "[workspace]\nmembers = [\"cli\"]\n\n[package]\nname = \"tidepool-core\"\nversion = \"0.3.1\"\nedition = \"2021\"\n\n[dependencies]\nname = \"not-this-one\"\n"
+}

@@ -1,0 +1,15 @@
+{
+  "repo": "someone/new-thing",
+  "via": "web",
+  "name": "new-thing",
+  "description": "",
+  "homepage": "",
+  "topics": [],
+  "language": "",
+  "private": false,
+  "readme": "",
+  "contributors": [],
+  "codeowners": "",
+  "packageJson": "not json",
+  "cargoToml": ""
+}

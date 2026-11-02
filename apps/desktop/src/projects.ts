@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ProjectBrief } from "@aftercall/core";
+import type { BriefSource, ProjectBrief } from "@aftercall/core";
 import { isDesktop } from "./recorder";
 import { fundraiseBrief } from "./sample";
 
@@ -11,6 +11,11 @@ export interface Project {
    * sealed with the data key; absent in files from earlier versions.
    */
   brief?: ProjectBrief;
+  /**
+   * Where the brief came from (a GitHub repo, when it was looked up, what it suggested),
+   * sealed in the same file; absent when you wrote it. Never sent anywhere.
+   */
+  briefSource?: BriefSource;
 }
 
 /** The browser preview: General, and the sample meeting's Fundraise with its brief. */

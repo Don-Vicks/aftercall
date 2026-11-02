@@ -32,3 +32,6 @@ export * from "./ask.ts";
 export * from "./cost.ts";
 export * from "./errors.ts";
 export * from "./export.ts";
+export * from "./notes/briefTemplates.ts";
+export * from "./notes/githubBrief.ts";
+export * from "./notes/briefDraft.ts";

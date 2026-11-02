@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -170,20 +170,21 @@ export default function App() {
     projectsApi.list().then(setProjects).catch(() => setProjects([{ id: "general", name: "General" }]));
   }, []);
 
-  const createProject = async (name: string, brief?: ProjectBrief) => {
-    const next = [...projects, { id: projectId(name), name, ...(brief ? { brief } : {}) }];
+  const createProject = async (name: string, brief?: ProjectBrief, briefSource?: BriefSource) => {
+    const next = [...projects, { id: projectId(name), name, ...(brief ? { brief } : {}), ...(brief && briefSource ? { briefSource } : {}) }];
     await projectsApi.save(next);
     setProjects(next);
     setCreatedProject(name);
     setNewProjectOpen(false);
   };
 
-  /** Saves one project's brief; undefined clears it. */
-  const saveBrief = async (id: string, brief: ProjectBrief | undefined) => {
+  /** Saves one project's brief; undefined clears it (and where it came from). `source`: undefined keeps it, null drops it. */
+  const saveBrief = async (id: string, brief: ProjectBrief | undefined, source?: BriefSource | null) => {
     const next = projects.map((p) => {
       if (p.id !== id) return p;
-      const { brief: _old, ...rest } = p;
-      return brief ? { ...rest, brief } : rest;
+      const { brief: _old, briefSource: oldSource, ...rest } = p;
+      const briefSource = source === undefined ? oldSource : (source ?? undefined);
+      return brief ? { ...rest, brief, ...(briefSource ? { briefSource } : {}) } : rest;
     });
     await projectsApi.save(next);
     setProjects(next);
@@ -777,7 +778,8 @@ export default function App() {
                   setRecordOpen(true);
                 }}
                 onRename={() => setRenaming(openProject)}
-                onSaveBrief={(brief) => saveBrief(openProject.id, brief)}
+                onSaveBrief={(brief, source) => saveBrief(openProject.id, brief, source)}
+                payees={payees.map((p) => p.name)}
               />
             )}
             {view.name === "wallet" && (
@@ -915,7 +917,7 @@ export default function App() {
               onOpenSearch={(query) => setView({ name: "search", query })}
             />
           )}
-          {newProjectOpen && <NewProjectSheet key="new-project" existing={projects.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
+          {newProjectOpen && <NewProjectSheet key="new-project" existing={projects.map((p) => p.name)} payees={payees.map((p) => p.name)} onClose={() => setNewProjectOpen(false)} onCreate={createProject} />}
           {renaming && (
             <NewProjectSheet key="rename-project" existing={projects.map((p) => p.name)} initial={renaming.name} onClose={() => setRenaming(null)} onCreate={(name) => renameProject(renaming, name)} />
           )}

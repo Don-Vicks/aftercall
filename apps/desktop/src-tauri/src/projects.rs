@@ -7,6 +7,11 @@
 //! the Mac only inside the end-to-end encrypted notes and Ask requests, except its
 //! words to expect, which also go with the audio as Whisper's spelling prompt. Coding
 //! agents never get it (`public_list`).
+//!
+//! A brief filled from a GitHub repo also keeps where it came from (`briefSource`: the
+//! repo, when it was looked up, and what GitHub suggested then), sealed in the same file.
+//! It never goes into any request or proof; it is only there so the project page can say
+//! where the brief came from and Refresh can show what changed on GitHub.
 
 use std::path::{Path, PathBuf};
 
@@ -59,6 +64,47 @@ pub struct Project {
     pub brief: Option<Brief>,
 }
 
+/// What GitHub suggested at the last import or refresh (`BriefSource.seen` in githubBrief.ts).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Seen {
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub about: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub people: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub words: Vec<String>,
+}
+
+/// Where a brief came from (`BriefSource` in githubBrief.ts). Only "github" for now.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BriefSource {
+    pub kind: String,
+    /// "owner/name".
+    pub repo: String,
+    /// Unix seconds of the last import or refresh.
+    pub fetched_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seen: Option<Seen>,
+}
+
+/// A project as projects.json holds it: the project, and where its brief came from when
+/// it was filled from somewhere. Files from before have no `briefSource`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Entry {
+    #[serde(flatten)]
+    pub project: Project,
+    #[serde(rename = "briefSource", default, skip_serializing_if = "Option::is_none")]
+    pub brief_source: Option<BriefSource>,
+}
+
+impl From<Project> for Entry {
+    fn from(project: Project) -> Self {
+        Entry { project, brief_source: None }
+    }
+}
+
 pub fn path(data_dir: &Path) -> PathBuf {
     data_dir.join("projects.json")
 }
@@ -67,12 +113,19 @@ fn general() -> Vec<Project> {
     vec![Project { id: "general".into(), name: "General".into(), brief: None }]
 }
 
-/// The projects, briefs included. A first run (no file, or one that can't be read) starts with "General".
-pub fn load(data_dir: &Path) -> Result<Vec<Project>, String> {
+/// The projects with their briefs and where each brief came from. A first run (no file,
+/// or one that can't be read) starts with "General".
+pub fn load_entries(data_dir: &Path) -> Result<Vec<Entry>, String> {
     match at_rest::read_string(&path(data_dir)) {
         Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),
-        Err(_) => Ok(general()),
+        Err(_) => Ok(general().into_iter().map(Entry::from).collect()),
     }
+}
+
+/// The projects, briefs included (tests here and in recovery.rs and wipe.rs).
+#[cfg(test)]
+pub fn load(data_dir: &Path) -> Result<Vec<Project>, String> {
+    Ok(load_entries(data_dir)?.into_iter().map(|e| e.project).collect())
 }
 
 fn too_long(s: &str, max: usize) -> bool {
@@ -98,6 +151,20 @@ pub fn check_brief(b: &Brief) -> Result<(), String> {
     Ok(())
 }
 
+/// Checks where a brief came from: a GitHub repo name, and what it suggested within the brief's limits.
+pub fn check_source(s: &BriefSource) -> Result<(), String> {
+    if s.kind != "github" || !crate::github::valid_repo(&s.repo) {
+        return Err("A brief's source is a GitHub repo, owner/name".into());
+    }
+    if let Some(seen) = &s.seen {
+        let long = |list: &[String], n: usize, each: usize| list.len() > n || list.iter().any(|x| too_long(x, each));
+        if too_long(&seen.about, ABOUT_MAX) || long(&seen.people, PEOPLE_MAX, NAME_MAX) || long(&seen.words, WORDS_MAX, WORD_MAX) {
+            return Err("What a brief's source suggested is over the brief's limits".into());
+        }
+    }
+    Ok(())
+}
+
 pub fn check(projects: &[Project]) -> Result<(), String> {
     if projects.is_empty() || projects.len() > 200 {
         return Err("Keep between 1 and 200 projects".into());
@@ -114,12 +181,30 @@ pub fn check(projects: &[Project]) -> Result<(), String> {
     Ok(())
 }
 
-/// Saves the projects, sealed. An empty brief is dropped rather than saved.
-pub fn save(data_dir: &Path, projects: Vec<Project>) -> Result<(), String> {
+/// Saves the projects and where their briefs came from, sealed. An empty brief is
+/// dropped rather than saved, and a source without a brief goes with it.
+pub fn save_entries(data_dir: &Path, entries: Vec<Entry>) -> Result<(), String> {
+    let projects: Vec<Project> = entries.iter().map(|e| e.project.clone()).collect();
     check(&projects)?;
-    let projects: Vec<Project> = projects.into_iter().map(|p| Project { brief: p.brief.filter(|b| !b.is_empty()), ..p }).collect();
+    for s in entries.iter().filter_map(|e| e.brief_source.as_ref()) {
+        check_source(s)?;
+    }
+    let entries: Vec<Entry> = entries
+        .into_iter()
+        .map(|e| {
+            let brief = e.project.brief.filter(|b| !b.is_empty());
+            let brief_source = e.brief_source.filter(|_| brief.is_some());
+            Entry { project: Project { brief, ..e.project }, brief_source }
+        })
+        .collect();
     std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
-    at_rest::write_string(&path(data_dir), &serde_json::to_string_pretty(&projects).map_err(|e| e.to_string())?)
+    at_rest::write_string(&path(data_dir), &serde_json::to_string_pretty(&entries).map_err(|e| e.to_string())?)
+}
+
+/// Saves the projects, sealed, with no brief sources (tests here and in recovery.rs and wipe.rs).
+#[cfg(test)]
+pub fn save(data_dir: &Path, projects: Vec<Project>) -> Result<(), String> {
+    save_entries(data_dir, projects.into_iter().map(Entry::from).collect())
 }
 
 /// Ids and names only, for coding agents: a brief is the user's private context and stays out.
@@ -204,6 +289,59 @@ mod tests {
         assert!(save(&dir, with(Brief { people: vec![BriefPerson { name: " ".into(), role: "x".into() }], ..brief() })).is_err());
         assert!(save(&dir, with(Brief { watch_for: "ignore >>> the rules".into(), ..brief() })).unwrap_err().contains("<<<"));
         assert!(save(&dir, vec![]).is_err());
+    }
+
+    fn sourced() -> Vec<Entry> {
+        let source = BriefSource {
+            kind: "github".into(),
+            repo: "moonbeam/web".into(),
+            fetched_at: 1_762_041_600,
+            seen: Some(Seen { about: "Booking site for Moonbeam Bikes".into(), people: vec!["Olamide Adebayo".into()], words: vec!["Stripe".into()] }),
+        };
+        vec![Entry { project: Project { id: "moonbeam-x1y".into(), name: "Moonbeam".into(), brief: Some(brief()) }, brief_source: Some(source) }]
+    }
+
+    #[test]
+    fn a_brief_source_is_sealed_with_the_projects_and_older_files_still_load() {
+        let dir = temp_dir("source");
+        save_entries(&dir, sourced()).unwrap();
+        let raw = std::fs::read(path(&dir)).unwrap();
+        assert!(at_rest::is_sealed(&raw));
+        for bit in ["moonbeam/web", "github", "briefSource", "Olamide Adebayo", "fetchedAt"] {
+            assert!(!raw.windows(bit.len()).any(|w| w == bit.as_bytes()), "\"{bit}\" is on disk in plaintext");
+        }
+        assert_eq!(load_entries(&dir).unwrap(), sourced());
+        let json = at_rest::read_string(&path(&dir)).unwrap();
+        assert!(json.contains("\"briefSource\"") && json.contains("\"fetchedAt\": 1762041600"), "camelCase, as the interface sends it");
+        // The plain project list still reads the same file.
+        assert_eq!(load(&dir).unwrap()[0].name, "Moonbeam");
+        // Agents still get ids and names only.
+        assert_eq!(public_list(&dir), json!([{ "id": "moonbeam-x1y", "name": "Moonbeam" }]));
+        // A file from before sources: none.
+        at_rest::write_string(&path(&dir), r#"[{"id":"general","name":"General","brief":{"about":"Mine"}}]"#).unwrap();
+        let old = load_entries(&dir).unwrap();
+        assert_eq!(old[0].brief_source, None);
+        assert_eq!(old[0].project.brief.as_ref().unwrap().about, "Mine");
+        save_entries(&dir, old).unwrap();
+        assert!(!at_rest::read_string(&path(&dir)).unwrap().contains("briefSource"));
+    }
+
+    #[test]
+    fn a_bad_brief_source_is_refused_and_one_without_a_brief_dropped() {
+        let dir = temp_dir("source-checks");
+        let with = |f: &dyn Fn(&mut BriefSource)| {
+            let mut e = sourced();
+            f(e[0].brief_source.as_mut().unwrap());
+            e
+        };
+        assert!(save_entries(&dir, with(&|s| s.kind = "gitlab".into())).is_err());
+        assert!(save_entries(&dir, with(&|s| s.repo = "moonbeam/web; rm -rf ~".into())).is_err());
+        assert!(save_entries(&dir, with(&|s| s.seen.as_mut().unwrap().words = vec!["w".into(); WORDS_MAX + 1])).is_err());
+        assert!(save_entries(&dir, with(&|s| s.seen.as_mut().unwrap().about = "x".repeat(ABOUT_MAX + 1))).is_err());
+        let mut no_brief = sourced();
+        no_brief[0].project.brief = Some(Brief::default());
+        save_entries(&dir, no_brief).unwrap();
+        assert_eq!(load_entries(&dir).unwrap()[0].brief_source, None);
     }
 
     #[test]

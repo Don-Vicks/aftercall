@@ -3,6 +3,7 @@ mod at_rest;
 mod attest;
 mod calendar;
 mod capture;
+mod github;
 mod live_window;
 mod near;
 mod nearai;
@@ -1056,16 +1057,30 @@ fn backup_import(app: AppHandle, file: String) -> Result<recovery::Restored, Str
     recovery::import(&data_dir(&app)?, &bytes)
 }
 
-/// The user's projects, with their briefs. A first run starts with one, "General".
+/// The user's projects, with their briefs and where each brief came from. A first run starts with one, "General".
 #[tauri::command]
-fn list_projects(app: AppHandle) -> Result<Vec<projects::Project>, String> {
-    projects::load(&data_dir(&app)?)
+fn list_projects(app: AppHandle) -> Result<Vec<projects::Entry>, String> {
+    projects::load_entries(&data_dir(&app)?)
 }
 
-/// Saves the projects and their briefs, sealed with the data key (`projects.rs`).
+/// Saves the projects, their briefs and where the briefs came from, sealed with the data key (`projects.rs`).
 #[tauri::command]
-fn save_projects(app: AppHandle, projects: Vec<projects::Project>) -> Result<(), String> {
-    projects::save(&data_dir(&app)?, projects)
+fn save_projects(app: AppHandle, projects: Vec<projects::Entry>) -> Result<(), String> {
+    projects::save_entries(&data_dir(&app)?, projects)
+}
+
+/// Whether the GitHub CLI is on this Mac (looked for, not run), for "Fill from GitHub".
+#[tauri::command]
+async fn github_cli(app: AppHandle) -> bool {
+    let Ok(home) = app.path().home_dir() else { return false };
+    tauri::async_runtime::spawn_blocking(move || github::find_gh(&home).is_some()).await.unwrap_or(false)
+}
+
+/// A GitHub repo's public details for a project brief, through `gh` or GitHub's public API (`github.rs`). No AI.
+#[tauri::command]
+async fn github_repo(app: AppHandle, repo: String) -> Result<github::RepoDetails, String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    github::lookup(home, repo).await
 }
 
 /// Moves every recording filed under project `from` to project `to` (rename or delete
@@ -1214,6 +1229,8 @@ pub fn run() {
             near_sign_in_message,
             list_projects,
             save_projects,
+            github_cli,
+            github_repo,
             delete_recording,
             read_chunk_transcript,
             write_chunk_transcript,

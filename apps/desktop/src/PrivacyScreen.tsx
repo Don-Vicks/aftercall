@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeftRight, Check, Cpu, ExternalLink, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Trash2 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { agentsApi, PREVIEW_INFO } from "./agents";
 import { isDesktop } from "./recorder";
@@ -41,6 +41,13 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
     kind: "Only if you use it",
     sees: "Recaps you send through Aftercall, for one request. Claim links you make.",
     keeps: "A send count. Per claim link: token hash, amount, expiry, status, payee account.",
+  },
+  {
+    icon: <FolderGit2 size={14} strokeWidth={1.75} />,
+    name: "GitHub",
+    kind: "Only if you fill a brief from a repo",
+    sees: "Which repo you looked up, from this Mac (through gh, with your own GitHub sign-in). Nothing from your meetings.",
+    keeps: "Set by GitHub's policy.",
   },
   { icon: <Mail size={14} strokeWidth={1.75} />, name: "Resend", kind: "Recap email", sees: "Recaps you send through Aftercall.", keeps: "Sent mail, under Resend's own policy." },
   {
