@@ -120,7 +120,7 @@ export function VerifyClient() {
           {state.kind === "missing" && (
             <Message
               title="Open a proof link"
-              body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the model and its signature, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can."
+              body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the models, the checks the app ran, the summary's signature and the NEAR account it belongs to, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can."
             >
               <span className={v.messageLinks}>
                 <a href="/how-it-works" className="arrow-link">

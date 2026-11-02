@@ -536,7 +536,7 @@ function WhatItDoes() {
         <Feature
           label="People"
           title="Who owes whom."
-          text="Every action item has an owner and a due date, and each person gets a page: what you owe them, and what they owe you. It's worked out on your Mac from your calendar and the notes."
+          text="Action items carry an owner and a due date when the call names them, and each person gets a page: what you owe them, and what they owe you. It's worked out on your Mac from your calendar and the notes."
           visual={
             <div role="img" aria-label="A page for Ines Rocha: you owe Ines the logo files and photos by Wednesday, the 40 USDC deposit is done; Ines owes you three style directions by Friday and a first home page draft" className={`${l.featureVisual} ${l.right} ${l.onRaised} ${l.cardPad}`}>
               <span aria-hidden="true" className={l.owes}>
@@ -725,7 +725,7 @@ function Private() {
             </div>
             <div>
               <dt>Our servers keep nothing about a meeting</dt>
-              <dd>Draft in Mail, the default, keeps the recap on your Mac. Send through Aftercall hands it to Resend, which keeps sent mail under its own policy; our backend keeps a count.</dd>
+              <dd>Draft in Mail, the default, keeps the recap on your Mac. Send through Aftercall hands it to Resend, which keeps sent mail under its own policy; our backend keeps a count. A claim link keeps only a token hash and an amount.</dd>
             </div>
           </dl>
           <aside aria-labelledby="cant-h" className={l.cant}>
