@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NETWORK_CONFIG, decodeSignRequest, describe, explorerTxUrl, toTransactions, type Network, type SignRequest } from "@aftercall/core";
+import { NETWORK_CONFIG, decodeSignRequest, describe, explorerTxUrl, plainNearError, toTransactions, type Network, type SignRequest } from "@aftercall/core";
 import { AppHeader, Avatar, Pill, Tick } from "../ui";
 import g from "./sign.module.css";
 
@@ -120,6 +120,9 @@ export function SignClient() {
   const busy = step.kind === "connecting" || step.kind === "signing";
   const via = step.kind === "connecting" || step.kind === "signing" ? step.via : null;
 
+  // Failures name the contract plainly ("No Aftercall contract at …"), not as raw JSON.
+  const at = { network: request.network, contract: request.contract };
+
   const sign = async (choice: Choice | null) => {
     const name = choice?.name ?? "your wallet";
     setStep({ kind: "connecting", via: choice?.id ?? OTHER });
@@ -138,10 +141,14 @@ export function SignClient() {
         transactions: toTransactions(request) as Params["transactions"],
       })) as { status?: unknown; transaction_outcome?: { id?: string }; transaction?: { hash?: string } }[];
       const failed = outcomes.find((o) => typeof o.status === "object" && o.status !== null && "Failure" in o.status);
-      if (failed) throw new Error(`The transaction failed: ${JSON.stringify((failed.status as { Failure: unknown }).Failure)}`);
+      if (failed) {
+        const failure = (failed.status as { Failure: unknown }).Failure;
+        const said = plainNearError(failure, at);
+        throw new Error(said === JSON.stringify(failure) ? `The transaction failed: ${said}` : said);
+      }
       setStep({ kind: "done", txHashes: outcomes.map((o) => o.transaction_outcome?.id ?? o.transaction?.hash).filter((h): h is string => !!h) });
     } catch (e) {
-      setStep({ kind: "failed", message: e instanceof Error ? e.message : String(e) });
+      setStep({ kind: "failed", message: plainNearError(e, at) });
     }
   };
 
