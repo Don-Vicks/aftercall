@@ -1,0 +1,160 @@
+import type { ReactNode } from "react";
+import { REPO_URL, vars } from "../ui";
+import l from "../landing.module.css";
+import { AutopilotLine } from "./AutopilotLine";
+import { Check, Face, SectionHead } from "./bits";
+import { Moment } from "./motion";
+
+/* Section 5: four things Aftercall is built not to do, each with the test that holds it. */
+
+type Row = { n: string; title: string; body: ReactNode; tests: [string, string][]; note?: string; visual: ReactNode };
+
+const ROWS: Row[] = [
+  {
+    n: "01",
+    title: "It can't invent a payment.",
+    body: "Every follow-up needs an exact quote from the transcript, on whole words. Anything without one is dropped, listed on the meeting page and never acted on. Amounts come from the words spoken, and are kept only when the same value is in the quote.",
+    tests: [
+      ["keeps what the transcript backs up and drops what it doesn't", "build.test.ts"],
+      ["an amount that isn't in the quote is dropped to null", "build.test.ts"],
+      ["a quote must start and end on whole words", "transcript.test.ts"],
+    ],
+    visual: (
+      <div className={l.vCard}>
+        <p className={l.vDropHead}>
+          <b>1 item dropped</b> · no exact quote in the transcript
+        </p>
+        <p className={l.vDropped}>
+          <span>
+            Book the launch venue for the demo
+            <i className={l.strike} aria-hidden="true" />
+          </span>
+        </p>
+        <p className={l.vReason}>Action item · quote not in the transcript</p>
+      </div>
+    ),
+  },
+  {
+    n: "02",
+    title: "It can't overspend.",
+    body: (
+      <>
+        Payment rules live in a NEAR contract: listed payees, a daily cap and a per-payment cap. The key on your Mac can call only <code>pay</code> and <code>record_proof</code>; every rule change needs
+        your own wallet. Anything over a cap waits for you.
+      </>
+    ),
+    tests: [
+      ["limited_key_cannot_change_rules", "sandbox.rs"],
+      ["one_yocto_rule_holds_even_if_key_lists_owner_methods", "sandbox.rs"],
+      ["over_cap_is_blocked_then_owner_approves", "sandbox.rs"],
+    ],
+    note: "On a local NEAR node; testnet deploy pending.",
+    visual: (
+      <div className={`${l.vCard} ${l.vKey}`}>
+        <p className={l.vKeyHead}>This Mac&apos;s key</p>
+        <p>
+          <span className={l.vKeyLabel}>Can call</span>
+          <span className={l.vOk}>pay · record_proof</span>
+        </p>
+        <p>
+          <span className={l.vKeyLabel}>Can&apos;t</span>
+          <span className={l.vNo}>raise a cap · add a payee · withdraw · change any rule</span>
+        </p>
+      </div>
+    ),
+  },
+  {
+    n: "03",
+    title: "It can't act without your say.",
+    body: "Every follow-up waits for your approval, with five seconds to undo. Autopilot is off until you set rules, gives you 60 seconds to undo, and never runs anything that was queued when the app closed: that waits for you.",
+    tests: [
+      ["a queued follow-up read from disk at launch is held for you, never run", "autopilot.test.ts"],
+      ["follow_ups_are_saved_as_the_app_sent_them_and_ticks_keep_them", "notes_file.rs"],
+    ],
+    visual: (
+      <div className={l.vCard}>
+        <AutopilotLine />
+      </div>
+    ),
+  },
+  {
+    n: "04",
+    title: "It can't show your notes to agents.",
+    body: "Connected agents are off by default and only read until you allow claiming and completing. They never send, pay or change rules, and never get your own notes. Each read, claim and refused request is listed on your Mac, with ids, never meeting content.",
+    tests: [
+      ["your_notes_and_their_salt_never_reach_agents", "agents.rs"],
+      ["agents_read_only_by_default_and_are_told_which_switch_to_turn_on", "agents.rs"],
+      ["read-only by default: reads work, claim and complete are refused by name", "tools.test.ts"],
+    ],
+    visual: (
+      <div className={`${l.vCard} ${l.vActivity}`}>
+        <Face who="CC" size={30} hue={4} />
+        <span className={l.vActText}>
+          <b>Ship the API fix</b>
+          <span>Claude Code · Agents are read-only</span>
+        </span>
+        <span className={l.vRight}>
+          <span className={l.tagCaution}>Refused</span>
+          <span className={l.vTime}>14:12</span>
+        </span>
+      </div>
+    ),
+  },
+];
+
+export function Cant() {
+  return (
+    <section id="cant" aria-labelledby="cant-h" className={l.section}>
+      <div className={l.wrap}>
+        <SectionHead
+          index="05"
+          eyebrow="Limits, enforced in code"
+          id="cant-h"
+          title="Built so it can't."
+          lead={
+            <>
+              Four things Aftercall is built not to do. Each one is held by code with a test you can run: <code>pnpm verify</code>.
+            </>
+          }
+        />
+        <ol className={l.cantRows}>
+          {ROWS.map((r) => (
+            <li key={r.n}>
+              <Moment as="article" className={l.cantRow} threshold={0.3} aria-labelledby={`cant-${r.n}`}>
+                <div className={l.cantTitle}>
+                  <span className={l.numeral} aria-hidden="true">
+                    {r.n}
+                  </span>
+                  <h3 id={`cant-${r.n}`} className={l.h3}>
+                    {r.title}
+                  </h3>
+                </div>
+                <div className={l.cantBody}>
+                  <p className={l.body}>{r.body}</p>
+                  <ul className={l.tests} aria-label="Tests">
+                    {r.tests.map(([t, f], i) => (
+                      <li key={t} style={vars({ i })}>
+                        <Check size={15} i={i} />
+                        <code>{t}</code>
+                        <span className={l.testFile}>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {r.note ? <p className={l.testNote}>{r.note}</p> : null}
+                </div>
+                <div className={l.cantVisual}>{r.visual}</div>
+              </Moment>
+            </li>
+          ))}
+        </ol>
+        <p className={l.cantFoot} data-reveal="">
+          Each of the four maps to tests listed in the README&apos;s What is proven table.{" "}
+          <a href={`${REPO_URL}#what-is-proven`} className={l.textLink}>
+            What is proven
+            <span aria-hidden="true"> ↗</span>
+          </a>
+        </p>
+      </div>
+    </section>
+  );
+}

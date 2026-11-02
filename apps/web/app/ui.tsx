@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { initials, personHue } from "@aftercall/core";
+import { HeaderMenu } from "./HeaderMenu";
+import { DOWNLOAD_HREF, DOWNLOAD_NOTE } from "./site";
 import s from "./site.module.css";
 
 /** Where the code lives, for every "GitHub" and "Read the code" link. */
@@ -230,42 +232,100 @@ export function Seal({ size = 148, id, fine, className, style }: { size?: number
   );
 }
 
-// ---------- headers and footers ----------
+// ---------- download, windows, headers and footers ----------
+
+/**
+ * "Download for Mac": the one primary action, in the header, the landing hero and its close.
+ * It goes to DOWNLOAD_URL once a signed build is published, and to the Install page until then.
+ * `note` adds the mono line under it (hero and close only).
+ */
+export function DownloadCta({ size = "lg", note, className }: { size?: "sm" | "lg"; note?: boolean; className?: string }) {
+  const button = (
+    <a href={DOWNLOAD_HREF} className={`${s.cta} ${size === "sm" ? s.ctaSm : s.ctaLg} press${note ? "" : className ? ` ${className}` : ""}`}>
+      <Icon name="download" size={size === "sm" ? 14 : 17} stroke={2.2} />
+      {size === "sm" ? (
+        <>
+          <span className={s.ctaLong}>Download for Mac</span>
+          <span className={s.ctaShort}>Download</span>
+        </>
+      ) : (
+        "Download for Mac"
+      )}
+    </a>
+  );
+  if (!note) return button;
+  return (
+    <span className={`${s.ctaBlock}${className ? ` ${className}` : ""}`}>
+      {button}
+      <span className={s.ctaNote}>{DOWNLOAD_NOTE}</span>
+    </span>
+  );
+}
+
+/** A plain macOS window frame around a screen of the app: three neutral dots and a centred title. */
+export function AppWindow({ title = "Aftercall", children, className, style, bodyClassName }: { title?: string; children: ReactNode; className?: string; style?: CSSProperties; bodyClassName?: string }) {
+  return (
+    <div className={`${s.window}${className ? ` ${className}` : ""}`} style={style}>
+      <div className={s.windowBar} aria-hidden="true">
+        <span className={s.windowDots}>
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className={s.windowTitle}>{title}</span>
+      </div>
+      <div className={`${s.windowBody}${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
+    </div>
+  );
+}
 
 type Current = "how" | "handling" | "verify" | "download" | null;
 
 /**
- * The site header on the landing, How it works, Call handling, Verify and Install pages.
- * No signed build is published yet, so nothing here offers a download: Install says how
- * to build the app from source.
+ * The site header on the landing, How it works, Call handling, Verify and Install pages:
+ * three links and Download for Mac. Below 900 px the links fold into a Menu; below 600 px
+ * the button goes too (the page carries it).
  */
 export function SiteHeader({ current = null }: { current?: Current }) {
   const here = (page: Current) => (current === page ? { "aria-current": "page" as const } : {});
+  const links = (
+    <>
+      <a href="/how-it-works" className="quiet" {...here("how")}>
+        How it works
+      </a>
+      <a href="/handling" className="quiet" {...here("handling")}>
+        Call handling
+      </a>
+      <a href="/verify" className="quiet" {...here("verify")}>
+        Verify a proof
+      </a>
+    </>
+  );
   return (
-    <header className={s.gutter}>
-      <div className={s.header}>
-        <a href="/" className={s.brand} aria-label="Aftercall, home">
-          <Logo size={26} />
-          <span className={s.brandName}>Aftercall</span>
-        </a>
-        <nav aria-label="Site" className={s.nav}>
-          <a href="/how-it-works" className="quiet" {...here("how")}>
-            How it works
+    <header className={s.headerWrap}>
+      <div className={`${s.gutter} ${s.headerGutter}`}>
+        <div className={s.header}>
+          <a href="/" className={s.brand} aria-label="Aftercall, home">
+            <Logo size={26} />
+            <span className={s.brandName}>Aftercall</span>
           </a>
-          <a href="/handling" className={`quiet ${s.navNarrowHide}`} {...here("handling")}>
-            Call handling
-          </a>
-          <a href="/verify" className="quiet" {...here("verify")}>
-            Verify a proof
-          </a>
-          <a href="/download" className="quiet" {...here("download")}>
-            Install
-          </a>
-          <a href={REPO_URL} className={`quiet ${s.navExternal}`}>
-            GitHub
-            <Icon name="external" size={12} />
-          </a>
-        </nav>
+          <nav aria-label="Site" className={s.nav}>
+            {links}
+          </nav>
+          <div className={s.headerEnd}>
+            <HeaderMenu>
+              {links}
+              <a href="/download" className="quiet" {...here("download")}>
+                Install
+              </a>
+              <a href={REPO_URL} className={`quiet ${s.navExternal}`}>
+                GitHub
+                <Icon name="external" size={12} />
+              </a>
+            </HeaderMenu>
+            <DownloadCta size="sm" className={s.headerCta} />
+          </div>
+        </div>
       </div>
     </header>
   );

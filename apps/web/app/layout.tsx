@@ -15,9 +15,23 @@ export const metadata = {
   description: "A Mac app that makes private notes of your calls inside NEAR AI's secure hardware, then sends the recap and pays what you agreed, once you say so.",
 };
 
+/*
+ * Motion is opt-in and decided before the first paint. The server renders every
+ * animated part in its finished state; this adds `motion` to <html> only when the
+ * visitor hasn't asked for reduced motion and the page isn't driven by automation,
+ * so JS-off visits, reduced motion, headless captures and print all show the final
+ * content. `?motion=1` forces it on for testing. Reduced motion adds `calm` (fades
+ * only). If the page's script hasn't started within 4 s, motion is dropped so nothing
+ * stays hidden.
+ */
+const MOTION_GATE = `(function(){try{var d=document.documentElement,f=/[?&]motion=1/.test(location.search);if(!f&&matchMedia("(prefers-reduced-motion: reduce)").matches){d.classList.add("calm");return}if(navigator.webdriver&&!f)return;d.classList.add("motion");setTimeout(function(){if(!window.__acMotion)d.classList.remove("motion")},4000)}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: MOTION_GATE }} />
+      </head>
       <body>{children}</body>
     </html>
   );
