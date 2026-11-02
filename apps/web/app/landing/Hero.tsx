@@ -1,40 +1,44 @@
 import { AppWindow, DownloadCta, vars } from "../ui";
 import l from "../landing.module.css";
-import { Caption, Check, Face, Glyph, Said, Shot } from "./bits";
+import { ApproveDemo } from "./ApproveDemo";
+import { Check, Glyph, Shot, MEETING_COL_SIZES } from "./bits";
+import { Moment } from "./motion";
 
 /*
- * Section 1. Category and reason in five seconds, then the product's own output at
- * full width: the Sync with Ada meeting, the checks receipt (moment 4) and the
- * payment card the meeting proposed. Plays once on load, in CSS, then stays still.
+ * Section 1. The outcome first (notes that follow through), privacy as the qualifier, who
+ * it's for, one button. Beside it the product doing the thing: the Sync with Ada notes and
+ * the payment they proposed, which plays moment 3 when it's in view (the quote highlights,
+ * Heard → 50.00 USDC, Approve, "Paying in 5…", Paid). Under the button, the Verified seal
+ * row plays moment 4. On a phone the payment card comes straight after the button.
  */
 
-/** Check labels and counts: packages/core/src/tee/checks.ts, nvidia.ts and pipeline.ts. */
-const BEFORE: [string, number][] = [
-  ["Gateway TEE", 6],
-  ["Whisper TEE", 9],
-  ["Qwen TEE", 9],
-];
-const REPLY: [string, number][] = [
-  ["Transcript end-to-end encrypted to the checked model", 1],
-  ["Reply signed by that TEE, over the exact request and reply", 4],
+/** Check counts: packages/core/src/tee/checks.ts, nvidia.ts and pipeline.ts, one node per model. */
+const GROUPS: [string, number][] = [
+  ["Gateway", 6],
+  ["Whisper", 9],
+  ["Qwen", 9],
+  ["On the reply", 5],
 ];
 
 export function Hero() {
   return (
     <section id="top" aria-labelledby="hero-h" className={l.hero}>
-      <div className={l.wrap}>
-        <div className={l.heroText}>
+      <div className={`${l.wrap} ${l.heroGrid}`}>
+        <div className={l.heroCopy}>
           <p className={`${l.eyebrow} ${l.load}`} style={vars({ ld: "0ms" })}>
-            Meeting notes for Mac · Built for NEAR HACKATHON
+            For Mac · No bot joins your call
           </p>
           <h1 id="hero-h" className={`${l.display} ${l.load} ${l.loadRise}`} style={vars({ ld: "40ms" })}>
-            Private meeting notes <span className={l.nobr}>you can check.</span>
+            Meeting notes that follow&nbsp;through.
           </h1>
           <p className={`${l.heroLead} ${l.load}`} style={vars({ ld: "120ms" })}>
-            Aftercall records your calls on your Mac and makes the notes inside NEAR AI&apos;s secure hardware, which it checks before anything is sent. Then it does what the meeting agreed: the recap goes out
-            and the payment is made, after your approval and within caps a NEAR contract enforces.
+            Aftercall records your calls on your Mac and makes the notes in secure hardware it checks first. Then it drafts the recap and pays what was agreed, once you approve, within caps a NEAR
+            contract enforces.
           </p>
-          <div className={`${l.ctaRow} ${l.load}`} style={vars({ ld: "180ms" })}>
+          <p className={`${l.heroWho} ${l.load}`} style={vars({ ld: "150ms" })}>
+            For founders and freelancers who agree work and payments on calls.
+          </p>
+          <div id="hero-cta" className={`${l.ctaRow} ${l.load}`} style={vars({ ld: "180ms" })}>
             <DownloadCta note />
             <a href="#story" className={l.secondary}>
               See one call, start to finish
@@ -43,78 +47,45 @@ export function Hero() {
           </div>
         </div>
 
-        <figure className={l.heroStage}>
-          <div className={l.heroBox}>
-          <div className={`${l.heroWindowWrap} ${l.load} ${l.loadWindow}`} style={vars({ ld: "260ms" })}>
-            <AppWindow className={l.heroWindow}>
+        <Moment className={`${l.heroTrust} ${l.load}`} style={vars({ ld: "320ms" })} threshold={0.6} role="group" aria-labelledby="trust-h">
+          <SealMark size={56} />
+          <div className={l.trustText}>
+            <p id="trust-h" className={l.trustTitle}>
+              Verified in secure hardware, every run
+            </p>
+            <ul className={l.trustChips} aria-label="Checks, with one node per model">
+              {GROUPS.map(([name, n], i) => (
+                <li key={name} style={vars({ i })}>
+                  <Check size={14} i={i} />
+                  {name} <span className={l.mono}>{n}</span>
+                </li>
+              ))}
+            </ul>
+            <p className={l.trustSub}>24 checks before anything is sent and 5 on the reply, with one node per model.</p>
+            <p className={l.trustCaveat}>Audio goes to NEAR AI over TLS and isn&apos;t end-to-end encrypted. The transcript is, or it isn&apos;t sent.</p>
+          </div>
+        </Moment>
+
+        <div className={l.heroStage}>
+          <div className={`${l.heroWindowWrap} ${l.load} ${l.loadWindow}`} style={vars({ ld: "220ms" })}>
+            <AppWindow className={l.heroWindow} bodyClassName={l.heroWindowBody}>
               <Shot
-                name="meeting"
-                w={1280}
-                h={820}
+                name="meeting-col"
+                w={632}
+                h={796}
                 eager
-                sizes="(max-width: 767px) 358px, (max-width: 1240px) 92vw, 1112px"
-                phone={{ name: "meeting-col", w: 632, h: 796, sizes: "92vw" }}
-                alt="Aftercall's meeting page for Sync with Ada: summary, your notes, two decisions and three action items, one claimed by Claude Code, marked Verified."
+                sizes={MEETING_COL_SIZES}
+                alt="Aftercall's notes for Sync with Ada, marked Verified: Ada and Victor agreed the API fix ships before Friday's demo; Victor sends Ada a recap today and pays the designer a 50 USDC deposit to refresh the deck."
               />
             </AppWindow>
           </div>
-          <Receipt />
-          <PaymentCard />
-          </div>
-          <Caption className={l.heroCaption}>The Mac app on its built-in sample meeting. The receipt and payment card are drawn from the app&apos;s own components.</Caption>
-        </figure>
-      </div>
-    </section>
-  );
-}
-
-/** Moment 4: rows tick in 90 ms apart, the totals fade in, and it ends on the Verified seal. */
-function Receipt() {
-  let i = 0;
-  return (
-    <div className={`${l.receipt} ${l.load}`} style={vars({ ld: "600ms" })} aria-labelledby="receipt-h" role="group">
-      <div className={l.receiptHead}>
-        <SealMark />
-        <div>
-          <p id="receipt-h" className={l.receiptTitle}>
-            Checked on your Mac
-          </p>
-          <p className={l.receiptSub}>Every run · against a fresh nonce</p>
+          <Moment className={`${l.heroPay} ${l.load} ${l.loadSlide}`} style={vars({ ld: "420ms" })} threshold={0.5} role="group" aria-label="The payment the meeting proposed: Pay Designer 50.00 USDC">
+            <ApproveDemo className={l.heroApprove} />
+          </Moment>
+          <p className={`${l.caption} ${l.heroCaption}`}>The Mac app on its built-in sample meeting. The payment card is drawn from the app&apos;s own; payments in the sample are simulated.</p>
         </div>
       </div>
-      <ul className={l.receiptRows}>
-        {BEFORE.map(([label, n]) => {
-          const k = i++;
-          return (
-            <li key={label} className={l.receiptRow} style={vars({ i: k })}>
-              <Check i={k} />
-              <span>{label}</span>
-              <span className={l.receiptN}>{n}</span>
-            </li>
-          );
-        })}
-        <li className={l.receiptTotal} style={vars({ i: i - 1 })}>
-          24 checks before anything is sent
-        </li>
-        {REPLY.map(([label, n]) => {
-          const k = i++;
-          return (
-            <li key={label} className={l.receiptRow} style={vars({ i: k })}>
-              <Check i={k} />
-              <span>{label}</span>
-              <span className={l.receiptN}>{n}</span>
-            </li>
-          );
-        })}
-        <li className={l.receiptTotal} style={vars({ i: i - 1 })}>
-          5 on the signed reply
-        </li>
-      </ul>
-      <div className={l.receiptFoot}>
-        <p>Counts with one node per model. Ran live on NEAR AI Cloud once, 1 Nov 2026: every check passed.</p>
-        <p>Audio goes to NEAR AI over TLS through the checked gateway; it isn&apos;t end-to-end encrypted. The transcript is, or it isn&apos;t sent.</p>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -139,45 +110,5 @@ export function SealMark({ size = 44, id = "seal-hero", className }: { size?: nu
         <path d="m9 12 2 2 4-4" />
       </g>
     </svg>
-  );
-}
-
-/** The payment the meeting proposed, as the app's follow-up card shows it before you approve. */
-function PaymentCard() {
-  return (
-    <div className={`${l.payCard} ${l.load} ${l.loadSlide}`} style={vars({ ld: "520ms" })} role="group" aria-label="Proposed payment: Pay Designer 50.00 USDC">
-      <div className={l.payHead}>
-        <Face who="D" size={36} hue={5} />
-        <div className={l.payWho}>
-          <p className={l.payTitle}>Pay Designer</p>
-          <p className={l.payAcct}>designer.near</p>
-        </div>
-        <p className={l.payAmount}>
-          50.00 <span>USDC</span>
-        </p>
-      </div>
-      <Said at="02:14" className={l.paySaid}>
-        pay the designer the <mark className={l.sweep}>fifty dollar</mark> deposit today
-      </Said>
-      <dl className={l.payWell}>
-        <div>
-          <dt>Heard</dt>
-          <dd>
-            <q className={l.serifQ}>fifty dollar</q> → <span className={l.mono}>50.00 USDC</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Payee</dt>
-          <dd>
-            Designer <span className={l.accent}>· on your list</span>
-          </dd>
-        </div>
-      </dl>
-      <div className={l.payButtons} aria-hidden="true">
-        <span className={l.btnQuiet}>Dismiss</span>
-        <span className={l.btnOutline}>Edit amount</span>
-        <span className={l.btnPrimary}>Approve payment</span>
-      </div>
-    </div>
   );
 }

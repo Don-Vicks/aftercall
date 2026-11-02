@@ -6,21 +6,23 @@ import { Face, Said } from "./atoms";
 import { ReplayButton, Rolling, TIMING, usePlay } from "./motion";
 
 /*
- * Moment 3, approve: the sample's payment card (FollowUps.tsx). Approve payment starts
- * "Paying in 5… you can still take it back." with Undo and a bar that empties over the
- * app's real grace period (GRACE_MS, 5 s); at 0 the amount slides into the Paid pill.
- * The server renders it paid. With motion, it presses Approve by itself 600 ms after
- * its step is shown; anyone can Undo, Approve or Replay. The card's height never changes.
+ * Moment 3, approve: the sample's payment card (FollowUps.tsx). When it plays, the words
+ * "fifty dollar" are highlighted in the quote, the Heard row reads them as 50.00 USDC, then
+ * Approve payment is pressed and "Paying in 5… you can still take it back." runs with Undo
+ * and a bar that empties over the app's real grace period (GRACE_MS, 5 s); at 0 the amount
+ * slides into the Paid pill. The server renders it paid. Anyone can Undo, Approve or Replay.
+ * The card's height never changes.
  */
 
 type Mode = "idle" | "count" | "paid";
 
-export function ApproveDemo() {
-  const { state } = usePlay();
+export function ApproveDemo({ startAfter = TIMING.approve.autoStart, className }: { startAfter?: number; className?: string }) {
+  const { state, run } = usePlay();
   const [mode, setMode] = useState<Mode>("paid");
   const [left, setLeft] = useState(5);
   const [startedAt, setStartedAt] = useState(0);
   const [said, setSaid] = useState("");
+  const [pass, setPass] = useState(0); // remounts the quote and Heard row so Replay replays them
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const clear = () => {
@@ -56,7 +58,8 @@ export function ApproveDemo() {
     clear();
     setMode("idle");
     setSaid("");
-    timers.current.push(setTimeout(approve, TIMING.approve.autoStart));
+    setPass((p) => p + 1);
+    timers.current.push(setTimeout(approve, startAfter));
   };
 
   // Armed: back to the card as proposed. Playing: press Approve after a beat.
@@ -68,10 +71,10 @@ export function ApproveDemo() {
     } else if (state === "play") {
       clear();
       setMode("idle");
-      timers.current.push(setTimeout(approve, TIMING.approve.autoStart));
+      timers.current.push(setTimeout(approve, startAfter));
     }
     return clear;
-  }, [state, approve]);
+  }, [state, run, approve, startAfter]);
 
   // ⌘Z undoes while the countdown runs, as in the app.
   useEffect(() => {
@@ -88,7 +91,7 @@ export function ApproveDemo() {
 
   const title = mode === "paid" ? "Paid Designer" : mode === "count" ? "Paying Designer" : "Pay Designer";
   return (
-    <div className={l.approve} data-mode={mode}>
+    <div className={`${l.approve}${className ? ` ${className}` : ""}`} data-mode={mode}>
       <div className={l.payCardFlat}>
         <div className={l.payHead}>
           <Face who="D" size={36} hue={5} />
@@ -108,10 +111,11 @@ export function ApproveDemo() {
             </p>
           </div>
         </div>
+        <div key={pass} className={l.evidence}>
         <Said at="02:14" className={l.paySaid}>
-          pay the designer the fifty dollar deposit today
+          pay the designer the <mark className={l.sweep}>fifty dollar</mark> deposit today
         </Said>
-        <dl className={l.payWell}>
+        <dl className={`${l.payWell} ${l.heardWell}`}>
           <div>
             <dt>Heard</dt>
             <dd>
@@ -125,6 +129,7 @@ export function ApproveDemo() {
             </dd>
           </div>
         </dl>
+        </div>
         <div className={l.actionStack}>
           <div className={l.actIdle} inert={mode !== "idle"}>
             <span className={l.btnQuiet} aria-hidden="true">

@@ -110,9 +110,8 @@
 }
 .detail,
 .status {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 19px;
   color: var(--muted);
 }
 .status {
@@ -132,16 +131,14 @@
 }
 .caveat {
   margin-top: 10px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 19px;
   color: var(--muted);
 }
 .caption {
   margin-top: 14px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 13px;
+  line-height: 19px;
   color: var(--muted);
 }
 .mono {
@@ -279,6 +276,7 @@
   background-repeat: no-repeat;
   background-size: 100% 100%;
   border-radius: 3px;
+  margin: 0 -2px;
   padding: 0 2px;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -299,7 +297,7 @@
   padding: 0 8px;
   border-radius: 999px;
   font-family: var(--font-sans);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -399,7 +397,9 @@ button.btnPrimary:hover {
   stroke-dashoffset: 0;
 }
 
-/* Digits that roll: each digit is a 0–9 column in a 1ch window. */
+/* Digits that roll: each digit is a 0–9 column in a 1ch window. The column's digits are
+   generated content, so they never show up in the page's text. The cell's edges fade, so a
+   rolling digit never shows a clipped neighbour. */
 .rolling {
   display: inline-block;
   font-variant-numeric: tabular-nums;
@@ -416,7 +416,13 @@ button.btnPrimary:hover {
   overflow: hidden;
   vertical-align: bottom;
 }
-.digitSizer {
+:global(.motion) .digit,
+:global(.motion) .bDigit {
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+}
+.digitSizer::before {
+  content: "0";
   visibility: hidden;
 }
 .digitCol,
@@ -424,13 +430,13 @@ button.btnPrimary:hover {
   position: absolute;
   left: 0;
   top: 0;
-  display: flex;
-  flex-direction: column;
+  line-height: 1.2em;
 }
-.digitCol > span,
-.bCol > span {
+.digitCol::before,
+.bCol::before {
+  content: "0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9";
+  white-space: pre;
   display: block;
-  height: 1.2em;
 }
 :global(.motion) .digitCol {
   transition: transform 280ms var(--ease);
@@ -457,53 +463,143 @@ button.btnPrimary:hover {
 /* ---------- 1. hero ---------- */
 
 .hero {
-  padding-top: 52px;
+  padding-top: 56px;
 }
-.heroText {
+/* Copy and the seal row on the left, the product on the right. Below 1024 px one column:
+   copy, the payment card, the seal row, then the window (the stage dissolves into the grid). */
+.heroGrid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  column-gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "copy stage"
+    "trust stage";
+  grid-template-rows: auto 1fr;
+  column-gap: 64px;
   align-items: start;
 }
-.heroText > .eyebrow,
-.heroText > .display {
-  grid-column: 1 / -1;
+.heroCopy {
+  grid-area: copy;
 }
 .hero .display {
   margin-top: 18px;
-  font-size: 72px;
-  line-height: 76px;
+  font-size: 64px;
+  line-height: 68px;
 }
 .heroLead {
-  grid-column: 1 / 8;
-  margin-top: 24px;
-  font-size: 20px;
-  line-height: 30px;
+  margin-top: 22px;
+  max-width: 34em;
+  font-size: 19px;
+  line-height: 29px;
   color: var(--ink-2);
 }
-@media (min-width: 1024px) {
-  .ctaRow span span {
-    white-space: nowrap;
-  }
+.heroWho {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--ink);
 }
 .ctaRow {
-  grid-column: 8 / -1;
-  justify-self: end;
-  margin-top: 30px;
+  margin-top: 28px;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 4px;
+  column-gap: 28px;
+  row-gap: 8px;
 }
+.ctaRow .secondary {
+  height: 52px;
+}
+
+/* The seal row (moment 4): the four groups tick in 90 ms apart, then the seal pops. */
+.heroTrust {
+  grid-area: trust;
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hairline);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.trustText {
+  min-width: 0;
+}
+.trustTitle {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.trustChips {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.trustChips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 6px;
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: var(--sh1);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.trustChips .mono {
+  color: var(--ink-2);
+}
+.trustSub {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--ink-2);
+}
+.trustCaveat {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.seal {
+  flex-shrink: 0;
+}
+.sealRing {
+  transform-origin: 74px 74px;
+}
+:global(.motion) .heroTrust[data-state="armed"] .seal,
+:global(.motion) .heroTrust[data-state="armed"] .trustChips li {
+  opacity: 0;
+}
+:global(.motion) .heroTrust[data-state="play"] .trustChips li {
+  animation: rise6 240ms var(--ease) calc(120ms + var(--i) * 90ms) both;
+}
+:global(.motion) .heroTrust[data-state="play"] .chkFill {
+  animation: fillPop 200ms var(--ease) calc(180ms + var(--i) * 90ms) both;
+}
+:global(.motion) .heroTrust[data-state="play"] .chkMark {
+  animation: draw 200ms var(--ease) calc(240ms + var(--i) * 90ms) both;
+}
+:global(.motion) .heroTrust[data-state="play"] .seal {
+  animation: sealIn 280ms var(--ease) 620ms both;
+}
+:global(.motion) .heroTrust[data-state="play"] .sealRing {
+  animation: ringTurn 1200ms var(--ease) 880ms both;
+}
+
+/* The product: the notes, cropped below Your notes, and the payment they proposed over its foot. */
 .heroStage {
-  margin: 48px 0 0;
-}
-.heroBox {
+  grid-area: stage;
   position: relative;
+  padding-top: 6px;
 }
 .heroWindowWrap {
   position: relative;
-  margin: 0 40px 0 48px;
 }
 .heroWindow {
   position: relative;
@@ -525,105 +621,31 @@ button.btnPrimary:hover {
 .heroWindowWrap:hover .heroWindow::after {
   opacity: 1;
 }
-.heroCaption {
-  margin-left: 392px;
-  margin-top: 16px;
-  max-width: 560px;
+.heroWindowBody {
+  aspect-ratio: 632 / 466;
+  overflow: hidden;
 }
-
-/* The receipt (moment 4). */
-.receipt {
-  position: absolute;
-  left: 0;
-  bottom: -56px;
+.heroPay {
+  position: relative;
   z-index: 2;
-  width: 360px;
-  padding: 18px 18px 16px;
-  border-radius: 14px;
-  background: var(--elevated);
+  width: min(420px, 100%);
+  margin: -40px 0 0 -40px;
+}
+.heroApprove .payCardFlat {
   box-shadow: var(--shfloat), var(--sh2);
 }
-.receiptHead {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--hairline);
+.heroApprove .replay {
+  margin-top: 8px;
 }
-.receiptTitle {
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 600;
-}
-.receiptSub {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--muted);
-}
-.receiptRows {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-}
-.receiptRow {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-  padding: 5px 0;
-  font-size: 13.5px;
-  line-height: 19px;
-  color: var(--ink);
-}
-.receiptRow .chk {
-  margin-top: 2px;
-}
-.receiptN {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.receiptTotal {
-  margin: 2px 0 8px 26px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--ink);
-}
-.receiptFoot {
-  display: grid;
-  gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--muted);
-}
-.seal {
-  flex-shrink: 0;
-}
-.sealRing {
-  transform-origin: 74px 74px;
+.heroCaption {
+  margin-top: 10px;
+  max-width: 520px;
 }
 
 /* The payment card. */
-.payCard,
 .payCardFlat {
   border-radius: 14px;
   background: var(--elevated);
-}
-.payCard {
-  position: absolute;
-  right: 0;
-  top: 52%;
-  z-index: 2;
-  width: 400px;
-  padding: 18px 20px 16px;
-  box-shadow: var(--shfloat), var(--sh2);
 }
 .payHead {
   display: grid;
@@ -674,20 +696,27 @@ button.btnPrimary:hover {
   grid-template-columns: 56px minmax(0, 1fr);
 }
 .payWell dt {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 .payWell dd {
   margin: 0;
 }
-.payButtons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 14px;
+/* Moment 3's lead-in: the words highlight, then Heard reads them as an amount. */
+:global(.motion) [data-state="armed"] .evidence .sweep {
+  background-size: 0% 100%;
+}
+:global(.motion) [data-state="armed"] .heardWell {
+  opacity: 0;
+}
+:global(.motion) [data-state="play"] .evidence .sweep {
+  animation: sweep 600ms var(--ease) 200ms both;
+}
+:global(.motion) [data-state="play"] .heardWell {
+  animation: pop 260ms var(--ease) 760ms both;
 }
 
-/* Hero on load: everything plays once, in CSS, then stays still. */
+/* Hero on load: the copy and window play once, in CSS; the two moments play when in view. */
 :global(.motion) .load {
   animation: fadeIn 260ms var(--ease) var(--ld, 0ms) both;
 }
@@ -698,37 +727,23 @@ button.btnPrimary:hover {
   animation: windowIn 320ms var(--ease) var(--ld, 0ms) both;
 }
 :global(.motion) .loadSlide {
-  animation: slideIn 280ms var(--ease) var(--ld, 0ms) both;
-}
-:global(.motion) .receipt .receiptRow {
-  animation: rise8 240ms var(--ease) calc(760ms + var(--i) * 90ms) both;
-}
-:global(.motion) .receipt .chkFill {
-  animation: fillPop 200ms var(--ease) calc(840ms + var(--i) * 90ms) both;
-}
-:global(.motion) .receipt .chkMark {
-  animation: draw 200ms var(--ease) calc(900ms + var(--i) * 90ms) both;
-}
-:global(.motion) .receipt .receiptTotal {
-  animation: fadeIn 200ms var(--ease) calc(1120ms + var(--i) * 90ms) both;
-}
-:global(.motion) .receipt .seal {
-  animation: sealIn 280ms var(--ease) 1500ms both;
-}
-:global(.motion) .receipt .sealRing {
-  animation: ringTurn 1200ms var(--ease) 1780ms both;
-}
-:global(.motion) .payCard .sweep {
-  animation: sweep 500ms var(--ease) 1700ms both;
+  animation: rise16 300ms var(--ease) var(--ld, 0ms) both;
 }
 
 /* ---------- 2. in the call ---------- */
 
+/* A Mac desktop: the menu bar, the call's window, the recorder docked above its top-right
+   corner, Your notes over its right edge, and the shortcut and a note in the right column. */
 .callStage {
+  --dw: 1040px;
+  --ww: 760px;
   position: relative;
-  height: 600px;
+  height: 640px;
   border-radius: 20px;
-  background: var(--well);
+  background:
+    radial-gradient(120% 90% at 15% 0%, color-mix(in srgb, var(--verdigris-tint) 75%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--p2, var(--well)) 35%, transparent) 0%, transparent 70%),
+    var(--well);
   overflow: hidden;
 }
 .callArt {
@@ -779,29 +794,41 @@ button.btnPrimary:hover {
 :global(.motion) [data-running] .recDot::after {
   animation: breathe 2s ease-in-out infinite;
 }
+.desk {
+  position: absolute;
+  top: 28px;
+  left: calc(50% - var(--dw) / 2);
+  width: var(--dw);
+  height: 612px;
+}
 .callKeys {
   position: absolute;
-  top: 56px;
-  left: 48px;
+  top: 40px;
+  right: 0;
+  width: 250px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 .callKeysNote {
-  margin-left: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
+  flex-basis: 100%;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
 }
 :global(.motion) [data-keys] .key {
   animation: keyPress 140ms var(--ease) calc(var(--k) * 90ms) both;
 }
 .callWindow {
   position: absolute;
-  left: 48px;
-  top: 112px;
-  width: 720px;
-  height: 432px;
+  left: 0;
+  top: 124px;
+  width: var(--ww);
+  height: 468px;
+  display: flex;
+  flex-direction: column;
   border-radius: 12px;
   overflow: hidden;
   background: var(--raised);
@@ -809,13 +836,14 @@ button.btnPrimary:hover {
 }
 .callBar {
   position: relative;
+  flex: none;
   height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid var(--hairline);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--muted);
 }
 .callDots {
@@ -832,16 +860,18 @@ button.btnPrimary:hover {
   opacity: 0.55;
 }
 .tiles {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  padding: 18px;
-  height: calc(100% - 34px - 52px);
+  gap: 12px;
+  padding: 14px 14px 0;
 }
 .tile {
   position: relative;
   display: grid;
   place-items: center;
+  min-height: 120px;
   border-radius: 10px;
   background: var(--elevated);
 }
@@ -850,7 +880,7 @@ button.btnPrimary:hover {
   inset: 0;
   border-radius: 10px;
   box-shadow: inset 0 0 0 2px var(--ink);
-  opacity: 0.2;
+  opacity: 0.15;
   transition: opacity 160ms var(--ease);
 }
 .tileRingYou {
@@ -861,28 +891,79 @@ button.btnPrimary:hover {
   left: 12px;
   bottom: 10px;
   font-size: 13px;
+  line-height: 16px;
   font-weight: 600;
   color: var(--ink-2);
 }
-.toldChip {
-  position: absolute;
-  left: 18px;
-  bottom: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--verdigris-tint);
-  color: var(--verdigris);
-  font-size: 12.5px;
+/* What's being said, under the tiles (the conversation itself, not something Aftercall shows). */
+.saidStrip {
+  flex: none;
+  margin: 12px 14px 14px;
+  padding: 12px 14px 14px;
+  border-radius: 10px;
+  background: var(--elevated);
+}
+.saidStrip {
+  transition: opacity 240ms var(--ease);
+}
+.saidStrip[data-idle] {
+  opacity: 0;
+  transition-duration: 160ms;
+}
+.saidLabel {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.saidLine {
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--ink);
+}
+.saidLine b {
   font-weight: 600;
+  color: var(--verdigris);
+}
+.saidQuote {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--verdigris) 60%, transparent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.heardNote {
+  position: absolute;
+  right: 0;
+  top: 476px;
+  width: 250px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--verdigris) 55%, transparent);
+  background: color-mix(in srgb, var(--raised) 60%, transparent);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
+.heardNote svg {
+  margin-top: 3px;
+  color: var(--verdigris);
+  transform: rotate(180deg);
+}
+.heardNote b {
+  font-weight: 500;
+  color: var(--ink);
 }
 .recorderWrap {
   position: absolute;
-  left: 584px;
-  top: 74px;
+  right: calc(100% - var(--ww));
+  top: 18px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -892,28 +973,28 @@ button.btnPrimary:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 52px;
-  padding: 0 8px 0 18px;
+  height: 56px;
+  padding: 0 9px 0 18px;
   border-radius: 999px;
   background: var(--elevated);
   box-shadow: var(--shpill);
 }
 .recTime {
   font-family: var(--font-mono);
-  font-size: 17px;
+  font-size: 18px;
   color: var(--ink);
   min-width: 5ch;
 }
 .meter {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 22px;
+  gap: 3px;
+  height: 30px;
 }
 .meter i {
   display: block;
-  width: 3px;
-  height: 22px;
+  width: 4px;
+  height: 30px;
   border-radius: 2px;
   transition: transform 90ms linear;
 }
@@ -927,7 +1008,7 @@ button.btnPrimary:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 38px;
   padding: 0 12px;
   border-radius: 999px;
   background: var(--raised);
@@ -936,30 +1017,30 @@ button.btnPrimary:hover {
   color: var(--ink);
 }
 .recIcon {
-  width: 36px;
+  width: 38px;
   padding: 0;
   justify-content: center;
 }
+/* Record red with the ground colour on it: 4.5:1 or better in both themes. */
 .recStop {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 36px;
+  height: 38px;
   padding: 0 14px;
   border-radius: 999px;
   background: var(--record);
-  color: #fff;
+  color: var(--ground);
   font-size: 13.5px;
   font-weight: 600;
 }
 .meterLegend {
   display: flex;
   gap: 14px;
-  padding-right: 18px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  padding-right: 22px;
+  font-size: 12px;
   line-height: 14px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .meterLegend span {
   display: inline-flex;
@@ -976,11 +1057,33 @@ button.btnPrimary:hover {
 .legendCall {
   background: var(--ink);
 }
+.jumpTag {
+  position: absolute;
+  right: calc(100% + 12px);
+  top: 16px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: var(--sh1);
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease);
+}
+[data-jump] .jumpTag {
+  opacity: 1;
+  transition-duration: 240ms;
+}
 .notesPop {
   position: absolute;
-  left: 708px;
-  top: 318px;
-  width: 420px;
+  right: 0;
+  top: 176px;
+  width: calc(var(--dw) - var(--ww) + 120px);
   padding: 14px 18px 16px;
   border-radius: 14px;
   background: var(--elevated);
@@ -999,7 +1102,7 @@ button.btnPrimary:hover {
 }
 .notesTitle kbd {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .notesBody {
@@ -1018,7 +1121,7 @@ button.btnPrimary:hover {
 }
 .sheet {
   position: absolute;
-  left: 238px;
+  left: 210px;
   top: 150px;
   z-index: 3;
   width: 340px;
@@ -1072,7 +1175,7 @@ button.btnPrimary:hover {
 }
 .sheetEvent span span {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--verdigris);
 }
 .sheetCheck {
@@ -1117,7 +1220,7 @@ button.btnPrimary:hover {
   height: 40px;
   border-radius: 10px;
   background: var(--record);
-  color: #fff;
+  color: var(--ground);
   font-size: 14px;
   font-weight: 600;
   opacity: 0.45;
@@ -1129,11 +1232,11 @@ button.btnPrimary:hover {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fff;
+  background: currentColor;
 }
 .sheetStart kbd {
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 12px;
+  opacity: 0.75;
 }
 .sheetCheck[data-on] + .sheetStart {
   opacity: 1;
@@ -1143,7 +1246,8 @@ button.btnPrimary:hover {
 }
 [data-rec] .recorderWrap,
 [data-rec] .menuClock,
-[data-notes] .notesPop {
+[data-notes] .notesPop,
+[data-heard] .heardNote {
   transition:
     opacity 280ms var(--ease),
     transform 280ms var(--ease);
@@ -1157,10 +1261,14 @@ button.btnPrimary:hover {
   opacity: 0;
   transform: translateY(8px);
 }
+[data-heard="off"] .heardNote {
+  opacity: 0;
+  transform: translateX(-8px) scale(0.98);
+}
 .pauseMotion {
   position: absolute;
   left: 14px;
-  bottom: 14px;
+  top: 40px;
   z-index: 4;
   height: 28px;
   padding: 0 12px;
@@ -1169,7 +1277,6 @@ button.btnPrimary:hover {
   background: var(--raised);
   box-shadow: var(--sh1);
   color: var(--ink-2);
-  font-family: var(--font-mono);
   font-size: 12px;
 }
 .pauseMotion:hover {
@@ -1211,15 +1318,13 @@ button.btnPrimary:hover {
   margin: 0;
   padding: 0;
 }
+/* Each step is at least 80vh, so a page jump (about 87% of the viewport) lands on the next
+   one instead of skipping it; its text sits in the middle of that height. */
 .step {
-  min-height: min(64vh, 580px);
-  padding: min(12vh, 110px) 0 40px;
-}
-.step:first-child {
-  padding-top: 40px;
-}
-.step:last-child {
-  min-height: min(70vh, 600px);
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  padding: 24px 0;
 }
 .stepText {
   transition: opacity 200ms var(--ease);
@@ -1250,19 +1355,21 @@ button.btnPrimary:hover {
   position: sticky;
   top: calc(50vh - 300px);
 }
-.storyWell {
-  padding: 30px;
-  border-radius: 20px;
-  background: var(--well);
+.storyWindow {
+  box-shadow: var(--shfloat), var(--sh2), 0 0 0 1px var(--hairline);
 }
 .storyBody {
-  height: 486px;
+  height: 520px;
   overflow: hidden;
   background: var(--raised);
 }
+/* Every screen is centred in the one window, so none leaves a band of empty window. */
 .screen {
   position: absolute;
   inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   opacity: 0;
   transform: scale(0.99);
   transition:
@@ -1305,8 +1412,7 @@ button.btnPrimary:hover {
   padding: 18px 24px;
 }
 .procEyebrow {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
 }
 .procTitle {
@@ -1354,7 +1460,7 @@ button.btnPrimary:hover {
 }
 .procTime {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
   color: var(--muted);
 }
@@ -1367,12 +1473,12 @@ button.btnPrimary:hover {
 .chip {
   display: inline-flex;
   align-items: center;
-  height: 19px;
+  height: 20px;
   padding: 0 7px;
   border-radius: 999px;
   background: var(--verdigris-tint);
   color: var(--verdigris);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 :global(.motion) [data-state] .procSpin {
@@ -1413,21 +1519,18 @@ button.btnPrimary:hover {
   animation: pop 240ms var(--ease) calc((var(--i) + 1) * 420ms + var(--c) * 60ms) both;
 }
 
-/* Notes with the quote behind them (step 2). */
+/* Notes with the quote behind them (step 2): the notes cropped above Your notes, the line below. */
 .notesScreen {
-  position: relative;
-  height: 486px;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 18px;
+}
+.notesCrop {
+  height: 318px;
   overflow: hidden;
 }
-.notesShot {
-  position: absolute;
-  inset: 0 0 auto 0;
-}
 .strip {
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
+  margin: 0 18px;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: start;
@@ -1435,7 +1538,7 @@ button.btnPrimary:hover {
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--elevated);
-  box-shadow: var(--shfloat), var(--sh2);
+  box-shadow: var(--sh1), 0 0 0 1px var(--hairline);
 }
 .stripAt {
   font-family: var(--font-mono);
@@ -1478,23 +1581,18 @@ button.btnPrimary:hover {
   animation: pop 240ms var(--ease) 1240ms both;
 }
 
-/* The recap (step 3). */
+/* The recap (step 3): the follow-up's Draft in Mail is pressed and the draft opens in Mail. */
 .recapScreen,
 .paymentScreen {
   padding: 22px 24px;
 }
-.followTitle {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-.followTitle span {
-  font-weight: 500;
-  color: var(--muted);
-}
 .recapCard {
-  padding: 16px 18px;
-  border-radius: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background: var(--elevated);
   box-shadow: var(--sh1);
 }
@@ -1503,52 +1601,105 @@ button.btnPrimary:hover {
   line-height: 18px;
   color: var(--ink-2);
 }
-.proposed {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
+.draftBtn {
+  gap: 6px;
 }
-.recapActions {
-  margin-top: 14px;
+.compose {
+  position: relative;
+  z-index: 1;
+  margin: -6px 0 0 28px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--elevated);
+  box-shadow: var(--shfloat), var(--sh2), 0 0 0 1px var(--hairline);
+  transform-origin: 100% 0;
+}
+.composeBar {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-}
-.recapWhy {
-  margin-right: auto;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--hairline);
   font-size: 12.5px;
+  font-weight: 600;
   color: var(--ink-2);
 }
-.footerBlock {
-  margin-top: 14px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  background: var(--well);
+.composeBar > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composeBar svg {
+  position: absolute;
+  right: 14px;
+  color: var(--verdigris);
+}
+.composeHead {
+  margin: 0;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 24px;
+}
+.composeHead div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.composeHead dt {
+  color: var(--muted);
+}
+.composeHead dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composeBody {
+  padding: 12px 16px 14px;
   display: grid;
   gap: 8px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--ink);
 }
-.footerLabel {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
+.composeBody ol {
+  margin: 0;
+  padding-left: 20px;
 }
-.footerLine {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 17px;
+.composeItems {
   color: var(--ink-2);
 }
-:global(.motion) [data-state="armed"] .recapCard,
-:global(.motion) [data-state="armed"] .footerLine {
+.composeFoot {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--hairline);
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--muted);
+}
+.composeLink {
+  color: var(--verdigris);
+  font-weight: 600;
+}
+:global(.motion) [data-state="armed"] .compose,
+:global(.motion) [data-state="armed"] .composeBody > * {
   opacity: 0;
 }
-:global(.motion) [data-state="play"] .recapCard {
-  animation: rise12 280ms var(--ease) 80ms both;
+:global(.motion) [data-state="play"] .draftBtn {
+  animation: press 160ms var(--ease) 240ms both;
 }
-:global(.motion) [data-state="play"] .footerLine {
-  animation: fadeIn 240ms var(--ease) calc(420ms + var(--i) * 90ms) both;
+:global(.motion) [data-state="play"] .compose {
+  animation: composeIn 320ms var(--ease) 420ms both;
+}
+:global(.motion) [data-state="play"] .composeBody > * {
+  animation: fadeIn 240ms var(--ease) calc(700ms + var(--i) * 90ms) both;
 }
 
 /* The payment (step 4, moment 3). */
@@ -1663,7 +1814,7 @@ button.btnPrimary:hover {
   font-weight: 600;
 }
 .undo kbd {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .countBar {
@@ -1750,6 +1901,7 @@ button.btnPrimary:hover {
 .tab {
   position: relative;
   z-index: 1;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1787,23 +1939,39 @@ button.btnPrimary:hover {
   border-radius: 6px;
   background: var(--elevated);
   box-shadow: var(--sh1);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-2);
 }
+/* Only the selected tab shows its line; the others are a name and a shortcut. */
 .tabLine {
+  display: none;
   font-size: 14px;
   line-height: 20px;
-  color: var(--muted);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  overflow: hidden;
+  color: var(--ink-2);
 }
 .tab[aria-selected="true"] .tabLine {
-  -webkit-line-clamp: unset;
-  line-clamp: unset;
-  color: var(--ink-2);
+  display: block;
+  animation: fadeIn 240ms var(--ease) both;
+}
+:global(.calm) .tab[aria-selected="true"] .tabLine,
+:global(html:not(.motion)) .tab[aria-selected="true"] .tabLine {
+  animation: none;
+}
+.tabProgress {
+  position: absolute;
+  left: 20px;
+  right: 16px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--verdigris);
+  opacity: 0.55;
+  transform-origin: left;
+  transform: scaleX(0);
+  animation: tabFill 5000ms linear forwards;
+}
+.tabProgress[data-paused] {
+  animation-play-state: paused;
 }
 .panels {
   grid-column: 5 / -1;
@@ -1829,25 +1997,28 @@ button.btnPrimary:hover {
 .panelLine {
   display: none;
 }
+/* Each panel is one window on the page itself (no panel behind it), filled to its foot. */
 .panelStage {
   display: flex;
   flex-direction: column;
-  height: 640px;
-  padding: 28px 28px 20px;
-  border-radius: 20px;
-  background: var(--well);
+  height: 600px;
 }
 .panelWindow {
   display: flex;
   flex-direction: column;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
+  box-shadow: var(--shfloat), var(--sh2), 0 0 0 1px var(--hairline);
 }
 .panelBody {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   background: var(--raised);
+}
+/* A screen at about 0.9x, top-aligned; the window below it is the app's own background. */
+.fillShot img {
+  width: 100%;
 }
 .panelStage > .caption {
   margin-top: auto;
@@ -1871,23 +2042,15 @@ button.btnPrimary:hover {
   min-height: 0;
 }
 .pairBack {
-  width: 84%;
+  width: 100%;
   height: 100%;
-}
-.pairFront {
-  position: absolute;
-  right: 0;
-  top: 72px;
-  width: 54%;
-  height: calc(100% - 72px);
-  box-shadow: var(--shfloat), var(--sh2);
 }
 .tickFloat {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 420px;
-  max-width: 92%;
+  right: 20px;
+  bottom: 20px;
+  width: 400px;
+  max-width: 88%;
 }
 .agentsStack {
   display: flex;
@@ -1921,8 +2084,7 @@ button.btnPrimary:hover {
   padding: 22px 26px;
 }
 .askEyebrow {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
 }
 .askTitle {
@@ -1949,15 +2111,14 @@ button.btnPrimary:hover {
   color: var(--ink);
 }
 .askInput kbd {
-  font-size: 11px;
+  font-size: 12px;
 }
 .askStep {
   margin-top: 12px;
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--verdigris);
 }
 .askCards {
@@ -2006,8 +2167,7 @@ button.btnPrimary:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--muted);
 }
 :global(.motion) [data-state="armed"] .askStep,
@@ -2142,11 +2302,28 @@ button.btnPrimary:hover {
 
 .smallThings {
   list-style: none;
-  margin: 48px 0 0;
+  margin: 56px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 24px;
+}
+.smallIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 12px;
+  border-radius: 9px;
+  background: var(--verdigris-tint);
+  color: var(--verdigris);
+  transition: transform 200ms var(--ease);
+}
+.smallThings li:hover .smallIcon {
+  transform: translateY(-2px);
+}
+.smallStatus {
+  margin-top: 20px;
 }
 
 /* ---------- 5. built so it can't ---------- */
@@ -2184,9 +2361,12 @@ button.btnPrimary:hover {
 .cantBody {
   grid-column: 5 / 10;
 }
+.testsBox {
+  margin-top: 14px;
+}
 .tests {
   list-style: none;
-  margin: 18px 0 0;
+  margin: 10px 0 0;
   padding: 0;
   display: grid;
   gap: 8px;
@@ -2208,14 +2388,13 @@ button.btnPrimary:hover {
 .testFile {
   grid-column: 2;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 15px;
   color: var(--muted);
 }
 .testNote {
   margin-top: 12px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .cantVisual {
@@ -2253,7 +2432,7 @@ button.btnPrimary:hover {
 .vReason {
   margin-top: 2px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .vKey {
@@ -2373,19 +2552,137 @@ button.btnPrimary:hover {
   column-gap: 24px;
   row-gap: 40px;
 }
-.checksCol {
+/* The band: the seal, the four groups as chips (moment 4), every check by name on request. */
+.proofBand {
   grid-column: 1 / 8;
+  align-self: start;
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--raised);
+  box-shadow: var(--sh1), 0 0 0 1px var(--hairline);
+}
+.bandTop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+}
+.bandTitle {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.bandSub {
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink-2);
+}
+.bandChips {
+  list-style: none;
+  margin: 22px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.bandChips li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--elevated);
+  box-shadow: var(--sh1);
+  font-size: 14px;
+  font-weight: 600;
+}
+.bandChips .mono {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.allChecks {
+  margin-top: 16px;
+}
+.allChecks > summary,
+.testsBox > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--verdigris);
+  cursor: pointer;
+  list-style: none;
+}
+.allChecks > summary::-webkit-details-marker,
+.testsBox > summary::-webkit-details-marker {
+  display: none;
+}
+.allChecks > summary::after,
+.testsBox > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 200ms var(--ease);
+}
+.allChecks[open] > summary::after,
+.testsBox[open] > summary::after {
+  margin-top: 3px;
+  transform: rotate(-135deg);
+}
+.testsBox > summary .mono {
+  color: var(--muted);
+  font-weight: 500;
+}
+.allChecks .groups {
+  margin-top: 12px;
+}
+.bandCaveat {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+:global(.motion) .proofBand[data-state="armed"] .bandChips li,
+:global(.motion) .proofBand[data-state="armed"] .seal {
+  opacity: 0;
+}
+:global(.motion) .proofBand[data-state="play"] .bandChips li {
+  animation: rise6 240ms var(--ease) calc(120ms + var(--i) * 90ms) both;
+}
+:global(.motion) .proofBand[data-state="play"] .bandChips .chkFill {
+  animation: fillPop 200ms var(--ease) calc(180ms + var(--i) * 90ms) both;
+}
+:global(.motion) .proofBand[data-state="play"] .bandChips .chkMark {
+  animation: draw 200ms var(--ease) calc(240ms + var(--i) * 90ms) both;
+}
+:global(.motion) .proofBand[data-state="play"] .seal {
+  animation: sealIn 280ms var(--ease) 620ms both;
+}
+:global(.motion) .proofBand[data-state="play"] .sealRing {
+  animation: ringTurn 1200ms var(--ease) 880ms both;
 }
 .groups {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
 }
 .group {
-  padding: 16px 18px;
-  border-radius: 14px;
-  background: var(--raised);
-  box-shadow: var(--sh1);
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--elevated);
 }
 .group ul {
   list-style: none;
@@ -2420,12 +2717,7 @@ button.btnPrimary:hover {
   font-size: 12.5px;
   color: var(--muted);
 }
-:global(.motion) [data-state="armed"] .group li {
-  opacity: 0;
-}
-:global(.motion) [data-state="play"] .group li {
-  animation: rise6 200ms var(--ease) calc(var(--i) * 30ms) both;
-}
+
 .runCol {
   grid-column: 8 / -1;
   display: grid;
@@ -2520,9 +2812,11 @@ button.btnPrimary:hover {
 .walletWell {
   position: relative;
   grid-column: 1 / 8;
-  padding: 40px 40px 56px;
-  border-radius: 20px;
-  background: var(--well);
+  padding-bottom: 48px;
+}
+.walletWell > .replay {
+  right: 0;
+  bottom: 0;
 }
 .wallet {
   padding: 26px 28px;
@@ -2638,7 +2932,7 @@ button.btnPrimary:hover {
   background: var(--verdigris);
   border-radius: 3px;
   transform-origin: left;
-  transform: scaleX(0.5);
+  transform: scaleX(0.25);
 }
 .leftToday {
   margin-top: 6px;
@@ -2675,7 +2969,7 @@ button.btnPrimary:hover {
 }
 .limitValue span {
   float: right;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 22px;
   color: var(--muted);
 }
@@ -2704,9 +2998,8 @@ button.btnPrimary:hover {
   align-self: center;
 }
 .moneyPoints .status {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 19px;
   color: var(--muted);
   margin-top: 28px;
 }
@@ -2722,12 +3015,6 @@ button.btnPrimary:hover {
 }
 :global(.motion) [data-state="play"] .bCol {
   transition: transform 420ms var(--ease) calc(240ms + var(--ri) * 40ms);
-}
-:global(.motion) [data-state="armed"] .spentFill {
-  transform: scaleX(0);
-}
-:global(.motion) [data-state="play"] .spentFill {
-  transition: transform 600ms var(--ease) 640ms;
 }
 :global(.motion) [data-state="play"] .depositBtn {
   animation: press 140ms var(--ease) both;
@@ -2773,15 +3060,65 @@ button.btnPrimary:hover {
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
-.closeBody {
-  margin-top: 20px;
-  max-width: 600px;
-  font-size: 20px;
-  line-height: 30px;
+.beats {
+  list-style: none;
+  margin: 36px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: min(760px, 100vw - 2 * var(--gutter));
+  text-align: left;
+}
+.beats li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--sh1), 0 0 0 1px var(--hairline);
+}
+.beats b {
+  display: block;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.beats li > span:last-child > span {
+  display: block;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--ink-2);
 }
+.beatGlyph {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+}
+.beatDot {
+  width: 12px;
+  height: 12px;
+}
+:global(.motion) .beatDot::after {
+  animation: breathe 2s ease-in-out infinite;
+}
+.beatPaid {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--verdigris-tint);
+  color: var(--verdigris);
+  font-size: 11.5px;
+  font-weight: 600;
+}
 .closeCta {
-  margin-top: 32px;
+  margin-top: 36px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2792,13 +3129,23 @@ button.btnPrimary:hover {
 }
 .closeMeta {
   margin-top: 24px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 
 /* ---------- keyframes ---------- */
 
+@keyframes tabFill {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes composeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+}
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -2999,19 +3346,37 @@ button.btnPrimary:hover {
 
 /* ---------- responsive ---------- */
 
+/* Short laptop screens (1280×720): pull the hero up so the seal row is in the first screen. */
+@media (min-width: 1024px) and (max-height: 780px) {
+  .hero {
+    padding-top: 28px;
+  }
+  .hero .display {
+    margin-top: 12px;
+  }
+  .heroLead {
+    margin-top: 16px;
+  }
+  .ctaRow {
+    margin-top: 20px;
+  }
+  .heroTrust {
+    margin-top: 20px;
+    padding-top: 18px;
+  }
+}
+
 @media (max-width: 1239px) {
-  .callWindow {
-    width: calc(100% - 380px);
+  .callStage {
+    --dw: 900px;
+    --ww: 640px;
   }
-  .notesPop {
-    left: auto;
-    right: 24px;
-    width: 360px;
-    top: 340px;
+  .hero .display {
+    font-size: 56px;
+    line-height: 60px;
   }
-  .recorderWrap {
-    left: auto;
-    right: 24px;
+  .heroGrid {
+    column-gap: 48px;
   }
 }
 
@@ -3028,81 +3393,123 @@ button.btnPrimary:hover {
     line-height: 64px;
   }
 
-  /* Hero: text stacked; the window, then the receipt and the payment card side by side. */
-  .heroLead,
-  .ctaRow {
-    grid-column: 1 / -1;
+  /* Hero: one column. The stage dissolves into the grid so the payment card comes straight
+     after the button, then the seal row, then the window. */
+  .heroGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: none;
+    grid-template-rows: none;
   }
-  .ctaRow {
-    margin-top: 28px;
+  .heroCopy,
+  .heroTrust {
+    grid-area: auto;
   }
-  .hero .display {
-    font-size: 60px;
-    line-height: 64px;
+  .heroStage {
+    display: contents;
+  }
+  .heroCopy {
+    order: 1;
+  }
+  .heroPay {
+    order: 2;
+    width: min(480px, 100%);
+    margin: 36px 0 0;
+  }
+  .heroTrust {
+    order: 3;
+    max-width: 560px;
   }
   .heroWindowWrap {
-    margin: 0;
-  }
-  .heroBox {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  .heroWindowWrap {
-    grid-column: 1 / -1;
-  }
-  .receipt,
-  .payCard {
-    position: relative;
-    left: auto;
-    right: auto;
-    top: auto;
-    bottom: auto;
-    width: auto;
+    order: 4;
+    margin-top: 36px;
   }
   .heroCaption {
-    margin-left: 0;
+    order: 5;
+  }
+  .hero .display {
+    font-size: 56px;
+    line-height: 60px;
   }
 
   /* In the call: the same pieces, in a column. */
   .callStage {
     height: auto;
-    padding: 44px 16px 56px;
+    padding: 0 16px 60px;
   }
   .callArt {
     position: relative;
     inset: auto;
+  }
+  .menubar {
+    position: relative;
+    margin: 0 -16px;
+  }
+  .desk {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    height: auto;
     display: flex;
     flex-direction: column;
-    align-items: stretch;
     gap: 16px;
+    padding-top: 20px;
   }
   .callKeys,
   .callWindow,
   .recorderWrap,
-  .notesPop {
+  .notesPop,
+  .heardNote {
     position: relative;
     left: auto;
     right: auto;
     top: auto;
     width: auto;
   }
-  .callWindow {
-    height: 300px;
+  .callKeys {
+    order: 1;
   }
   .recorderWrap {
+    order: 2;
     align-items: center;
+    margin-top: 28px;
+  }
+  .callWindow {
+    order: 3;
+    height: auto;
+  }
+  .heardNote {
+    order: 4;
+  }
+  .notesPop {
+    order: 5;
+  }
+  .tiles {
+    flex: none;
+  }
+  .tile {
+    min-height: 150px;
   }
   .meterLegend {
     padding-right: 0;
   }
+  .jumpTag {
+    right: auto;
+    left: 50%;
+    top: -32px;
+    transform: translateX(-50%);
+  }
   .sheet {
-    left: 24px;
-    right: 24px;
-    top: 120px;
+    left: 0;
+    right: 0;
+    top: 96px;
     width: auto;
     max-width: 360px;
     margin-inline: auto;
+  }
+  .pauseMotion {
+    top: auto;
+    bottom: 16px;
   }
 
   /* Story: no sticky window; each step carries its own. */
@@ -3116,13 +3523,10 @@ button.btnPrimary:hover {
   .stepsCol {
     padding-left: 0;
   }
-  .step,
-  .step:last-child {
+  .step {
+    display: block;
     min-height: 0;
     padding: 0 0 72px;
-  }
-  .step:first-child {
-    padding-top: 0;
   }
   .stepLabel {
     padding-left: 10px;
@@ -3134,9 +3538,6 @@ button.btnPrimary:hover {
   }
   .stepPhone .storyBody {
     height: auto;
-  }
-  .stepPhone .notesScreen {
-    height: 440px;
   }
 
   /* Features: a row of chips that scrolls on its own; panels below. */
@@ -3183,8 +3584,13 @@ button.btnPrimary:hover {
     white-space: nowrap;
   }
   .tabKey,
-  .tabLine {
+  .tab[aria-selected="true"] .tabLine {
     display: none;
+  }
+  .tabProgress {
+    left: 14px;
+    right: 14px;
+    bottom: 3px;
   }
   .panelLine {
     display: block;
@@ -3195,7 +3601,6 @@ button.btnPrimary:hover {
   }
   .panelStage {
     height: auto;
-    padding: 16px;
   }
   .panelWindow,
   .pair,
@@ -3207,23 +3612,17 @@ button.btnPrimary:hover {
     display: flex;
     flex-direction: column;
   }
-  .pairBack,
-  .exportBack {
-    width: 100%;
+  .pairBack {
     height: auto;
-  }
-  .pairFront {
-    position: relative;
-    top: auto;
-    width: 82%;
-    height: auto;
-    margin: -48px 0 0 auto;
   }
   .tickFloat {
     position: relative;
+    right: auto;
+    bottom: auto;
     width: 100%;
     max-width: none;
     margin-top: -40px;
+    padding: 0 12px;
   }
   .exportBack {
     display: none;
@@ -3240,11 +3639,11 @@ button.btnPrimary:hover {
     grid-template-columns: 1fr 1fr;
   }
 
-  /* Can't, receipt, wallet: one column. */
+  /* Can't, the band, the wallet: one column. */
   .cantTitle,
   .cantBody,
   .cantVisual,
-  .checksCol,
+  .proofBand,
   .runCol,
   .walletWell,
   .moneyPoints {
@@ -3283,10 +3682,9 @@ button.btnPrimary:hover {
     line-height: 30px;
   }
   .lead,
-  .heroLead,
-  .closeBody {
-    font-size: 18px;
-    line-height: 27px;
+  .heroLead {
+    font-size: 17px;
+    line-height: 26px;
   }
   .body {
     font-size: 16px;
@@ -3296,16 +3694,21 @@ button.btnPrimary:hover {
     margin-bottom: 36px;
   }
   .hero {
-    padding-top: 32px;
+    padding-top: 28px;
   }
   .hero .display {
-    font-size: 44px;
-    line-height: 48px;
+    margin-top: 14px;
+    font-size: 42px;
+    line-height: 46px;
+  }
+  .heroLead {
+    margin-top: 16px;
   }
   .ctaRow {
+    margin-top: 22px;
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 4px;
   }
   .ctaRow > span,
   .closeCta > span {
@@ -3319,18 +3722,17 @@ button.btnPrimary:hover {
   .ctaRow .secondary {
     justify-content: center;
   }
-  .heroStage {
-    margin-top: 40px;
+  .heroPay {
+    margin-top: 28px;
   }
-  .heroBox {
+  .heroWindowBody {
+    aspect-ratio: 632 / 330;
+  }
+  .heroTrust {
     grid-template-columns: 1fr;
   }
-  .heroWindowWrap .shot img {
-    aspect-ratio: 632 / 796;
-  }
-  .payCard,
-  .receipt {
-    padding: 16px;
+  .heroTrust .seal {
+    display: none;
   }
   .payAmount {
     font-size: 24px;
@@ -3339,22 +3741,25 @@ button.btnPrimary:hover {
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  .callWindow {
-    height: 230px;
+  .tile {
+    min-height: 118px;
+  }
+  .tile .face {
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 16px !important;
   }
   .tiles {
-    padding: 12px;
-    gap: 10px;
+    padding: 10px 10px 0;
+    gap: 8px;
   }
-  .recorder {
-    gap: 9px;
-    padding-left: 14px;
+  .saidStrip {
+    margin: 10px;
+    padding: 10px 12px 12px;
   }
-  .recBtn:first-of-type {
-    padding: 0 10px;
-  }
-  .menubar span:last-child {
-    display: none;
+  .saidLine {
+    font-size: 15px;
+    line-height: 22px;
   }
   .proc,
   .recapScreen,
@@ -3362,10 +3767,11 @@ button.btnPrimary:hover {
   .ask {
     padding: 16px;
   }
+  .compose {
+    margin: -6px 0 0;
+  }
   .strip {
-    left: 10px;
-    right: 10px;
-    bottom: 10px;
+    margin: 0 10px;
     padding: 12px;
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -3375,6 +3781,9 @@ button.btnPrimary:hover {
   .heardTag {
     grid-column: 2;
   }
+  .notesCrop {
+    height: 220px;
+  }
   .payHead {
     grid-template-columns: auto minmax(0, 1fr);
   }
@@ -3383,7 +3792,6 @@ button.btnPrimary:hover {
     grid-column: 1 / -1;
     justify-items: start;
   }
-  .payButtons,
   .actIdle {
     flex-wrap: wrap;
   }
@@ -3400,11 +3808,26 @@ button.btnPrimary:hover {
   .askOpen {
     margin-left: 0;
   }
+  .panelBody .fillShot img {
+    width: 150%;
+    max-width: none;
+  }
   .groups {
     grid-template-columns: 1fr;
   }
-  .walletWell {
-    padding: 12px;
+  .proofBand {
+    padding: 20px;
+  }
+  .bandTop {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .bandChips {
+    grid-template-columns: 1fr 1fr;
+  }
+  .bandTitle {
+    font-size: 24px;
+    line-height: 30px;
   }
   .wallet {
     padding: 18px;
@@ -3430,6 +3853,10 @@ button.btnPrimary:hover {
     font-size: 40px;
     line-height: 44px;
   }
+  .beats {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
   .closeCta {
     align-items: stretch;
     width: 100%;
@@ -3440,5 +3867,27 @@ button.btnPrimary:hover {
   .smallThings {
     grid-template-columns: 1fr 1fr;
     gap: 20px 16px;
+  }
+}
+
+@media (max-width: 599px) {
+  .recorder {
+    gap: 8px;
+    padding-left: 14px;
+  }
+  .recBtnLabel,
+  .recIcon,
+  .meter i:first-child,
+  .meter i:last-child {
+    display: none;
+  }
+  .recBtn {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .callKeysNote {
+    flex-basis: auto;
+    margin: 0 0 0 4px;
   }
 }

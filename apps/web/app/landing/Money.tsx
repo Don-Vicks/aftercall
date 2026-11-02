@@ -4,32 +4,33 @@ import { Face, SectionHead } from "./bits";
 import { Moment } from "./motion";
 
 /*
- * Section 7: the agent wallet (WalletScreen.tsx strings). Moment 5: Deposit is pressed,
- * "+25.00 USDC" rises, the balance rolls from 387.50 to 412.50 right to left, and the
- * spent-today bar fills to half. Rendered finished; the roll is CSS on data-state.
+ * Section 5: the agent wallet (WalletScreen.tsx strings, the app's sample balance and daily
+ * cap). Moment 5: Deposit is pressed, "+25.00 USDC" rises and the balance rolls from 180.00
+ * to 205.00 right to left. A deposit doesn't change what was spent, so the spent bar stays
+ * still. Rendered finished; the roll is CSS on data-state.
+ *
+ * The caps are set so the sample agrees with the contract (lib.rs: a payment over the
+ * per-payment cap or past the daily cap parks for the owner's wallet): the 50.00 deposit is
+ * inside both, the 5,000.00 payment is over both.
  */
 
-const FROM = "387.50";
-const TO = "412.50";
+const FROM = "180.00";
+const TO = "205.00";
 
 function Balance() {
   const digits = TO.split("");
   const order = digits.map((_, i) => digits.slice(i + 1).filter((c) => c !== ".").length);
   return (
     <span className={l.balance}>
-      <span className="sr-only">Balance 412.50 USDC</span>
+      <span className="sr-only">Balance {TO} USDC</span>
       <span aria-hidden="true" className={l.balanceDigits}>
         {digits.map((c, i) =>
           c === "." ? (
             <span key={i}>.</span>
           ) : (
             <span key={i} className={l.bDigit}>
-              <span className={l.bCol} style={vars({ from: Number(FROM[i]), to: Number(c), ri: order[i] })}>
-                {"0123456789".split("").map((d) => (
-                  <span key={d}>{d}</span>
-                ))}
-              </span>
-              <span className={l.digitSizer}>0</span>
+              <span className={l.bCol} style={vars({ from: Number(FROM[i]), to: Number(c), ri: order[i] })} />
+              <span className={l.digitSizer} />
             </span>
           ),
         )}
@@ -41,7 +42,7 @@ function Balance() {
 const POINTS: [string, string][] = [
   ["Over the cap", "A payment over your caps waits in the contract until your own wallet approves or declines it."],
   ["New payee", "Send a single-use claim link, and they say where they want to be paid."],
-  ["Autopilot", "Optional. Rules you set, 60 seconds to undo, never more than the per-payment cap."],
+  ["Autopilot", "Optional, and off until you set rules. 60 seconds to undo, never more than the per-payment cap."],
 ];
 
 export function Money() {
@@ -49,7 +50,7 @@ export function Money() {
     <section id="money" aria-labelledby="money-h" className={l.section}>
       <div className={l.wrap}>
         <SectionHead
-          index="07"
+          index="05"
           eyebrow="The agent wallet"
           id="money-h"
           title="Pays what was agreed. Never more than you allow."
@@ -84,14 +85,14 @@ export function Money() {
                   <p>
                     <b>Spent today</b>
                     <span className={l.mono}>
-                      50.00 <span className={l.mutedText}>of</span> 100.00
+                      50.00 <span className={l.mutedText}>of</span> 200.00
                     </span>
                   </p>
                   <span className={l.spentTrack}>
                     <span className={l.spentFill} />
                   </span>
                   <p className={l.leftToday}>
-                    <span className={l.mono}>50.00</span> left today
+                    <span className={l.mono}>150.00</span> left today · paid the designer 14:07
                   </p>
                 </div>
               </div>
@@ -102,16 +103,16 @@ export function Money() {
                 <div>
                   <p className={l.limitLabel}>Daily cap</p>
                   <p className={l.limitValue}>
-                    100.00 <span>USDC</span>
+                    200.00 <span>USDC</span>
                   </p>
                   <p className={l.limitHint}>Everything Aftercall pays in a day, together.</p>
                 </div>
                 <div>
-                  <p className={l.limitLabel}>Per payment, for autopilot</p>
+                  <p className={l.limitLabel}>Per payment</p>
                   <p className={l.limitValue}>
-                    25.00 <span>USDC</span>
+                    100.00 <span>USDC</span>
                   </p>
-                  <p className={l.limitHint}>Bigger payments wait for you to approve.</p>
+                  <p className={l.limitHint}>Bigger payments wait in the contract for your wallet.</p>
                 </div>
               </div>
               <p className={l.walletSection}>Payees</p>

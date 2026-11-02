@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { initials, personHue } from "@aftercall/core";
 import { HeaderMenu } from "./HeaderMenu";
-import { DOWNLOAD_HREF, DOWNLOAD_NOTE } from "./site";
+import { DOWNLOAD_HREF, DOWNLOAD_NOTE, REPO_PUBLIC } from "./site";
 import s from "./site.module.css";
 
 /** Where the code lives, for every "GitHub" and "Read the code" link. */
@@ -318,10 +318,12 @@ export function SiteHeader({ current = null }: { current?: Current }) {
               <a href="/download" className="quiet" {...here("download")}>
                 Install
               </a>
-              <a href={REPO_URL} className={`quiet ${s.navExternal}`}>
-                GitHub
-                <Icon name="external" size={12} />
-              </a>
+              {REPO_PUBLIC ? (
+                <a href={REPO_URL} className={`quiet ${s.navExternal}`}>
+                  GitHub
+                  <Icon name="external" size={12} />
+                </a>
+              ) : null}
             </HeaderMenu>
             <DownloadCta size="sm" className={s.headerCta} />
           </div>
@@ -343,7 +345,7 @@ export function SiteFooter() {
           <a href="/handling" className="quiet">
             How a call is handled
           </a>
-          <a href={`${REPO_URL}/blob/main/docs/privacy.md`} className="quiet">
+          <a href={REPO_PUBLIC ? `${REPO_URL}/blob/main/docs/privacy.md` : "/handling"} className="quiet">
             Privacy
           </a>
           <a href="/verify" className="quiet">
@@ -352,9 +354,11 @@ export function SiteFooter() {
           <a href="/download" className="quiet">
             Install
           </a>
-          <a href={REPO_URL} className="quiet">
-            GitHub
-          </a>
+          {REPO_PUBLIC ? (
+            <a href={REPO_URL} className="quiet">
+              GitHub
+            </a>
+          ) : null}
         </nav>
       </div>
     </footer>

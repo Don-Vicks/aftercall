@@ -1,22 +1,26 @@
 import { CopyButton } from "../client";
+import { REPO_PUBLIC } from "../site";
 import { vars } from "../ui";
 import l from "../landing.module.css";
 import { Check, SectionHead } from "./bits";
+import { SealMark } from "./Hero";
 import { Moment } from "./motion";
 
 /*
- * Section 6: the receipt in full. Check labels verbatim from packages/core/src/tee/checks.ts,
- * nvidia.ts and pipeline.ts. The live run is stated, not linked: its proof isn't on NEAR.
+ * Section 7: check it yourself. The seal and the four check groups (moment 4 again, as a
+ * band), the full list by name behind a disclosure (labels verbatim from
+ * packages/core/src/tee/checks.ts, nvidia.ts and pipeline.ts), the one live run, the two
+ * commands and what it can't prove. The live run is stated, not linked: its proof isn't on NEAR.
  */
 
 const TDX = ["Genuine Intel TDX confidential VM", "Debug mode off", "The TEE made its signing key", "Evidence is fresh", "Boot log matches the quote", "Known software is running"];
 const GPU = ["Genuine NVIDIA confidential GPU", "GPU evidence is fresh", "GPUs in secure mode"];
 const GROUPS: { name: string; n: number; checks: string[]; extra?: string }[] = [
   { name: "Gateway TEE", n: 6, checks: TDX },
-  { name: "Whisper TEE", n: 9, checks: GPU, extra: "The six above, plus" },
-  { name: "Qwen TEE", n: 9, checks: GPU, extra: "The six above, plus" },
+  { name: "Whisper TEE", n: 9, checks: GPU, extra: "The gateway's six, plus" },
+  { name: "Qwen TEE", n: 9, checks: GPU, extra: "The gateway's six, plus" },
   {
-    name: "Signed reply",
+    name: "On the reply",
     n: 5,
     checks: ["Transcript encrypted to the attested model", "Signed over exactly what was sent", "Signed over exactly what came back", "Signed for the model asked for", "Signed by an attested TEE"],
   },
@@ -42,41 +46,57 @@ export function Proof() {
     <section id="proof" aria-labelledby="proof-h" className={l.section}>
       <div className={l.wrap}>
         <SectionHead
-          index="06"
-          eyebrow="The receipt"
+          index="07"
+          eyebrow="Check it yourself"
           id="proof-h"
           title="Checked by name, every run."
-          lead="These are the checks your Mac runs on NEAR AI's secure hardware for each recording. The Verify sheet lists them for every meeting, and the proof's hash goes in a NEAR contract so anyone with the link can re-run the checks in a browser at /verify."
+          lead="Your Mac runs these checks on NEAR AI's secure hardware for every recording, and the Verify sheet lists them for each meeting. A proof's hash goes in a NEAR contract, so anyone with the link can re-check it in a browser at /verify; what a browser can't re-run is marked as recorded by the app."
         >
           <p className={l.status}>Proof recording is tested on a local NEAR node; testnet deploy pending.</p>
         </SectionHead>
         <div className={l.proofGrid}>
-          <div className={l.checksCol}>
-            <Moment className={l.groups} threshold={0.2}>
-              {GROUPS.map((g, gi) => (
-                <div key={g.name} className={l.group}>
-                  <p className={l.groupHead}>
-                    {g.name} <span>{g.n}</span>
-                  </p>
-                  {g.extra ? <p className={l.groupExtra}>{g.extra}</p> : null}
-                  <ul>
-                    {g.checks.map((c, i) => (
-                      <li key={c} style={vars({ i: gi * 3 + i })}>
-                        <Check size={15} i={gi * 3 + i} />
-                        {c}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+          <Moment className={l.proofBand} threshold={0.4} role="group" aria-labelledby="band-h">
+            <div className={l.bandTop}>
+              <SealMark size={88} id="seal-proof" />
+              <div>
+                <p id="band-h" className={l.bandTitle}>
+                  29 checks with one node per model
+                </p>
+                <p className={l.bandSub}>24 before anything is sent. If the gateway or Whisper fails, or no Qwen node passes, nothing leaves your Mac. 5 more on the reply.</p>
+              </div>
+            </div>
+            <ul className={l.bandChips}>
+              {GROUPS.map((g, i) => (
+                <li key={g.name} style={vars({ i })}>
+                  <Check size={16} i={i} />
+                  <span>{g.name}</span>
+                  <span className={l.mono}>{g.n}</span>
+                </li>
               ))}
-            </Moment>
-            <p className={l.small} data-reveal="">
-              24 before anything is sent, 5 on the reply, with one node per model. If any of the first 24 fails, nothing leaves your Mac.
-            </p>
-            <p className={l.caveat} data-reveal="">
-              Audio goes over TLS through the checked gateway, not end-to-end encrypted; the transcript is end-to-end encrypted or not sent.
-            </p>
-          </div>
+            </ul>
+            <details className={l.allChecks}>
+              <summary>See every check by name</summary>
+              <div className={l.groups}>
+                {GROUPS.map((g) => (
+                  <div key={g.name} className={l.group}>
+                    <p className={l.groupHead}>
+                      {g.name} <span>{g.n}</span>
+                    </p>
+                    {g.extra ? <p className={l.groupExtra}>{g.extra}</p> : null}
+                    <ul>
+                      {g.checks.map((c) => (
+                        <li key={c}>
+                          <Check size={14} />
+                          {c}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+            <p className={l.bandCaveat}>Audio goes over TLS through the checked gateway and isn&apos;t end-to-end encrypted. The transcript is end-to-end encrypted to the checked model, or not sent.</p>
+          </Moment>
 
           <div className={l.runCol}>
             <div className={l.liveCard} data-reveal="">
@@ -85,12 +105,12 @@ export function Proof() {
                 Ran live once
               </p>
               <p>
-                On 1 Nov 2026 the Mac app made notes from a sample call on live NEAR AI Cloud. All 29 checks passed, with one node per model. That run&apos;s proof isn&apos;t on NEAR yet, so it can&apos;t be
-                re-checked from outside.
+                On 1 Nov 2026 the Mac app made notes from another sample call, a designer kickoff, on live NEAR AI Cloud. All 29 checks passed, with one node per model. That run&apos;s proof isn&apos;t on NEAR
+                yet, so it can&apos;t be re-checked from outside.
               </p>
             </div>
             <div data-reveal="" style={vars({ rd: "60ms" })}>
-              <h3 className={l.h4}>Check it in five minutes</h3>
+              <h3 className={l.h4}>{REPO_PUBLIC ? "Check it in five minutes" : "Check it in five minutes, once the source opens"}</h3>
               <ul className={l.commands}>
                 {COMMANDS.map(([cmd, what]) => (
                   <li key={cmd}>

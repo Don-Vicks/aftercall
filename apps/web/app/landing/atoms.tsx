@@ -1,6 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import l from "../landing.module.css";
 
+/** One `sizes` for every use of the meeting-col screen, so the browser fetches one file for all of them. */
+export const MEETING_COL_SIZES = "(max-width: 767px) 92vw, 680px";
+
 /* Small pieces shared by the server sections and the client moments (no other imports, so client bundles stay small). */
 
 /** Custom properties in a style prop: cssVars({ i: 2 }) sets --i. */

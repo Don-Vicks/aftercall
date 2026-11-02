@@ -326,3 +326,18 @@
     padding: 0 20px;
   }
 }
+
+/* On the landing, the header's Download button waits until the hero's has scrolled away
+   (landing/motion.tsx sets data-hero-cta on <html>), so the first screen has one. */
+.headerCta {
+  transition:
+    opacity 200ms var(--ease),
+    visibility 0s linear 0s;
+}
+:global(html[data-hero-cta="in"]) .headerCta {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 160ms var(--ease),
+    visibility 0s linear 160ms;
+}

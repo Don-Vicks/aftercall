@@ -21,23 +21,27 @@ export const TIMING = {
   reveal: 320,
   /*
    * Moment 1, the live recorder (section 2):
-   *   0      ⌘ ⇧ R keys press in turn, 60 apart
+   *   0      ⌘ ⇧ R keys press in turn, 90 apart
    *   420    record sheet in
    *   1000   "I've told everyone on the call" ticks; Start recording enables
    *   1400   Start recording pressed
    *   1560   sheet out
-   *   1640   recorder drops in at 12:31; menu bar clock in; dot breathes
-   *   2400   Your notes in; line 2 types at 40 ms a letter
+   *   1640   recorder drops in at 00:00; menu bar timer in; the dot breathes
+   *   3200   "Two minutes in": the timer rolls to 02:11
+   *   4000   your line is said, 30 ms a letter; your meter leads
+   *   6900   the note on what happens to it after the call pops
+   *   7600   Your notes in; line 2 types at 40 ms a letter
    *   loop   timer +1 s, meters at 12 Hz, tiles glow with their side
    */
-  call: { keys: 0, sheetIn: 420, tick: 1000, start: 1400, sheetOut: 1560, recorder: 1640, notes: 2400, typeEvery: 40, meterEvery: 83 },
+  call: { keys: 0, sheetIn: 420, tick: 1000, start: 1400, sheetOut: 1560, recorder: 1640, jump: 3200, said: 4000, sayEvery: 30, heard: 6900, notes: 7600, typeEvery: 40, meterEvery: 83 },
   /*
-   * Moment 3, approve (section 3, step 4):
-   *   +600   Approve payment pressed by itself
+   * Moment 3, approve (the hero, and section 3, step 4):
+   *   +200   "fifty dollar" highlights in the quote (600 ms); +760 the Heard row pops
+   *   +1400  Approve payment pressed by itself
    *   0–5 s  "Paying in 5…" with Undo, the bar empties, the digit rolls each second
    *   5 s    the amount slides into "✓ 50.00 USDC paid 14:07"; Pay → Paid Designer
    */
-  approve: { autoStart: 600, grace: 5000 },
+  approve: { autoStart: 1400, grace: 5000 },
   /* The Ask demo's question types at 35 ms a letter. */
   ask: { typeEvery: 35, startAfter: 260 },
   /* The tick demo ticks the first row 600 ms after its panel opens. */
@@ -104,6 +108,17 @@ export function useInView(ref: RefObject<Element | null>, threshold = 0): boolea
  * motion on) and reveals every [data-reveal] element the first time it enters view.
  */
 export function MotionRoot() {
+  // The header's Download button stays hidden while the hero's own is on screen.
+  useEffect(() => {
+    const cta = document.getElementById("hero-cta");
+    if (!cta) return;
+    const html = document.documentElement;
+    const stop = watch(cta, (e) => (html.dataset.heroCta = e.isIntersecting ? "in" : "out"), { threshold: 0, rootMargin: "-64px 0px 0px 0px" });
+    return () => {
+      stop();
+      delete html.dataset.heroCta;
+    };
+  }, []);
   useEffect(() => {
     window.__acMotion = true;
     if (!motionOn()) return;
@@ -139,6 +154,7 @@ export function Moment({
   replay,
   replayLabel = "Replay",
   loop,
+  role,
   as: Tag = "div",
   ...rest
 }: {
@@ -149,8 +165,9 @@ export function Moment({
   replay?: boolean;
   replayLabel?: string;
   loop?: boolean;
+  role?: string;
   as?: "div" | "section" | "figure" | "ol" | "ul" | "article";
-} & Record<`data-${string}`, string | undefined>) {
+} & Record<`data-${string}` | `aria-${string}`, string | undefined>) {
   const ref = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<PlayState>("final");
   const [run, setRun] = useState(0);
@@ -191,7 +208,7 @@ export function Moment({
   const Any = Tag as "div";
   return (
     <PlayContext.Provider value={{ state, run }}>
-      <Any ref={ref} className={className} style={style} data-state={state} data-visible={visible ? "" : undefined} {...rest}>
+      <Any ref={ref} className={className} style={style} role={role} data-state={state} data-visible={visible ? "" : undefined} {...rest}>
         {children}
         {replay && state !== "final" ? <ReplayButton onClick={again} label={replayLabel} /> : null}
       </Any>
@@ -215,7 +232,9 @@ export function ReplayButton({ onClick, label = "Replay" }: { onClick: () => voi
 
 /**
  * Text whose digits roll to their new value (translateY, 280 ms). Other characters
- * are fixed. Each digit column is 1ch wide, so nothing shifts. Screen readers get the text.
+ * are fixed. Each digit column is 1ch wide, so nothing shifts. The 0–9 strips are CSS
+ * generated content (.digitCol::before), so text extraction and screen readers get the
+ * value once, as plain text.
  */
 export function Rolling({ value, className, still }: { value: string; className?: string; still?: boolean }) {
   return (
@@ -225,12 +244,8 @@ export function Rolling({ value, className, still }: { value: string; className?
         {value.split("").map((c, i) =>
           /\d/.test(c) ? (
             <span key={i} className={l.digit}>
-              <span className={l.digitCol} style={{ transform: `translateY(${-Number(c) * 10}%)` }}>
-                {"0123456789".split("").map((d) => (
-                  <span key={d}>{d}</span>
-                ))}
-              </span>
-              <span className={l.digitSizer}>0</span>
+              <span className={l.digitCol} style={{ transform: `translateY(${-Number(c) * 10}%)` }} />
+              <span className={l.digitSizer} />
             </span>
           ) : (
             <span key={i}>{c}</span>

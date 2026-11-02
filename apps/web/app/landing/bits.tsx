@@ -15,6 +15,7 @@ export function Shot({
   alt,
   sizes,
   eager,
+  lazy,
   phone,
   className,
   style,
@@ -25,19 +26,22 @@ export function Shot({
   alt: string;
   sizes: string;
   eager?: boolean;
+  /** Below the fold (the feature tabs): load when near the viewport. */
+  lazy?: boolean;
   phone?: { name: string; w: number; h: number; sizes: string };
   className?: string;
   style?: CSSProperties;
 }) {
-  // Every screen loads with the page (not lazily), so full-page captures and machine readers
-  // see them; only the hero's is fetched at high priority.
-  const base = { alt, sizes, loading: "eager" as const, ...(eager ? { fetchPriority: "high" as const } : { fetchPriority: "low" as const }) };
+  // Screens load with the page unless marked lazy; only the hero's is fetched at high priority.
+  // The alt text is in the HTML either way.
+  const loading = lazy ? ("lazy" as const) : ("eager" as const);
+  const base = { alt, sizes, loading, ...(eager ? { fetchPriority: "high" as const } : { fetchPriority: "low" as const }) };
   const dark = getImageProps({ ...base, src: `/landing/${name}-dark.webp`, width: w, height: h }).props;
   const light = getImageProps({ ...base, src: `/landing/${name}-light.webp`, width: w, height: h }).props;
   const p = phone
     ? {
-        dark: getImageProps({ alt, loading: "eager", sizes: phone.sizes, src: `/landing/${phone.name}-dark.webp`, width: phone.w, height: phone.h }).props,
-        light: getImageProps({ alt, loading: "eager", sizes: phone.sizes, src: `/landing/${phone.name}-light.webp`, width: phone.w, height: phone.h }).props,
+        dark: getImageProps({ alt, loading, sizes: phone.sizes, src: `/landing/${phone.name}-dark.webp`, width: phone.w, height: phone.h }).props,
+        light: getImageProps({ alt, loading, sizes: phone.sizes, src: `/landing/${phone.name}-light.webp`, width: phone.w, height: phone.h }).props,
       }
     : null;
   return (
@@ -71,4 +75,4 @@ export function SectionHead({ index, eyebrow, id, title, lead, children }: { ind
   );
 }
 
-export { Caption, Check, Face, Glyph, Key, Said, cssVars } from "./atoms";
+export { Caption, Check, Face, Glyph, Key, MEETING_COL_SIZES, Said, cssVars } from "./atoms";

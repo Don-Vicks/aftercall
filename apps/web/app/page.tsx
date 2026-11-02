@@ -19,13 +19,13 @@ import { Story } from "./landing/Story";
  */
 
 export const metadata = {
-  title: "Aftercall · Private meeting notes you can check",
+  title: "Aftercall · Meeting notes that follow through",
   description:
-    "A Mac app that makes private notes of your calls inside NEAR AI's checked secure hardware, then sends the recap and pays what was agreed, after your approval and within caps a NEAR contract enforces.",
+    "A Mac app that records your calls with no bot in them, makes the notes in NEAR AI's secure hardware it checks first, then drafts the recap and pays what was agreed, once you approve and within caps a NEAR contract enforces.",
   openGraph: {
-    title: "Aftercall · Private meeting notes you can check",
-    description: "Meeting notes for Mac, made inside NEAR AI's secure hardware that your Mac checks first. Then the recap and the agreed payment, within caps a NEAR contract enforces.",
-    images: [{ url: "/landing/og.png", width: 1200, height: 630, alt: "Aftercall: private meeting notes you can check." }],
+    title: "Aftercall · Meeting notes that follow through",
+    description: "Meeting notes for Mac, made in secure hardware your Mac checks first. Then the recap and the agreed payment, once you approve, within caps a NEAR contract enforces.",
+    images: [{ url: "/landing/og.png", width: 1200, height: 630, alt: "Aftercall: meeting notes that follow through." }],
   },
 };
 
@@ -41,9 +41,9 @@ export default function Landing() {
         <InCall />
         <Story />
         <Features />
+        <Money />
         <Cant />
         <Proof />
-        <Money />
         <Close />
       </main>
       <SiteFooter />

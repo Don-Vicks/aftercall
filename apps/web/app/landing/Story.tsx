@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AppWindow, vars } from "../ui";
 import l from "../landing.module.css";
 import { ApproveDemo } from "./ApproveDemo";
-import { Caption, Check, Face, Said, SectionHead, Shot } from "./bits";
+import { Caption, Check, Face, Glyph, Said, SectionHead, Shot, MEETING_COL_SIZES } from "./bits";
 import { Moment } from "./motion";
 import { StoryScreen, StoryStage } from "./StoryStage";
 
@@ -21,8 +21,8 @@ const STEPS: Step[] = [
     title: "Nothing leaves until the hardware checks out.",
     body: (
       <>
-        Press Stop and make notes. Before any audio is sent, Aftercall checks NEAR AI&apos;s gateway and the Whisper and Qwen machines against a fresh nonce: <b>24 checks</b>. If one fails, nothing is
-        sent.
+        Press Stop and make notes. Before any audio is sent, Aftercall checks NEAR AI&apos;s gateway and the Whisper and Qwen machines against a fresh nonce: <b>24 checks</b> with one node per model. If
+        the gateway or Whisper fails, or no Qwen node passes, nothing is sent.
       </>
     ),
     detail: "Audio then goes over TLS through the checked gateway; the transcript is end-to-end encrypted to the Qwen model, or not sent.",
@@ -49,13 +49,12 @@ const STEPS: Step[] = [
     title: "The recap waits in your own Mail.",
     body: (
       <>
-        Draft in Mail, the default, opens the recap in your own mail app, so Aftercall&apos;s servers never see it. Its footer says what was checked and links to the proof. Send through Aftercall is there if
-        you want it.
+        Draft in Mail, the default, opens the recap in your own mail app, ready to send: what you agreed, the action items, and a footer that says what was checked. Aftercall&apos;s servers never see it.
       </>
     ),
-    detail: "Nothing about the meeting is kept on Aftercall's servers.",
+    detail: "Send through Aftercall is there if you want it; it hands the email to Resend, which keeps sent mail under its own policy.",
     screen: () => <RecapScreen />,
-    caption: "Drawn from the app's own follow-up card; the footer is the one the app writes when every check passed.",
+    caption: "The recap the app builds for the sample meeting, as a draft in Mail. The footer is the one it writes when every check passed.",
   },
   {
     n: 4,
@@ -63,8 +62,8 @@ const STEPS: Step[] = [
     title: "Approve once. Paid, within your caps.",
     body: (
       <>
-        One approval pays the designer 50 USDC from your agent wallet, with five seconds to take it back. “The full five thousand when the deck is done” is over your caps, so the contract holds it until{" "}
-        <b>your own wallet</b> approves.
+        One approval pays the designer 50 USDC from your agent wallet, with five seconds to take it back. The 5,000 USDC from <q>the full five thousand when the deck is done</q> is over your caps, so the
+        contract holds it until <b>your own wallet</b> approves.
       </>
     ),
     detail: "The app's own key can't raise a cap or add a payee.",
@@ -94,7 +93,7 @@ export function Story() {
               <li key={s.n} className={l.step} data-step={s.n}>
                 <div className={l.stepText}>
                   <p className={l.stepLabel}>
-                    <span>{String(s.n).padStart(2, "0")}</span> · {s.label}
+                    <span>Step {s.n}</span> · {s.label}
                   </p>
                   <h3 className={l.h3}>{s.title}</h3>
                   <p className={l.body}>{s.body}</p>
@@ -102,7 +101,7 @@ export function Story() {
                 </div>
                 {/* Phones: the step's own window, played when it scrolls in. */}
                 <div className={l.stepPhone}>
-                  <Moment className={l.phoneScreen} threshold={0.35}>
+                  <Moment threshold={0.35}>
                     <AppWindow className={l.storyWindow} bodyClassName={l.storyBody}>
                       {s.screen()}
                     </AppWindow>
@@ -115,15 +114,13 @@ export function Story() {
           </div>
           <div className={l.stageCol}>
             <div className={l.stageSticky}>
-              <div className={l.storyWell}>
-                <AppWindow className={l.storyWindow} bodyClassName={l.storyBody}>
-                  {STEPS.map((s) => (
-                    <StoryScreen key={s.n} n={s.n}>
-                      {s.screen()}
-                    </StoryScreen>
-                  ))}
-                </AppWindow>
-              </div>
+              <AppWindow className={l.storyWindow} bodyClassName={l.storyBody}>
+                {STEPS.map((s) => (
+                  <StoryScreen key={s.n} n={s.n}>
+                    {s.screen()}
+                  </StoryScreen>
+                ))}
+              </AppWindow>
               <div className={l.stageCaptions}>
                 {STEPS.map((s) => (
                   <Caption key={s.n} className={l.stageCaption}>
@@ -187,14 +184,9 @@ function Processing() {
 function NotesScreen() {
   return (
     <div className={l.notesScreen}>
-      <Shot
-        name="meeting-col"
-        w={632}
-        h={796}
-        sizes="(max-width: 767px) 92vw, 620px"
-        className={l.notesShot}
-        alt="The Sync with Ada notes: summary, your notes and decisions."
-      />
+      <div className={l.notesCrop}>
+        <Shot name="meeting-col" w={632} h={796} sizes={MEETING_COL_SIZES} alt="The Sync with Ada notes, marked Verified, with the summary." />
+      </div>
       <div className={l.strip}>
         <span className={l.stripAt}>02:14</span>
         <Face who="You" size={24} />
@@ -209,44 +201,66 @@ function NotesScreen() {
   );
 }
 
+/** buildRecap() in packages/core/src/followups/recap.ts, on the sample meeting, shortened to what fits. */
 const FOOTER = [
   "Notes made by Aftercall in secure hardware on NEAR AI Cloud, checked by the app before anything was sent. The transcript was end-to-end encrypted to that hardware.",
   "Aftercall deletes the call's audio once the notes are saved.",
-  "What was and wasn't checked: <proof link>",
 ];
 
 function RecapScreen() {
   return (
     <div className={l.recapScreen}>
-      <p className={l.followTitle}>
-        Follow-ups <span>nothing runs until you approve</span>
-      </p>
       <div className={l.recapCard}>
-        <div className={l.payHead}>
-          <Face who="A" size={36} hue={2} />
-          <div className={l.payWho}>
-            <p className={l.payTitle}>Recap to Ada</p>
-            <p className={l.recapSub}>ada@example.com · from your calendar</p>
-          </div>
-          <span className={l.proposed}>Proposed</span>
+        <Face who="A" size={32} hue={2} />
+        <div className={l.payWho}>
+          <p className={l.payTitle}>Recap to Ada</p>
+          <p className={l.recapSub}>ada@example.com · from your calendar</p>
         </div>
-        <Said at="02:14" className={l.paySaid}>
-          Send Ada the recap after this call
-        </Said>
-        <div className={l.recapActions} aria-hidden="true">
-          <span className={l.recapWhy}>Draft in Mail keeps it on this Mac.</span>
-          <span className={l.btnQuiet}>Dismiss</span>
-          <span className={l.btnQuiet}>Send through Aftercall</span>
-          <span className={l.btnPrimary}>Draft in Mail</span>
-        </div>
+        <span className={`${l.btnPrimary} ${l.draftBtn}`} aria-hidden="true">
+          <Glyph name="mail" size={14} />
+          Draft in Mail
+        </span>
       </div>
-      <div className={l.footerBlock}>
-        <p className={l.footerLabel}>The recap&apos;s footer</p>
-        {FOOTER.map((f, i) => (
-          <p key={i} className={l.footerLine} style={vars({ i })}>
-            {f}
+      <div className={l.compose} aria-label="The recap, drafted in Mail" role="group">
+        <div className={l.composeBar}>
+          <span className={l.callDots} aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>Recap: API fix before Friday, deck refresh</span>
+          <Glyph name="send" size={14} />
+        </div>
+        <dl className={l.composeHead}>
+          <div>
+            <dt>To</dt>
+            <dd>Ada &lt;ada@example.com&gt;</dd>
+          </div>
+          <div>
+            <dt>Subject</dt>
+            <dd>Recap: API fix before Friday, deck refresh</dd>
+          </div>
+        </dl>
+        <div className={l.composeBody}>
+          <p style={vars({ i: 0 })}>Hi Ada, thanks for the call. Here&apos;s what we agreed.</p>
+          <ol style={vars({ i: 1 })}>
+            <li>Ship the API fix before Friday&apos;s demo.</li>
+            <li>Refresh the deck with the designer, with a 50 USDC deposit now.</li>
+          </ol>
+          <p className={l.composeItems} style={vars({ i: 2 })}>
+            Send Ada the recap · You · today
+            <br />
+            Ship the API fix · You · by Friday
           </p>
-        ))}
+          <div className={l.composeFoot} style={vars({ i: 3 })}>
+            {FOOTER.map((f) => (
+              <p key={f}>{f}</p>
+            ))}
+            <p>
+              <span className={l.composeLink}>What was and wasn&apos;t checked →</span>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

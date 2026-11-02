@@ -20,11 +20,11 @@ export function InCall() {
           eyebrow="In the call"
           id="call-h"
           title="Record any call. No bot joins."
-          lead="Aftercall records both sides on your Mac, your microphone and the call's audio, kept apart. Press ⌘⇧R in any app to start. A small recorder sits above your call and the menu bar keeps time."
+          lead="Aftercall records both sides on your Mac, your microphone and the call's audio, kept apart, whatever app the call is in. Press ⌘⇧R in any app to open the record sheet. A small recorder sits above your call and the menu bar keeps time."
         />
         <div data-reveal="" className={l.revealWide}>
           <InCallStage />
-          <Caption>Drawn from the app&apos;s own recorder and notes components. Sample call.</Caption>
+          <Caption>Drawn from the app&apos;s own recorder, record sheet and notes. Sample call. Built and unit-tested; not all of it has run on a real call yet.</Caption>
         </div>
         <ul className={l.points3}>
           {POINTS.map(([k, v], i) => (

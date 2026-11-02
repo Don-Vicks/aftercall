@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
+import { REPO_PUBLIC } from "../site";
 import { REPO_URL, vars } from "../ui";
 import l from "../landing.module.css";
 import { AutopilotLine } from "./AutopilotLine";
 import { Check, Face, SectionHead } from "./bits";
 import { Moment } from "./motion";
 
-/* Section 5: four things Aftercall is built not to do, each with the test that holds it. */
+/* Section 6: four things Aftercall is built not to do. The tests that hold each one sit behind "See the tests" (still in the HTML). */
 
 type Row = { n: string; title: string; body: ReactNode; tests: [string, string][]; note?: string; visual: ReactNode };
 
@@ -66,7 +67,7 @@ const ROWS: Row[] = [
   {
     n: "03",
     title: "It can't act without your say.",
-    body: "Every follow-up waits for your approval, with five seconds to undo. Autopilot is off until you set rules, gives you 60 seconds to undo, and never runs anything that was queued when the app closed: that waits for you.",
+    body: "Nothing runs until you approve it, with five seconds to undo, unless you set autopilot rules. Autopilot is off until you do, gives you 60 seconds to undo, and never runs anything that was queued when the app closed: that waits for you.",
     tests: [
       ["a queued follow-up read from disk at launch is held for you, never run", "autopilot.test.ts"],
       ["follow_ups_are_saved_as_the_app_sent_them_and_ticks_keep_them", "notes_file.rs"],
@@ -107,13 +108,13 @@ export function Cant() {
     <section id="cant" aria-labelledby="cant-h" className={l.section}>
       <div className={l.wrap}>
         <SectionHead
-          index="05"
+          index="06"
           eyebrow="Limits, enforced in code"
           id="cant-h"
           title="Built so it can't."
           lead={
             <>
-              Four things Aftercall is built not to do. Each one is held by code with a test you can run: <code>pnpm verify</code>.
+              Four things Aftercall is built not to do, each held by code with tests. The spending limits hold even if the app itself is hijacked: they live in a NEAR contract.
             </>
           }
         />
@@ -131,16 +132,21 @@ export function Cant() {
                 </div>
                 <div className={l.cantBody}>
                   <p className={l.body}>{r.body}</p>
-                  <ul className={l.tests} aria-label="Tests">
-                    {r.tests.map(([t, f], i) => (
-                      <li key={t} style={vars({ i })}>
-                        <Check size={15} i={i} />
-                        <code>{t}</code>
-                        <span className={l.testFile}>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
                   {r.note ? <p className={l.testNote}>{r.note}</p> : null}
+                  <details className={l.testsBox}>
+                    <summary>
+                      See the tests <span className={l.mono}>{r.tests.length}</span>
+                    </summary>
+                    <ul className={l.tests} aria-label="Tests">
+                      {r.tests.map(([t, f], i) => (
+                        <li key={t} style={vars({ i })}>
+                          <Check size={15} i={i} />
+                          <code>{t}</code>
+                          <span className={l.testFile}>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 </div>
                 <div className={l.cantVisual}>{r.visual}</div>
               </Moment>
@@ -148,11 +154,16 @@ export function Cant() {
           ))}
         </ol>
         <p className={l.cantFoot} data-reveal="">
-          Each of the four maps to tests listed in the README&apos;s What is proven table.{" "}
-          <a href={`${REPO_URL}#what-is-proven`} className={l.textLink}>
-            What is proven
-            <span aria-hidden="true"> ↗</span>
-          </a>
+          Each of the four maps to tests listed in the README&apos;s What is proven table.
+          {REPO_PUBLIC ? (
+            <>
+              {" "}
+              <a href={`${REPO_URL}#what-is-proven`} className={l.textLink}>
+                What is proven
+                <span aria-hidden="true"> ↗</span>
+              </a>
+            </>
+          ) : null}
         </p>
       </div>
     </section>

@@ -1,5 +1,6 @@
 import { CopyButton } from "../client";
 import { Icon, Pill, REPO_URL, SiteFooter, SiteHeader, vars, type IconName } from "../ui";
+import { REPO_PUBLIC } from "../site";
 import d from "./download.module.css";
 
 export const metadata = {
@@ -55,7 +56,8 @@ export default function Download() {
                 Build Aftercall on your Mac
               </h1>
               <p className={`${d.lede} enter`} style={vars({ d: "80ms", dur: "360ms" })}>
-                No signed build is published yet. Until one is, you build the app from source. It&apos;s open source, MIT.
+                No signed build is published yet. Until one is, you build the app from source. It&apos;s open source, MIT
+                {REPO_PUBLIC ? "." : ", and the repository opens with the hackathon submission; the steps below work from then."}
               </p>
               <div className={`${d.getRow} enter`} style={vars({ d: "120ms", dur: "360ms" })}>
                 <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
