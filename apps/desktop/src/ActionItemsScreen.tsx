@@ -220,7 +220,7 @@ export function ActionItemsScreen({
           <div style={rise(2)}>
             <Empty title={tab === "mine" ? "Nothing open for you" : tab === "others" ? "No one owes you anything open" : "No agent has taken an item yet"}>
               {tab === "agents"
-                ? "With Connected agents on, Claude Code or Codex can claim an action item and mark it done. You'll see it here."
+                ? "With Coding agents on and claiming allowed, Claude Code or Codex can claim an action item and mark it done. You'll see it here."
                 : meetings.length === 0
                   ? "Action items appear once a recorded meeting has notes."
                   : done.length
@@ -301,9 +301,9 @@ export function ActionItemsScreen({
           <p className="m-0 mt-4 text-[13px] leading-[19px] text-ink-2" style={rise(Math.min(n, 10) + 1)}>
             {tab === "agents" ? (
               <>
-                Agents can claim and finish action items. They can't send, pay or change your notes or rules.{" "}
+                When you allow it, agents can claim and finish action items. They can't send, pay, or change anything else in your notes or rules.{" "}
                 <button type="button" onClick={onOpenAgents} className="rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
-                  Connected agents
+                  Coding agents
                 </button>
               </>
             ) : (

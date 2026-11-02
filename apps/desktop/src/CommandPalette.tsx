@@ -98,7 +98,7 @@ export function CommandPalette({
     { id: "ask", label: "Ask your meetings", keywords: "ask question meetings", icon: <MessageCircle size={15} strokeWidth={1.75} />, right: <Kbd>⌘J</Kbd>, run: onOpenAsk },
     { id: "project", label: "New project", keywords: "new project folder", icon: <FolderPlus size={15} strokeWidth={1.75} />, run: onNewProject },
     { id: "people", label: "People", keywords: "people person contacts", icon: <Users size={15} strokeWidth={1.75} />, run: onOpenPeople },
-    { id: "agents", label: "Connected agents", keywords: "connected agents mcp claude codex", icon: <Bot size={15} strokeWidth={1.75} />, run: onOpenAgents },
+    { id: "agents", label: "Coding agents", keywords: "coding agents connected mcp claude codex", icon: <Bot size={15} strokeWidth={1.75} />, run: onOpenAgents },
     { id: "settings", label: "Settings", keywords: "settings near ai account calendar autopilot recovery", icon: <Settings size={15} strokeWidth={1.75} />, run: onOpenSettings },
   ];
 

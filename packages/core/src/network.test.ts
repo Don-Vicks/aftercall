@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NETWORK_CONFIG, accountFitsNetwork, exampleAccount, explorerAccountUrl, explorerTxUrl, parseNetwork } from "./network.ts";
+import { NETWORK_CONFIG, accountFitsNetwork, exampleAccount, explorerAccountUrl, explorerTxUrl, parseNetwork, plainNearError } from "./network.ts";
 import { USDC_CONTRACT } from "./wallet/actions.ts";
 
 test("mainnet and testnet each have their own RPC, USDC and explorer", () => {
@@ -35,4 +35,27 @@ test("a testnet account can't be used on mainnet, and the other way round", () =
   assert.equal(accountFitsNetwork(implicit, "mainnet"), true);
   assert.equal(accountFitsNetwork(implicit, "testnet"), true);
   assert.equal(accountFitsNetwork("0x" + "ab".repeat(20), "mainnet"), true);
+});
+
+test("Aftercall's contract is built in where it's deployed, and fits its network", () => {
+  assert.equal(NETWORK_CONFIG.testnet.agentWallet, "wallet.aftercall.testnet");
+  assert.equal(NETWORK_CONFIG.mainnet.agentWallet, null);
+  for (const n of ["testnet", "mainnet"] as const) {
+    const id = NETWORK_CONFIG[n].agentWallet;
+    if (id) assert.equal(accountFitsNetwork(id, n), true);
+  }
+});
+
+test("NEAR failures read as plain sentences", () => {
+  const at = { network: "testnet" as const, contract: "wallet.aftercall.testnet" };
+  // As the RPC and wallets report them (shapes seen on testnet, 2 Nov 2026).
+  assert.equal(plainNearError(new Error("RPC error UNKNOWN_ACCOUNT \"account wallet.aftercall.testnet does not exist while viewing\""), at), "No Aftercall contract at wallet.aftercall.testnet on testnet yet.");
+  assert.equal(plainNearError('wasm execution failed with error: CompilationError(CodeDoesNotExist { account_id: "wallet.aftercall.testnet" })', at), "No Aftercall contract at wallet.aftercall.testnet on testnet yet.");
+  assert.equal(plainNearError({ ActionError: { index: 0, kind: { AccountDoesNotExist: { account_id: "wallet.aftercall.testnet" } } } }, at), "No Aftercall contract at wallet.aftercall.testnet on testnet yet.");
+  assert.equal(plainNearError({ ActionError: { kind: { FunctionCallError: { MethodResolveError: "MethodNotFound" } } } }, at), "wallet.aftercall.testnet isn't the Aftercall contract.");
+  assert.equal(plainNearError("InvalidAccessKeyError: { NotEnoughAllowance: { allowance: 0 } }", at), "Authorise this Mac again: its key ran out of allowance.");
+  assert.equal(plainNearError("account victor.testnet does not exist while viewing", at), "victor.testnet doesn't exist on testnet.");
+  assert.equal(plainNearError({ ActionError: { kind: { FunctionCallError: { ExecutionError: "Smart contract panicked: NOT_REGISTERED" } } } }, at), "Create your agent wallet first.");
+  assert.equal(plainNearError("Smart contract panicked: PAUSED", at), "The contract refused it: PAUSED.");
+  assert.equal(plainNearError(new Error("User rejected"), at), "User rejected");
 });

@@ -38,7 +38,7 @@ Reduced motion: nothing moves, things fade. The `ac-*` keyframes that move becom
 </Field>
 
 <Card interactive tone="default|caution|record" pad="none|sm|md|lg" as="button" onClick>…</Card>   // radius 14, shadow-1, lifts when interactive
-<Toggle checked onChange={setOn} label="Connected agents" description="On. Agents can read meetings." />   // or aria-label without label
+<Toggle checked onChange={setOn} label="Coding agents" description="On. Agents can read meetings." />   // or aria-label without label
 <Tick checked={done} onChange={setDone} aria-labelledby={textId} working={claimedByAgent} />  <Strike on={done}>Send Ada the recap</Strike>   // working: an arc turns round the empty circle
 <Pill tone="verdigris|caution|record|muted" icon={<Check size={12} />} live>Paid 14:06</Pill>
 <SectionTitle count={3}>Follow-ups</SectionTitle>

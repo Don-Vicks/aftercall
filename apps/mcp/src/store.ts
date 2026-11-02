@@ -6,7 +6,7 @@ import type { ActionItem, Meeting } from "@aftercall/core";
 /**
  * Talks to the running Aftercall app. Meetings are encrypted on disk with a key in
  * the macOS Keychain, so this server can't read them as files. While the user has
- * Settings → Connected agents turned on, the app listens on a Unix socket,
+ * Coding agents turned on, the app listens on a Unix socket,
  * `<data dir>/agents/aftercall.sock` (owner-only), and answers one JSON request per
  * line, each carrying the token shown on that screen
  * (apps/desktop/src-tauri/src/agents.rs):
@@ -29,9 +29,9 @@ export function socketPathFor(dataDir: string): string {
   return join(dataDir, "agents", "aftercall.sock");
 }
 
-export const NOT_RUNNING = "Aftercall isn't reachable. Open Aftercall and turn on Connected agents (Settings → Connected agents).";
+export const NOT_RUNNING = "Aftercall isn't reachable. Open Aftercall and turn on Coding agents (in the sidebar).";
 export const NO_TOKEN =
-  "This MCP server has no Aftercall token. Open Aftercall, turn on Connected agents and run the setup command it shows (it sets AFTERCALL_TOKEN).";
+  "This MCP server has no Aftercall token. Open Aftercall, turn on Coding agents and run the setup command it shows (it sets AFTERCALL_TOKEN).";
 
 export interface Project {
   id: string;

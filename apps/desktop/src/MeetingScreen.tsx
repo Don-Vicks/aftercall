@@ -31,12 +31,15 @@ export function MeetingScreen({
   onOpenAutopilot,
   sample,
   onNear,
+  proofError,
 }: {
   meeting: Meeting;
   /** Which kind of sample this is, so an export says so. */
   sample?: ExportOptions["sample"];
   /** The meeting's proof is recorded on NEAR, so an export can say anyone can check it. */
   onNear?: boolean;
+  /** Why recording the proof on NEAR failed when the notes were made ("Couldn't record the proof on NEAR: …"). */
+  proofError?: string;
   /** What the model proposed that the app dropped for lack of an exact quote (notes.json). */
   dropped?: Dropped[];
   /** Your names (NEAR account, name): action items owned by these show as "You". */
@@ -103,6 +106,18 @@ export function MeetingScreen({
             </div>
             <h1 className="t-display selectable m-0">{meeting.title}</h1>
             {others.length > 0 && <People others={others} />}
+            {proofError && (
+              <p role="status" className="m-0 text-[13px] leading-[18px] text-ink-2">
+                <span className="selectable text-caution">{proofError}</span>{" "}
+                <button
+                  type="button"
+                  onClick={onOpenVerify}
+                  className="rounded-sm text-ink-2 underline decoration-border decoration-1 underline-offset-[3px] hover:text-ink"
+                >
+                  Open Verify
+                </button>
+              </p>
+            )}
             <Tabs
               id="meeting"
               label="Meeting views"
@@ -243,7 +258,7 @@ function Notes({
             </SectionTitle>
             {agents && onOpenAgents && (
               <button type="button" onClick={onOpenAgents} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
-                Connected agents
+                Coding agents
               </button>
             )}
           </div>

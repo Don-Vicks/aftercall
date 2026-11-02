@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ItemFields, Meeting } from "@aftercall/core";
 
-/** Connected agents state and paths, from the Mac app (`agents_info`, apps/desktop/src-tauri/src/agents.rs). */
+/** Coding agents (MCP) state and paths, from the Mac app (`agents_info`, apps/desktop/src-tauri/src/agents.rs). */
 export interface AgentsInfo {
   dataDir: string;
   serverPath: string;
@@ -46,7 +46,7 @@ export const PREVIEW_INFO: AgentsInfo = {
   socketPath: "~/Library/Application Support/dev.aftercall.app/agents/aftercall.sock",
 };
 
-const TOKEN_PLACEHOLDER = "<turn on Connected agents>";
+const TOKEN_PLACEHOLDER = "<turn on Coding agents>";
 
 /** A word-safe single-quoted shell argument. */
 export function shellQuote(s: string): string {

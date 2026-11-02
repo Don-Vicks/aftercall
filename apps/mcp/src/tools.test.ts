@@ -131,7 +131,7 @@ test("read-only by default: reads work, claim and complete are refused by name, 
   assert.equal(list.canClaim, false);
   assert.match(list.note ?? "", /read only/);
   await assert.rejects(claimActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), (e: Error) => e.message === WRITES_OFF);
-  await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), /Settings → Connected agents/);
+  await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), /Coding agents in Aftercall's sidebar/);
   const item = fake.notes("1761100000").meeting.actionItems[1];
   assert.equal(item.claimed, undefined);
   assert.equal(item.done, false);
@@ -181,7 +181,7 @@ test("app closed or agents off: every tool says to open Aftercall", async () => 
   // No socket at all: the default path under a data dir that has none.
   const off = connectApp({ socketPath: socketPathFor(join(fake.dataDir, "nowhere")), token: fake.token });
   await assert.rejects(listMeetings(off), (e: Error) => e.message === NOT_RUNNING);
-  await assert.rejects(claimActionItem(off, { meetingId: "1761000000", itemId: "a1", agent: "Codex" }), /Open Aftercall and turn on Connected agents/);
+  await assert.rejects(claimActionItem(off, { meetingId: "1761000000", itemId: "a1", agent: "Codex" }), /Open Aftercall and turn on Coding agents/);
   // A plain file where the socket would be.
   const file = join(fake.dataDir, "not-a-socket");
   await writeFile(file, "");

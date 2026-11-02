@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
@@ -104,12 +104,16 @@ export default function App() {
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
   const [verifyId, setVerifyId] = useState<string | null>(null);
+  /** Why a meeting's proof failed to go on NEAR when its notes were made, by id, until it is recorded. */
+  const [proofErrors, setProofErrors] = useState<Record<string, string>>({});
   /**
    * From the agent-wallet contract once NEAR is connected; none until then, so a real
    * call's transcription and notes never hear the sample's names. Samples (and the
    * browser preview) use the sample payees instead.
    */
   const [payees, setPayees] = useState<Payee[]>(isDesktop ? [] : samplePayees);
+  /** True once the payee list has been read from the contract, so an empty list means "none", not "not read yet". */
+  const [payeesRead, setPayeesRead] = useState(false);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
   /** Payees the owner opted in to payment on Solana or Base, by NEAR account. */
   const [destinations, setDestinations] = useState<Record<string, PayeeDestination>>({});
@@ -238,6 +242,7 @@ export default function App() {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
       setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
+      setPayeesRead(true);
       setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
       if (v.wallet) {
         const today = Math.floor(Date.now() / 86_400_000);
@@ -334,6 +339,24 @@ export default function App() {
       clearInterval(t);
     };
   }, []);
+
+  // A payment heard before its payee was on the list waits as "not on your list". Once
+  // the list is read (or changes), saved meetings' waiting payments are matched again,
+  // by the same rule as when the notes were made, and saved like any other follow-up change.
+  // Sample recordings keep the sample payees they were made with.
+  useEffect(() => {
+    if (!isDesktop || !payeesRead) return;
+    const samples = new Set(recordings.filter((r) => r.label).map((r) => r.id));
+    for (const [id, notes] of Object.entries(saved)) {
+      if (hidden[id] || samples.has(id)) continue;
+      const meeting = rematchPayees(notes.meeting, payees);
+      if (meeting === notes.meeting) continue;
+      const updated = { ...notes, meeting };
+      writeNotes(id, updated);
+      setSaved((all) => (all[id] === notes ? { ...all, [id]: updated } : all));
+      setMeetings((all) => (all[id] ? { ...all, [id]: rematchPayees(all[id], payees) } : all));
+    }
+  }, [payees, payeesRead, saved, hidden, recordings]);
 
   const paletteBlocked = useRef(false);
   paletteBlocked.current = onboarding || recordOpen;
@@ -448,18 +471,18 @@ export default function App() {
         const f = find(id);
         if (sample) {
           // The sample meeting only simulates the round trip, under the sample wallet's rules, as
-          // the contract would: more than the balance is refused, and a payment over the
-          // per-payment cap or past today's cap waits for your wallet. What the sample already
-          // paid comes off the balance and counts towards today.
+          // the contract would: a payment over the per-payment cap or past today's cap waits for
+          // your wallet, whatever the balance; under the caps, more than the balance is refused.
+          // What the sample already paid comes off the balance and counts towards today.
           const amount = f.kind === "payment" ? f.amount : null;
           const paid = paidBySample(meeting);
           const outcome: Patch =
             f.kind === "email"
               ? { status: "sent", doneAt: nowHHMM() }
-              : amount !== null && amount > sampleBalance - paid
-                ? { status: "proposed", error: "Not enough USDC in your agent wallet. Deposit some first." }
-                : amount !== null && (amount > samplePerPaymentCap || paid + amount > sampleDailyCap)
-                  ? { status: "blocked" }
+              : amount !== null && (amount > samplePerPaymentCap || paid + amount > sampleDailyCap)
+                ? { status: "blocked" }
+                : amount !== null && amount > sampleBalance - paid
+                  ? { status: "proposed", error: "Not enough USDC in your agent wallet. Deposit some first." }
                   : { status: "paid", doneAt: nowHHMM() };
           apply(id)({ status: "sending", error: undefined });
           setTimeout(() => apply(id)(outcome), 1600);
@@ -568,10 +591,11 @@ export default function App() {
   const selectedMeetingId = view.name === "meeting" || view.name === "recording" ? view.id : null;
   // Processing can finish after the user has left the recording, so this reads
   // the latest state instead of the closure the run started with.
-  const onProcessedRef = useRef((_id: string, _notes: string) => {});
-  onProcessedRef.current = (id, notes) => {
+  const onProcessedRef = useRef((_id: string, _notes: string, _proofError?: string) => {});
+  onProcessedRef.current = (id, notes, proofError) => {
     const recording = recordings.find((r) => r.id === id);
     if (!recording) return;
+    if (proofError) setProofErrors((all) => ({ ...all, [id]: proofError }));
     const updated = { ...recording, notes };
     // The run saved these notes itself; the refresh needn't read them back.
     diskNotes.current[id] = notes;
@@ -676,6 +700,7 @@ export default function App() {
                 meeting={meeting}
                 sample={meeting.id === syncWithAda.id ? "made-up" : recordings.some((r) => r.id === meeting.id && r.label === "Sample") ? "fictional" : undefined}
                 onNear={!!saved[meeting.id]?.onChain}
+                proofError={saved[meeting.id]?.onChain ? undefined : proofErrors[meeting.id]}
                 dropped={saved[meeting.id]?.dropped ?? (meeting.id === syncWithAda.id ? syncWithAdaDropped : undefined)}
                 me={account ? [account] : []}
                 autopilotOn={autopilotOn}
@@ -700,7 +725,7 @@ export default function App() {
                 recording={openRecording}
                 payees={openRecording.label ? samplePayees : payees}
                 onDelete={() => removeRecording(openRecording.id)}
-                onProcessed={(id, notes) => onProcessedRef.current(id, notes)}
+                onProcessed={(id, notes, proofError) => onProcessedRef.current(id, notes, proofError)}
               />
             )}
             {view.name === "home" && (

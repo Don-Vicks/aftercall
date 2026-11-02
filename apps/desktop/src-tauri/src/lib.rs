@@ -842,6 +842,18 @@ fn near_save_config(app: AppHandle, config: near::NearConfig) -> Result<(), Stri
     near::save_config(&data_dir(&app)?, &config)
 }
 
+/// "Save and check": is the account there, and is the contract Aftercall's? Saves nothing.
+#[tauri::command]
+async fn near_check_setup(config: near::NearConfig) -> Result<near::SetupCheck, String> {
+    near::check_setup(&config).await
+}
+
+/// Does the signing page answer? Asked from Rust, so the webview's origin and CORS don't matter.
+#[tauri::command]
+async fn near_page_answers(url: String) -> bool {
+    near::page_answers(&url).await
+}
+
 #[tauri::command]
 fn near_public_key() -> Result<String, String> {
     Ok(near::app_key()?.public_key())
@@ -1095,6 +1107,8 @@ pub fn run() {
             tee_nvidia_keys,
             near_get_config,
             near_save_config,
+            near_check_setup,
+            near_page_answers,
             near_public_key,
             near_status,
             near_record_proof,

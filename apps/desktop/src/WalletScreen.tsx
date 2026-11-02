@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, Pause, Play, Plus, RefreshCw } from "lucide-react";
 import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, meetingLabel, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
-import { contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
+import { SignPageDown, contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast } from "./ui";
 import { isDesktop } from "./recorder";
 import { dailyCap as sampleDailyCap, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
@@ -50,7 +50,7 @@ export function WalletScreen({
   const [connected, setConnected] = useState<boolean | null>(null);
   const [network, setNetwork] = useState<Network>("testnet");
   const [contract, setContract] = useState<string | null>(null);
-  const [waiting, setWaiting] = useState<string | null>(null);
+  const { waiting, signAndWait, unseenPill } = useWalletSigning(setView, onChanged);
   const [sheet, setSheet] = useState<"deposit" | "withdraw" | "payee" | null>(null);
   const [capText, setCapText] = useState("");
   const [paymentCapText, setPaymentCapText] = useState("");
@@ -59,7 +59,9 @@ export function WalletScreen({
     setLoadError(null);
     if (!isDesktop) {
       // The browser preview shows a sample wallet, like the sample meeting, so the page can be seen.
+      // Its payees are .near accounts, one paid on Solana: a mainnet wallet.
       setConnected(true);
+      setNetwork("mainnet");
       setCapText(plain(sampleDailyCap));
       setPaymentCapText(plain(samplePerPaymentCap));
       return;
@@ -84,35 +86,6 @@ export function WalletScreen({
   useEffect(() => {
     load();
   }, [load]);
-
-  /** Opens the signing page, then refreshes once the contract shows `done`; says what changed. */
-  const signAndWait = async (label: string, action: OwnerAction, done: (v: WalletView) => boolean | Promise<boolean>, said: (v: WalletView) => string): Promise<boolean> => {
-    if (!isDesktop) {
-      toast({ text: `“${label}” is signed in your NEAR wallet, from the Mac app. This is sample data, so nothing changed.`, tone: "caution" });
-      return false;
-    }
-    try {
-      await signInWallet(action);
-      setWaiting(label);
-      let last: WalletView | null = null;
-      const landed = await waitFor(async () => {
-        const v = await near.wallet();
-        last = v;
-        setView(v);
-        return done(v);
-      });
-      if (landed && last) {
-        toast({ text: said(last), tone: "verdigris" });
-        onChanged?.();
-      } else toast({ text: `Didn't see “${label}” on NEAR yet. If you signed, refresh in a moment.`, tone: "caution" });
-      return landed;
-    } catch (e) {
-      toast({ text: `${label} didn't go through: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
-      return false;
-    } finally {
-      setWaiting(null);
-    }
-  };
 
   const eyebrow = !isDesktop ? "Sample wallet · browser preview" : contract ? `${contract} · NEAR ${network}` : "NEAR";
   // The preview's wallet follows the sample meeting: what it paid is spent, and what is blocked waits.
@@ -159,6 +132,7 @@ export function WalletScreen({
           </Button>
         </div>
         <SigningPill label={waiting} />
+        {unseenPill}
       </Shell>
     );
   }
@@ -288,7 +262,8 @@ export function WalletScreen({
                         { kind: "cancel", followupId: id, payee: f.payeeAccount, amount: String(f.amount ?? 0n) },
                         async () => !(await near.paymentState(id)).pending,
                         () => `Declined paying ${f.payeeName} ${amount} USDC`,
-                      ).then((ok) => ok && onResolved(meeting.id, f.id, "dismissed"))
+                        () => onResolved(meeting.id, f.id, "dismissed"),
+                      )
                     }
                   >
                     Decline
@@ -309,7 +284,8 @@ export function WalletScreen({
                         },
                         async () => (await near.paymentState(id)).paid,
                         () => `Paid ${f.payeeName} ${amount} USDC`,
-                      ).then((ok) => ok && onResolved(meeting.id, f.id, "paid"))
+                        () => onResolved(meeting.id, f.id, "paid"),
+                      )
                     }
                   >
                     Review
@@ -424,6 +400,7 @@ export function WalletScreen({
       </div>
 
       <SigningPill label={waiting} />
+      {unseenPill}
 
       <AnimatePresence>
         {sheet === "deposit" && (
@@ -472,6 +449,117 @@ export function WalletScreen({
         )}
       </AnimatePresence>
     </Shell>
+  );
+}
+
+/** A signed change being checked for: what it should look like on NEAR, what to say, and what follows. */
+interface Watch {
+  label: string;
+  done: (v: WalletView) => boolean | Promise<boolean>;
+  said: (v: WalletView) => string;
+  landed?: () => void;
+}
+
+/**
+ * Signing a wallet change: opens the signing page (or says why it can't), then reads
+ * the wallet every 3 s for two minutes until the change shows. If it hasn't by then,
+ * a "Check again" pill stays until it lands or is dismissed. Shared with Set up payments.
+ */
+export function useWalletSigning(onView: (v: WalletView) => void, onChanged?: () => void) {
+  const [waiting, setWaiting] = useState<string | null>(null);
+  const [unseen, setUnseen] = useState<Watch | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const land = (w: Watch, v: WalletView) => {
+    toast({ text: w.said(v), tone: "verdigris" });
+    onChanged?.();
+    w.landed?.();
+  };
+
+  /** Opens the signing page, then refreshes once the contract shows `done`; says what changed. */
+  const signAndWait = async (
+    label: string,
+    action: OwnerAction,
+    done: Watch["done"],
+    said: Watch["said"],
+    landed?: Watch["landed"],
+  ): Promise<boolean> => {
+    if (!isDesktop) {
+      toast({ text: `“${label}” is signed in your NEAR wallet, from the Mac app. This is sample data, so nothing changed.`, tone: "caution" });
+      return false;
+    }
+    try {
+      await signInWallet(action);
+      setUnseen(null);
+      setWaiting(label);
+      let last: WalletView | null = null;
+      const ok = await waitFor(async () => {
+        const v = await near.wallet();
+        last = v;
+        onView(v);
+        return done(v);
+      });
+      if (ok && last) land({ label, done, said, landed }, last);
+      else setUnseen({ label, done, said, landed });
+      return ok;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ text: e instanceof SignPageDown ? message : `${label} didn't go through: ${message}`, tone: e instanceof SignPageDown ? "caution" : "record" });
+      return false;
+    } finally {
+      setWaiting(null);
+    }
+  };
+
+  const checkAgain = async () => {
+    if (!unseen) return;
+    setChecking(true);
+    try {
+      const v = await near.wallet();
+      onView(v);
+      if (await unseen.done(v)) {
+        land(unseen, v);
+        setUnseen(null);
+      } else toast({ text: `Still not on NEAR. If you signed “${unseen.label}”, check again in a moment.`, tone: "caution" });
+    } catch (e) {
+      toast({ text: e instanceof Error ? e.message : String(e), tone: "record" });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const dismiss = () => setUnseen(null);
+  const unseenLabel = waiting ? null : (unseen?.label ?? null);
+  // The pill sits over a screen beside the sidebar; full-screen setup shows `unseenLabel` and `checkAgain` inline instead.
+  const unseenPill = <UnseenPill label={unseenLabel} checking={checking} onCheck={checkAgain} onDismiss={dismiss} />;
+  return { waiting, signAndWait, unseenLabel, checking, checkAgain, dismiss, unseenPill };
+}
+
+/** After two minutes without the change on NEAR: say so, and keep "Check again" until it lands. */
+function UnseenPill({ label, checking, onCheck, onDismiss }: { label: string | null; checking: boolean; onCheck: () => void; onDismiss: () => void }) {
+  return (
+    <div className="pointer-events-none fixed right-0 bottom-7 left-[248px] z-40 flex justify-center px-4">
+      <AnimatePresence>
+        {label && (
+          <m.div
+            key="unseen"
+            role="status"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0, transition: enter }}
+            exit={{ opacity: 0, transition: exit }}
+            className="pointer-events-auto flex items-center gap-3 rounded-full bg-elevated py-1.5 pr-1.5 pl-4 shadow-pill"
+          >
+            <span>Didn't see “{label}” on NEAR yet.</span>
+            <Button size="sm" variant="primary" loading={checking} onClick={onCheck}>
+              Check again
+            </Button>
+            <Button size="sm" variant="quiet" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          </m.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -621,7 +709,7 @@ function CapField({
   );
 }
 
-function AmountSheet({
+export function AmountSheet({
   title,
   intro,
   hint,
@@ -707,7 +795,7 @@ function Segmented<T extends string>({ labelledBy, value, options, onChange }: {
   );
 }
 
-function PayeeSheet({
+export function PayeeSheet({
   network,
   onClose,
   onConfirm,
@@ -778,16 +866,21 @@ function PayeeSheet({
           <span id={paidOnId} className="text-[13px] leading-[18px] font-semibold">
             Paid on
           </span>
-          <Segmented
-            labelledBy={paidOnId}
-            value={paidOn}
-            onChange={setPaidOn}
-            options={[
-              { value: "near", label: "NEAR" },
-              { value: "solana", label: "Solana" },
-              { value: "base", label: "Base" },
-            ]}
-          />
+          {network === "mainnet" ? (
+            <Segmented
+              labelledBy={paidOnId}
+              value={paidOn}
+              onChange={setPaidOn}
+              options={[
+                { value: "near", label: "NEAR" },
+                { value: "solana", label: "Solana" },
+                { value: "base", label: "Base" },
+              ]}
+            />
+          ) : (
+            // NEAR Intents pays out on NEAR mainnet only, so a testnet payee is paid on NEAR.
+            <span className="text-[13px] leading-[19px] text-ink-2">NEAR. Paying on Solana or Base works on NEAR mainnet only.</span>
+          )}
           {external && (
             <Field
               label={`${CHAIN_NAME[paidOn]} address`}

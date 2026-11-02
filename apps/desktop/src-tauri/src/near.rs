@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use near_tx::{Client, FunctionCall, KeyPair, Network};
+use near_tx::{Client, FunctionCall, KeyPair, Network, Problem};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -18,8 +18,19 @@ pub struct NearConfig {
     pub network: String,
     /// The user's NEAR account, e.g. victor.testnet.
     pub account: String,
-    /// The agent-wallet contract.
+    /// The agent-wallet contract: the network's built-in one, or the user's own deployment.
     pub contract: String,
+}
+
+/// What "Save and check" found, before anything is saved.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetupCheck {
+    /// The user's account exists on the network.
+    pub account: bool,
+    /// "ok" (Aftercall's contract, on this network's USDC), "missing" (no account there, or no
+    /// code) or "wrong" (a contract, but not Aftercall's).
+    pub contract: &'static str,
 }
 
 #[derive(Serialize)]
@@ -42,7 +53,8 @@ pub fn load_config(data_dir: &Path) -> Option<NearConfig> {
     serde_json::from_str(&std::fs::read_to_string(config_path(data_dir)).ok()?).ok()
 }
 
-pub fn save_config(data_dir: &Path, config: &NearConfig) -> Result<(), String> {
+/// Well-formed ids that fit the chosen network; returns the network.
+fn validate(config: &NearConfig) -> Result<Network, String> {
     let network = Network::parse(&config.network).map_err(|_| "Network must be testnet or mainnet".to_string())?;
     let valid = |id: &str| id.len() >= 2 && id.len() <= 64 && id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "-_.".contains(c));
     if !valid(&config.account) || !valid(&config.contract) {
@@ -53,6 +65,11 @@ pub fn save_config(data_dir: &Path, config: &NearConfig) -> Result<(), String> {
             return Err(format!("{id} isn't a {} account", config.network));
         }
     }
+    Ok(network)
+}
+
+pub fn save_config(data_dir: &Path, config: &NearConfig) -> Result<(), String> {
+    validate(config)?;
     std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
     std::fs::write(config_path(data_dir), serde_json::to_string_pretty(config).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
@@ -63,6 +80,55 @@ fn network(config: &NearConfig) -> Network {
 
 fn client(config: &NearConfig) -> Client {
     Client::for_network(network(config))
+}
+
+/// A NEAR failure in words a person can act on, for the causes that have one (`near_tx::problem`).
+/// Anything else, such as a contract's own reason ("LOW_BALANCE"), passes through unchanged:
+/// the interface matches on those. `packages/core` `plainNearError` says the same for the web.
+pub fn plain(config: &NearConfig, error: String) -> String {
+    let net = network(config).name();
+    match near_tx::problem(&error) {
+        Some(Problem::NoAccount(id)) if id == config.contract => format!("No Aftercall contract at {id} on {net} yet."),
+        Some(Problem::NoAccount(id)) => format!("{id} doesn't exist on {net}."),
+        Some(Problem::NoCode) => format!("No Aftercall contract at {} on {net} yet.", config.contract),
+        Some(Problem::NoMethod) => format!("{} isn't the Aftercall contract.", config.contract),
+        Some(Problem::Allowance) => "Authorise this Mac again: its key ran out of allowance.".into(),
+        Some(Problem::KeyGone) => "This Mac's key isn't on your account any more. Authorise this Mac again.".into(),
+        None => error,
+    }
+}
+
+/// Before saving: does the account exist, and is the contract really Aftercall's? Its
+/// `get_usdc` must name this network's USDC, so an ordinary account or someone else's
+/// contract at that id doesn't pass. Read-only; nothing is saved.
+pub async fn check_setup(config: &NearConfig) -> Result<SetupCheck, String> {
+    let network = validate(config)?;
+    let rpc = Client::for_network(network);
+    let account = rpc.account_exists(&config.account).await.map_err(|e| plain(config, e))?;
+    let contract = match rpc.view(&config.contract, "get_usdc", &json!({})).await {
+        Ok(usdc) if usdc.as_str() == Some(network.usdc()) => "ok",
+        Ok(_) => "wrong",
+        Err(e) => match near_tx::problem(&e) {
+            Some(Problem::NoAccount(_) | Problem::NoCode) => "missing",
+            Some(Problem::NoMethod) => "wrong",
+            // It panicked: there's a contract, and it isn't ours.
+            _ if e.contains("wasm execution failed") || e.contains("CONTRACT_EXECUTION_ERROR") => "wrong",
+            _ => return Err(plain(config, e)),
+        },
+    };
+    Ok(SetupCheck { account, contract })
+}
+
+/// Whether a web page answers (the signing page, before the app opens it). Only http(s).
+pub async fn page_answers(url: &str) -> bool {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return false;
+    }
+    let http = reqwest::Client::builder().timeout(std::time::Duration::from_secs(3)).build();
+    match http {
+        Ok(http) => http.get(url).send().await.map(|r| r.status().is_success()).unwrap_or(false),
+        Err(_) => false,
+    }
 }
 
 fn entry() -> Result<keyring::Entry, String> {
@@ -111,18 +177,19 @@ pub fn check_permission(permission: &Value, contract: &str) -> Result<(), String
 pub async fn status(config: &NearConfig) -> Result<NearStatus, String> {
     let key = app_key()?;
     let rpc = client(config);
-    let (key_added, key_problem) = match rpc.access_key(&config.account, &key.public_key()).await? {
+    let (key_added, key_problem) = match rpc.access_key(&config.account, &key.public_key()).await.map_err(|e| plain(config, e))? {
         None => (false, None),
         Some(access) => match check_permission(&access["permission"], &config.contract) {
             Ok(()) => (true, None),
             Err(problem) => (false, Some(problem)),
         },
     };
+    // A contract that's missing or isn't Aftercall's is said as such, not read as "not registered".
     let registered = rpc
         .view(&config.contract, "get_wallet", &json!({ "owner": config.account }))
         .await
         .map(|w| !w.is_null())
-        .unwrap_or(false);
+        .map_err(|e| plain(config, e))?;
     Ok(NearStatus { public_key: key.public_key(), key_added, key_problem, registered })
 }
 
@@ -136,7 +203,8 @@ pub async fn record_proof(config: &NearConfig, meeting_id: &str, proof_hash: &st
             &config.contract,
             FunctionCall { method_name: "record_proof".into(), args: args.to_string().into_bytes(), gas: RECORD_PROOF_GAS, deposit: 0 },
         )
-        .await?;
+        .await
+        .map_err(|e| plain(config, e))?;
     Ok(outcome.tx_hash)
 }
 
@@ -164,7 +232,8 @@ pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, fol
     let args = json!({ "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id });
     let outcome = rpc
         .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
-        .await?;
+        .await
+        .map_err(|e| plain(config, e))?;
     let result = outcome.value.unwrap_or(Value::Null);
     let left_today = result["left_today"].as_str().map(String::from);
     if result["status"] == "blocked" {
@@ -194,7 +263,8 @@ pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, mem
     });
     let outcome = rpc
         .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
-        .await?;
+        .await
+        .map_err(|e| plain(config, e))?;
     let result = outcome.value.unwrap_or(Value::Null);
     let left_today = result["left_today"].as_str().map(String::from);
     if result["status"] == "blocked" {
@@ -215,7 +285,7 @@ fn is_deposit_address(s: &str) -> bool {
 pub async fn wallet(config: &NearConfig) -> Result<Value, String> {
     let rpc = client(config);
     let owner = json!({ "owner": config.account });
-    let wallet = rpc.view(&config.contract, "get_wallet", &owner).await?;
+    let wallet = rpc.view(&config.contract, "get_wallet", &owner).await.map_err(|e| plain(config, e))?;
     let payees = rpc.view(&config.contract, "get_payees", &owner).await.unwrap_or(json!([]));
     // An older contract without the method: no payee has a destination.
     let destinations = rpc.view(&config.contract, "get_payee_destinations", &owner).await.unwrap_or(json!([]));
@@ -226,8 +296,8 @@ pub async fn wallet(config: &NearConfig) -> Result<Value, String> {
 pub async fn payment_state(config: &NearConfig, followup_id: &str) -> Result<Value, String> {
     let rpc = client(config);
     let args = json!({ "owner": config.account, "followup_id": followup_id });
-    let paid = rpc.view(&config.contract, "is_paid", &args).await?;
-    let pending = rpc.view(&config.contract, "get_pending", &args).await?;
+    let paid = rpc.view(&config.contract, "is_paid", &args).await.map_err(|e| plain(config, e))?;
+    let pending = rpc.view(&config.contract, "get_pending", &args).await.map_err(|e| plain(config, e))?;
     Ok(json!({ "paid": paid, "pending": !pending.is_null() }))
 }
 
@@ -275,7 +345,7 @@ pub fn sign_in_message(config: &NearConfig, message: &str, nonce_b64: &str, reci
 }
 
 pub async fn get_proof(config: &NearConfig, owner: &str, meeting_id: &str) -> Result<Value, String> {
-    client(config).view(&config.contract, "get_proof", &json!({ "owner": owner, "meeting_id": meeting_id })).await
+    client(config).view(&config.contract, "get_proof", &json!({ "owner": owner, "meeting_id": meeting_id })).await.map_err(|e| plain(config, e))
 }
 
 #[cfg(test)]
@@ -290,6 +360,32 @@ mod tests {
         assert!(check_permission(&good, "other.testnet").is_err());
         let wide = json!({ "FunctionCall": { "receiver_id": "w.testnet", "method_names": [] } });
         assert!(check_permission(&wide, "w.testnet").is_err(), "an empty list means every method");
+    }
+
+    #[test]
+    fn near_failures_read_as_plain_sentences() {
+        let c = NearConfig { network: "testnet".into(), account: "victor.testnet".into(), contract: "wallet.aftercall.testnet".into() };
+        let unknown = |id: &str| format!(r#"RPC error UNKNOWN_ACCOUNT "account {id} does not exist while viewing""#);
+        assert_eq!(plain(&c, unknown("wallet.aftercall.testnet")), "No Aftercall contract at wallet.aftercall.testnet on testnet yet.");
+        assert_eq!(plain(&c, unknown("victor.testnet")), "victor.testnet doesn't exist on testnet.");
+        let no_code = r#"wasm execution failed with error: CompilationError(CodeDoesNotExist { account_id: "wallet.aftercall.testnet" })"#;
+        assert_eq!(plain(&c, no_code.into()), "No Aftercall contract at wallet.aftercall.testnet on testnet yet.");
+        assert_eq!(plain(&c, "wasm execution failed with error: MethodResolveError(MethodNotFound)".into()), "wallet.aftercall.testnet isn't the Aftercall contract.");
+        assert_eq!(plain(&c, r#"RPC error INVALID_TRANSACTION {"NotEnoughAllowance":{}}"#.into()), "Authorise this Mac again: its key ran out of allowance.");
+        // The contract's own reasons pass through: the interface matches on them.
+        assert_eq!(plain(&c, "Transaction failed: LOW_BALANCE".into()), "Transaction failed: LOW_BALANCE");
+    }
+
+    /// Read-only calls to testnet's RPC: `cargo test -- --ignored check_setup`.
+    #[tokio::test]
+    #[ignore]
+    async fn check_setup_tells_a_missing_contract_from_a_wrong_one() {
+        let c = |contract: &str| NearConfig { network: "testnet".into(), account: "victor.testnet".into(), contract: contract.into() };
+        // No account at all; an account with no code; a contract without get_usdc (USDC itself).
+        let none = check_setup(&c("no-such-aftercall-wallet.testnet")).await.unwrap();
+        assert_eq!(none.contract, "missing");
+        assert_eq!(check_setup(&c("victor.testnet")).await.unwrap().contract, "missing");
+        assert_eq!(check_setup(&c(Network::Testnet.usdc())).await.unwrap().contract, "wrong");
     }
 
     #[test]

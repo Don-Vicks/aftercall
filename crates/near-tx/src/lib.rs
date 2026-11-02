@@ -188,11 +188,26 @@ impl Network {
         }
     }
 
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Testnet => "testnet",
+            Self::Mainnet => "mainnet",
+        }
+    }
+
     /// Circle USDC (NEP-141, 6 decimals).
     pub fn usdc(self) -> &'static str {
         match self {
             Self::Testnet => "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
             Self::Mainnet => "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1",
+        }
+    }
+
+    /// Aftercall's shared agent-wallet contract, or None where none is deployed yet.
+    pub fn agent_wallet(self) -> Option<&'static str> {
+        match self {
+            Self::Testnet => Some("wallet.aftercall.testnet"),
+            Self::Mainnet => None,
         }
     }
 
@@ -278,6 +293,10 @@ impl Client {
         let r = self
             .rpc("query", json!({ "request_type": "call_function", "finality": "optimistic", "account_id": contract, "method_name": method, "args_base64": args }))
             .await?;
+        // Older nodes report a failed view (no code, no such method, a panic) inside the result.
+        if let Some(e) = r.get("error").and_then(|e| e.as_str()) {
+            return Err(e.to_string());
+        }
         let bytes: Vec<u8> = serde_json::from_value(r["result"].clone()).map_err(|e| e.to_string())?;
         serde_json::from_slice(&bytes).map_err(|e| e.to_string())
     }
@@ -313,6 +332,45 @@ fn rpc_error(e: &Value) -> String {
     format!("RPC error {cause} {data}").trim().to_string()
 }
 
+/// A failure with a known cause a person can act on. The words are the app's to choose.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Problem {
+    /// No account with this id on the network.
+    NoAccount(String),
+    /// The account exists but has no contract deployed.
+    NoCode,
+    /// The contract has no such method: it isn't the contract we think it is.
+    NoMethod,
+    /// A function-call key's allowance can't cover the gas.
+    Allowance,
+    /// The signing key isn't on the account (any more).
+    KeyGone,
+}
+
+/// Recognises the RPC's and nearcore's own words for the causes in `Problem`.
+pub fn problem(error: &str) -> Option<Problem> {
+    if let Some(i) = error.find("account ") {
+        let rest = &error[i + "account ".len()..];
+        if let Some(id) = rest.split_whitespace().next() {
+            if rest[id.len()..].trim_start().starts_with("does not exist") {
+                return Some(Problem::NoAccount(id.trim_matches(|c| c == '"' || c == '\\').to_string()));
+            }
+        }
+    }
+    let has = |needle: &str| error.contains(needle);
+    if has("CodeDoesNotExist") || has("NO_CONTRACT_CODE") || has("has not been deployed") {
+        Some(Problem::NoCode)
+    } else if has("MethodNotFound") || has("MethodResolveError") {
+        Some(Problem::NoMethod)
+    } else if has("NotEnoughAllowance") {
+        Some(Problem::Allowance)
+    } else if has("AccessKeyNotFound") || has("UNKNOWN_ACCESS_KEY") {
+        Some(Problem::KeyGone)
+    } else {
+        None
+    }
+}
+
 /// Pulls the contract's panic message ("ALREADY_PAID", "PROOF_EXISTS"...) out of a failure.
 fn failure_message(f: &Value) -> String {
     f.pointer("/ActionError/kind/FunctionCallError/ExecutionError")
@@ -334,6 +392,26 @@ mod tests {
         assert!(Network::Testnet.rpc_url().contains("test"));
         assert_eq!(Network::Mainnet.usdc(), "17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1");
         assert_eq!(Network::Testnet.usdc(), "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af");
+    }
+
+    #[test]
+    fn aftercall_contract_is_built_in_where_deployed() {
+        assert_eq!(Network::Testnet.agent_wallet(), Some("wallet.aftercall.testnet"));
+        assert_eq!(Network::Mainnet.agent_wallet(), None);
+        assert!(Network::Testnet.fits(Network::Testnet.agent_wallet().unwrap()));
+        assert_eq!(Network::Testnet.name(), "testnet");
+    }
+
+    #[test]
+    fn known_failures_are_recognised() {
+        // As testnet's RPC reports them (2 Nov 2026).
+        let unknown = r#"RPC error UNKNOWN_ACCOUNT "account wallet.aftercall.testnet does not exist while viewing""#;
+        assert_eq!(problem(unknown), Some(Problem::NoAccount("wallet.aftercall.testnet".into())));
+        assert_eq!(problem(r#"wasm execution failed with error: CompilationError(CodeDoesNotExist { account_id: "victor.testnet" })"#), Some(Problem::NoCode));
+        assert_eq!(problem("wasm execution failed with error: MethodResolveError(MethodNotFound)"), Some(Problem::NoMethod));
+        assert_eq!(problem(r#"RPC error INVALID_TRANSACTION {"TxExecutionError":{"InvalidTxError":{"InvalidAccessKeyError":{"NotEnoughAllowance":{}}}}}"#), Some(Problem::Allowance));
+        assert_eq!(problem(r#"{"InvalidAccessKeyError":{"AccessKeyNotFound":{}}}"#), Some(Problem::KeyGone));
+        assert_eq!(problem("PROOF_EXISTS"), None);
     }
 
     #[test]

@@ -63,7 +63,7 @@ I listed your meetings, but I couldn't claim the API fix item. Aftercall only le
 - Sync with Ada: "Send Ada the pilot plan" (You, due Friday)
 - Sync with Ada: "Share the term sheet" (Ada)
 
-To let me claim it, turn on "Let agents claim and complete action items" in Aftercall under **Settings → Connected agents**. Tell me once it's on and I'll claim "Ship the API fix" as Claude Code.
+To let me claim it, turn on "Let agents claim and complete action items" in Aftercall under **Coding agents** in the sidebar. Tell me once it's on and I'll claim "Ship the API fix" as Claude Code.
 ```
 
 What the stand-in saw (`demo.ts` prints each request; ids and names only):
@@ -128,7 +128,7 @@ Reads carry the MCP client's own name (`claude-code`); the claim carries the age
 
 This part was not recorded; it is the same server and setup, pointed at the Mac app instead of the stand-in. It needs Node 20 or later and the `claude` CLI.
 
-1. Open Aftercall and go to Settings → Connected agents.
+1. Open Aftercall and open Coding agents in the sidebar.
 2. Turn on "Let agents reach my meetings". A token appears. Agents can now read your processed meetings, and nothing else.
 3. To let agents claim and complete action items, also turn on "Let agents claim and complete action items". Leave it off to keep them read-only.
 4. Under Claude Code, press Copy and run the command in Terminal. It registers the server for every project (`claude mcp add --scope user …`), running the `aftercall-mcp.mjs` that ships inside Aftercall with your token.

@@ -8,7 +8,7 @@
  *   AFTERCALL_TOKEN=<token> node apps/mcp/src/main.ts [--data-dir <path>] [--socket <path>]
  *
  * Meetings are encrypted on disk, so this server asks the running Aftercall app for
- * them over a Unix socket the app opens only while Settings → Connected agents is on
+ * them over a Unix socket the app opens only while Coding agents is on (in the sidebar)
  * (default `<data dir>/agents/aftercall.sock`; data dir defaults to
  * ~/Library/Application Support/dev.aftercall.app, or AFTERCALL_DATA_DIR). The token
  * comes from that screen. Nothing leaves this Mac: there is no network access here.

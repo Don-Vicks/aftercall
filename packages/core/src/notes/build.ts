@@ -28,7 +28,8 @@ export interface Dropped {
   reason: "QUOTE_NOT_IN_TRANSCRIPT";
 }
 
-function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
+/** The payee a name means: the same label or the same NEAR account, ignoring case. */
+export function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
   if (!name) return undefined;
   const n = name.trim().toLowerCase();
   return payees.find((p) => p.name.toLowerCase() === n || p.account.toLowerCase() === n);

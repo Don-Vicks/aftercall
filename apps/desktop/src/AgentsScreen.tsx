@@ -14,7 +14,7 @@ const CANNOT = [
   "Send email or recaps",
   "Pay, or touch the agent wallet",
   "Record proofs on NEAR",
-  "Change or delete notes",
+  "Change anything else in your notes, or delete them",
   "Reach meetings while this is off",
 ];
 
@@ -103,7 +103,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
         <div className="mx-auto flex max-w-[680px] flex-col gap-8">
           <header className="flex flex-col gap-1.5" style={rise(0)}>
             <span className="t-eyebrow text-muted">On this Mac only</span>
-            <h1 className="t-display m-0">Connected agents</h1>
+            <h1 className="t-display m-0">Coding agents</h1>
             <p className="m-0 text-ink-2">Let Claude Code or Codex pick up action items from your meetings.</p>
             <Why className="mt-0.5">
               Agents reach a small server on this Mac, which asks Aftercall over a local channel only while this is on. What an agent reads then goes wherever
@@ -171,7 +171,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
               )}
             </AnimatePresence>
             {error && (
-              <p className="m-0 border-t border-hairline px-5 py-3 text-[13px] leading-[19px] text-caution">Couldn't change Connected agents: {error}</p>
+              <p className="m-0 border-t border-hairline px-5 py-3 text-[13px] leading-[19px] text-caution">Couldn't change agent access: {error}</p>
             )}
           </Card>
 

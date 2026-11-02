@@ -16,7 +16,7 @@ import {
 } from "@aftercall/core";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
-import { nearReady, recordProof } from "./proofs";
+import { proofErrorLine, proofMissLine, tryRecordProof } from "./proofs";
 import type { Payee } from "@aftercall/core";
 import { Button, Pill, SectionTitle } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
@@ -50,7 +50,7 @@ const SEAL_MS = 1600;
 type Run =
   | { state: "idle" }
   | { state: "running"; at: number; part?: string; times: number[] }
-  | { state: "done"; times: number[]; checks: TeeCheck[]; onChain: boolean }
+  | { state: "done"; times: number[]; checks: TeeCheck[]; onChain: boolean; proofNote?: string; proofFailed?: boolean }
   | { state: "failed"; at: number; error: string; times: number[] };
 
 /**
@@ -80,7 +80,10 @@ function useRun(id: string): Run {
   return run;
 }
 
-async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: (id: string, notes: string) => void) {
+/** Called once the notes are saved; `proofError` says why the proof didn't go on NEAR when that was an error, not a missing account. */
+type OnProcessed = (id: string, notes: string, proofError?: string) => void;
+
+async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: OnProcessed) {
   const id = recording.id;
   const current = runs.get(id)?.state;
   if (current === "running" || current === "done") return;
@@ -137,8 +140,12 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     await recordingFiles.deleteAudio(id);
 
     moveTo("proof");
-    // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet.
-    if (await nearReady()) saved = await recordProof(id, saved).catch(() => saved);
+    // A failed proof doesn't lose the notes: it can be recorded later from the Verify sheet,
+    // and the step and the meeting say why it failed.
+    const proof = await tryRecordProof(id, saved);
+    saved = proof.saved;
+    const proofNote = proof.missed ? proofMissLine(proof.missed) : undefined;
+    const proofError = proof.missed?.why === "error" ? proofErrorLine(proof.missed.error) : undefined;
     times[STEP_IDS.length - 1] = (performance.now() - since) / 1000;
 
     const notes = serializeNotes(saved);
@@ -148,10 +155,10 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
       finished = true;
       finishers.delete(id);
       report(id, { state: "idle" });
-      onProcessed(id, notes);
+      onProcessed(id, notes, proofError);
     };
     finishers.set(id, finish);
-    report(id, { state: "done", times: [...times], checks: result.checks, onChain: Boolean(saved.onChain) });
+    report(id, { state: "done", times: [...times], checks: result.checks, onChain: Boolean(saved.onChain), proofNote, proofFailed: Boolean(proofError) });
     void notesReady(meeting);
     // The seal shows for a moment, then the meeting opens (Open notes skips the wait).
     window.setTimeout(finish, SEAL_MS);
@@ -182,7 +189,7 @@ export function RecordingScreen({
   recording: SavedRecording;
   payees: Payee[];
   /** Called once the notes are saved, even if the user has left this screen. */
-  onProcessed: (id: string, notes: string) => void;
+  onProcessed: OnProcessed;
   onDelete: () => void;
 }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
@@ -244,8 +251,10 @@ export function RecordingScreen({
         ) : run.state === "done" ? (
           <>
             <ProcessHeader eyebrow={eyebrow} title={title} lede="Your notes are ready." />
-            <VerifiedSeal checks={run.checks} onChain={run.onChain} onOpen={() => finishers.get(recording.id)?.()} />
-            <ProcessingSteps view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, onChain: run.onChain, others: one }} />
+            <VerifiedSeal checks={run.checks} onChain={run.onChain} proofFailed={run.proofFailed} onOpen={() => finishers.get(recording.id)?.()} />
+            <ProcessingSteps
+              view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, onChain: run.onChain, proofNote: run.proofNote, others: one }}
+            />
           </>
         ) : (
           <>

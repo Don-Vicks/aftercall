@@ -62,7 +62,7 @@ What you type during a call is yours: it guides the notes, and goes nowhere else
 - Never sent to connected agents: the app's agents socket removes `meeting.yourNotes` and the salt from everything it answers, along with the proof's notice and the cost estimate (`for_agents`, `apps/desktop/src-tauri/src/agents.rs:286`; test `your_notes_and_their_salt_never_reach_agents`), and no MCP tool returns or searches them (`apps/mcp/src/tools.test.ts`: "your notes never reach an agent…").
 - Nothing about them goes on NEAR except inside the proof hash.
 
-## Connected agents
+## Coding agents
 
 Off by default. While on, agents reach meetings only through the running app's owner-only socket with a token (`apps/desktop/src-tauri/src/agents.rs`).
 

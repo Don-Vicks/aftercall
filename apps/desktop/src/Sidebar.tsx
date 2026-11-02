@@ -296,7 +296,7 @@ export function Sidebar({
             <Wallet {...icon} />,
             balance === null ? undefined : <RollingNumber value={formatUsdc(balance)} className="font-mono text-xs font-normal text-ink" />,
           )}
-          {navRow("Connected agents", "agents", onOpenAgents, <Bot {...icon} />)}
+          {navRow("Coding agents", "agents", onOpenAgents, <Bot {...icon} />)}
           {navRow("Settings", "settings", onOpenSettings, <Settings {...icon} />)}
         </div>
       </m.nav>

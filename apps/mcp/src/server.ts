@@ -4,7 +4,7 @@ import type { AppChannel } from "./store.ts";
 import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 
 const READ_ONLY =
-  "Aftercall's MCP server only reads meetings, plus claiming and completing action items when the user has allowed that. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or follow-ups: those stay in the app, with the user. It works only while the Aftercall app is open with Connected agents turned on.";
+  "Aftercall's MCP server only reads meetings, plus claiming and completing action items when the user has allowed that. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or follow-ups: those stay in the app, with the user. It works only while the Aftercall app is open with Coding agents turned on.";
 
 const WRITES =
   'Claiming and completing need the user\'s switch "Let agents claim and complete action items" in Aftercall; it is off by default, and while it is off the app refuses these calls and says so. list_action_items reports whether it is on.';

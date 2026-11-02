@@ -66,7 +66,7 @@ test("the server starts over stdio, lists its tools and answers a call through t
   try {
     const r = await offline.callTool({ name: "list_meetings", arguments: {} });
     assert.equal(r.isError, true);
-    assert.match(text(r), /Open Aftercall and turn on Connected agents/);
+    assert.match(text(r), /Open Aftercall and turn on Coding agents/);
   } finally {
     await offline.close();
   }

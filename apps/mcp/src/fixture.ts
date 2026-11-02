@@ -94,7 +94,7 @@ const PROJECTS = [
 
 /** The app's refusal while agents may only read (agents.rs, `WRITES_OFF`). */
 export const WRITES_OFF =
-  "Aftercall lets agents read only. To let them claim and complete action items, turn that on in Settings → Connected agents.";
+  "Aftercall lets agents read only. To let them claim and complete action items, turn that on under Coding agents in Aftercall's sidebar.";
 
 type Req = { token?: string; op?: string; [k: string]: unknown };
 
@@ -175,7 +175,7 @@ export async function startFakeApp(opts: { now?: () => string; allowWrites?: boo
       let req: Req = {};
       try {
         req = JSON.parse(buf.slice(0, nl)) as Req;
-        if (req.token !== token) throw new Error("Aftercall refused the token. Copy the current setup from Settings → Connected agents in Aftercall.");
+        if (req.token !== token) throw new Error("Aftercall refused the token. Copy the current setup from Coding agents in Aftercall's sidebar.");
         reply = { ok: true, result: handle(store, req, allowWrites, now) };
       } catch (e) {
         reply = { ok: false, error: e instanceof Error ? e.message : String(e) };

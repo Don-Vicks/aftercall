@@ -36,13 +36,14 @@ export const payees = [{ name: "Designer", account: "designer.near" }];
 /*
  * The sample agent wallet at the start of the day, before the sample meeting's payments. The
  * browser preview's Agent wallet shows it minus what the sample meeting has paid, and approving
- * the sample's payments follows it as the contract would (lib.rs `pay`): a payment bigger than
- * the balance is refused before the caps are checked; one over the per-payment cap or past the
- * daily cap waits for the owner's wallet. The designer's 50.00 deposit fits both caps; once it
- * is paid, 5,180.00 is left, with 50.00 of 200.00 spent and 150.00 left today. The 5,000.00 is
- * covered by the balance but over both caps, so it waits for the owner's wallet.
+ * the sample's payments follows it as the contract would (lib.rs `pay`): one over the
+ * per-payment cap or past the daily cap waits for the owner's wallet, whatever the balance;
+ * under the caps, more than the balance is refused. The designer's 50.00 deposit fits both
+ * caps; once it is paid, 180.00 is left, with 50.00 of 200.00 spent and 150.00 left today.
+ * The 5,000.00 is over both caps, so it waits for the owner's wallet (which needs the balance
+ * to cover it before approving).
  */
-export const walletBalance = 5_230_000_000n; // 5,230.00 USDC
+export const walletBalance = 230_000_000n; // 230.00 USDC
 export const dailyCap = 200_000_000n; // 200.00 USDC
 export const perPaymentCap = 100_000_000n; // 100.00 USDC
 

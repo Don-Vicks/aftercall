@@ -10,7 +10,7 @@ import type { Spend } from "./costs";
 import { useNearSetup, type NearSetup } from "./nearSetup";
 import { isDesktop } from "./recorder";
 import { RecoverySettings } from "./RecoveryPhrase";
-import { AccountFields, AccountNotes, SetupPayments, type SetupStep } from "./SetupPayments";
+import { AccountFields, AccountNotes, SetupPayments, UnseenNote, type SetupStep } from "./SetupPayments";
 import { IconDisc, Pop, Snippet, Why, rise } from "./SettingsParts";
 import { Button, Card, Pill, SectionTitle, Spinner, cx } from "./ui";
 
@@ -119,10 +119,10 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
                 <span className="text-ink-2">
                   {n.config.network === "mainnet" ? "Mainnet moves real USDC. Keep the caps small." : "Testnet moves test USDC, not real money."}
                 </span>
-                <Pop show={n.found.account === true && n.found.contract === true}>
+                <Pop show={n.found.account === true && n.found.contract === "ok"}>
                   <span className="inline-flex items-center gap-1.5 font-medium text-verdigris">
                     <Check size={13} strokeWidth={2.5} aria-hidden="true" />
-                    Both found on NEAR
+                    Account and Aftercall contract found
                   </span>
                 </Pop>
               </div>
@@ -202,9 +202,10 @@ function Authorise({ n }: { n: NearSetup }) {
           <Spinner size={12} /> Waiting for you to sign “{n.waiting}” in your browser…
         </p>
       )}
+      <UnseenNote label={n.unseen?.label ?? null} checking={n.rechecking} onCheck={n.checkAgain} />
       {n.status?.keyProblem && <p className="m-0 text-[13px] leading-[19px] text-caution">{n.status.keyProblem}</p>}
       {n.error && n.errorFrom === "sign" && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{n.error}</p>}
-      {!n.ready && !registered && <p className="m-0 text-[13px] leading-[19px] text-ink-2">Save your NEAR account and contract above, then sign both.</p>}
+      {!n.ready && !registered && <p className="m-0 text-[13px] leading-[19px] text-ink-2">Save your NEAR account above, then sign both.</p>}
       <Why defaultOpen>
         The first signature creates your agent wallet. The second lets this Mac's key call only <span className="font-mono text-ink">pay</span> and{" "}
         <span className="font-mono text-ink">record_proof</span>, within your caps. Raising a cap, adding a payee or withdrawing still needs your wallet.
@@ -217,7 +218,7 @@ function Authorise({ n }: { n: NearSetup }) {
             <Snippet text={n.commands.addKey} label="Copy the command that authorises this Mac's key" />
           </span>
         ) : (
-          "Save your NEAR account and contract above, and make this Mac's key; the two commands then appear here."
+          "Save your NEAR account above, and make this Mac's key; the two commands then appear here."
         )}
       </Why>
     </section>

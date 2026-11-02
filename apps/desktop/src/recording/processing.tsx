@@ -29,8 +29,10 @@ export interface StepsView {
   others?: string;
   /** Known once finished: */
   checks?: TeeCheck[];
-  /** False when NEAR isn't connected, so no proof went on chain. */
+  /** False when no proof went on chain: NEAR isn't connected, or recording it failed. */
   onChain?: boolean;
+  /** Why the proof isn't on NEAR, when it isn't ("Connect your NEAR account…", or the error). */
+  proofNote?: string;
 }
 
 const label: Record<StepId, { done: string; doing: string }> = {
@@ -53,7 +55,7 @@ function detail(id: StepId, v: StepsView, state: StageState): string {
     case "signature":
       return "Signed over the exact request and response by the attested key";
     case "proof":
-      return v.onChain === false ? "Connect your NEAR account, then record it from Verify" : "A hash only; no meeting content goes on chain";
+      return v.onChain === false ? (v.proofNote ?? "Record it on NEAR from Verify") : "A hash only; no meeting content goes on chain";
     case "deleted":
       return "Only the encrypted transcript and notes stay";
   }
@@ -139,7 +141,7 @@ const TinyCheck = () => (
 export function ProcessingSteps({ view, compact = false }: { view: StepsView; compact?: boolean }) {
   const stages: Stage[] = STEP_IDS.map((id, i) => {
     let state: StageState = i < view.at ? "done" : i === view.at ? (view.failed ? "failed" : "active") : "todo";
-    // No NEAR account: the proof step is left undone, and says so.
+    // No proof on NEAR (no account, or it failed): the step is left undone, and says why.
     if (id === "proof" && view.onChain === false && state === "done") state = "todo";
     const title = id === "proof" && view.onChain === false ? "Proof not recorded on NEAR" : state === "done" ? label[id].done : label[id].doing;
     return {
@@ -176,7 +178,20 @@ export function ProcessHeader({ eyebrow, title, lede, pill }: { eyebrow: ReactNo
  * The end of a run: Verified when every attestation and signature check passed
  * (end-to-end encryption is reported on its own line, as on Verify).
  */
-export function VerifiedSeal({ checks, onChain, preview, onOpen }: { checks?: TeeCheck[]; onChain?: boolean; preview?: boolean; onOpen: () => void }) {
+export function VerifiedSeal({
+  checks,
+  onChain,
+  proofFailed,
+  preview,
+  onOpen,
+}: {
+  checks?: TeeCheck[];
+  onChain?: boolean;
+  /** Connected, but recording the proof on NEAR failed (the proof step says why). */
+  proofFailed?: boolean;
+  preview?: boolean;
+  onOpen: () => void;
+}) {
   const counted = (checks ?? []).filter((c) => c.id !== "response-e2ee");
   const failed = counted.filter((c) => !c.ok).length;
   const verified = preview || (counted.length > 0 && failed === 0);
@@ -184,7 +199,13 @@ export function VerifiedSeal({ checks, onChain, preview, onOpen }: { checks?: Te
     ? "Simulated in the browser preview. In the Mac app every check runs for real."
     : !verified
       ? `${failed} of ${counted.length} checks didn't pass. Verify shows which.`
-      : `${counted.length} checks passed. ${onChain ? "Proof recorded on NEAR; the audio is gone from this Mac." : "The audio is gone from this Mac; record the proof on NEAR from Verify."}`;
+      : `${counted.length} checks passed. ${
+          onChain
+            ? "Proof recorded on NEAR; the audio is gone from this Mac."
+            : proofFailed
+              ? "The audio is gone from this Mac. The proof didn't go on NEAR; try again from Verify."
+              : "The audio is gone from this Mac; record the proof on NEAR from Verify."
+        }`;
   return (
     <m.div
       role="status"

@@ -38,5 +38,12 @@ near contract call-function as-transaction "${USDC}" storage_deposit \
 
 echo
 echo "Done. Agent-wallet contract: ${CONTRACT}"
-echo "In Aftercall → Settings, enter ${OWNER} and ${CONTRACT}, then run the two commands it shows."
+if [ "${CONTRACT}" = "wallet.aftercall.testnet" ]; then
+  echo "Aftercall already uses this id on testnet: nothing to type in the app."
+else
+  echo "Aftercall ships with wallet.aftercall.testnet. To use ${CONTRACT} instead, put it in"
+  echo "packages/core/src/network.ts (testnet agentWallet), or enter it in Aftercall under Settings > Advanced."
+fi
+echo "Check it answers (read-only; should print the USDC id above):"
+echo "  near contract call-function as-read-only ${CONTRACT} get_usdc json-args '{}' network-config testnet now"
 echo "For mainnet, use ./scripts/deploy-mainnet.sh: tiny caps, then it locks the contract (deletes its full-access keys)."

@@ -21,7 +21,7 @@ import {
 import { aboutCost, pricesDay } from "./costs";
 import { VERIFY_URL, explorerTx, near } from "./near";
 import type { SavedNotes } from "./nearai";
-import { nearReady, recordProof } from "./proofs";
+import { plainProofError, proofReadiness, recordProof } from "./proofs";
 import { Button, Dialog, IconButton, Spinner, cx } from "./ui";
 
 /** What each group's TEE did for this meeting, after its name. */
@@ -81,8 +81,11 @@ export function VerifySheet({
         }
       }
       if (!saved.onChain) {
-        const ready = await nearReady();
-        if (!cancelled) setCanRecord(ready);
+        // Connected but NEAR didn't answer: offer to try, and say why, rather than "connect".
+        const readiness = await proofReadiness();
+        if (cancelled) return;
+        setCanRecord(readiness.ready || readiness.why === "error");
+        if (!readiness.ready && readiness.why === "error") setError(`Couldn't reach your NEAR wallet: ${readiness.error}.`);
       }
     })();
     return () => {
@@ -96,7 +99,7 @@ export function VerifySheet({
     try {
       onUpdated(await recordProof(recordingId, saved));
     } catch (e) {
-      setError(String(e));
+      setError(`Couldn't record the proof on NEAR: ${plainProofError(e)}.`);
     } finally {
       setRecording(false);
     }

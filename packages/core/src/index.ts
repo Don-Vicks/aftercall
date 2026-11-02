@@ -7,6 +7,7 @@ export * from "./people-index.ts";
 export * from "./when.ts";
 export * from "./notes/amounts.ts";
 export * from "./notes/build.ts";
+export * from "./notes/rematch.ts";
 export * from "./notes/pipeline.ts";
 export * from "./notes/schema.ts";
 export * from "./notes/transcript.ts";

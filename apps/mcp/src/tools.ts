@@ -128,7 +128,7 @@ export async function listActionItems(
     ...(allowWrites === true
       ? {}
       : allowWrites === false
-        ? { note: "Aftercall lets agents read only right now. The user can allow claiming and completing in Settings → Connected agents." }
+        ? { note: "Aftercall lets agents read only right now. The user can allow claiming and completing under Coding agents in Aftercall's sidebar." }
         : { note: "Aftercall didn't say whether agents may claim and complete. A claim says so if it is refused." }),
   };
 }

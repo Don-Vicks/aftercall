@@ -1,31 +1,39 @@
 import { useEffect, useState } from "react";
 import { accountFitsNetwork } from "@aftercall/core";
-import { near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus } from "./near";
+import { builtInContract, near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus, type SetupCheck } from "./near";
 import { isDesktop } from "./recorder";
 import { recovery, type RecoveryStatus } from "./recovery";
 import { errorText } from "./SettingsParts";
 
-/** Whether each saved name was found on NEAR by "Save and check" (absent: not checked yet). */
+/** What "Save and check" found for each name (absent: not checked yet). */
 export interface Found {
   account?: boolean;
-  contract?: boolean;
+  contract?: SetupCheck["contract"];
+}
+
+/** A signature the owner was waited on for that didn't show on NEAR in time; "Check again" looks once more. */
+export interface Unseen {
+  label: string;
+  kind: "register" | "authorise-key";
 }
 
 /**
- * Everything Settings and Set up payments need to connect NEAR: the account and
- * contract, this Mac's key (from the recovery phrase), and the two signatures that
+ * Everything Settings and Set up payments need to connect NEAR: the account (the
+ * contract is Aftercall's own for the network, unless the owner points at their own
+ * deployment), this Mac's key (from the recovery phrase), and the two signatures that
  * register the agent wallet and authorise the key. The app holds its own limited
  * key; the owner authorises it once from their own wallet or near-cli, so the app
  * can only record proofs and pay within the contract's caps.
  */
 export function useNearSetup() {
-  const [config, setConfig] = useState<NearConfig>({ network: "testnet", account: "", contract: "" });
+  const [config, setConfig] = useState<NearConfig>({ network: "testnet", account: "", contract: builtInContract("testnet") ?? "" });
   /** What's saved on this Mac, as last loaded or saved. */
   const [saved, setSaved] = useState<NearConfig | null>(null);
   const [publicKey, setPublicKey] = useState("");
   const [status, setStatus] = useState<NearStatus | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus | null>(null);
-  const [found, setFound] = useState<Found>({});
+  /** What "Save and check" found, and for which names: it applies only while they're unchanged. */
+  const [checked, setChecked] = useState<{ config: NearConfig; found: Found } | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Which action the error came from, so it shows next to that action. */
@@ -34,6 +42,8 @@ export function useNearSetup() {
   const [loaded, setLoaded] = useState(!isDesktop);
   /** The signature the owner is being waited on for ("Create wallet"). */
   const [waiting, setWaiting] = useState<string | null>(null);
+  const [unseen, setUnseen] = useState<Unseen | null>(null);
+  const [rechecking, setRechecking] = useState(false);
 
   /** This Mac's key, which a new install only has once a recovery phrase is made or restored. */
   const loadKey = async () => {
@@ -52,9 +62,17 @@ export function useNearSetup() {
         if (!c) return;
         setConfig(c);
         setSaved(c);
-        // Already set up on an earlier visit: show where it stands without a click.
+        // Already set up on an earlier visit: show where it stands without a click. A contract
+        // that's gone or isn't Aftercall's is said under the account, not read as "not signed".
         const r = await recovery.status().catch(() => null);
-        if (r?.hasKey) setStatus(await near.status());
+        if (r?.hasKey)
+          await near
+            .status()
+            .then(setStatus)
+            .catch((e) => {
+              setErrorFrom("check");
+              setError(errorText(e));
+            });
       })
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -71,33 +89,59 @@ export function useNearSetup() {
         .catch(() => {});
   };
 
+  /** Aftercall's contract on the chosen network, or null where there's none yet (mainnet today). */
+  const builtIn = builtInContract(config.network);
+  /** The contract isn't the network's built-in one: the owner's own deployment, typed under "Advanced". */
+  const ownContract = config.contract !== builtIn;
   // A testnet account in a mainnet setup (or the other way round) can't work; say so before anything is signed.
   const wrongNetwork = [config.account, config.contract].find((a) => a.length > 1 && !accountFitsNetwork(a, config.network)) ?? null;
   const ready = config.account.length > 1 && config.contract.length > 1 && !wrongNetwork;
   const commands = ready && publicKey ? setupCommands(config, publicKey) : null;
   const connected = Boolean(status?.registered && status.keyAdded);
-  /** The saved account still matches what's typed, so "found" applies to it. */
-  const unchanged = saved !== null && saved.account === config.account && saved.contract === config.contract && saved.network === config.network;
-  const accountDone = Boolean(saved && unchanged && ready && found.account !== false && found.contract !== false);
+  const same = (a: NearConfig | null) => a !== null && a.account === config.account && a.contract === config.contract && a.network === config.network;
+  const found: Found = checked && same(checked.config) ? checked.found : {};
+  /** The saved account still matches what's typed, and nothing found it wanting. */
+  const accountDone = Boolean(same(saved) && ready && found.account !== false && (found.contract === undefined || found.contract === "ok"));
   const signed = (status?.registered ? 1 : 0) + (status?.keyAdded ? 1 : 0);
 
   const edit = (next: NearConfig) => {
+    // Switching network swaps in that network's contract, unless the owner typed their own.
+    if (next.network !== config.network && (config.contract === builtIn || config.contract === "")) next = { ...next, contract: builtInContract(next.network) ?? "" };
     setConfig(next);
     setError(null);
+    setUnseen(null);
   };
 
-  /** Saves the account and contract, checks both exist on NEAR, then reads where setup stands. True when nothing failed. */
+  /** What's wrong with the contract, as "Save and check" found it. */
+  const contractProblem = (c: NearConfig, f: Found): string | null =>
+    f.contract === "missing" ? `No Aftercall contract at ${c.contract} on ${c.network} yet.` : f.contract === "wrong" ? `${c.contract} isn't the Aftercall contract.` : null;
+
+  /**
+   * Checks the account exists and the contract is Aftercall's (its USDC must be this
+   * network's), and only then saves near.json and reads where setup stands. Returns
+   * what's wrong, or null when it's saved.
+   */
+  const verify = async (): Promise<string | null> => {
+    const result = await near.checkSetup(config);
+    const f: Found = { account: result.account, contract: result.contract };
+    setChecked({ config, found: f });
+    if (!result.account) return `${config.account} isn't on NEAR ${config.network}.`;
+    const problem = contractProblem(config, f);
+    if (problem) return problem;
+    await near.saveConfig(config);
+    setSaved(config);
+    if (publicKey) setStatus(await near.status());
+    return null;
+  };
+
+  /** "Save and check". True when the account and contract passed and were saved. */
   const check = async (): Promise<boolean> => {
     setError(null);
     setErrorFrom("check");
     setChecking(true);
     try {
-      await near.saveConfig(config);
-      setSaved(config);
-      const [account, contract] = await Promise.all([near.checkPayee(config.account), near.checkPayee(config.contract)]);
-      setFound({ account: account.exists, contract: contract.exists });
-      if (publicKey) setStatus(await near.status());
-      return account.exists && contract.exists;
+      // What's wrong shows by the fields (account) or under them (contractProblem), so no error here.
+      return (await verify()) === null;
     } catch (e) {
       setError(errorText(e));
       return false;
@@ -106,27 +150,55 @@ export function useNearSetup() {
     }
   };
 
-  /** Opens the signing page in the browser and checks NEAR until the step lands. */
+  /** Whether the step has landed on NEAR, reading the status once. */
+  const landed = async (kind: Unseen["kind"]) => {
+    const s = await near.status();
+    setStatus(s);
+    return kind === "register" ? s.registered : s.keyAdded;
+  };
+
+  /** Opens the signing page in the browser and checks NEAR every 3 s for two minutes until the step lands. */
   const signStep = async (label: string, kind: "register" | "authorise-key") => {
     setError(null);
     setErrorFrom("sign");
+    setUnseen(null);
     try {
-      await near.saveConfig(config);
-      setSaved(config);
+      // Nothing is signed against an account or contract that hasn't passed "Save and check".
+      if (!accountDone) {
+        const problem = await verify();
+        if (problem) {
+          setError(problem);
+          return false;
+        }
+      }
       await signInWallet(kind === "register" ? { kind } : { kind, publicKey });
       setWaiting(label);
-      const done = await waitFor(async () => {
-        const s = await near.status();
-        setStatus(s);
-        return kind === "register" ? s.registered : s.keyAdded;
-      });
-      if (!done) setError(`Didn't see “${label}” on NEAR yet. If you signed, press Save and check in a moment.`);
+      const done = await waitFor(() => landed(kind));
+      if (!done) setUnseen({ label, kind });
       return done;
     } catch (e) {
       setError(errorText(e));
       return false;
     } finally {
       setWaiting(null);
+    }
+  };
+
+  /** After the two minutes: one more look, for a wallet that took longer. */
+  const checkAgain = async () => {
+    if (!unseen) return false;
+    setError(null);
+    setErrorFrom("sign");
+    setRechecking(true);
+    try {
+      const done = await landed(unseen.kind);
+      if (done) setUnseen(null);
+      return done;
+    } catch (e) {
+      setError(errorText(e));
+      return false;
+    } finally {
+      setRechecking(false);
     }
   };
 
@@ -137,12 +209,17 @@ export function useNearSetup() {
     publicKey,
     status,
     recoveryStatus,
-    found: unchanged ? found : {},
+    found,
+    contractProblem: contractProblem(config, found),
+    builtIn,
+    ownContract,
     checking,
     error,
     errorFrom,
     loaded,
     waiting,
+    unseen,
+    rechecking,
     wrongNetwork,
     ready,
     commands,
@@ -151,6 +228,7 @@ export function useNearSetup() {
     signed,
     check,
     signStep,
+    checkAgain,
     keyChanged,
   };
 }
