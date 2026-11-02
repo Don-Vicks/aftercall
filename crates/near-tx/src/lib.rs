@@ -160,6 +160,9 @@ pub struct Outcome {
     pub tx_hash: String,
     /// The method's return value (JSON) when it succeeded.
     pub value: Option<Value>,
+    /// What the transaction cost in yoctoNEAR: the tokens burnt for gas by the transaction and
+    /// every receipt it made. None when the node's reply didn't say.
+    pub fee: Option<u128>,
 }
 
 /// The NEAR network the app talks to. Mirrors `packages/core/src/network.ts`.
@@ -278,13 +281,18 @@ impl Client {
         }
     }
 
-    /// Whether an account exists.
-    pub async fn account_exists(&self, account: &str) -> Result<bool, Error> {
+    /// The account's view (balance in `amount`, storage, code hash), or None if there's no such account.
+    pub async fn view_account(&self, account: &str) -> Result<Option<Value>, Error> {
         match self.rpc("query", json!({ "request_type": "view_account", "finality": "optimistic", "account_id": account })).await {
-            Ok(_) => Ok(true),
-            Err(e) if e.contains("UNKNOWN_ACCOUNT") || e.contains("does not exist") => Ok(false),
+            Ok(v) => Ok(Some(v)),
+            Err(e) if e.contains("UNKNOWN_ACCOUNT") || e.contains("does not exist") => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    /// Whether an account exists.
+    pub async fn account_exists(&self, account: &str) -> Result<bool, Error> {
+        Ok(self.view_account(account).await?.is_some())
     }
 
     /// Calls a view method and parses its JSON result.
@@ -313,17 +321,39 @@ impl Client {
         let tx = transaction_bytes(signer, key, nonce, receiver, &block_hash, &call);
         let (signed, tx_hash) = sign(&tx, key);
         let r = self.rpc("send_tx", json!({ "signed_tx_base64": signed, "wait_until": "EXECUTED_OPTIMISTIC" })).await?;
-        let status = &r["status"];
-        if let Some(failure) = status.get("Failure") {
-            return Err(format!("Transaction failed: {}", failure_message(failure)));
-        }
-        let value = status
-            .get("SuccessValue")
-            .and_then(|v| v.as_str())
-            .and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok())
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        Ok(Outcome { tx_hash, value })
+        outcome_from(&r, tx_hash)
     }
+}
+
+/// Reads a sent transaction's result (as `send_tx` or `tx` return it): the method's value, or why it failed.
+pub fn outcome_from(r: &Value, tx_hash: String) -> Result<Outcome, Error> {
+    let status = &r["status"];
+    if let Some(failure) = status.get("Failure") {
+        return Err(format!("Transaction failed: {}", failure_message(failure)));
+    }
+    let value = status
+        .get("SuccessValue")
+        .and_then(|v| v.as_str())
+        .and_then(|b64| base64::engine::general_purpose::STANDARD.decode(b64).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+    Ok(Outcome { tx_hash, value, fee: fee_of(r) })
+}
+
+/// Tokens burnt for gas across the transaction and its receipts, in yoctoNEAR (nearcore reports
+/// each as a decimal string). None if the transaction's own outcome is missing.
+pub fn fee_of(r: &Value) -> Option<u128> {
+    let burnt = |o: &Value| o.pointer("/outcome/tokens_burnt").and_then(|v| v.as_str()).and_then(|s| s.parse::<u128>().ok());
+    let mut fee = burnt(r.get("transaction_outcome")?)?;
+    for receipt in r["receipts_outcome"].as_array().into_iter().flatten() {
+        fee += burnt(receipt).unwrap_or(0);
+    }
+    Some(fee)
+}
+
+/// The 32 bytes of an "ed25519:<base58>" public key.
+pub fn parse_public_key(key: &str) -> Result<[u8; 32], Error> {
+    let data = key.strip_prefix("ed25519:").ok_or("A NEAR public key starts with ed25519:")?;
+    bs58::decode(data).into_vec().map_err(|e| e.to_string())?.try_into().map_err(|_| "A NEAR ed25519 public key is 32 bytes".into())
 }
 
 fn rpc_error(e: &Value) -> String {
@@ -433,6 +463,34 @@ mod tests {
         assert_eq!(again.public_key(), k.public_key());
         assert!(k.public_key().starts_with("ed25519:"));
         assert!(KeyPair::from_secret("secp256k1:abc").is_err());
+    }
+
+    #[test]
+    fn a_sent_transaction_reports_its_value_and_fee() {
+        // The shape of testnet's send_tx reply, trimmed to what's read.
+        let ok = json!({
+            "status": { "SuccessValue": base64::engine::general_purpose::STANDARD.encode(br#"{"ok":true}"#) },
+            "transaction_outcome": { "id": "tx1", "outcome": { "tokens_burnt": "242800000000000000000" } },
+            "receipts_outcome": [
+                { "outcome": { "tokens_burnt": "300000000000000000000" } },
+                { "outcome": { "tokens_burnt": "0" } },
+            ],
+        });
+        let o = outcome_from(&ok, "tx1".into()).unwrap();
+        assert_eq!(o.value, Some(json!({ "ok": true })));
+        assert_eq!(o.fee, Some(542_800_000_000_000_000_000));
+        // No outcomes in the reply: the fee is unknown, not zero.
+        assert_eq!(outcome_from(&json!({ "status": { "SuccessValue": "" } }), "t".into()).unwrap().fee, None);
+        let failed = json!({ "status": { "Failure": { "ActionError": { "kind": { "FunctionCallError": { "ExecutionError": "Smart contract panicked: PROOF_EXISTS" } } } } } });
+        assert_eq!(outcome_from(&failed, "t".into()).unwrap_err(), "Transaction failed: PROOF_EXISTS");
+    }
+
+    #[test]
+    fn public_keys_parse_from_near_format() {
+        let k = KeyPair::generate();
+        assert_eq!(parse_public_key(&k.public_key()).unwrap(), k.public_bytes());
+        assert!(parse_public_key("secp256k1:abc").is_err());
+        assert!(parse_public_key("ed25519:abc").is_err());
     }
 
     #[test]

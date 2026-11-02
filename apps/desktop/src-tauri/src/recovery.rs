@@ -6,6 +6,11 @@
 //! - the backup key is HKDF-SHA256 over the BIP39 seed, used with XChaCha20-Poly1305.
 //!
 //! The phrase is never stored or logged. Only the two derived keys go to the Keychain.
+//!
+//! Separately, `new_wallet` makes a phrase for a brand-new NEAR account (Set up payments,
+//! "Create one"): its key is at `WALLET_KEY_PATH`, where wallet apps such as Meteor look
+//! when the phrase is imported. That phrase and its private key are never stored: only the
+//! words (to show once) and the public key go back to the interface.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -25,6 +30,9 @@ use crate::near;
 /// NEAR's coin type (397) with an app-only branch. A NEAR wallet's own phrase derives its
 /// full-access key at m/44'/397'/0', so entering one here never yields that key.
 pub const APP_KEY_PATH: [u32; 4] = [44, 397, 0, 1];
+/// Where NEAR wallets derive an account's full-access key from its phrase (Meteor, MyNearWallet
+/// and near-cli-rs's seed-phrase default). Used only for an account Aftercall helps create.
+pub const WALLET_KEY_PATH: [u32; 3] = [44, 397, 0];
 const HARDENED: u32 = 0x8000_0000;
 
 const KEYCHAIN_SERVICE: &str = "dev.aftercall.app";
@@ -85,6 +93,38 @@ pub fn app_key_from(mnemonic: &Mnemonic) -> Result<KeyPair, String> {
     let private = slip10_ed25519(seed(mnemonic).as_ref(), &APP_KEY_PATH);
     let secret = Zeroizing::new(format!("ed25519:{}", bs58::encode(private.as_ref()).into_string()));
     KeyPair::from_secret(&secret)
+}
+
+/// The NEAR account key a wallet app derives from this phrase (`WALLET_KEY_PATH`).
+pub fn wallet_key_from(mnemonic: &Mnemonic) -> Result<KeyPair, String> {
+    let private = slip10_ed25519(seed(mnemonic).as_ref(), &WALLET_KEY_PATH);
+    let secret = Zeroizing::new(format!("ed25519:{}", bs58::encode(private.as_ref()).into_string()));
+    KeyPair::from_secret(&secret)
+}
+
+/// A phrase for a new NEAR account and the public key a wallet will derive from it. The
+/// phrase is wiped from this side's memory when the value is dropped (after it's sent to
+/// the interface); the private key never leaves `new_wallet`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewWallet {
+    pub phrase: String,
+    pub public_key: String,
+}
+
+impl Drop for NewWallet {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.phrase.zeroize();
+    }
+}
+
+/// A new 12-word phrase for a NEAR account, with the public key at the wallet path. Nothing is
+/// stored: not the phrase, not the key, not in the Keychain, not on disk.
+pub fn new_wallet() -> Result<NewWallet, String> {
+    let phrase = Zeroizing::new(new_phrase()?);
+    let key = wallet_key_from(&parse_phrase(&phrase)?)?;
+    Ok(NewWallet { phrase: phrase.to_string(), public_key: key.public_key() })
 }
 
 pub fn backup_key_from(mnemonic: &Mnemonic) -> Zeroizing<[u8; 32]> {
@@ -389,6 +429,32 @@ mod tests {
         // Not the key a NEAR wallet derives from the same phrase (m/44'/397'/0').
         let wallet = slip10_ed25519(seed(&parse_phrase(ABANDON).unwrap()).as_ref(), &[44, 397, 0]);
         assert_ne!(slip10_ed25519(seed(&parse_phrase(ABANDON).unwrap()).as_ref(), &APP_KEY_PATH), wallet);
+    }
+
+    #[test]
+    fn wallet_key_is_the_one_near_wallets_derive() {
+        // near-cli-rs 0.30.1, offline: `near account create-account fund-later use-seed-phrase
+        // '<ABANDON>' --seed-phrase-hd-path "m/44'/397'/0'"` gives this public key.
+        let key = wallet_key_from(&parse_phrase(ABANDON).unwrap()).unwrap();
+        assert_eq!(key.public_key(), "ed25519:6j4b6zUaty6fD1awqcGCCU9JYGCWYUgdJhQrzfZhqE25");
+        // Aftercall's own key (m/44'/397'/0'/1') from the same words is a different key.
+        let app = app_key_from(&parse_phrase(ABANDON).unwrap()).unwrap();
+        assert_ne!(app.public_key(), key.public_key());
+        assert_eq!(WALLET_KEY_PATH, APP_KEY_PATH[..3]);
+        assert_ne!(WALLET_KEY_PATH.len(), APP_KEY_PATH.len());
+    }
+
+    #[test]
+    fn a_new_wallet_is_12_words_and_its_own_public_key() {
+        let w = new_wallet().unwrap();
+        assert_eq!(w.phrase.split(' ').count(), 12);
+        let m = parse_phrase(&w.phrase).unwrap();
+        assert_eq!(wallet_key_from(&m).unwrap().public_key(), w.public_key);
+        assert_ne!(app_key_from(&m).unwrap().public_key(), w.public_key);
+        // Only the phrase and the public key go to the interface.
+        let sent = serde_json::to_value(&w).unwrap();
+        assert_eq!(sent.as_object().unwrap().keys().collect::<Vec<_>>(), ["phrase", "publicKey"]);
+        assert_ne!(new_wallet().unwrap().phrase, w.phrase);
     }
 
     #[test]

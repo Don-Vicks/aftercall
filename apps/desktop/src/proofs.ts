@@ -1,6 +1,7 @@
 import { proofHash } from "@aftercall/core";
 import { near } from "./near";
 import { recordingFiles, serializeNotes, type SavedNotes } from "./nearai";
+import { noteProofRecorded } from "./firstProof";
 
 /**
  * Whether this Mac can record a proof right now: ready (account saved, wallet
@@ -24,17 +25,21 @@ export async function proofReadiness(): Promise<ProofReadiness> {
   }
 }
 
-/** Records the proof hash on NEAR and saves where it went into notes.json. */
+/**
+ * Records the proof hash on NEAR and saves where it went (and its fee) into notes.json. The
+ * first proof from this Mac is noted, so that meeting shows "Your first NEAR transaction".
+ */
 export async function recordProof(recordingId: string, saved: SavedNotes): Promise<SavedNotes> {
   const config = await near.getConfig();
   if (!config) throw new Error("Connect your NEAR account in Settings first.");
   const hash = proofHash(saved.proof);
-  const txHash = await near.recordProof(saved.proof.meetingId, hash, saved.proof.summaryModel);
+  const { txHash, fee } = await near.recordProof(saved.proof.meetingId, hash, saved.proof.summaryModel);
   const updated: SavedNotes = {
     ...saved,
-    onChain: { network: config.network, contract: config.contract, owner: config.account, txHash, proofHash: hash },
+    onChain: { network: config.network, contract: config.contract, owner: config.account, txHash, proofHash: hash, ...(fee ? { fee } : {}) },
   };
   await recordingFiles.saveNotes(recordingId, serializeNotes(updated));
+  await noteProofRecorded(recordingId);
   return updated;
 }
 

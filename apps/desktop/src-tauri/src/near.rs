@@ -193,8 +193,17 @@ pub async fn status(config: &NearConfig) -> Result<NearStatus, String> {
     Ok(NearStatus { public_key: key.public_key(), key_added, key_problem, registered })
 }
 
-/// Records a meeting's proof hash; returns the transaction hash.
-pub async fn record_proof(config: &NearConfig, meeting_id: &str, proof_hash: &str, model: &str) -> Result<String, String> {
+/// A recorded proof's transaction, and what it cost.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProofTx {
+    pub tx_hash: String,
+    /// Tokens burnt for gas, in yoctoNEAR, paid from this Mac's key allowance. None if NEAR didn't say.
+    pub fee: Option<String>,
+}
+
+/// Records a meeting's proof hash; returns the transaction hash and its fee.
+pub async fn record_proof(config: &NearConfig, meeting_id: &str, proof_hash: &str, model: &str) -> Result<ProofTx, String> {
     let args = json!({ "meeting_id": meeting_id, "proof_hash": proof_hash, "model": model });
     let outcome = client(config)
         .call(
@@ -205,7 +214,113 @@ pub async fn record_proof(config: &NearConfig, meeting_id: &str, proof_hash: &st
         )
         .await
         .map_err(|e| plain(config, e))?;
-    Ok(outcome.tx_hash)
+    Ok(ProofTx { tx_hash: outcome.tx_hash, fee: outcome.fee.map(|f| f.to_string()) })
+}
+
+// ---------- A new testnet account ----------
+
+/// NEAR testnet's account helper: the `faucet_url` near-cli-rs posts to for
+/// `account create-account sponsor-by-faucet-service` (its built-in testnet config, and
+/// `~/Library/Application Support/near-cli/config.toml`). It creates `<name>.testnet` with the
+/// given full-access public key and funds it with test NEAR. Testnet only; mainnet has none.
+pub const TESTNET_HELPER_URL: &str = "https://helper.nearprotocol.com/account";
+
+/// Why `<name>.testnet` can't be a new account, or None if it can. The helper makes names
+/// directly under `testnet`, so the name has no dots. Mirrors `newTestnetNameProblem` in
+/// packages/core, which the interface shows as you type.
+pub fn new_testnet_name_problem(account: &str) -> Option<String> {
+    let Some(name) = account.strip_suffix(".testnet") else { return Some("A new testnet account ends in .testnet.".into()) };
+    if name.is_empty() {
+        return Some("Type a name.".into());
+    }
+    if name.len() < 2 {
+        return Some("Use at least 2 characters.".into());
+    }
+    if name.len() > 56 {
+        return Some("Use at most 56 characters.".into());
+    }
+    if name.contains('.') {
+        return Some("Use one name with no dots.".into());
+    }
+    if let Some(c) = name.chars().find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_')) {
+        return Some(if c.is_ascii_uppercase() { "Use lowercase letters.".into() } else { format!("“{c}” can't be in a NEAR name. Use a–z, 0–9, - and _.") });
+    }
+    let sep = |c: char| c == '-' || c == '_';
+    if name.starts_with(sep) || name.ends_with(sep) || name.contains("--") || name.contains("__") || name.contains("-_") || name.contains("_-") {
+        return Some("- and _ go between letters or digits, one at a time.".into());
+    }
+    None
+}
+
+/// Read-only: is `<name>.testnet` free to create? An error says why the name can't be used.
+pub async fn testnet_name_free(account: &str) -> Result<bool, String> {
+    if let Some(problem) = new_testnet_name_problem(account) {
+        return Err(problem);
+    }
+    Ok(!Client::testnet().account_exists(account).await?)
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedAccount {
+    pub account_id: String,
+    /// The helper's create_account transaction, when its reply named it.
+    pub tx_hash: Option<String>,
+    /// The new account's balance in yoctoNEAR, read back from NEAR once it exists.
+    pub balance: Option<String>,
+}
+
+/// Asks the testnet helper to create `account` with `public_key` as its full-access key, through
+/// `post` (the real one is `helper_post`; tests pass a stub, so nothing is created). Reads the
+/// reply as near-cli-rs does: a transaction result whose value is `false` when nothing was made.
+pub async fn create_testnet_account<F, Fut>(account: &str, public_key: &str, post: F) -> Result<CreatedAccount, String>
+where
+    F: FnOnce(Value) -> Fut,
+    Fut: std::future::Future<Output = Result<(u16, Value), String>>,
+{
+    if let Some(problem) = new_testnet_name_problem(account) {
+        return Err(problem);
+    }
+    near_tx::parse_public_key(public_key)?;
+    let (status, body) = post(json!({ "newAccountId": account, "newAccountPublicKey": public_key })).await?;
+    let said = body.as_str().map(|s| s.trim().chars().take(160).collect::<String>()).filter(|s| !s.is_empty());
+    if status >= 400 {
+        return Err(match said {
+            Some(why) => format!("NEAR's testnet helper didn't create {account}: {why}"),
+            None => format!("NEAR's testnet helper didn't create {account} (it answered {status}). Try again in a minute."),
+        });
+    }
+    // near-cli-rs reads this as an RPC transaction response, its outcome flattened in.
+    let tx = body.get("final_execution_outcome").unwrap_or(&body);
+    let Some(result) = tx.get("status") else {
+        return Err(format!("NEAR's testnet helper answered, but not with a transaction. Check {account} on NEAR before trying again."));
+    };
+    if let Some(failure) = result.get("Failure") {
+        return Err(format!("NEAR refused to create {account}: {failure}"));
+    }
+    let tx_hash = tx.pointer("/transaction_outcome/id").or_else(|| tx.pointer("/transaction/hash")).and_then(|v| v.as_str()).map(String::from);
+    let value = result.get("SuccessValue").and_then(|v| v.as_str()).and_then(|b64| {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.decode(b64).ok()
+    });
+    if value.as_deref() == Some(b"false") {
+        return Err(format!("{account} wasn't created. Someone may have just taken the name: pick another."));
+    }
+    Ok(CreatedAccount { account_id: account.to_string(), tx_hash, balance: None })
+}
+
+/// The real call to the testnet helper. Only `near_create_testnet_account` uses it.
+pub async fn helper_post(body: Value) -> Result<(u16, Value), String> {
+    let http = reqwest::Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
+    let response = http.post(TESTNET_HELPER_URL).json(&body).send().await.map_err(|e| format!("NEAR's testnet helper couldn't be reached: {e}"))?;
+    let status = response.status().as_u16();
+    let text = response.text().await.unwrap_or_default();
+    Ok((status, serde_json::from_str(&text).unwrap_or(Value::String(text))))
+}
+
+/// The account's balance in yoctoNEAR, or None if it isn't on testnet (yet).
+pub async fn testnet_balance(account: &str) -> Result<Option<String>, String> {
+    Ok(Client::testnet().view_account(account).await?.and_then(|v| v["amount"].as_str().map(String::from)))
 }
 
 const PAY_GAS: u64 = 100_000_000_000_000;
@@ -386,6 +501,83 @@ mod tests {
         assert_eq!(none.contract, "missing");
         assert_eq!(check_setup(&c("victor.testnet")).await.unwrap().contract, "missing");
         assert_eq!(check_setup(&c(Network::Testnet.usdc())).await.unwrap().contract, "wrong");
+    }
+
+    #[test]
+    fn new_testnet_names_follow_near_rules() {
+        for ok in ["victor.testnet", "ada-lovelace.testnet", "a1_b2.testnet", "42.testnet", &format!("{}.testnet", "a".repeat(56))] {
+            assert_eq!(new_testnet_name_problem(ok), None, "{ok}");
+        }
+        let problem = |id: &str| new_testnet_name_problem(id).unwrap();
+        assert!(problem("victor.near").contains("ends in .testnet"));
+        assert!(problem(".testnet").contains("Type a name"));
+        assert!(problem("v.testnet").contains("at least 2"));
+        assert!(problem(&format!("{}.testnet", "a".repeat(57))).contains("at most 56"));
+        assert!(problem("me.victor.testnet").contains("no dots"));
+        assert!(problem("Victor.testnet").contains("lowercase"));
+        assert!(problem("vic tor.testnet").contains("can't be in a NEAR name"));
+        assert!(problem("víctor.testnet").contains("can't be in a NEAR name"));
+        for bad in ["-victor.testnet", "victor_.testnet", "vic--tor.testnet", "vic-_tor.testnet"] {
+            assert!(problem(bad).contains("one at a time"), "{bad}");
+        }
+    }
+
+    const PK: &str = "ed25519:6j4b6zUaty6fD1awqcGCCU9JYGCWYUgdJhQrzfZhqE25";
+
+    /// The helper's reply as near-cli-rs reads it: an RPC transaction response.
+    fn helper_reply(value: &[u8]) -> Value {
+        use base64::Engine as _;
+        json!({
+            "final_execution_status": "EXECUTED",
+            "status": { "SuccessValue": base64::engine::general_purpose::STANDARD.encode(value) },
+            "transaction": { "hash": "HelperTx111" },
+            "transaction_outcome": { "id": "HelperTx111", "outcome": { "tokens_burnt": "1" } },
+        })
+    }
+
+    #[tokio::test]
+    async fn creating_a_testnet_account_sends_the_name_and_key_and_reads_the_reply() {
+        // A stub stands in for the helper: nothing is created anywhere.
+        let sent = std::sync::Mutex::new(None);
+        let created = create_testnet_account("ada.testnet", PK, |body| {
+            *sent.lock().unwrap() = Some(body);
+            async { Ok((200, helper_reply(b"true"))) }
+        })
+        .await
+        .unwrap();
+        assert_eq!(sent.into_inner().unwrap(), Some(json!({ "newAccountId": "ada.testnet", "newAccountPublicKey": PK })));
+        assert_eq!(created, CreatedAccount { account_id: "ada.testnet".into(), tx_hash: Some("HelperTx111".into()), balance: None });
+    }
+
+    #[tokio::test]
+    async fn a_refused_or_odd_helper_reply_is_an_error_in_words() {
+        let reply = |status: u16, body: Value| move |_body: Value| async move { Ok((status, body)) };
+        let taken = create_testnet_account("ada.testnet", PK, reply(200, helper_reply(b"false"))).await.unwrap_err();
+        assert!(taken.contains("pick another"), "{taken}");
+        let down = create_testnet_account("ada.testnet", PK, reply(500, Value::Null)).await.unwrap_err();
+        assert!(down.contains("answered 500"), "{down}");
+        let said = create_testnet_account("ada.testnet", PK, reply(400, json!("Account ada.testnet already exists"))).await.unwrap_err();
+        assert!(said.ends_with("Account ada.testnet already exists"), "{said}");
+        let odd = create_testnet_account("ada.testnet", PK, reply(200, json!({ "ok": true }))).await.unwrap_err();
+        assert!(odd.contains("not with a transaction"), "{odd}");
+        let failed = create_testnet_account("ada.testnet", PK, reply(200, json!({ "status": { "Failure": { "ActionError": {} } } }))).await.unwrap_err();
+        assert!(failed.contains("refused"), "{failed}");
+    }
+
+    #[tokio::test]
+    async fn nothing_is_sent_for_a_bad_name_or_key() {
+        let never = |_body: Value| async { panic!("the helper must not be called") };
+        assert!(create_testnet_account("Ada.testnet", PK, never).await.is_err());
+        assert!(create_testnet_account("ada.near", PK, never).await.is_err());
+        assert!(create_testnet_account("ada.testnet", "ed25519:short", never).await.is_err());
+    }
+
+    /// Read-only, against testnet's RPC: `cargo test -- --ignored name_free`.
+    #[tokio::test]
+    #[ignore]
+    async fn name_free_reads_testnet() {
+        assert_eq!(testnet_name_free("aftercall.testnet").await.unwrap(), false);
+        assert!(testnet_name_free("Bad.testnet").await.is_err());
     }
 
     #[test]

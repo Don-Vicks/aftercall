@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, type Variant } from "motion/react";
 import * as m from "motion/react-m";
 import { Archive, ArrowRight, Check, KeyRound, Lock, X } from "lucide-react";
@@ -37,16 +37,74 @@ export function useNewPhrase() {
   return { phrase, words, ask, error, load, forget: () => setPhrase(null) };
 }
 
+/**
+ * What a phrase screen says, so the two phrases never look alike: Aftercall's own (this
+ * Mac's limited key, the default) and a new NEAR account's (CreateAccount.tsx).
+ */
+export interface PhraseWords {
+  icon: ReactNode;
+  title: string;
+  intro: ReactNode;
+  /** Whose phrase this is, for screen readers ("NEAR wallet phrase"). */
+  name: string;
+  /** Over the words: whose phrase this is. */
+  label: ReactNode;
+  /** Under the words: what Aftercall does with them, and why paper. */
+  notes: ReactNode;
+}
+
+/** Aftercall's own recovery phrase. `afterWallet` when a NEAR account's phrase was just written down too. */
+export function appPhraseWords(count: number, afterWallet = false): PhraseWords {
+  return {
+    icon: <KeyRound size={22} strokeWidth={1.75} />,
+    title: `Write these ${count} words down`,
+    intro: afterWallet
+      ? "A second phrase, and a different one: Aftercall's own, for this Mac's limited key. These words bring that key back on a new Mac. On paper, in order."
+      : "This Mac gets its own NEAR key for proofs and payments. These words bring it back on a new Mac. On paper, in order.",
+    name: "Aftercall recovery phrase",
+    label: (
+      <>
+        Aftercall recovery phrase <span className="text-muted">· this Mac's key</span>
+      </>
+    ),
+    notes: (
+      <>
+        <p className="m-0 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2">
+          <Lock size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
+          Aftercall never stores the phrase, so it can't show these words again.
+        </p>
+        <Why label="Why on paper?">
+          Anyone with these words can use this Mac's key, within your contract's limits. Don't photograph them or paste them anywhere.
+        </Why>
+      </>
+    ),
+  };
+}
+
 /** Step: the words, once, and a tick that they're on paper. */
-export function PhraseStep({ words, error, onBack, onContinue }: { words: string[]; error: string | null; onBack: () => void; onContinue: () => void }) {
+export function PhraseStep({
+  words,
+  error,
+  says,
+  onBack,
+  onContinue,
+}: {
+  words: string[];
+  error: string | null;
+  /** What the screen says; Aftercall's own phrase unless given. */
+  says?: PhraseWords;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
   const [wrote, setWrote] = useState(false);
   const count = words.length || 12;
   const tickLabel = useId();
+  const say = says ?? appPhraseWords(count);
   return (
     <AssistantStep
-      icon={<KeyRound size={22} strokeWidth={1.75} />}
-      title={`Write these ${count} words down`}
-      intro="This Mac gets its own NEAR key for proofs and payments. These words bring it back on a new Mac. On paper, in order."
+      icon={say.icon}
+      title={say.title}
+      intro={say.intro}
       back={<BackButton onClick={onBack} />}
       primary={
         <Button variant="primary" disabled={!wrote} onClick={onContinue}>
@@ -61,26 +119,23 @@ export function PhraseStep({ words, error, onBack, onContinue }: { words: string
         ) : words.length === 0 ? (
           <Spinner label="Making your phrase" />
         ) : (
-          <ol aria-label="Recovery phrase" className="m-0 grid list-none grid-cols-3 gap-1.5 rounded-md bg-well p-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
-            {words.map((w, i) => (
-              <li
-                key={i}
-                className="flex items-baseline gap-2.5 rounded-sm bg-elevated px-3 py-2 shadow-1"
-                style={{ animation: `ac-in 280ms ${120 + i * 25}ms var(--ease) both` }}
-              >
-                <span className="w-[18px] shrink-0 text-right font-mono text-xs text-muted">{nn(i + 1)}</span>
-                <span className="selectable font-mono text-[14px] leading-5 whitespace-nowrap text-ink">{w}</span>
-              </li>
-            ))}
-          </ol>
+          <div className="flex flex-col rounded-md bg-well shadow-[inset_0_0_0_1px_var(--hairline)]">
+            <span className="t-eyebrow px-3.5 pt-2.5 pb-0.5 text-ink-2">{say.label}</span>
+            <ol aria-label={say.name} className="m-0 grid list-none grid-cols-3 gap-1.5 p-2.5">
+              {words.map((w, i) => (
+                <li
+                  key={i}
+                  className="flex items-baseline gap-2.5 rounded-sm bg-elevated px-3 py-2 shadow-1"
+                  style={{ animation: `ac-in 280ms ${120 + i * 25}ms var(--ease) both` }}
+                >
+                  <span className="w-[18px] shrink-0 text-right font-mono text-xs text-muted">{nn(i + 1)}</span>
+                  <span className="selectable font-mono text-[14px] leading-5 whitespace-nowrap text-ink">{w}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
-        <p className="m-0 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2">
-          <Lock size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
-          Aftercall never stores the phrase, so it can't show these words again.
-        </p>
-        <Why label="Why on paper?">
-          Anyone with these words can use this Mac's key, within your contract's limits. Don't photograph them or paste them anywhere.
-        </Why>
+        {say.notes}
       </div>
       <Card interactive onClick={() => words.length && setWrote(!wrote)} pad="none" style={rise(2)}>
         <div className="flex items-center gap-3 px-4 py-3">
@@ -110,6 +165,9 @@ export function ConfirmStep({
   ask,
   busy,
   error,
+  intro = "Type three of your words from the paper, not from memory: one from each third.",
+  icon = <KeyRound size={22} strokeWidth={1.75} />,
+  confirmLabel = "Continue",
   onBack,
   onConfirm,
 }: {
@@ -117,6 +175,10 @@ export function ConfirmStep({
   ask: number[];
   busy: boolean;
   error: string | null;
+  intro?: ReactNode;
+  icon?: ReactNode;
+  /** The primary button, once all three match. */
+  confirmLabel?: string;
   onBack: () => void;
   onConfirm: () => void;
 }) {
@@ -141,13 +203,13 @@ export function ConfirmStep({
 
   return (
     <AssistantStep
-      icon={<KeyRound size={22} strokeWidth={1.75} />}
+      icon={icon}
       title="Check you have them"
-      intro="Type three of your words from the paper, not from memory: one from each third."
+      intro={intro}
       back={<BackButton onClick={onBack}>Show words again</BackButton>}
       primary={
         <Button variant="primary" disabled={!all} loading={busy} onClick={onConfirm}>
-          Continue
+          {confirmLabel}
           <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
         </Button>
       }

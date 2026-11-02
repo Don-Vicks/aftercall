@@ -1,8 +1,8 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowRight, Check, Clock, Coins, ExternalLink, FlaskConical, Laptop, Link2, Lock, ShieldCheck, UserCheck, UserPlus, UserRound, Wallet } from "lucide-react";
-import { exampleAccount, formatUsdc } from "@aftercall/core";
-import { KEY_ALLOWANCE, KEY_METHODS, REGISTER_DEPOSIT, near, type NearConfig, type WalletView } from "./near";
+import { ArrowRight, Check, Clock, Coins, Cpu, ExternalLink, FlaskConical, Globe, KeyRound, Laptop, Link2, Lock, ShieldCheck, UserCheck, UserPlus, UserRound, Wallet } from "lucide-react";
+import { exampleAccount, explorerAccountUrl, formatUsdc } from "@aftercall/core";
+import { KEY_ALLOWANCE, KEY_METHODS, REGISTER_DEPOSIT, builtInContract, near, type NearConfig, type WalletView } from "./near";
 import type { NearSetup } from "./nearSetup";
 import { isDesktop } from "./recorder";
 import { recovery } from "./recovery";
@@ -10,8 +10,10 @@ import { CheckCircle } from "./primitives/Check";
 import { Button, Card, Field, Input, Select, Spinner, cx, toast } from "./ui";
 import { IconDisc, Pop, Why, errorText, rise } from "./SettingsParts";
 import { AmountSheet, PayeeSheet, useWalletSigning } from "./WalletScreen";
-import { AssistantSheet, AssistantStep, BackButton, DetailRow, Inset, LaterButton, LinkButton } from "./SetupAssistant";
-import { ConfirmStep, PhraseStep, useNewPhrase } from "./RecoveryPhrase";
+import { AssistantSheet, AssistantStep, BackButton, DetailRow, GuideRow, Inset, LaterButton, LinkButton, openLink } from "./SetupAssistant";
+import { ConfirmStep, PhraseStep, appPhraseWords, useNewPhrase } from "./RecoveryPhrase";
+import { CreateNameStep, CreatingStep, ImportStep, useWalletPhrase, walletPhraseWords } from "./CreateAccount";
+import { METEOR_URL, nearAccount, type CreatedAccount } from "./nearAccount";
 
 export type SetupStep = "intro" | "account" | "phrase" | "confirm" | "register" | "authorise" | "finish";
 
@@ -19,11 +21,16 @@ export type SetupStep = "intro" | "account" | "phrase" | "confirm" | "register" 
 const PHASES = ["NEAR account", "Recovery phrase", "Agent wallet", "This Mac", "Before paying"] as const;
 const PHASE: Record<SetupStep, number | null> = { intro: null, account: 0, phrase: 1, confirm: 1, register: 2, authorise: 3, finish: 4 };
 
-/** Where the account step starts: the question, the field, or the guide to making one. */
-type AccountMode = "ask" | "have" | "create";
+/**
+ * Where the account step stands: the question, the field, making one in Aftercall
+ * ("create", the default for "Create one"), or the guide to making one in Meteor ("wallet-app").
+ */
+type AccountMode = "ask" | "have" | "create" | "wallet-app";
+
+/** Making an account in Aftercall: the name, its phrase, three words back, the helper at work, then Meteor. */
+type CreateStep = "name" | "words" | "check" | "creating" | "import";
 
 /** Checked against the NEAR Connect wallet list (features.testnet) and the sites themselves, 2 Nov 2026. */
-const METEOR_URL = "https://wallet.meteorwallet.app";
 const FAUCET_URL = "https://docs.near.org/getting-started/faucet";
 
 /**
@@ -47,6 +54,41 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
   useEffect(() => {
     if (step === "phrase" && !phrase.phrase && !phrase.error) phrase.load();
   }, [step]);
+
+  // A new account, made here. Its phrase is held in this component's state only, and dropped
+  // as soon as three words are typed back; the public key stays for a retry with another name.
+  const [createStep, setCreateStep] = useState<CreateStep>("name");
+  const [newName, setNewName] = useState("");
+  const wallet = useWalletPhrase();
+  const [created, setCreated] = useState<CreatedAccount | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  /** An account was made in this visit, so Aftercall's own phrase screen says it's a second one. */
+  const madeHere = created !== null;
+  useEffect(() => {
+    if (step === "account" && mode === "create" && createStep === "words" && !wallet.phrase && !wallet.error) wallet.load();
+  }, [step, mode, createStep]);
+
+  const createAccount = async () => {
+    const key = wallet.publicKey;
+    if (!key) return;
+    // The words are on paper and checked: Aftercall lets go of them before anything is sent.
+    wallet.forget();
+    setCreateError(null);
+    setCreateStep("creating");
+    try {
+      const made = await nearAccount.create(`${newName}.testnet`, key);
+      setCreated(made);
+      n.edit({ network: "testnet", account: made.accountId, contract: builtInContract("testnet") ?? "" });
+      setCreateStep("import");
+    } catch (e) {
+      setCreateError(errorText(e));
+    }
+  };
+
+  /** "I've imported it": the usual account check (and save), then on to Aftercall's own phrase. */
+  const imported = async () => {
+    if (await n.check()) go(fromPhrase ? afterKey() : "phrase");
+  };
 
   // The phrase lives only in this component's state, so closing drops it. (No state
   // change here: a re-render while the dialog animates out would draw it twice.)
@@ -76,23 +118,74 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
     close();
   };
 
+  const wordsOrMaking = createStep === "words" || createStep === "check" || (createStep === "creating" && !createError);
   const phase = PHASE[step];
   return (
     <AssistantSheet
       label="Set up payments"
       phase={phase === null ? null : { index: phase, names: PHASES }}
-      // Escape doesn't throw away words on screen, or a signature you're waiting on.
-      dismissible={step !== "phrase" && step !== "confirm" && !n.waiting}
-      busy={saving}
+      // Escape doesn't throw away words on screen, an account being made, or a signature you're waiting on.
+      dismissible={step !== "phrase" && step !== "confirm" && !(step === "account" && mode === "create" && wordsOrMaking) && !n.waiting}
+      busy={saving || (step === "account" && mode === "create" && createStep === "creating" && !createError)}
       onClose={close}
     >
       {step === "intro" && <IntroStep key="intro" n={n} onLater={close} onNext={() => go("account")} />}
       {step === "account" && mode === "ask" && <AskStep key="ask" onBack={() => go("intro")} onPick={setMode} />}
-      {step === "account" && mode === "create" && (
-        <CreateGuide
-          key="create"
-          n={n}
+      {step === "account" && mode === "create" && createStep === "name" && (
+        <CreateNameStep
+          key="create-name"
+          name={newName}
+          onName={setNewName}
           onBack={() => setMode("ask")}
+          // Words already written down and checked (a retry with another name) go straight to the helper.
+          onNext={() => (wallet.publicKey && !wallet.phrase ? createAccount() : setCreateStep("words"))}
+          onWalletApp={() => setMode("wallet-app")}
+        />
+      )}
+      {step === "account" && mode === "create" && createStep === "words" && (
+        <PhraseStep
+          key="create-words"
+          words={wallet.words}
+          error={wallet.error}
+          says={walletPhraseWords(`${newName}.testnet`)}
+          onBack={() => {
+            // Back to the name drops these words; a new set is made next time.
+            wallet.forget();
+            setCreateStep("name");
+          }}
+          onContinue={() => setCreateStep("check")}
+        />
+      )}
+      {step === "account" && mode === "create" && createStep === "check" && (
+        <ConfirmStep
+          key="create-check"
+          words={wallet.words}
+          ask={wallet.ask}
+          busy={false}
+          error={null}
+          intro={
+            <>
+              Type three of your wallet's words from the paper: one from each third. Then Aftercall forgets them and creates{" "}
+              <span className="font-mono text-[13px] text-ink">{newName}.testnet</span>.
+            </>
+          }
+          icon={<Wallet size={22} strokeWidth={1.75} />}
+          confirmLabel="Create account"
+          onBack={() => setCreateStep("words")}
+          onConfirm={createAccount}
+        />
+      )}
+      {step === "account" && mode === "create" && createStep === "creating" && (
+        <CreatingStep key="create-creating" account={`${newName}.testnet`} error={createError} onRetry={createAccount} onRename={() => setCreateStep("name")} />
+      )}
+      {step === "account" && mode === "create" && createStep === "import" && created && (
+        <ImportStep key="create-import" created={created} checking={n.checking} error={n.error && n.errorFrom === "check" ? n.error : null} onNext={imported} />
+      )}
+      {step === "account" && mode === "wallet-app" && (
+        <CreateGuide
+          key="wallet-app"
+          n={n}
+          onBack={() => setMode("create")}
           onMade={() => {
             if (n.config.network !== "testnet") n.edit({ ...n.config, network: "testnet" });
             setMode("have");
@@ -103,7 +196,14 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
         <AccountStep key="have" n={n} onBack={() => setMode("ask")} onCreate={() => setMode("create")} onNext={() => go(fromPhrase ? "register" : "phrase")} />
       )}
       {step === "phrase" && (
-        <PhraseStep key="phrase" words={phrase.words} error={phrase.error} onBack={() => go("account")} onContinue={() => go("confirm")} />
+        <PhraseStep
+          key="phrase"
+          words={phrase.words}
+          error={phrase.error}
+          says={appPhraseWords(phrase.words.length || 12, madeHere)}
+          onBack={() => go("account")}
+          onContinue={() => go("confirm")}
+        />
       )}
       {step === "confirm" && (
         <ConfirmStep key="confirm" words={phrase.words} ask={phrase.ask} busy={saving} error={keyError} onBack={() => go("phrase")} onConfirm={confirmWords} />
@@ -123,7 +223,7 @@ function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; 
     <AssistantStep
       icon={<Link2 size={22} strokeWidth={1.75} />}
       title="Proofs and payments on NEAR"
-      intro="Optional: your notes work without it. Connecting a NEAR account adds two things."
+      intro="Optional: your notes work without it. A NEAR account adds two things."
       back={<LaterButton onClick={onLater}>Not now</LaterButton>}
       primary={
         <Button variant="primary" onClick={onNext}>
@@ -132,7 +232,9 @@ function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; 
         </Button>
       }
     >
-      <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0" style={rise(1)}>
+      <WhatIsNear style={rise(1)} />
+
+      <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0" style={rise(2)}>
         <Benefit icon={<ShieldCheck size={16} strokeWidth={1.75} />} title="A proof for each meeting">
           A public record anyone can check: a hash of the notes and the model's name. Never what was said.
         </Benefit>
@@ -141,7 +243,7 @@ function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; 
         </Benefit>
       </ul>
 
-      <dl className="m-0 grid grid-cols-3 gap-2" style={rise(2)}>
+      <dl className="m-0 grid grid-cols-3 gap-2" style={rise(3)}>
         <Fact icon={<Clock size={14} strokeWidth={1.75} />} label="Time" value="About 5 min" note="Two signatures" />
         <Fact icon={<Coins size={14} strokeWidth={1.75} />} label="Cost" value="0.35 NEAR" mono note={`${REGISTER_DEPOSIT.replace(" NEAR", "")} storage + ${KEY_ALLOWANCE.replace(" NEAR", "")} fees`} />
         <Fact
@@ -152,7 +254,7 @@ function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; 
         />
       </dl>
 
-      <section aria-labelledby="ahead-h" className="flex flex-col gap-2.5" style={rise(3)}>
+      <section aria-labelledby="ahead-h" className="flex flex-col gap-2.5" style={rise(4)}>
         <h2 id="ahead-h" className="t-section m-0 text-ink">
           What you'll do
         </h2>
@@ -173,6 +275,38 @@ function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; 
         </ol>
       </section>
     </AssistantStep>
+  );
+}
+
+/** Four plain lines for someone who has never used NEAR, two by two. */
+function WhatIsNear({ style }: { style?: CSSProperties }) {
+  const lines: [ReactNode, ReactNode][] = [
+    [
+      <Globe size={14} strokeWidth={1.75} />,
+      <>
+        A public network with names you can read, like <span className="font-mono text-[12px] text-ink">yourname.testnet</span>.
+      </>,
+    ],
+    [<KeyRound size={14} strokeWidth={1.75} />, "Your account is yours: your wallet holds its keys, not Aftercall."],
+    [<Link2 size={14} strokeWidth={1.75} />, "Aftercall uses it for a public proof per meeting and an agent wallet with caps."],
+    [<Cpu size={14} strokeWidth={1.75} />, "NEAR AI Cloud, where your notes are made, runs on secure hardware."],
+  ];
+  return (
+    <section aria-labelledby="what-near" className="flex flex-col gap-2.5 rounded-md px-4 pt-3 pb-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]" style={style}>
+      <h2 id="what-near" className="t-eyebrow m-0 text-muted">
+        What is NEAR?
+      </h2>
+      <ul className="m-0 grid list-none grid-cols-2 gap-x-5 gap-y-2 p-0">
+        {lines.map(([icon, text], i) => (
+          <li key={i} className="grid grid-cols-[14px_minmax(0,1fr)] items-baseline gap-x-2.5 text-[13px] leading-[18px] text-ink-2">
+            <span aria-hidden="true" className="translate-y-[2px] text-muted">
+              {icon}
+            </span>
+            <span>{text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -254,7 +388,7 @@ function AskStep({ onBack, onPick }: { onBack: () => void; onPick: (m: AccountMo
         <Choice
           icon={<UserPlus size={18} strokeWidth={1.75} />}
           title="Create one"
-          detail="Free on testnet. About two minutes in your browser."
+          detail="Free on testnet. Aftercall makes it with you, in about two minutes."
           selected={pick === "create"}
           onSelect={() => setPick("create")}
           onChoose={() => onPick("create")}
@@ -262,7 +396,7 @@ function AskStep({ onBack, onPick }: { onBack: () => void; onPick: (m: AccountMo
       </div>
       <Note icon={<UserRound size={15} strokeWidth={1.75} />} title="What's a NEAR account?" style={rise(2)}>
         A name on the NEAR network, like <span className="font-mono text-ink">{exampleAccount("testnet")}</span>. A wallet app such as Meteor holds its keys and
-        signs for it. Aftercall only reads the name; it never sees those keys.
+        signs for it. Aftercall keeps only the name. If it makes the account, it shows the phrase once and forgets it.
       </Note>
     </AssistantStep>
   );
@@ -315,11 +449,12 @@ function Choice({
   );
 }
 
+/** "Use a wallet app instead": the account made in Meteor, then its name typed here. */
 function CreateGuide({ n, onBack, onMade }: { n: NearSetup; onBack: () => void; onMade: () => void }) {
   return (
     <AssistantStep
-      icon={<UserPlus size={22} strokeWidth={1.75} />}
-      title="Make a testnet account"
+      icon={<Wallet size={22} strokeWidth={1.75} />}
+      title="Make an account in Meteor"
       intro="Testnet is NEAR's practice network: accounts and NEAR there are free and worth nothing. Leave this open while you do it."
       back={<BackButton onClick={onBack} />}
       primary={
@@ -355,26 +490,6 @@ function CreateGuide({ n, onBack, onMade }: { n: NearSetup; onBack: () => void; 
         </Why>
       </div>
     </AssistantStep>
-  );
-}
-
-function GuideRow({ n, title, action, children }: { n: number; title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <li className="flex gap-3.5 px-4 py-4">
-      <span
-        aria-hidden="true"
-        className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-medium text-verdigris shadow-[inset_0_0_0_1.5px_var(--verdigris)]"
-      >
-        {n}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex min-h-8 items-center justify-between gap-3">
-          <span className="text-[15px] leading-6 font-semibold text-ink">{title}</span>
-          {action}
-        </span>
-        <span className="text-[13px] leading-[19px] text-ink-2">{children}</span>
-      </span>
-    </li>
   );
 }
 
@@ -704,7 +819,43 @@ function FinishStep({ n, onDone }: { n: NearSetup; onDone: (canPay: boolean) => 
       }
     >
       <PayChecklist view={view} network={n.config.network} signing={signing} />
+      <WhereNext n={n} />
     </AssistantStep>
+  );
+}
+
+/** "Where to go next": your account and the agent-wallet contract on NearBlocks, and Meteor. */
+function WhereNext({ n }: { n: NearSetup }) {
+  const { network, contract } = n.config;
+  const account = n.saved?.account ?? n.config.account;
+  const links = [
+    { title: "Your account", detail: `${account} on NearBlocks`, href: explorerAccountUrl(network, account) },
+    { title: "Agent-wallet contract", detail: `${contract}: caps and proofs`, href: explorerAccountUrl(network, contract) },
+    { title: "Meteor Wallet", detail: "Your wallet, if you use Meteor", href: METEOR_URL },
+  ];
+  return (
+    <section aria-labelledby="next-h" className="flex flex-col gap-2" style={rise(2)}>
+      <h2 id="next-h" className="t-eyebrow m-0 text-muted">
+        Where to go next
+      </h2>
+      <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0">
+        {links.map((l) => (
+          <li key={l.title} className="flex">
+            <button
+              type="button"
+              onClick={() => openLink(l.href)}
+              className="press group flex w-full flex-col gap-1 rounded-md px-3.5 py-3 text-left shadow-[inset_0_0_0_1px_var(--hairline)] transition-colors duration-[var(--dur-1)] hover:bg-elevated"
+            >
+              <span className="flex items-center justify-between gap-2 text-[13px] leading-[18px] font-semibold text-ink">
+                {l.title}
+                <ExternalLink size={12} strokeWidth={2} aria-hidden="true" className="shrink-0 text-muted group-hover:text-ink-2" />
+              </span>
+              <span className="text-[12px] leading-4 break-words text-muted">{l.detail}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

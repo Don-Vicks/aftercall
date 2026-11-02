@@ -32,6 +32,8 @@ export interface ProofOnChain {
   owner: string;
   txHash: string;
   proofHash: string;
+  /** What the transaction cost in yoctoNEAR (gas burnt), paid from this Mac's key allowance. Absent on older notes, or if NEAR didn't say. */
+  fee?: string;
 }
 
 export const near = {
@@ -41,7 +43,7 @@ export const near = {
   checkSetup: (config: NearConfig) => invoke<SetupCheck>("near_check_setup", { config }),
   publicKey: () => invoke<string>("near_public_key"),
   status: () => invoke<NearStatus>("near_status"),
-  recordProof: (meetingId: string, proofHash: string, model: string) => invoke<string>("near_record_proof", { meetingId, proofHash, model }),
+  recordProof: (meetingId: string, proofHash: string, model: string) => invoke<{ txHash: string; fee: string | null }>("near_record_proof", { meetingId, proofHash, model }),
   getProof: (owner: string, meetingId: string) => invoke<OnChainProof | null>("near_get_proof", { owner, meetingId }),
   pay: (payee: string, amount: bigint, memo: string, followupId: string) =>
     invoke<PayOutcome>("near_pay", { payee, amount: amount.toString(), memo, followupId }),

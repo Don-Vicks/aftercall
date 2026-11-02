@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { NETWORK_CONFIG, accountFitsNetwork, exampleAccount, explorerAccountUrl, explorerTxUrl, parseNetwork, plainNearError } from "./network.ts";
+import { NETWORK_CONFIG, accountFitsNetwork, exampleAccount, explorerAccountUrl, explorerTxUrl, newTestnetNameProblem, parseNetwork, plainNearError } from "./network.ts";
 import { USDC_CONTRACT } from "./wallet/actions.ts";
 
 test("mainnet and testnet each have their own RPC, USDC and explorer", () => {
@@ -58,4 +58,18 @@ test("NEAR failures read as plain sentences", () => {
   assert.equal(plainNearError({ ActionError: { kind: { FunctionCallError: { ExecutionError: "Smart contract panicked: NOT_REGISTERED" } } } }, at), "Create your agent wallet first.");
   assert.equal(plainNearError("Smart contract panicked: PAUSED", at), "The contract refused it: PAUSED.");
   assert.equal(plainNearError(new Error("User rejected"), at), "User rejected");
+});
+
+test("new testnet names follow NEAR's rules, as the Mac app's Rust side checks them", () => {
+  for (const ok of ["victor.testnet", "ada-lovelace.testnet", "a1_b2.testnet", "42.testnet", `${"a".repeat(56)}.testnet`]) assert.equal(newTestnetNameProblem(ok), null, ok);
+  const problem = (id: string) => newTestnetNameProblem(id) ?? "";
+  assert.match(problem("victor.near"), /ends in \.testnet/);
+  assert.match(problem(".testnet"), /Type a name/);
+  assert.match(problem("v.testnet"), /at least 2/);
+  assert.match(problem(`${"a".repeat(57)}.testnet`), /at most 56/);
+  assert.match(problem("me.victor.testnet"), /no dots/);
+  assert.match(problem("Victor.testnet"), /lowercase/);
+  assert.match(problem("vic tor.testnet"), /can't be in a NEAR name/);
+  assert.match(problem("víctor.testnet"), /can't be in a NEAR name/);
+  for (const bad of ["-victor.testnet", "victor_.testnet", "vic--tor.testnet", "vic-_tor.testnet"]) assert.match(problem(bad), /one at a time/, bad);
 });

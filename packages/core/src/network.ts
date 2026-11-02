@@ -107,3 +107,22 @@ export function plainNearError(error: unknown, at: { network: Network; contract:
   if (panic) return REFUSALS[panic] ?? `The contract refused it: ${panic}.`;
   return text;
 }
+
+/**
+ * Why `<name>.testnet` can't be a new account, or null if it can: NEAR's account-id rules
+ * (lowercase a–z, 0–9, `-` and `_` between them, 64 characters in all) for a name made directly
+ * under `testnet`, so no dots. Mirrors `new_testnet_name_problem` in the Mac app's near.rs, which
+ * checks again before anything is created.
+ */
+export function newTestnetNameProblem(account: string): string | null {
+  if (!account.endsWith(".testnet")) return "A new testnet account ends in .testnet.";
+  const name = account.slice(0, -".testnet".length);
+  if (name === "") return "Type a name.";
+  if (name.length < 2) return "Use at least 2 characters.";
+  if (name.length > 56) return "Use at most 56 characters.";
+  if (name.includes(".")) return "Use one name with no dots.";
+  const bad = [...name].find((c) => !/[a-z0-9_-]/.test(c));
+  if (bad) return /[A-Z]/.test(bad) ? "Use lowercase letters." : `“${bad}” can't be in a NEAR name. Use a–z, 0–9, - and _.`;
+  if (/^[-_]|[-_]$|[-_]{2}/.test(name)) return "- and _ go between letters or digits, one at a time.";
+  return null;
+}

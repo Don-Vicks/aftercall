@@ -156,7 +156,7 @@ export function DetailRow({ label, children, mono }: { label: string; children: 
   return (
     <div className="flex items-baseline gap-4 px-4 py-2.5">
       <dt className="w-[112px] shrink-0 text-[13px] leading-[19px] text-muted">{label}</dt>
-      <dd className={cx("m-0 min-w-0 flex-1 break-all text-ink", mono ? "t-mono selectable" : "text-[13px] leading-[19px]")}>{children}</dd>
+      <dd className={cx("m-0 min-w-0 flex-1 text-ink", mono ? "t-mono selectable break-all" : "text-[13px] leading-[19px] break-words")}>{children}</dd>
     </div>
   );
 }
@@ -171,5 +171,26 @@ export function LinkButton({ href, children }: { href: string; children: ReactNo
       {children}
       <ExternalLink size={13} strokeWidth={2} aria-hidden="true" className="text-muted" />
     </Button>
+  );
+}
+
+/** A numbered step in a guide: the number in a verdigris ring, a title, an optional link out, and a line or two. */
+export function GuideRow({ n, title, action, dense, children }: { n: number; title: string; action?: ReactNode; dense?: boolean; children: ReactNode }) {
+  return (
+    <li className={cx("flex gap-3.5 px-4", dense ? "py-3" : "py-4")}>
+      <span
+        aria-hidden="true"
+        className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-medium text-verdigris shadow-[inset_0_0_0_1.5px_var(--verdigris)]"
+      >
+        {n}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={cx("flex items-center justify-between gap-3", dense ? "min-h-7" : "min-h-8")}>
+          <span className="text-[15px] leading-6 font-semibold text-ink">{title}</span>
+          {action}
+        </span>
+        <span className="text-[13px] leading-[19px] text-ink-2">{children}</span>
+      </span>
+    </li>
   );
 }

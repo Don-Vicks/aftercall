@@ -895,7 +895,7 @@ async fn near_status(app: AppHandle) -> Result<near::NearStatus, String> {
 }
 
 #[tauri::command]
-async fn near_record_proof(app: AppHandle, meeting_id: String, proof_hash: String, model: String) -> Result<String, String> {
+async fn near_record_proof(app: AppHandle, meeting_id: String, proof_hash: String, model: String) -> Result<near::ProofTx, String> {
     near::record_proof(&near_config(&app)?, &meeting_id, &proof_hash, &model).await
 }
 
@@ -962,6 +962,31 @@ fn recovery_new_phrase() -> Result<String, String> {
 #[tauri::command]
 fn recovery_use_phrase(phrase: String) -> Result<String, String> {
     recovery::use_phrase(&phrase)
+}
+
+/// A phrase for a new NEAR account (wallet path m/44'/397'/0') and its public key. Nothing is
+/// kept: not in the Keychain, not on disk, not in logs. Separate from this Mac's recovery phrase.
+#[tauri::command]
+fn near_new_wallet_phrase() -> Result<recovery::NewWallet, String> {
+    recovery::new_wallet()
+}
+
+/// Read-only: can `<name>.testnet` be created? An error says what's wrong with the name.
+#[tauri::command]
+async fn near_testnet_name_free(account_id: String) -> Result<bool, String> {
+    near::testnet_name_free(&account_id).await
+}
+
+/// Creates `<name>.testnet` with the public key through NEAR's testnet helper, then reads its
+/// balance back. Testnet only. Refuses a name that's already taken before asking the helper.
+#[tauri::command]
+async fn near_create_testnet_account(account_id: String, public_key: String) -> Result<near::CreatedAccount, String> {
+    if !near::testnet_name_free(&account_id).await? {
+        return Err(format!("{account_id} is already taken. Pick another name."));
+    }
+    let mut created = near::create_testnet_account(&account_id, &public_key, near::helper_post).await?;
+    created.balance = near::testnet_balance(&account_id).await.unwrap_or(None);
+    Ok(created)
 }
 
 /// Writes an encrypted backup to Downloads; returns its path.
@@ -1163,6 +1188,9 @@ pub fn run() {
             recovery_status,
             recovery_new_phrase,
             recovery_use_phrase,
+            near_new_wallet_phrase,
+            near_testnet_name_free,
+            near_create_testnet_account,
             backup_export,
             backup_import,
             delete_all_data
