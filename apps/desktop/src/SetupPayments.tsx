@@ -1,32 +1,44 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowRight, Check, ExternalLink, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, Clock, Coins, ExternalLink, FlaskConical, Laptop, Link2, Lock, ShieldCheck, UserCheck, UserPlus, UserRound, Wallet } from "lucide-react";
 import { exampleAccount, formatUsdc } from "@aftercall/core";
-import { near, type NearConfig, type WalletView } from "./near";
+import { KEY_ALLOWANCE, KEY_METHODS, REGISTER_DEPOSIT, near, type NearConfig, type WalletView } from "./near";
 import type { NearSetup } from "./nearSetup";
 import { isDesktop } from "./recorder";
 import { recovery } from "./recovery";
 import { CheckCircle } from "./primitives/Check";
-import { Button, Dialog, Field, Input, Pill, SectionTitle, Select, Spinner, cx, toast } from "./ui";
-import { Pop, Why, errorText, rise } from "./SettingsParts";
+import { Button, Card, Field, Input, Select, Spinner, cx, toast } from "./ui";
+import { IconDisc, Pop, Why, errorText, rise } from "./SettingsParts";
 import { AmountSheet, PayeeSheet, useWalletSigning } from "./WalletScreen";
-import { QuietAction, StepActions, StepHeading, StepPage, StepProgress } from "./Flow";
+import { AssistantSheet, AssistantStep, BackButton, DetailRow, Inset, LaterButton, LinkButton } from "./SetupAssistant";
 import { ConfirmStep, PhraseStep, useNewPhrase } from "./RecoveryPhrase";
 
-export type SetupStep = "account" | "phrase" | "confirm" | "wallet";
-const ORDER: SetupStep[] = ["account", "phrase", "confirm", "wallet"];
+export type SetupStep = "intro" | "account" | "phrase" | "confirm" | "register" | "authorise" | "finish";
+
+/** The bars at the top of the sheet: the welcome step has none, the two phrase screens share one. */
+const PHASES = ["NEAR account", "Recovery phrase", "Agent wallet", "This Mac", "Before paying"] as const;
+const PHASE: Record<SetupStep, number | null> = { intro: null, account: 0, phrase: 1, confirm: 1, register: 2, authorise: 3, finish: 4 };
+
+/** Where the account step starts: the question, the field, or the guide to making one. */
+type AccountMode = "ask" | "have" | "create";
+
+/** Checked against the NEAR Connect wallet list (features.testnet) and the sites themselves, 2 Nov 2026. */
+const METEOR_URL = "https://wallet.meteorwallet.app";
+const FAUCET_URL = "https://docs.near.org/getting-started/faucet";
 
 /**
- * Set up payments, full screen: the NEAR account, a recovery phrase for this Mac's
- * key (shown once, then three words typed back), and the two wallet signatures,
- * ending with what's still needed before Aftercall can pay (cap, deposit, payee).
- * Steps already done are skipped; the counter keeps the full four so it reads the
- * same every time. Nothing is stored until the words are confirmed. Escape and
- * "Set up later" leave without saving a half-made phrase.
+ * Set up payments, as a setup assistant: what connecting NEAR gives you, the NEAR
+ * account (or a short guide to making one on testnet), a recovery phrase for this
+ * Mac's key (shown once, then three words typed back), the two wallet signatures,
+ * each said in full before the wallet asks, and what's still needed before
+ * Aftercall can pay (cap, deposit, payee). Steps already done are skipped. Nothing
+ * is stored until the words are confirmed; closing drops a half-made phrase.
  */
 export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; start?: SetupStep; onClose: () => void }) {
   const fromPhrase = Boolean(n.recoveryStatus?.fromPhrase);
-  const [step, setStep] = useState<SetupStep>(() => start ?? (!n.accountDone ? "account" : !fromPhrase ? "phrase" : "wallet"));
+  const afterKey = (): SetupStep => (!n.status?.registered ? "register" : !n.status.keyAdded ? "authorise" : "finish");
+  const [step, setStep] = useState<SetupStep>(() => start ?? (!n.accountDone ? "intro" : !fromPhrase ? "phrase" : afterKey()));
+  const [mode, setMode] = useState<AccountMode>(() => (n.config.account ? "have" : "ask"));
   const go = (s: SetupStep) => setStep(s);
 
   const phrase = useNewPhrase();
@@ -48,7 +60,7 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
       await recovery.usePhrase(phrase.phrase);
       phrase.forget();
       await n.keyChanged();
-      go(n.accountDone ? "wallet" : "account");
+      go(n.accountDone ? "register" : "account");
     } catch (e) {
       setKeyError(errorText(e));
     } finally {
@@ -64,59 +76,351 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
     close();
   };
 
+  const phase = PHASE[step];
   return (
-    <Dialog placement="full" aria-label="Set up payments" onClose={close} dismissible={step === "account" || step === "wallet"}>
-      <StepProgress step={ORDER.indexOf(step)} total={ORDER.length} label="Set up payments" />
-      <AnimatePresence mode="wait" initial={false}>
-        {step === "account" && (
-          <StepPage key="account">
-            <AccountStep n={n} onLater={close} onNext={() => go(n.recoveryStatus?.fromPhrase ? "wallet" : "phrase")} />
-          </StepPage>
-        )}
-        {step === "phrase" && (
-          <StepPage key="phrase">
-            <PhraseStep words={phrase.words} error={phrase.error} onLater={close} onContinue={() => go("confirm")} />
-          </StepPage>
-        )}
-        {step === "confirm" && (
-          <StepPage key="confirm">
-            <ConfirmStep words={phrase.words} ask={phrase.ask} busy={saving} error={keyError} onBack={() => go("phrase")} onConfirm={confirmWords} />
-          </StepPage>
-        )}
-        {step === "wallet" && (
-          <StepPage key="wallet">
-            <WalletStep n={n} onLater={close} onDone={finish} />
-          </StepPage>
-        )}
-      </AnimatePresence>
-    </Dialog>
+    <AssistantSheet
+      label="Set up payments"
+      phase={phase === null ? null : { index: phase, names: PHASES }}
+      // Escape doesn't throw away words on screen, or a signature you're waiting on.
+      dismissible={step !== "phrase" && step !== "confirm" && !n.waiting}
+      busy={saving}
+      onClose={close}
+    >
+      {step === "intro" && <IntroStep key="intro" n={n} onLater={close} onNext={() => go("account")} />}
+      {step === "account" && mode === "ask" && <AskStep key="ask" onBack={() => go("intro")} onPick={setMode} />}
+      {step === "account" && mode === "create" && (
+        <CreateGuide
+          key="create"
+          n={n}
+          onBack={() => setMode("ask")}
+          onMade={() => {
+            if (n.config.network !== "testnet") n.edit({ ...n.config, network: "testnet" });
+            setMode("have");
+          }}
+        />
+      )}
+      {step === "account" && mode === "have" && (
+        <AccountStep key="have" n={n} onBack={() => setMode("ask")} onCreate={() => setMode("create")} onNext={() => go(fromPhrase ? "register" : "phrase")} />
+      )}
+      {step === "phrase" && (
+        <PhraseStep key="phrase" words={phrase.words} error={phrase.error} onBack={() => go("account")} onContinue={() => go("confirm")} />
+      )}
+      {step === "confirm" && (
+        <ConfirmStep key="confirm" words={phrase.words} ask={phrase.ask} busy={saving} error={keyError} onBack={() => go("phrase")} onConfirm={confirmWords} />
+      )}
+      {step === "register" && <SignStep key="register" n={n} kind="register" onBack={() => go("account")} onNext={() => go(afterKey())} />}
+      {step === "authorise" && <SignStep key="authorise" n={n} kind="authorise-key" onBack={() => go("register")} onNext={() => go("finish")} />}
+      {step === "finish" && <FinishStep key="finish" n={n} onDone={finish} />}
+    </AssistantSheet>
   );
 }
 
-function AccountStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; onNext: () => void }) {
+/* ——— Welcome ——— */
+
+function IntroStep({ n, onLater, onNext }: { n: NearSetup; onLater: () => void; onNext: () => void }) {
+  const testnet = n.config.network === "testnet";
+  return (
+    <AssistantStep
+      icon={<Link2 size={22} strokeWidth={1.75} />}
+      title="Proofs and payments on NEAR"
+      intro="Optional: your notes work without it. Connecting a NEAR account adds two things."
+      back={<LaterButton onClick={onLater}>Not now</LaterButton>}
+      primary={
+        <Button variant="primary" onClick={onNext}>
+          Get started
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <ul className="m-0 grid list-none grid-cols-2 gap-3 p-0" style={rise(1)}>
+        <Benefit icon={<ShieldCheck size={16} strokeWidth={1.75} />} title="A proof for each meeting">
+          A public record anyone can check: a hash of the notes and the model's name. Never what was said.
+        </Benefit>
+        <Benefit icon={<Wallet size={16} strokeWidth={1.75} />} title="An agent wallet">
+          It pays amounts agreed in meetings to people on your list, within caps only your wallet can change.
+        </Benefit>
+      </ul>
+
+      <dl className="m-0 grid grid-cols-3 gap-2" style={rise(2)}>
+        <Fact icon={<Clock size={14} strokeWidth={1.75} />} label="Time" value="About 5 min" note="Two signatures" />
+        <Fact icon={<Coins size={14} strokeWidth={1.75} />} label="Cost" value="0.35 NEAR" mono note={`${REGISTER_DEPOSIT.replace(" NEAR", "")} storage + ${KEY_ALLOWANCE.replace(" NEAR", "")} fees`} />
+        <Fact
+          icon={<FlaskConical size={14} strokeWidth={1.75} />}
+          label="Network"
+          value={testnet ? "Testnet" : "Mainnet"}
+          note={testnet ? "Test NEAR is free" : "Real NEAR and USDC"}
+        />
+      </dl>
+
+      <section aria-labelledby="ahead-h" className="flex flex-col gap-2.5" style={rise(3)}>
+        <h2 id="ahead-h" className="t-section m-0 text-ink">
+          What you'll do
+        </h2>
+        <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {[
+            ["Add your NEAR account", "or make one, free on testnet"],
+            ["Write down a recovery phrase", "for this Mac's own key"],
+            ["Create your agent wallet", "one signature"],
+            ["Authorise this Mac", "one signature"],
+            ["Set a cap, deposit and add a payee", "now or later"],
+          ].map(([what, how], i) => (
+            <li key={what} className="flex items-baseline gap-3 text-[14px] leading-[20px]">
+              <span className="w-4 shrink-0 text-right font-mono text-[12px] text-muted">{i + 1}</span>
+              <span className="text-ink">{what}</span>
+              <span className="text-[13px] text-muted">{how}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </AssistantStep>
+  );
+}
+
+function Benefit({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+  return (
+    <li className="flex flex-col gap-2 rounded-md bg-elevated px-4 pt-3.5 pb-3.5 shadow-1">
+      <span className="flex items-center gap-2.5">
+        <IconDisc tone="verdigris" size={28}>
+          {icon}
+        </IconDisc>
+        <span className="text-[15px] leading-5 font-semibold text-ink">{title}</span>
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-[13px] leading-[19px] text-ink-2">{children}</span>
+      </span>
+    </li>
+  );
+}
+
+function Fact({ icon, label, value, note, mono }: { icon: ReactNode; label: string; value: string; note: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md px-3.5 py-3 shadow-[inset_0_0_0_1px_var(--hairline)]">
+      <dt className="t-eyebrow flex items-center gap-1.5 text-muted">
+        <span aria-hidden="true">{icon}</span>
+        {label}
+      </dt>
+      <dd className="m-0 flex flex-col gap-0.5">
+        <span className={cx("text-ink", mono ? "font-mono text-[15px] leading-5 tabular-nums" : "text-[15px] leading-5 font-semibold")}>{value}</span>
+        <span className="text-[12px] leading-4 text-muted">{note}</span>
+      </dd>
+    </div>
+  );
+}
+
+/** A quiet aside on the sheet: an icon, a bold lead and a line or two. */
+function Note({ icon, title, style, children }: { icon: ReactNode; title: string; style?: CSSProperties; children: ReactNode }) {
+  return (
+    <aside className="flex items-start gap-3 rounded-md px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]" style={style}>
+      <span aria-hidden="true" className="mt-0.5 shrink-0 text-muted">
+        {icon}
+      </span>
+      <p className="m-0 text-[13px] leading-[19px] text-ink-2">
+        <span className="font-semibold text-ink">{title}</span> {children}
+      </p>
+    </aside>
+  );
+}
+
+/* ——— NEAR account ——— */
+
+function AskStep({ onBack, onPick }: { onBack: () => void; onPick: (m: AccountMode) => void }) {
+  const [pick, setPick] = useState<"have" | "create" | null>(null);
+  return (
+    <AssistantStep
+      icon={<UserRound size={22} strokeWidth={1.75} />}
+      title="Do you have a NEAR account?"
+      intro={
+        <>
+          Your agent wallet belongs to it, and proofs are recorded under it. On testnet its name ends in <span className="font-mono text-ink">.testnet</span>.
+        </>
+      }
+      back={<BackButton onClick={onBack} />}
+      primary={
+        <Button variant="primary" disabled={!pick} onClick={() => pick && onPick(pick)}>
+          Continue
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <div role="radiogroup" aria-label="Do you have a NEAR account?" className="grid grid-cols-2 gap-3" style={rise(1)}>
+        <Choice
+          icon={<UserCheck size={18} strokeWidth={1.75} />}
+          title="I have one"
+          detail="In Meteor, Intear, Ledger or another NEAR wallet."
+          selected={pick === "have"}
+          onSelect={() => setPick("have")}
+          onChoose={() => onPick("have")}
+        />
+        <Choice
+          icon={<UserPlus size={18} strokeWidth={1.75} />}
+          title="Create one"
+          detail="Free on testnet. About two minutes in your browser."
+          selected={pick === "create"}
+          onSelect={() => setPick("create")}
+          onChoose={() => onPick("create")}
+        />
+      </div>
+      <Note icon={<UserRound size={15} strokeWidth={1.75} />} title="What's a NEAR account?" style={rise(2)}>
+        A name on the NEAR network, like <span className="font-mono text-ink">{exampleAccount("testnet")}</span>. A wallet app such as Meteor holds its keys and
+        signs for it. Aftercall only reads the name; it never sees those keys.
+      </Note>
+    </AssistantStep>
+  );
+}
+
+/** A radio drawn as a card. A double click picks it and moves on. */
+function Choice({
+  icon,
+  title,
+  detail,
+  selected,
+  onSelect,
+  onChoose,
+}: {
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  selected: boolean;
+  onSelect: () => void;
+  onChoose: () => void;
+}) {
+  return (
+    <Card
+      as="button"
+      role="radio"
+      aria-checked={selected}
+      interactive
+      pad="none"
+      onClick={onSelect}
+      onDoubleClick={onChoose}
+      className={cx("relative flex flex-col items-start gap-3 px-5 pt-5 pb-[18px]", selected && "shadow-[0_0_0_1.5px_var(--verdigris)]! hover:shadow-[0_0_0_1.5px_var(--verdigris)]!")}
+    >
+      <IconDisc tone={selected ? "verdigris" : "well"} size={36}>
+        {icon}
+      </IconDisc>
+      <span className="flex flex-col gap-1">
+        <span className="text-[15px] leading-5 font-semibold text-ink">{title}</span>
+        <span className="text-[13px] leading-[19px] text-ink-2">{detail}</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className={cx(
+          "absolute top-4 right-4 inline-flex size-[18px] items-center justify-center rounded-full transition-colors duration-[var(--dur-1)]",
+          selected ? "bg-verdigris text-on-verdigris" : "shadow-[inset_0_0_0_1.5px_var(--border)]",
+        )}
+      >
+        {selected && <Check size={11} strokeWidth={3} />}
+      </span>
+    </Card>
+  );
+}
+
+function CreateGuide({ n, onBack, onMade }: { n: NearSetup; onBack: () => void; onMade: () => void }) {
+  return (
+    <AssistantStep
+      icon={<UserPlus size={22} strokeWidth={1.75} />}
+      title="Make a testnet account"
+      intro="Testnet is NEAR's practice network: accounts and NEAR there are free and worth nothing. Leave this open while you do it."
+      back={<BackButton onClick={onBack} />}
+      primary={
+        <Button variant="primary" onClick={onMade}>
+          I've made it
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <Inset as="ol" style={rise(1)}>
+        <GuideRow n={1} title="Create a wallet in Meteor" action={<LinkButton href={METEOR_URL}>Open Meteor</LinkButton>}>
+          Meteor Wallet runs in the browser and works on testnet. Switch the network at the top of its page to{" "}
+          <b className="font-semibold text-ink">Testnet</b>, then create a new wallet. Its recovery phrase is Meteor's, not Aftercall's: keep both.
+        </GuideRow>
+        <GuideRow n={2} title="Note your account name">
+          It looks like <span className="font-mono text-ink">{exampleAccount("testnet")}</span>. If the wallet gives you a long string of letters and numbers
+          instead, that works too.
+        </GuideRow>
+        <GuideRow n={3} title="Get free test NEAR" action={<LinkButton href={FAUCET_URL}>Open the faucet</LinkButton>}>
+          NEAR's docs have a faucet: paste your account name and press Request Tokens. The two signatures need about 0.35 NEAR.
+        </GuideRow>
+      </Inset>
+      <div style={rise(2)}>
+        <Why label="Prefer the terminal?">
+          <span className="flex flex-col gap-2">
+            <span>With near-cli-rs installed, this makes the account, funds it from the faucet and keeps its key in your macOS keychain:</span>
+            <code className="t-mono selectable w-fit rounded-sm bg-well px-2.5 py-1.5 text-ink shadow-[inset_0_0_0_1px_var(--hairline)]">
+              near account create-account sponsor-by-faucet-service {n.config.account.endsWith(".testnet") ? n.config.account : exampleAccount("testnet")}{" "}
+              autogenerate-new-keypair save-to-keychain network-config testnet create
+            </code>
+            <span>Its key lives in near-cli, not in a wallet app, so sign the two steps with the near-cli commands Settings shows once setup gets there.</span>
+          </span>
+        </Why>
+      </div>
+    </AssistantStep>
+  );
+}
+
+function GuideRow({ n, title, action, children }: { n: number; title: string; action?: ReactNode; children: ReactNode }) {
+  return (
+    <li className="flex gap-3.5 px-4 py-4">
+      <span
+        aria-hidden="true"
+        className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[12px] font-medium text-verdigris shadow-[inset_0_0_0_1.5px_var(--verdigris)]"
+      >
+        {n}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex min-h-8 items-center justify-between gap-3">
+          <span className="text-[15px] leading-6 font-semibold text-ink">{title}</span>
+          {action}
+        </span>
+        <span className="text-[13px] leading-[19px] text-ink-2">{children}</span>
+      </span>
+    </li>
+  );
+}
+
+function AccountStep({ n, onBack, onCreate, onNext }: { n: NearSetup; onBack: () => void; onCreate: () => void; onNext: () => void }) {
   const save = async () => {
     if (await n.check()) onNext();
   };
   return (
-    <>
-      <StepHeading title="Your NEAR account" intro="The account Aftercall pays from. Your agent wallet lives in Aftercall's contract on the network you pick." style={rise(1)} />
-      <div className="flex flex-col gap-3" style={rise(2)}>
+    <AssistantStep
+      icon={<UserCheck size={22} strokeWidth={1.75} />}
+      title="Your NEAR account"
+      intro="Type it as your wallet shows it. Aftercall checks it exists on NEAR before anything is signed."
+      back={<BackButton onClick={onBack} />}
+      primary={
+        <Button variant="primary" loading={n.checking} disabled={!n.ready || !isDesktop} onClick={save}>
+          Check and continue
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <form
+        className="flex flex-col gap-3"
+        style={rise(1)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (n.ready && isDesktop && !n.checking) save();
+        }}
+      >
         <AccountFields n={n} />
         <AccountNotes n={n} />
-      </div>
-      <StepActions style={rise(3)}>
-        <QuietAction onClick={onLater}>Set up later</QuietAction>
-        <Button variant="primary" size="lg" loading={n.checking} disabled={!n.ready || !isDesktop} onClick={save}>
-          Save and continue
-          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
-        </Button>
-      </StepActions>
-    </>
+      </form>
+      <Note icon={<Lock size={15} strokeWidth={1.75} />} title="Only the name" style={rise(2)}>
+        Aftercall reads this name to find your agent wallet. Your wallet keeps its keys and signs each change on the signing page in your browser.
+      </Note>
+      <p className="m-0 text-[13px] leading-[19px] text-ink-2" style={rise(3)}>
+        No account yet?{" "}
+        <button type="button" onClick={onCreate} className="press rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
+          Make one on testnet
+        </button>
+      </p>
+    </AssistantStep>
   );
 }
 
 /**
- * Account and network, with a tick once "Save and check" found the account. The
+ * Account and network, with a tick once the check found the account. The
  * contract is Aftercall's own for the network, folded under "Advanced" for anyone
  * running their own deployment; on a network with none yet (mainnet), it's open.
  */
@@ -135,8 +439,8 @@ export function AccountFields({ n, action }: { n: NearSetup; action?: ReactNode 
   );
   return (
     <div className="flex flex-col gap-3.5">
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
-        <Field label="NEAR account" error={found.account === false ? `Not found on ${config.network}.` : undefined}>
+      <div className="grid grid-cols-[1fr_168px] gap-x-3 gap-y-3.5">
+        <Field label="NEAR account" error={found.account === false ? `Not found on ${config.network}. Check the spelling and the network.` : undefined}>
           <FoundInput found={found.account} value={config.account} placeholder={exampleAccount(config.network)} onChange={(account) => set({ account })} />
         </Field>
         <Field label="Network">
@@ -154,7 +458,7 @@ export function AccountFields({ n, action }: { n: NearSetup; action?: ReactNode 
               Aftercall's contract on {config.network} is <span className="font-mono text-ink">{builtIn}</span>. Change it only if you deployed{" "}
               <span className="font-mono text-ink">contracts/agent-wallet</span> yourself.
             </span>
-            <span className="max-w-[calc(50%-8px)] min-w-[240px]">{contractField}</span>
+            <span className="max-w-[320px]">{contractField}</span>
             {n.ownContract && (
               <button type="button" onClick={() => set({ contract: builtIn })} className="press w-fit rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
                 Use Aftercall's contract
@@ -164,7 +468,7 @@ export function AccountFields({ n, action }: { n: NearSetup; action?: ReactNode 
         </Why>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <span className="max-w-[calc(50%-8px)] min-w-[240px]">{contractField}</span>
+          <span className="max-w-[320px]">{contractField}</span>
           <p className="m-0 text-[13px] leading-[19px] text-ink-2">
             There's no Aftercall contract on {config.network} yet. Enter your own deployment of <span className="font-mono text-ink">contracts/agent-wallet</span>, or pick testnet.
           </p>
@@ -212,6 +516,8 @@ export function AccountNotes({ n }: { n: NearSetup }) {
   );
 }
 
+/* ——— The two signatures ——— */
+
 /** "Didn't see it on NEAR yet" after the two minutes, with one more look for a slow wallet. */
 export function UnseenNote({ label, checking, onCheck }: { label: string | null; checking: boolean; onCheck: () => void }) {
   if (!label) return null;
@@ -225,112 +531,180 @@ export function UnseenNote({ label, checking, onCheck }: { label: string | null;
   );
 }
 
-function WalletStep({ n, onLater, onDone }: { n: NearSetup; onLater: () => void; onDone: (canPay: boolean) => void }) {
-  const registered = Boolean(n.status?.registered);
-  const keyAdded = Boolean(n.status?.keyAdded);
-  const next = !registered ? "register" : !keyAdded ? "authorise-key" : null;
+/** One signature: exactly what the wallet will show, then the signing page's state, from opening it to seeing it on NEAR. */
+function SignStep({ n, kind, onBack, onNext }: { n: NearSetup; kind: "register" | "authorise-key"; onBack: () => void; onNext: () => void }) {
+  const register = kind === "register";
+  const label = register ? "Create wallet" : "Authorise this Mac";
+  const done = register ? Boolean(n.status?.registered) : Boolean(n.status?.keyAdded);
+  const waiting = n.waiting === label;
+  const unseen = n.unseen?.kind === kind;
+  const error = n.error && n.errorFrom === "sign" ? n.error : null;
+  const account = n.saved?.account ?? n.config.account;
+  const contract = n.config.contract;
+  const noKey = !register && !n.publicKey;
+  const blocked = !n.ready || !isDesktop || noKey || Boolean(n.waiting);
+  const sign = () => n.signStep(label, kind);
+
+  const mono = (s: string) => <span className="font-mono text-ink">{s}</span>;
+  return (
+    <AssistantStep
+      icon={register ? <Wallet size={22} strokeWidth={1.75} /> : <Laptop size={22} strokeWidth={1.75} />}
+      title={register ? "Create your agent wallet" : "Authorise this Mac"}
+      intro={
+        register ? (
+          <>
+            Your wallet will ask you to approve one transaction: {mono("register")} on {mono(contract)}, with {REGISTER_DEPOSIT} attached. It creates your agent
+            wallet; only your wallet can change its rules.
+          </>
+        ) : (
+          <>
+            Your wallet will ask you to add a limited key for this Mac. It can only call {mono("pay")} and {mono("record_proof")}, with up to {KEY_ALLOWANCE} for
+            fees. It can't change caps, add payees or withdraw.
+          </>
+        )
+      }
+      back={<BackButton onClick={onBack} disabled={Boolean(n.waiting)} />}
+      primary={
+        done ? (
+          <Button variant="primary" onClick={onNext}>
+            Continue
+            <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+          </Button>
+        ) : (
+          <Button variant="primary" loading={waiting} disabled={blocked && !waiting} onClick={sign}>
+            {waiting ? "Waiting for your wallet" : unseen ? "Open signing page again" : "Open signing page"}
+            {!waiting && <ExternalLink size={14} strokeWidth={2} aria-hidden="true" />}
+          </Button>
+        )
+      }
+    >
+      <section aria-labelledby={`${kind}-shows`} className="flex flex-col gap-2" style={rise(1)}>
+        <h2 id={`${kind}-shows`} className="t-eyebrow m-0 text-muted">
+          What your wallet will show
+        </h2>
+        <Inset as="dl">
+          {register ? (
+            <>
+              <DetailRow label="Contract" mono>
+                {contract}
+              </DetailRow>
+              <DetailRow label="Method" mono>
+                register
+              </DetailRow>
+              <DetailRow label="Attached">
+                <span className="font-mono">{REGISTER_DEPOSIT}</span>
+                <span className="text-ink-2">, kept as your storage credit</span>
+              </DetailRow>
+              <DetailRow label="Signed as" mono>
+                {account}
+              </DetailRow>
+            </>
+          ) : (
+            <>
+              <DetailRow label="New key" mono>
+                {n.publicKey || "None yet"}
+              </DetailRow>
+              <DetailRow label="May call" mono>
+                {KEY_METHODS.join(", ")}
+              </DetailRow>
+              <DetailRow label="On contract" mono>
+                {contract}
+              </DetailRow>
+              <DetailRow label="Fee allowance" mono>
+                {KEY_ALLOWANCE}
+              </DetailRow>
+            </>
+          )}
+        </Inset>
+      </section>
+
+      <div className="flex flex-col gap-2.5" style={rise(2)}>
+        <SignState
+          state={done ? "seen" : waiting ? "waiting" : unseen ? "unseen" : "ready"}
+          seen={register ? "Your agent wallet exists. Next, authorise this Mac." : `This Mac's key is on ${account}, limited as above.`}
+          checking={n.rechecking}
+          onCheck={n.checkAgain}
+        />
+        {noKey && <p className="m-0 text-[13px] leading-[19px] text-caution">This Mac has no key yet. Go back and make a recovery phrase first.</p>}
+        {!register && n.status?.keyProblem && <p className="m-0 text-[13px] leading-[19px] text-caution">{n.status.keyProblem}</p>}
+        {error && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{error}</p>}
+        {!n.ready && <p className="m-0 text-[13px] leading-[19px] text-caution">Add your NEAR account first.</p>}
+      </div>
+    </AssistantStep>
+  );
+}
+
+/** The signing page, as this Mac sees it: not opened yet, waiting for the wallet, not seen on NEAR in time, or seen. */
+function SignState({ state, seen, checking, onCheck }: { state: "ready" | "waiting" | "unseen" | "seen"; seen: string; checking: boolean; onCheck: () => void }) {
+  const copy = {
+    ready: ["Signing happens in your browser", "The signing page opens there. Pick your wallet, check it shows the above, then approve."],
+    waiting: ["Waiting for your wallet", "Approve it on the signing page in your browser. This updates by itself once NEAR has it."],
+    unseen: ["Not seen on NEAR yet", "If you approved it, it may still be on its way. If you closed the page, open it again."],
+    seen: ["Seen on NEAR", seen],
+  }[state];
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cx(
+        "flex items-center gap-3.5 rounded-md px-4 py-3.5",
+        state === "seen" ? "bg-verdigris-tint" : state === "unseen" ? "bg-caution-tint" : "shadow-[inset_0_0_0_1px_var(--hairline)]",
+      )}
+    >
+      <span aria-hidden="true" className="inline-flex size-7 shrink-0 items-center justify-center">
+        {state === "seen" ? (
+          <CheckCircle size={26} play />
+        ) : state === "waiting" ? (
+          <Spinner size={18} tone="verdigris" />
+        ) : state === "unseen" ? (
+          <Clock size={20} strokeWidth={1.75} className="text-caution" />
+        ) : (
+          <ExternalLink size={18} strokeWidth={1.75} className="text-muted" />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className={cx("text-[14px] leading-5 font-semibold", state === "seen" ? "text-verdigris" : state === "unseen" ? "text-caution" : "text-ink")}>{copy[0]}</span>
+        <span className="text-[13px] leading-[19px] text-ink-2">{copy[1]}</span>
+      </span>
+      {state === "unseen" && (
+        <Button size="sm" loading={checking} onClick={onCheck}>
+          Check again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/* ——— Before paying ——— */
+
+function FinishStep({ n, onDone }: { n: NearSetup; onDone: (canPay: boolean) => void }) {
   const [view, setView] = useState<WalletView | null>(null);
   const signing = useWalletSigning(setView);
-
   useEffect(() => {
-    if (!isDesktop || !registered) return;
+    if (!isDesktop) return;
     near
       .wallet()
       .then(setView)
       .catch(() => {});
-  }, [registered, keyAdded]);
-
-  const sign = () => (next === "register" ? n.signStep("Create wallet", "register") : n.signStep("Authorise this Mac", "authorise-key"));
+  }, []);
   const w = view?.wallet ?? null;
-  const caps = w ? { daily: BigInt(w.daily_cap), payment: BigInt(w.per_payment_cap) } : null;
   // A daily cap of 0 parks every payment for your wallet; a per-payment cap of 0 means none
   // (only autopilot needs one), so the daily cap alone decides whether this Mac can pay.
-  const capsSet = Boolean(caps && caps.daily > 0n);
-  const canPay = capsSet && Boolean(w && BigInt(w.balance) > 0n) && Boolean(view && view.payees.length > 0);
-
+  const canPay = Boolean(w && BigInt(w.daily_cap) > 0n && BigInt(w.balance) > 0n && view && view.payees.length > 0);
   return (
-    <>
-      <StepHeading title="Set up your agent wallet" intro="Two signatures in your NEAR wallet, then Aftercall pays within your caps." style={rise(1)} />
-      <section aria-labelledby="sign-h" className="flex flex-col gap-3" style={rise(2)}>
-        <SectionTitle id="sign-h" count={`${n.signed} of 2 done`}>
-          Sign in your wallet
-        </SectionTitle>
-        <ol className="m-0 flex list-none flex-col gap-2 p-0">
-          <SignRow
-            n={1}
-            title="Create your agent wallet"
-            done={registered}
-            current={next === "register"}
-            detail={
-              registered ? (
-                <span className="font-mono text-muted">signed by {n.saved?.account ?? n.config.account}</span>
-              ) : (
-                "Holds the USDC Aftercall pays from. Only your wallet can withdraw."
-              )
-            }
-          />
-          <SignRow
-            n={2}
-            title="Authorise this Mac's key"
-            done={keyAdded}
-            current={next === "authorise-key"}
-            detail={
-              <>
-                It can call only <span className="font-mono text-ink">pay</span> and <span className="font-mono text-ink">record_proof</span>, nothing else.
-              </>
-            }
-          />
-        </ol>
-        {n.waiting && (
-          <p aria-live="polite" className="m-0 flex items-center gap-2 text-[13px] text-ink-2">
-            <Spinner size={12} /> Waiting for you to sign “{n.waiting}” in your browser…
-          </p>
-        )}
-        <UnseenNote label={n.unseen?.label ?? null} checking={n.rechecking} onCheck={n.checkAgain} />
-        {n.status?.keyProblem && <p className="m-0 text-[13px] leading-[19px] text-caution">{n.status.keyProblem}</p>}
-        {n.error && n.errorFrom === "sign" && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{n.error}</p>}
-        {!n.ready && <p className="m-0 text-[13px] leading-[19px] text-caution">Add your NEAR account first.</p>}
-      </section>
-
-      {next ? (
-        <section aria-labelledby="caps-h" className="flex flex-col gap-3" style={rise(3)}>
-          <SectionTitle id="caps-h" count="this Mac can't raise them">
-            Your caps
-          </SectionTitle>
-          <p className="m-0 text-[13px] leading-[19px] text-ink-2">
-            A new agent wallet starts with a 0.00 daily cap, so every payment waits for your wallet until you set one. You can set it right after these two
-            signatures.
-          </p>
-        </section>
-      ) : (
-        <PayChecklist view={view} network={n.config.network} signing={signing} />
-      )}
-
-      <p className="-mt-1.5 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2" style={rise(4)}>
-        <ShieldCheck size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
-        Your wallet signs any change, so only you can change what this Mac may spend.
-      </p>
-
-      <StepActions style={rise(5)}>
-        <QuietAction onClick={onLater}>Set up later</QuietAction>
-        {next ? (
-          <Button
-            variant="primary"
-            size="lg"
-            loading={Boolean(n.waiting)}
-            disabled={!n.ready || !isDesktop || (next === "authorise-key" && !n.publicKey)}
-            onClick={sign}
-          >
-            Sign in wallet
-            <ExternalLink size={15} strokeWidth={2} aria-hidden="true" />
-          </Button>
-        ) : (
-          <Button variant="primary" size="lg" disabled={Boolean(signing.waiting)} onClick={() => onDone(canPay)}>
-            Done
-          </Button>
-        )}
-      </StepActions>
-    </>
+    <AssistantStep
+      icon={<Check size={22} strokeWidth={2} />}
+      title={canPay ? "Ready to pay" : "This Mac is connected"}
+      intro="Proofs now go on NEAR when a meeting's notes are made. Three more signatures and Aftercall can pay: do them now, or later in Agent wallet."
+      back={<span />}
+      primary={
+        <Button variant="primary" disabled={Boolean(signing.waiting)} onClick={() => onDone(canPay)}>
+          Done
+        </Button>
+      }
+    >
+      <PayChecklist view={view} network={n.config.network} signing={signing} />
+    </AssistantStep>
   );
 }
 
@@ -350,23 +724,19 @@ function PayChecklist({ view, network, signing }: { view: WalletView | null; net
     { id: "deposit", title: "Deposit USDC", done: balance > 0n, detail: balance > 0n ? `${formatUsdc(balance)} USDC in your agent wallet` : "Aftercall pays from this balance." },
     { id: "payee", title: "Add a payee", done: payees.length > 0, detail: payees.length > 0 ? payees.map((p) => p.label || p.account).join(", ") : "Aftercall pays only people on your list." },
   ] as const;
-  const left = items.filter((i) => !i.done).length;
 
   return (
-    <section aria-labelledby="pay-h" className="flex flex-col gap-3" style={rise(3)}>
-      <SectionTitle id="pay-h" count={left ? `${left} to sign` : "ready"}>
-        Before Aftercall can pay
-      </SectionTitle>
-      <ol className="m-0 flex list-none flex-col gap-1 p-0">
+    <section aria-label="Before Aftercall can pay" className="flex flex-col gap-2.5" style={rise(1)}>
+      <Inset as="ol">
         {items.map((i) => (
-          <li key={i.id} className="flex items-center gap-3.5 rounded-md px-[18px] py-3">
+          <li key={i.id} className="flex items-center gap-3.5 px-4 py-3.5">
             {i.done ? (
               <CheckCircle size={24} play />
             ) : (
-              <span aria-hidden="true" className="inline-flex size-6 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--border)]" />
+              <span aria-hidden="true" className="inline-flex size-6 shrink-0 rounded-full shadow-[inset_0_0_0_1.5px_var(--border)]" />
             )}
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className={cx("t-title", i.done ? "text-ink-2" : "text-ink")}>
+              <span className={cx("text-[15px] leading-5 font-semibold", i.done ? "text-ink-2" : "text-ink")}>
                 {i.title}
                 {i.done && <span className="sr-only">, done</span>}
               </span>
@@ -379,13 +749,17 @@ function PayChecklist({ view, network, signing }: { view: WalletView | null; net
             )}
           </li>
         ))}
-      </ol>
+      </Inset>
       {signing.waiting && (
         <p aria-live="polite" className="m-0 flex items-center gap-2 text-[13px] text-ink-2">
           <Spinner size={12} /> Waiting for you to sign “{signing.waiting}” in your browser…
         </p>
       )}
       <UnseenNote label={signing.unseenLabel} checking={signing.checking} onCheck={signing.checkAgain} />
+      <p className="m-0 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2">
+        <ShieldCheck size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
+        Your wallet signs every change, so this Mac can't raise what it may spend.
+      </p>
 
       <AnimatePresence>
         {sheet === "cap" && (
@@ -434,39 +808,5 @@ function PayChecklist({ view, network, signing }: { view: WalletView | null; net
         )}
       </AnimatePresence>
     </section>
-  );
-}
-
-function SignRow({ n, title, detail, done, current }: { n: number; title: string; detail: ReactNode; done: boolean; current: boolean }) {
-  return (
-    <li
-      aria-current={current ? "step" : undefined}
-      className={cx("flex items-center gap-3.5 rounded-md px-[18px]", current ? "bg-elevated py-4 shadow-1" : "py-3")}
-    >
-      {done ? (
-        <CheckCircle size={28} play />
-      ) : (
-        <span
-          aria-hidden="true"
-          className={cx(
-            "inline-flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-[13px] font-medium",
-            current ? "text-verdigris shadow-[inset_0_0_0_1.5px_var(--verdigris)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--border)]",
-          )}
-        >
-          {n}
-        </span>
-      )}
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={cx("t-title", done ? "text-ink-2" : "text-ink")}>{title}</span>
-        <span className="text-[13px] leading-[18px] text-ink-2">{detail}</span>
-      </span>
-      {done ? (
-        <Pill tone="verdigris" icon={<Check size={12} strokeWidth={2.5} aria-hidden="true" />}>
-          Done
-        </Pill>
-      ) : current ? (
-        <Pill tone="muted">Next</Pill>
-      ) : null}
-    </li>
   );
 }

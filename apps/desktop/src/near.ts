@@ -9,7 +9,7 @@ export interface NearConfig {
   contract: string;
 }
 
-/** What "Save and check" found: the account exists, and the contract is Aftercall's ("ok"), absent ("missing") or another contract ("wrong"). */
+/** What the account check ("Check and continue") found: the account exists, and the contract is Aftercall's ("ok"), absent ("missing") or another contract ("wrong"). */
 export interface SetupCheck {
   account: boolean;
   contract: "ok" | "missing" | "wrong";
@@ -130,10 +130,16 @@ export function explorerTx(network: NearConfig["network"], txHash: string): stri
   return explorerTxUrl(network, txHash);
 }
 
+/** What the two setup signatures attach, as packages/core/src/wallet/actions.ts sends them. */
+export const REGISTER_DEPOSIT = "0.1 NEAR";
+export const KEY_ALLOWANCE = "0.25 NEAR";
+/** The two methods this Mac's limited key may call. */
+export const KEY_METHODS = ["pay", "record_proof"] as const;
+
 /** The one-time near-cli commands that connect the account to the app. */
 export function setupCommands(c: NearConfig, publicKey: string): { register: string; addKey: string } {
   return {
-    register: `near contract call-function as-transaction ${c.contract} register json-args '{}' prepaid-gas '30 Tgas' attached-deposit '0.1 NEAR' sign-as ${c.account} network-config ${c.network} sign-with-keychain send`,
-    addKey: `near account add-key ${c.account} grant-function-call-access --allowance '0.25 NEAR' --contract-account-id ${c.contract} --function-names 'pay, record_proof' use-manually-provided-public-key ${publicKey} network-config ${c.network} sign-with-keychain send`,
+    register: `near contract call-function as-transaction ${c.contract} register json-args '{}' prepaid-gas '30 Tgas' attached-deposit '${REGISTER_DEPOSIT}' sign-as ${c.account} network-config ${c.network} sign-with-keychain send`,
+    addKey: `near account add-key ${c.account} grant-function-call-access --allowance '${KEY_ALLOWANCE}' --contract-account-id ${c.contract} --function-names '${KEY_METHODS.join(", ")}' use-manually-provided-public-key ${publicKey} network-config ${c.network} sign-with-keychain send`,
   };
 }

@@ -5,7 +5,7 @@ import { isDesktop } from "./recorder";
 import { recovery, type RecoveryStatus } from "./recovery";
 import { errorText } from "./SettingsParts";
 
-/** What "Save and check" found for each name (absent: not checked yet). */
+/** What the account check found for each name (absent: not checked yet). */
 export interface Found {
   account?: boolean;
   contract?: SetupCheck["contract"];
@@ -32,7 +32,7 @@ export function useNearSetup() {
   const [publicKey, setPublicKey] = useState("");
   const [status, setStatus] = useState<NearStatus | null>(null);
   const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus | null>(null);
-  /** What "Save and check" found, and for which names: it applies only while they're unchanged. */
+  /** What the account check found, and for which names: it applies only while they're unchanged. */
   const [checked, setChecked] = useState<{ config: NearConfig; found: Found } | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +112,7 @@ export function useNearSetup() {
     setUnseen(null);
   };
 
-  /** What's wrong with the contract, as "Save and check" found it. */
+  /** What's wrong with the contract, as the account check found it. */
   const contractProblem = (c: NearConfig, f: Found): string | null =>
     f.contract === "missing" ? `No Aftercall contract at ${c.contract} on ${c.network} yet.` : f.contract === "wrong" ? `${c.contract} isn't the Aftercall contract.` : null;
 
@@ -134,7 +134,7 @@ export function useNearSetup() {
     return null;
   };
 
-  /** "Save and check". True when the account and contract passed and were saved. */
+  /** The account check ("Check and continue"). True when the account and contract passed and were saved. */
   const check = async (): Promise<boolean> => {
     setError(null);
     setErrorFrom("check");
@@ -163,7 +163,7 @@ export function useNearSetup() {
     setErrorFrom("sign");
     setUnseen(null);
     try {
-      // Nothing is signed against an account or contract that hasn't passed "Save and check".
+      // Nothing is signed against an account or contract that hasn't passed the account check.
       if (!accountDone) {
         const problem = await verify();
         if (problem) {

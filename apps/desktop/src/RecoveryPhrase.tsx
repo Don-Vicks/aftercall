@@ -8,7 +8,8 @@ import { isDesktop } from "./recorder";
 import { CheckCircle } from "./primitives/Check";
 import { Button, Card, Dialog, Input, Pill, SectionTitle, Spinner, Tick, cx, exit, springs, toast, useConfirm } from "./ui";
 import { CardRow, IconDisc, Why, errorText, rise } from "./SettingsParts";
-import { QuietAction, StepActions, StepHeading } from "./Flow";
+import { QuietAction, StepActions } from "./Flow";
+import { AssistantStep, BackButton } from "./SetupAssistant";
 
 /** "01", "02" … as the boards number words. */
 const nn = (n: number) => String(n).padStart(2, "0");
@@ -37,24 +38,34 @@ export function useNewPhrase() {
 }
 
 /** Step: the words, once, and a tick that they're on paper. */
-export function PhraseStep({ words, error, onLater, onContinue }: { words: string[]; error: string | null; onLater: () => void; onContinue: () => void }) {
+export function PhraseStep({ words, error, onBack, onContinue }: { words: string[]; error: string | null; onBack: () => void; onContinue: () => void }) {
   const [wrote, setWrote] = useState(false);
   const count = words.length || 12;
   const tickLabel = useId();
   return (
-    <>
-      <StepHeading title={`Write these ${count} words down`} intro="On paper, in order. They bring back this Mac's key on a new Mac." style={rise(1)} />
-      <div className="flex flex-col gap-3.5" style={rise(2)}>
+    <AssistantStep
+      icon={<KeyRound size={22} strokeWidth={1.75} />}
+      title={`Write these ${count} words down`}
+      intro="This Mac gets its own NEAR key for proofs and payments. These words bring it back on a new Mac. On paper, in order."
+      back={<BackButton onClick={onBack} />}
+      primary={
+        <Button variant="primary" disabled={!wrote} onClick={onContinue}>
+          Continue
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3" style={rise(1)}>
         {error ? (
           <p className="selectable m-0 text-record">{error}</p>
         ) : words.length === 0 ? (
           <Spinner label="Making your phrase" />
         ) : (
-          <ol aria-label="Recovery phrase" className="m-0 grid list-none grid-cols-3 gap-2 rounded-md bg-well p-3.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
+          <ol aria-label="Recovery phrase" className="m-0 grid list-none grid-cols-3 gap-1.5 rounded-md bg-well p-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
             {words.map((w, i) => (
               <li
                 key={i}
-                className="flex items-baseline gap-2.5 rounded-sm bg-raised px-3 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]"
+                className="flex items-baseline gap-2.5 rounded-sm bg-elevated px-3 py-2 shadow-1"
                 style={{ animation: `ac-in 280ms ${120 + i * 25}ms var(--ease) both` }}
               >
                 <span className="w-[18px] shrink-0 text-right font-mono text-xs text-muted">{nn(i + 1)}</span>
@@ -71,8 +82,8 @@ export function PhraseStep({ words, error, onLater, onContinue }: { words: strin
           Anyone with these words can use this Mac's key, within your contract's limits. Don't photograph them or paste them anywhere.
         </Why>
       </div>
-      <Card interactive onClick={() => words.length && setWrote(!wrote)} pad="none" style={rise(3)}>
-        <div className="flex items-center gap-3 px-4 py-3.5">
+      <Card interactive onClick={() => words.length && setWrote(!wrote)} pad="none" style={rise(2)}>
+        <div className="flex items-center gap-3 px-4 py-3">
           {/* The tick is the checkbox; the rest of the card is a bigger target for the pointer. */}
           <span onClick={(e) => e.stopPropagation()} className="inline-flex">
             <Tick checked={wrote} onChange={setWrote} disabled={!words.length} aria-labelledby={tickLabel} />
@@ -83,14 +94,7 @@ export function PhraseStep({ words, error, onLater, onContinue }: { words: strin
           <span className="text-[13px] text-muted">all {count}, in order</span>
         </div>
       </Card>
-      <StepActions style={rise(4)}>
-        <QuietAction onClick={onLater}>Set up later</QuietAction>
-        <Button variant="primary" size="lg" disabled={!wrote} onClick={onContinue}>
-          Continue
-          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
-        </Button>
-      </StepActions>
-    </>
+    </AssistantStep>
   );
 }
 
@@ -136,13 +140,20 @@ export function ConfirmStep({
   };
 
   return (
-    <>
-      <StepHeading title="Check you have them" intro="Type three of your words from the paper, not from memory." style={rise(1)} />
-      <section aria-labelledby={`${id}-h`} className="flex flex-col gap-3" style={rise(2)}>
-        <SectionTitle id={`${id}-h`} count="one from each third">
-          Your words
-        </SectionTitle>
-        <div className="flex flex-col rounded-md bg-raised shadow-[inset_0_0_0_1px_var(--hairline)]">
+    <AssistantStep
+      icon={<KeyRound size={22} strokeWidth={1.75} />}
+      title="Check you have them"
+      intro="Type three of your words from the paper, not from memory: one from each third."
+      back={<BackButton onClick={onBack}>Show words again</BackButton>}
+      primary={
+        <Button variant="primary" disabled={!all} loading={busy} onClick={onConfirm}>
+          Continue
+          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+        </Button>
+      }
+    >
+      <section aria-label="Your words" className="flex flex-col gap-3" style={rise(1)}>
+        <div className="flex flex-col rounded-md bg-elevated shadow-1">
           {ask.map((i, row) => {
             const ok = matches(i);
             const bad = wrong(i);
@@ -220,14 +231,7 @@ export function ConfirmStep({
         )}
         {error && <p className="selectable m-0 text-[13px] leading-[18px] text-record">{error}</p>}
       </section>
-      <StepActions style={rise(3)}>
-        <QuietAction onClick={onBack}>Show words again</QuietAction>
-        <Button variant="primary" size="lg" disabled={!all} loading={busy} onClick={onConfirm}>
-          Continue
-          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
-        </Button>
-      </StepActions>
-    </>
+    </AssistantStep>
   );
 }
 
@@ -436,7 +440,7 @@ export function RecoverySettings({
       !status?.hasKey ||
       (await confirm({
         title: "Make a new key for this Mac?",
-        body: "Payments and proofs stop until you authorise the new key once, under Authorise below.",
+        body: "Payments and proofs stop until you authorise the new key once, in Set up payments.",
         confirmLabel: "Make a new key",
         tone: "danger",
       }));
@@ -545,7 +549,7 @@ export function RecoverySettings({
         Aftercall keeps the key made from your words, never the words, so it can't show them again. Backups hold notes, projects, NEAR settings and autopilot
         rules. Audio and the NEAR AI key are left out.
         {legacy &&
-          " A new phrase makes a new key: you authorise it once under Authorise below, and the old key stays on your account until you remove it in your wallet."}
+          " A new phrase makes a new key: you authorise it once in Set up payments, and the old key stays on your account until you remove it in your wallet."}
       </Why>
 
       <AnimatePresence>
@@ -562,7 +566,7 @@ export function RecoverySettings({
               onCancel={() => setRestoring(false)}
               warning={
                 status?.hasKey
-                  ? "This replaces this Mac's current key with the one from the phrase. If that key isn't authorised yet, authorise it below."
+                  ? "This replaces this Mac's current key with the one from the phrase. If that key isn't authorised yet, authorise it in Set up payments."
                   : undefined
               }
               onDone={() => {
