@@ -91,9 +91,30 @@ pub fn clear_key() -> Result<(), String> {
     }
 }
 
+/// The notes for a long call can take NEAR AI several minutes to write, and the reply
+/// only comes once they're done (no streaming: the signature covers the whole body).
+const CHAT_TIMEOUT: Duration = Duration::from_secs(600);
+
 fn client() -> Result<reqwest::Client, String> {
     // Whisper on a 5-minute chunk can take a while; the gateway itself stops at 120 s.
-    reqwest::Client::builder().timeout(Duration::from_secs(180)).build().map_err(|e| e.to_string())
+    // A gateway that can't be reached at all fails fast instead of after the full wait.
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(180))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+/// A request that got no answer, in words: reqwest's own text ("error sending request
+/// for url …") hides whether it timed out or couldn't connect.
+fn send_error(e: reqwest::Error) -> String {
+    if e.is_timeout() {
+        "NEAR AI took too long to answer, so Aftercall stopped waiting. Nothing was lost; try again.".into()
+    } else if e.is_connect() {
+        "Couldn't connect to NEAR AI. Check the connection, then try again.".into()
+    } else {
+        e.to_string()
+    }
 }
 
 async fn body_text(res: reqwest::Response) -> Result<String, String> {
@@ -134,7 +155,7 @@ pub async fn transcribe(file: PathBuf, model: String, prompt: String) -> Result<
         .multipart(form)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(send_error)?;
     body_text(res).await
 }
 
@@ -185,7 +206,7 @@ pub async fn chat(body: String, e2ee: E2ee) -> Result<String, String> {
     for (name, value) in headers {
         req = req.header(name, value);
     }
-    let res = req.body(body).send().await.map_err(|e| e.to_string())?;
+    let res = req.timeout(CHAT_TIMEOUT).body(body).send().await.map_err(send_error)?;
     body_text(res).await
 }
 
@@ -206,7 +227,7 @@ pub async fn get(path: String) -> Result<String, String> {
         .header("x-no-aliasing", "true")
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(send_error)?;
     body_text(res).await
 }
 
