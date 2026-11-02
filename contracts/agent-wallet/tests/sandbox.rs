@@ -180,6 +180,10 @@ async fn refuses_unknown_payee_low_balance_and_paused() -> anyhow::Result<()> {
         .gas(near_workspaces::types::Gas::from_tgas(100)).transact().await?;
     assert!(format!("{:?}", unknown.into_result().unwrap_err()).contains("UNKNOWN_PAYEE"));
 
+    // Under the caps, more than the balance is refused. (Over a cap it would be parked: the
+    // balance is checked when the owner approves.)
+    e.victor.call(e.wallet.id(), "set_cap").args_json(json!({ "daily_cap": (1_000 * USDC).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
     let low = pay(&e, &app, 301 * USDC, "f-low").await?;
     assert!(format!("{:?}", low.into_result().unwrap_err()).contains("LOW_BALANCE"));
 

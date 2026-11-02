@@ -350,9 +350,11 @@ impl AgentWallet {
         assert_one_yocto();
         let owner = env::predecessor_account_id();
         let payment = self.take_pending(&owner, &followup_id);
-        // The payee may have been removed since; the usual checks still apply.
-        self.check_payable(&owner, &payment.payee, payment.amount, &followup_id);
+        // The payee may have been removed since; the usual checks still apply, and the
+        // balance must cover it now.
+        self.check_payable(&owner, &payment.payee, &followup_id);
         let w = self.wallet_mut(&owner);
+        require!(w.balance.0 >= payment.amount.0, "LOW_BALANCE");
         roll_day(w);
         w.balance = U128(w.balance.0 - payment.amount.0);
         // Approved over-cap payments still count towards today's spending.
@@ -389,7 +391,7 @@ impl AgentWallet {
         require!(env::prepaid_gas() >= MIN_GAS_FOR_PAY, "NEEDS_50_TGAS");
         require!(amount.0 > 0, "ZERO_AMOUNT");
         let owner = env::predecessor_account_id();
-        self.check_payable(&owner, &payee, amount, &followup_id);
+        self.check_payable(&owner, &payee, &followup_id);
         if let Some(route) = cross_chain {
             return self.pay_cross_chain(owner, payee, amount, memo, followup_id, route);
         }
@@ -413,6 +415,7 @@ impl AgentWallet {
             return PayResult { status: "blocked".into(), reason: Some(reason.into()), left_today: left };
         }
 
+        require!(w.balance.0 >= amount.0, "LOW_BALANCE");
         w.balance = U128(w.balance.0 - amount.0);
         w.spent_today = U128(w.spent_today.0 + amount.0);
         let left = U128(w.daily_cap.0 - w.spent_today.0);
@@ -566,6 +569,7 @@ impl AgentWallet {
             let left = U128(w.daily_cap.0.saturating_sub(w.spent_today.0));
             return PayResult { status: "blocked".into(), reason: Some(reason.into()), left_today: left };
         }
+        require!(w.balance.0 >= amount.0, "LOW_BALANCE");
         // Registering the deposit address with USDC comes out of the owner's storage credit.
         let fee = DEPOSIT_ADDRESS_REGISTRATION.as_yoctonear();
         require!(w.storage_credit.0 >= fee, "STORAGE_CREDIT_LOW");
@@ -611,13 +615,13 @@ impl AgentWallet {
         PayResult { status: "sending".into(), reason: None, left_today: left }
     }
 
-    fn check_payable(&mut self, owner: &AccountId, payee: &AccountId, amount: U128, followup_id: &str) {
+    fn check_payable(&mut self, owner: &AccountId, payee: &AccountId, followup_id: &str) {
         require!(followup_id.len() <= 64, "FOLLOWUP_ID_TOO_LONG");
         require!(!self.paid.contains(&(owner.clone(), followup_id.to_string())), "ALREADY_PAID");
         require!(self.is_listed(owner, payee), "UNKNOWN_PAYEE");
-        let w = self.wallet_mut(owner);
-        require!(!w.paused, "PAUSED");
-        require!(w.balance.0 >= amount.0, "LOW_BALANCE");
+        // The balance is checked where money moves (pay under the caps, approve_pending), so a
+        // payment over a cap is parked for the owner even when the wallet can't cover it yet.
+        require!(!self.wallet_mut(owner).paused, "PAUSED");
     }
 
     /// Removes a parked payment and returns its storage to the owner.
@@ -771,6 +775,34 @@ mod tests {
         // So a small payment the same day is over the cap, not silently allowed.
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 11));
         assert_eq!(c.pay(payee, U128(10 * USDC), None, "c".into(), None).status, "blocked");
+    }
+
+    #[test]
+    fn over_cap_parks_even_when_the_balance_cant_cover_it() {
+        let (mut c, owner, payee) = funded(10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        // 5,000 is over the 200 cap and more than the 1,000 held: parked for the owner, not refused.
+        let r = c.pay(payee.clone(), U128(5_000 * USDC), None, "big".into(), None);
+        assert_eq!((r.status.as_str(), r.reason.as_deref()), ("blocked", Some("OVER_CAP")));
+        assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 1_000 * USDC);
+        // Under the caps, the balance still decides.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_cap(U128(10_000 * USDC));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        let low = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.pay(payee.clone(), U128(1_001 * USDC), None, "low".into(), None)));
+        let Err(why) = low else { panic!("paid more than the balance") };
+        let why = why.downcast_ref::<String>().cloned().or_else(|| why.downcast_ref::<&str>().map(|x| x.to_string())).unwrap_or_default();
+        assert!(why.contains("LOW_BALANCE"), "{why}");
+    }
+
+    #[test]
+    #[should_panic(expected = "LOW_BALANCE")]
+    fn approving_a_parked_payment_needs_the_balance() {
+        let (mut c, owner, payee) = funded(10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee, U128(5_000 * USDC), None, "big".into(), None);
+        testing_env!(ctx(owner, NearToken::from_yoctonear(1), 10));
+        c.approve_pending("big".into());
     }
 
     #[test]
