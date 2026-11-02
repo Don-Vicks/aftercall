@@ -336,6 +336,10 @@ export async function processRecording(
       model: SUMMARY_MODEL,
       stream: false,
       max_tokens: SUMMARY_MAX_TOKENS,
+      // No thinking first: pulling decisions and items out of a transcript doesn't need it,
+      // and on a long call the reasoning alone ran past NEAR AI's 10-minute limit. Every
+      // item still has to quote the transcript exactly. A plaintext control, like max_tokens.
+      chat_template_kwargs: { enable_thinking: false },
       messages: encryptMessages(messages, key),
       response_format: { type: "json_schema", json_schema: { name: "meeting_notes", strict: true, schema: notesJsonSchema } },
     });
