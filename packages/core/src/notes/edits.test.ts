@@ -104,6 +104,8 @@ test("an edit back to the original clears the mark, and Restore original brings 
     done: true,
     claimed: { agent: "Codex", at: "t1" },
     completed: { agent: "Codex", at: "t2" },
+    // The quote behind the item is the signed one's, so edits and restores keep it.
+    evidence: { quote: "will book the venue", at: 20 },
   });
 });
 

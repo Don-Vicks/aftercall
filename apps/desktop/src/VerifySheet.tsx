@@ -16,13 +16,17 @@ import {
   verifyProof,
   type Check as ProofCheck,
   type CheckGroup,
+  type Meeting,
   type TeeCheck,
 } from "@aftercall/core";
 import { aboutCost, pricesDay } from "./costs";
 import { VERIFY_URL, explorerTx, near } from "./near";
 import type { SavedNotes } from "./nearai";
 import { plainProofError, proofReadiness, recordProof } from "./proofs";
-import { Button, Dialog, IconButton, Spinner, cx } from "./ui";
+import { isFirstProof } from "./firstProof";
+import { FirstTransaction } from "./FirstTransaction";
+import { SAMPLE_PROOF_NOTE, runSampleChecks, type SampleCheck } from "./sampleProof";
+import { Button, Dialog, IconButton, Pill, Spinner, cx } from "./ui";
 
 /** What each group's TEE did for this meeting, after its name. */
 const ROLE: Record<CheckGroup["key"], string> = {
@@ -35,7 +39,8 @@ const ROLE: Record<CheckGroup["key"], string> = {
 /** Rows shown per group until "Show all"; failures always show. */
 const FIRST = 4;
 
-/** The board's sequence: each row lands 70 ms after the one before. */
+/** The board's sequence: each row lands 90 ms after the one before (the design system's "Verified" moment). */
+const STEP = 90;
 const at = (ms: number): CSSProperties => ({ animation: `ac-in 280ms ${ms}ms var(--ease) both` });
 
 /**
@@ -130,15 +135,16 @@ export function VerifySheet({
   const verified = saved.meeting.verified && (again === null || again.every((c) => c.ok || c.id === "e2ee"));
   const checkedOn = saved.proof.version === 2 ? new Date(saved.proof.checkedAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
   const longest = Math.max(0, ...groups.map((g) => g.checks.length));
+  const first = Boolean(saved.onChain) && isFirstProof(recordingId);
 
-  // Row delays follow the board: groups at 120 ms + 40 each, rows from 260 ms, 70 apart.
+  // Row delays follow the board: groups at 120 ms + 40 each, rows from 260 ms, 90 apart.
   let row = 0;
-  const nextRow = () => 260 + Math.min(row++, 24) * 70;
+  const nextRow = () => 260 + Math.min(row++, 24) * STEP;
   const groupRows = groups.map((g) => {
     const ordered = [...g.checks.filter((c) => !c.ok), ...g.checks.filter((c) => c.ok)];
     return { g, shown: (all ? ordered : ordered.slice(0, Math.max(FIRST, g.checks.filter((c) => !c.ok).length))).map((c) => ({ c, delay: nextRow() })) };
   });
-  const lastRow = 260 + Math.min(row, 24) * 70;
+  const lastRow = 260 + Math.min(row, 24) * STEP;
 
   return (
     <Dialog onClose={onClose} aria-label={`Verify: ${saved.meeting.title}`} width={680} initialFocus={heading} className="gap-6!">
@@ -166,6 +172,9 @@ export function VerifySheet({
           <X size={18} />
         </IconButton>
       </header>
+
+      {/* This Mac's first proof on NEAR says what just happened; later ones keep the footer's "View on NEAR". */}
+      {first && saved.onChain && <FirstTransaction onChain={saved.onChain} delay={80} />}
 
       {recorded ? (
         <section aria-label="Checks made on this Mac when the notes were made" className="flex flex-col gap-3">
@@ -227,7 +236,7 @@ export function VerifySheet({
         ) : (
           <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
             {again.map((c, i) => {
-              const delay = lastRow + 160 + i * 70;
+              const delay = lastRow + 160 + i * STEP;
               return (
                 <li key={c.id} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 sm:grid-cols-[18px_286px_minmax(0,1fr)]" style={at(delay)}>
                   <Mark ok={c.ok} delay={delay} />
@@ -266,14 +275,19 @@ export function VerifySheet({
       <div className="flex flex-wrap items-center gap-2.5" style={at(lastRow + 280)}>
         {saved.onChain ? (
           <>
-            <Button
-              variant="quiet"
-              className="mr-auto px-0!"
-              icon={<ExternalLink size={13} aria-hidden="true" />}
-              onClick={() => openUrl(explorerTx(saved.onChain!.network, saved.onChain!.txHash))}
-            >
-              View on NEAR
-            </Button>
+            {first ? (
+              // The card above already links the transaction.
+              <span className="mr-auto" />
+            ) : (
+              <Button
+                variant="quiet"
+                className="mr-auto px-0!"
+                icon={<ExternalLink size={13} aria-hidden="true" />}
+                onClick={() => openUrl(explorerTx(saved.onChain!.network, saved.onChain!.txHash))}
+              >
+                View on NEAR
+              </Button>
+            )}
             <Button variant="primary" icon={<Copy size={14} aria-hidden="true" />} onClick={copyLink}>
               {copied ? "Link copied" : "Copy proof link"}
             </Button>
@@ -297,6 +311,107 @@ export function VerifySheet({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * The sample meeting's Verified sheet. The meeting is made up and has no proof, so this
+ * re-runs the real checks on a test proof (sampleProof.ts) and says plainly what that is.
+ * Checks it can't run from that proof show as not checked, never as passed.
+ */
+export function SampleVerifySheet({ meeting, onClose }: { meeting: Pick<Meeting, "title" | "project">; onClose: () => void }) {
+  // Run once as the sheet opens: the real verification code, on this Mac, offline.
+  const [checks] = useState<SampleCheck[]>(runSampleChecks);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const ran = checks.filter((c) => !c.skipped);
+  const passed = ran.filter((c) => c.ok).length;
+  const verified = passed === ran.length;
+  const lastRow = 260 + checks.length * STEP;
+
+  return (
+    <Dialog onClose={onClose} aria-label={`Verify: ${meeting.title}, sample`} width={680} initialFocus={heading} className="gap-6!">
+      <header className="flex items-center gap-5">
+        <Seal ok={verified} />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="t-eyebrow truncate text-muted">
+            {meeting.title} · {meeting.project} · Sample
+          </span>
+          <span className="flex flex-wrap items-center gap-3">
+            <h2 ref={heading} tabIndex={-1} className="m-0 font-serif text-[34px] leading-10 font-medium tracking-[-0.02em] text-ink outline-none">
+              {verified ? "Verified" : "Not verified"}
+            </h2>
+            <Pill tone="muted">Test proof</Pill>
+          </span>
+          <span className="text-[13px] leading-[18px] text-muted">
+            <span className="font-semibold text-ink">{passed === ran.length ? `${passed} checks passed` : `${passed} of ${ran.length} checks passed`}</span>
+            {` · ${checks.length - ran.length} not checked · re-run on this Mac just now`}
+          </span>
+        </div>
+        <IconButton aria-label="Close" onClick={onClose} className="-mt-1 -mr-1.5 self-start">
+          <X size={18} />
+        </IconButton>
+      </header>
+
+      <p role="note" className="m-0 grid grid-cols-[18px_minmax(0,1fr)] gap-x-2.5 rounded-sm bg-well px-4 py-3.5 text-[13px] leading-[19px] text-ink-2" style={at(120)}>
+        <Info size={16} strokeWidth={2} aria-hidden="true" className="mt-px ml-px text-muted" />
+        <span>
+          <span className="font-semibold text-ink">Sample.</span> {SAMPLE_PROOF_NOTE}
+        </span>
+      </p>
+
+      <section aria-labelledby="sample-again" className="flex flex-col gap-3">
+        <h3 id="sample-again" className="t-section m-0 text-ink" style={at(180)}>
+          Proof, checked again now <span className="font-medium text-muted">on this Mac, offline</span>
+        </h3>
+        <ol className="m-0 flex list-none flex-col gap-2.5 p-0">
+          {checks.map((c, i) => {
+            const delay = 260 + i * STEP;
+            return (
+              <li key={c.id} className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 sm:grid-cols-[18px_250px_minmax(0,1fr)]" style={at(delay)}>
+                {c.skipped ? <NotChecked /> : <Mark ok={c.ok} delay={delay} />}
+                <span className={cx("text-[15px] leading-5 font-semibold", c.skipped ? "text-ink-2" : "text-ink")}>{c.label}</span>
+                <span className="selectable col-start-2 text-[13px] leading-[18px] break-words text-ink-2 sm:col-start-3">{c.detail}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <section aria-labelledby="sample-not" className="flex flex-col gap-2.5 border-t border-hairline pt-4" style={at(lastRow + 80)}>
+        <h3 id="sample-not" className="t-section m-0 text-ink">
+          What this doesn't prove
+        </h3>
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {NOT_PROVEN.map((n) => (
+            <li key={n} className="grid grid-cols-[18px_minmax(0,1fr)] gap-x-2.5 text-[13px] leading-[19px] text-ink-2">
+              <span aria-hidden="true" className="text-center text-muted">
+                –
+              </span>
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2.5" style={at(lastRow + 120)}>
+        <span className="flex-1 text-[13px] leading-[18px] text-ink-2">
+          A real meeting's sheet also lists every check made in secure hardware when its notes were made, and can record its proof on NEAR.
+        </span>
+        <Button variant="primary" onClick={onClose}>
+          Done
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** A check the sample can't run: a quiet dash, read as "not checked", never as a pass or a failure. */
+function NotChecked() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" role="img" aria-label="Not checked" className="mt-px">
+      <circle cx="9" cy="9" r="8.25" fill="none" stroke="var(--border)" strokeWidth="1.5" />
+      <path d="M6 9h6" stroke="var(--muted)" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
   );
 }
 

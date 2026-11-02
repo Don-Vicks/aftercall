@@ -220,3 +220,22 @@ test("firstName", () => {
   assert.equal(firstName("Ada Lovelace"), "Ada");
   assert.equal(firstName("Designer"), "Designer");
 });
+
+test("decisions and items carry their quotes onto a person's page, and old meetings without quotes show none", () => {
+  const ev1 = { quote: "The API fix has to ship before the demo", at: 31 };
+  const ev2 = { quote: "I'll look out for the recap", at: 60 };
+  const quoted = meeting({
+    id: idAt(11, 3),
+    invited: [ada],
+    decisions: ["Ship the fix first."],
+    decisionEvidence: [ev1],
+    actionItems: [item("a1", "Ada", "Look out for the recap", { evidence: ev2 }), item("a2", "Ada", "Old item")],
+  });
+  const old = meeting({ id: idAt(11, 2), invited: [ada], decisions: ["An old decision."] });
+  const p = buildPeople([quoted, old], { me: ["Victor"], now: NOW }).people.find((x) => x.email === ada.email)!;
+  assert.deepEqual(p.decisions.find((d) => d.text === "Ship the fix first.")?.evidence, ev1);
+  const oldDecision = p.decisions.find((d) => d.text === "An old decision.")!;
+  assert.equal("evidence" in oldDecision, false);
+  assert.deepEqual(p.theyOwe.find((i) => i.itemId === "a1")?.evidence, ev2);
+  assert.equal("evidence" in p.theyOwe.find((i) => i.itemId === "a2")!, false);
+});

@@ -27,6 +27,11 @@ export interface ActionItem {
   owner: string;
   due?: string;
   done: boolean;
+  /**
+   * The exact words behind the item, as found in the transcript, and when they were said.
+   * Absent on meetings made before quotes were kept: show no quote then.
+   */
+  evidence?: Evidence;
   /** Set when the item was closed in a later meeting. */
   closedNote?: string;
   /** Set when a connected agent (through the local MCP server) took the item on. */
@@ -151,6 +156,11 @@ export interface Meeting {
   verified: boolean;
   summary: string;
   decisions: string[];
+  /**
+   * The exact words behind each decision, in the same order as `decisions`. Absent on
+   * meetings made before quotes were kept; read it through `decisionEvidence`.
+   */
+  decisionEvidence?: Evidence[];
   actionItems: ActionItem[];
   followUps: FollowUp[];
   transcript: TranscriptLine[];
@@ -164,6 +174,16 @@ export interface Meeting {
   attendees?: Attendee[];
   /** The invited people who have an email address: where a recap can go. */
   invited?: Attendee[];
+}
+
+/**
+ * The quote behind the meeting's i-th decision, or undefined when the meeting was made
+ * before quotes were kept (or the lists don't line up, so no quote is better than a wrong one).
+ */
+export function decisionEvidence(m: Pick<Meeting, "decisions" | "decisionEvidence">, i: number): Evidence | undefined {
+  const all = m.decisionEvidence;
+  if (!all || all.length !== m.decisions.length) return undefined;
+  return all[i];
 }
 
 /** "02:14" for 134 seconds. */

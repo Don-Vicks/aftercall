@@ -29,6 +29,7 @@ import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, d
 import { parseUsdcInput } from "./WalletScreen";
 import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
+import { TimeChip } from "./Quote";
 
 /** Everything a follow-up row can ask the app to do. */
 export interface FollowUpHandlers {
@@ -37,7 +38,8 @@ export interface FollowUpHandlers {
   onDismiss: (id: string) => void;
   /** Takes a dismiss back (the toast's Undo): the row returns in the state it had. */
   onRestore: (id: string, status: FollowUpStatus) => void;
-  onJumpTo: (at: number, quote: string) => void;
+  /** Shows the quote's line in the transcript; `focusId` is the row to focus again on "Back to notes". */
+  onJumpTo: (at: number, quote: string, focusId?: string) => void;
   onReviewBlocked: (id: string) => void;
   onDraft: (id: string) => void;
   onSetEmail: (id: string, email: string) => void;
@@ -207,19 +209,11 @@ function Head({ name, title, sub, clip, children }: { name: string; title: React
   );
 }
 
-/** The quote the follow-up came from, and a link to it in the transcript. */
-function EvidenceQuote({ quote, at, onJumpTo }: { quote: string; at: number; onJumpTo: (at: number, quote: string) => void }) {
+/** The quote the follow-up came from, and its time: a chip that jumps to it in the transcript. */
+function EvidenceQuote({ quote, at, returnId, onJumpTo }: { quote: string; at: number; returnId: string; onJumpTo: FollowUpHandlers["onJumpTo"] }) {
   return (
     <p className="t-quote selectable m-0 text-ink-2">
-      “{quote}”{" "}
-      <button
-        type="button"
-        onClick={() => onJumpTo(at, quote)}
-        aria-label={`Show ${formatClock(at)} in the transcript`}
-        className="font-mono text-[12px] not-italic text-verdigris hover:text-verdigris-hover"
-      >
-        {formatClock(at)}
-      </button>
+      “{quote}” <TimeChip id={returnId} at={at} onJump={() => onJumpTo(at, quote, returnId)} />
     </p>
   );
 }
@@ -404,7 +398,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This recap waits for you.</span>}
             {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
-            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
+            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={h.onJumpTo} />
             {!f.to && (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-2">
@@ -662,7 +656,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This payment waits for you.</span>}
             {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
-            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} onJumpTo={h.onJumpTo} />
+            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={h.onJumpTo} />
             <dl className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-well px-3.5 py-3">
               <div className="flex items-baseline gap-2.5">
                 <dt className="w-14 shrink-0 text-[12px] text-muted">Heard</dt>

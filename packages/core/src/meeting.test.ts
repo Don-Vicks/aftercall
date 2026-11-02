@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatClock, formatDuration } from "./meeting.ts";
+import { decisionEvidence, formatClock, formatDuration } from "./meeting.ts";
 
 test("formats transcript clock times", () => {
   assert.equal(formatClock(134), "02:14");
@@ -10,4 +10,11 @@ test("formats transcript clock times", () => {
 test("formats meeting durations", () => {
   assert.equal(formatDuration(192), "3 min 12 s");
   assert.equal(formatDuration(42), "42 s");
+});
+
+test("a decision's quote, and none for meetings saved before quotes were kept", () => {
+  const ev = { quote: "The API fix has to ship before the demo", at: 31 };
+  assert.deepEqual(decisionEvidence({ decisions: ["Ship it"], decisionEvidence: [ev] }, 0), ev);
+  assert.equal(decisionEvidence({ decisions: ["Ship it"] }, 0), undefined, "old notes.json has no decisionEvidence");
+  assert.equal(decisionEvidence({ decisions: ["Ship it", "Hire"], decisionEvidence: [ev] }, 0), undefined, "lists that don't line up show no quote rather than a wrong one");
 });

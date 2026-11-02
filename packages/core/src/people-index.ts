@@ -1,5 +1,5 @@
 import { matchAttendee, type Attendee } from "./calendar.ts";
-import type { FollowUpStatus, Meeting } from "./meeting.ts";
+import { decisionEvidence, type Evidence, type FollowUpStatus, type Meeting } from "./meeting.ts";
 import { isYou } from "./people.ts";
 import { meetingTime } from "./when.ts";
 
@@ -26,6 +26,8 @@ export interface PersonItem {
    * "one-to-one" (your item from a call where your calendar invited only them).
    */
   why: "owner" | "named" | "one-to-one";
+  /** The exact words behind the item; absent on meetings made before quotes were kept. */
+  evidence?: Evidence;
 }
 
 export interface PersonPayment {
@@ -50,6 +52,8 @@ export interface PersonDecision {
   meetingId: string;
   meeting: string;
   text: string;
+  /** The exact words behind the decision; absent on meetings made before quotes were kept. */
+  evidence?: Evidence;
 }
 
 export interface Person {
@@ -417,12 +421,17 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
       p.meetingIds.push(m.id);
       if (how === "invited") {
         p.invitedTo.push(m.id);
-        p.decisions.push(...m.decisions.map((text) => ({ ...base, text })));
+        p.decisions.push(
+          ...m.decisions.map((text, i) => {
+            const evidence = decisionEvidence(m, i);
+            return { ...base, text, ...(evidence ? { evidence } : {}) };
+          }),
+        );
       }
     }
 
     for (const a of m.actionItems) {
-      const item = { ...base, itemId: a.id, text: a.text, owner: a.owner, due: a.due, done: a.done };
+      const item = { ...base, itemId: a.id, text: a.text, owner: a.owner, due: a.due, done: a.done, ...(a.evidence ? { evidence: a.evidence } : {}) };
       if (isYou(a.owner, me)) {
         for (const p of people) {
           if (namesThem(a.text, p)) p.youOwe.push({ ...item, why: "named" });

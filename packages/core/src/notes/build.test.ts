@@ -41,6 +41,17 @@ test("keeps what the transcript backs up and drops what it doesn't", () => {
   );
 });
 
+test("decisions and action items keep the quote behind them, as spelled in the transcript, with its time", () => {
+  const { meeting } = buildMeeting({ ...base, notes, payees: [] });
+  assert.deepEqual(meeting.decisionEvidence, [{ quote: "The API fix has to ship before the demo", at: 31 }]);
+  assert.equal(meeting.decisionEvidence?.length, meeting.decisions.length, "one quote per kept decision, in order");
+  assert.deepEqual(meeting.actionItems[0].evidence, { quote: "Send Ada the recap after this call", at: 134 });
+
+  // The model's words differ in case and punctuation; the kept quote is the transcript's.
+  const loose = notesSchema.parse({ ...notes, decisions: [{ text: "Ship first.", evidence: "the api fix HAS to ship before the demo" }] });
+  assert.deepEqual(buildMeeting({ ...base, notes: loose, payees: [] }).meeting.decisionEvidence, [{ quote: "The API fix has to ship before the demo", at: 31 }]);
+});
+
 test("payments carry the heard words, the parsed amount and the listed payee", () => {
   const { meeting } = buildMeeting({ ...base, notes, payees: [{ name: "Designer", account: "designer.near" }] });
   const pay = meeting.followUps.find((f) => f.kind === "payment");

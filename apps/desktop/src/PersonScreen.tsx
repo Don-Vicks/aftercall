@@ -12,10 +12,12 @@ import {
   parseDue,
   relativeDay,
   type Meeting,
+  type PersonDecision,
   type PersonItem,
   type PersonPayment,
 } from "@aftercall/core";
-import { Avatar, AvatarStack, Button, Pill, SectionTitle, Strike, Tick, cx, type PillTone } from "./ui";
+import { Avatar, AvatarStack, Button, Pill, RollingNumber, SectionTitle, Strike, Tick, cx, type PillTone } from "./ui";
+import { QuoteReveal, useQuoteReveal } from "./Quote";
 import { Empty, Footnote, Page, PageHeader, Why, rise } from "./PagePieces";
 import { minutes, plural } from "./library";
 
@@ -116,7 +118,14 @@ export function PersonScreen({
       </header>
 
       <section aria-labelledby="ps-between" className="flex flex-col gap-3.5" style={rise(1)}>
-        <SectionTitle id="ps-between" count={`${open} open`}>
+        <SectionTitle
+          id="ps-between"
+          count={
+            <>
+              <RollingNumber value={open} /> open
+            </>
+          }
+        >
           Between you
         </SectionTitle>
         <div className="grid grid-cols-2 gap-10">
@@ -191,12 +200,7 @@ export function PersonScreen({
           </SectionTitle>
           <ol className="m-0 flex list-decimal flex-col gap-2 pl-[22px] font-serif marker:text-muted text-[18px] leading-7 text-ink">
             {p.decisions.map((d, i) => (
-              <li key={`${d.meetingId}-${i}`}>
-                <span className="flex items-baseline justify-between gap-4">
-                  <span className="selectable">{d.text}</span>
-                  <MeetingLink onClick={() => onOpenMeeting(d.meetingId)}>{meta(d.meetingId)}</MeetingLink>
-                </span>
-              </li>
+              <DecisionRow key={`${d.meetingId}-${i}`} decision={d} meta={meta(d.meetingId)} onOpenMeeting={onOpenMeeting} />
             ))}
           </ol>
         </section>
@@ -273,6 +277,33 @@ export function PersonScreen({
   );
 }
 
+/** A decision made together, with the words behind it on hover or focus; ↵ opens them in the transcript. */
+function DecisionRow({ decision: d, meta, onOpenMeeting }: { decision: PersonDecision; meta: string; onOpenMeeting: (id: string, at?: number) => void }) {
+  const quoteId = useId();
+  const reveal = useQuoteReveal(!!d.evidence);
+  const ev = d.evidence;
+  return (
+    <li
+      tabIndex={ev ? 0 : undefined}
+      aria-describedby={ev ? quoteId : undefined}
+      onKeyDown={(e) => {
+        if (ev && e.key === "Enter" && e.target === e.currentTarget) {
+          e.preventDefault();
+          onOpenMeeting(d.meetingId, ev.at);
+        }
+      }}
+      className="rounded-sm"
+      {...reveal.bind}
+    >
+      <span className="flex items-baseline justify-between gap-4">
+        <span className="selectable">{d.text}</span>
+        <MeetingLink onClick={() => onOpenMeeting(d.meetingId)}>{meta}</MeetingLink>
+      </span>
+      {ev && <QuoteReveal evidence={ev} open={reveal.open} descId={quoteId} onJump={() => onOpenMeeting(d.meetingId, ev.at)} className="pr-40 pb-0.5" />}
+    </li>
+  );
+}
+
 function MeetingLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick} className="shrink-0 rounded-sm font-sans text-[13px] leading-[18px] text-muted underline decoration-border underline-offset-[3px] hover:text-ink">
@@ -299,7 +330,7 @@ function ItemColumn({
   now: number;
   meetingsById: Record<string, Meeting>;
   meta: (meetingId: string) => string;
-  onOpenMeeting: (id: string) => void;
+  onOpenMeeting: (id: string, at?: number) => void;
   onToggleItem: (meetingId: string, itemId: string) => void;
 }) {
   const sorted = [...items].sort((a, b) => Number(a.done) - Number(b.done));
@@ -307,7 +338,10 @@ function ItemColumn({
     <div className="flex min-w-0 flex-col gap-2">
       <h3 className="m-0 flex items-center gap-2 text-[14px] leading-5 font-semibold text-ink">
         {avatar}
-        {title} <span className="font-medium text-muted">{openCount(items)} open</span>
+        {title}{" "}
+        <span className="font-medium text-muted">
+          <RollingNumber value={openCount(items)} /> open
+        </span>
       </h3>
       {sorted.length === 0 ? (
         <p className="m-0 border-t border-hairline pt-3 text-ink-2">{empty}</p>
@@ -324,6 +358,7 @@ function ItemColumn({
                 overdue={due.startsWith("Due ")}
                 meta={meta(it.meetingId)}
                 onOpen={() => onOpenMeeting(it.meetingId)}
+                onJump={(at) => onOpenMeeting(it.meetingId, at)}
                 onToggle={() => onToggleItem(it.meetingId, it.itemId)}
               />
             );
@@ -334,11 +369,30 @@ function ItemColumn({
   );
 }
 
-function ItemRow({ item, due, overdue, meta, onOpen, onToggle }: { item: PersonItem; due: string; overdue: boolean; meta: string; onOpen: () => void; onToggle: () => void }) {
+function ItemRow({
+  item,
+  due,
+  overdue,
+  meta,
+  onOpen,
+  onJump,
+  onToggle,
+}: {
+  item: PersonItem;
+  due: string;
+  overdue: boolean;
+  meta: string;
+  onOpen: () => void;
+  /** Opens the meeting's transcript at the item's quote. */
+  onJump: (at: number) => void;
+  onToggle: () => void;
+}) {
   const textId = useId();
+  const quoteId = useId();
+  const reveal = useQuoteReveal(!!item.evidence);
   return (
-    <li className="flex items-start gap-3 border-b border-hairline py-3">
-      <Tick checked={item.done} onChange={onToggle} aria-labelledby={textId} />
+    <li className="flex items-start gap-3 border-b border-hairline py-3" {...reveal.bind}>
+      <Tick checked={item.done} onChange={onToggle} aria-labelledby={textId} aria-describedby={item.evidence ? quoteId : undefined} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span id={textId} className="text-[15px] leading-[22px] text-ink">
           <Strike on={item.done}>{item.text}</Strike>
@@ -346,6 +400,7 @@ function ItemRow({ item, due, overdue, meta, onOpen, onToggle }: { item: PersonI
         <span className="flex">
           <MeetingLink onClick={onOpen}>{meta}</MeetingLink>
         </span>
+        {item.evidence && <QuoteReveal evidence={item.evidence} open={reveal.open} descId={quoteId} onJump={() => onJump(item.evidence!.at)} />}
       </span>
       {due && <span className={cx("text-[13px] leading-[22px] whitespace-nowrap", overdue ? "font-medium text-caution" : due === "no date" ? "text-muted" : "text-ink-2")}>{due}</span>}
     </li>

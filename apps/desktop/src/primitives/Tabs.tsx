@@ -3,6 +3,7 @@ import * as m from "motion/react-m";
 import { cx } from "./cx";
 import { springs } from "./motion";
 import { LayoutMotion } from "./MotionProvider";
+import { RollingNumber } from "./RollingNumber";
 
 export interface TabItem<T extends string> {
   id: T;
@@ -68,7 +69,11 @@ export function Tabs<T extends string>({
               className={cx("relative pt-1 pb-2.5 font-semibold transition-colors duration-(--dur-1)", selected ? "text-ink" : "text-muted hover:text-ink")}
             >
               {t.label}
-              {t.count !== undefined && <span className="ml-1.5 font-medium text-muted">{t.count}</span>}
+              {t.count !== undefined && (
+                <span className="ml-1.5 font-medium text-muted">
+                  <RollingNumber value={t.count} />
+                </span>
+              )}
               {selected && <m.span layoutId={`${id}-underline`} transition={springs.snappy} aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-ink" />}
             </button>
           );

@@ -1,4 +1,4 @@
-import type { ActionItem, AmountProblemKind, FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
+import type { ActionItem, AmountProblemKind, Evidence, FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
 import type { Notes } from "./schema.ts";
 import { findQuote } from "./transcript.ts";
@@ -76,18 +76,28 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
   const { notes, transcript } = input;
   const dropped: Dropped[] = [];
 
-  const decisions = notes.decisions.flatMap((d) => {
-    if (findQuote(transcript, d.evidence)) return [d.text];
-    dropped.push({ kind: "decision", text: d.text, reason: "QUOTE_NOT_IN_TRANSCRIPT" });
-    return [];
-  });
+  // Each kept item carries its quote as found in the transcript (original spelling, and
+  // the line's time), so the app can show the words behind it and jump to them.
+  const decisions: string[] = [];
+  const decisionEvidence: Evidence[] = [];
+  for (const d of notes.decisions) {
+    const quote = findQuote(transcript, d.evidence);
+    if (!quote) {
+      dropped.push({ kind: "decision", text: d.text, reason: "QUOTE_NOT_IN_TRANSCRIPT" });
+      continue;
+    }
+    decisions.push(d.text);
+    decisionEvidence.push({ quote: quote.text, at: quote.at });
+  }
 
   const actionItems: ActionItem[] = notes.action_items.flatMap((a, i) => {
-    if (!findQuote(transcript, a.evidence)) {
+    const quote = findQuote(transcript, a.evidence);
+    if (!quote) {
       dropped.push({ kind: "action item", text: a.text, reason: "QUOTE_NOT_IN_TRANSCRIPT" });
       return [];
     }
-    return [{ id: `a${i + 1}`, text: a.text, owner: a.owner?.trim() || "Unassigned", due: a.due ?? undefined, done: false }];
+    const evidence = { quote: quote.text, at: quote.at };
+    return [{ id: `a${i + 1}`, text: a.text, owner: a.owner?.trim() || "Unassigned", due: a.due ?? undefined, done: false, evidence }];
   });
 
   const followUps: FollowUp[] = notes.followups.flatMap((f, i): FollowUp[] => {
@@ -127,6 +137,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
       verified: input.verified,
       summary: notes.summary,
       decisions,
+      decisionEvidence,
       actionItems,
       followUps,
       transcript,

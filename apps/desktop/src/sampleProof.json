@@ -1,0 +1,332 @@
+{
+  "source": "test-kit",
+  "madeAt": "2026-11-02T15:07:51.391Z",
+  "bundle": {
+    "version": 2,
+    "meetingId": "sample-test-proof",
+    "summaryModel": "Qwen/Qwen3.8-27B",
+    "whisperModel": "openai/whisper-large-v3",
+    "attestationNonce": {
+      "summary": "f72d3892730a4b7876c11018aeb04782b6df44bdc1196a6043bf54b93658cb3f",
+      "whisper": "110c911b9a44527d33fec9122c5c0c05c8a1b50a0b75cbdb84c45602370e4710"
+    },
+    "signingAlgo": "ed25519",
+    "attestedSigners": [
+      "4e7fa104be06ddefc3ec79f99f33beaa1d5f9954323dccbf03cd36f5ebc84cd1"
+    ],
+    "gatewaySigners": [
+      "c514ed6103078f6f08b603247928f0b7e062d1ad23c5ec9a83fcacae990cc748"
+    ],
+    "requestHash": "4a3651fedf16516e2eb37b6c6615a1131b1e4fb835aab853e7cdbd26947a70ec",
+    "responseHash": "4cd8144e0d08c417e4c52287ac9349892dc95bbc10291402a68343f888852402",
+    "signature": {
+      "text": "Qwen/Qwen3.8-27B:4a3651fedf16516e2eb37b6c6615a1131b1e4fb835aab853e7cdbd26947a70ec:4cd8144e0d08c417e4c52287ac9349892dc95bbc10291402a68343f888852402",
+      "signature": "6b9740eacad1336310a487331dcd73269f7b842d69038e670883f084d0eff3ca8353a4f71a6b6d5512fe5b7656885aaba463d1bb5ba4f30c54cb34211616d90c",
+      "signing_address": "4e7fa104be06ddefc3ec79f99f33beaa1d5f9954323dccbf03cd36f5ebc84cd1",
+      "signing_algo": "ed25519",
+      "signature_kind": "provider_tee"
+    },
+    "e2ee": {
+      "used": true,
+      "modelKey": "4e7fa104be06ddefc3ec79f99f33beaa1d5f9954323dccbf03cd36f5ebc84cd1"
+    },
+    "checks": [
+      {
+        "id": "gateway-tdx",
+        "scope": "gateway",
+        "label": "Genuine Intel TDX confidential VM",
+        "ok": true,
+        "detail": "Quote verified against Intel's collateral; TCB UpToDate"
+      },
+      {
+        "id": "gateway-debug",
+        "scope": "gateway",
+        "label": "Debug mode off",
+        "ok": true,
+        "detail": "The quote's TD attributes have the debug bit clear"
+      },
+      {
+        "id": "gateway-binds-key",
+        "scope": "gateway",
+        "label": "The TEE made its signing key",
+        "ok": true,
+        "detail": "Quote report data holds signing key c514ed6103…0cc748"
+      },
+      {
+        "id": "gateway-binds-nonce",
+        "scope": "gateway",
+        "label": "Evidence is fresh",
+        "ok": true,
+        "detail": "Quote report data and the reply hold the nonce made for this check"
+      },
+      {
+        "id": "gateway-rtmr3",
+        "scope": "gateway",
+        "label": "Boot log matches the quote",
+        "ok": true,
+        "detail": "2 boot events replay to the quote's RTMR3"
+      },
+      {
+        "id": "gateway-compose",
+        "scope": "gateway",
+        "label": "Known software is running",
+        "ok": true,
+        "detail": "sha256 of the attested Docker compose (767c679a8846…) is the quote's mr_config"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-tdx",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Genuine Intel TDX confidential VM",
+        "ok": true,
+        "detail": "Quote verified against Intel's collateral; TCB UpToDate"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-debug",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Debug mode off",
+        "ok": true,
+        "detail": "The quote's TD attributes have the debug bit clear"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-binds-key",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "The TEE made its signing key",
+        "ok": true,
+        "detail": "Quote report data holds signing key 29dfc94be7…3f9aa8"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-binds-nonce",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Evidence is fresh",
+        "ok": true,
+        "detail": "Quote report data and the reply hold the nonce made for this check"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-rtmr3",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Boot log matches the quote",
+        "ok": true,
+        "detail": "2 boot events replay to the quote's RTMR3"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-compose",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Known software is running",
+        "ok": true,
+        "detail": "sha256 of the attested Docker compose (767c679a8846…) is the quote's mr_config"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-gpu",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "Genuine NVIDIA confidential GPU",
+        "ok": true,
+        "detail": "NVIDIA NRAS passed 2 GPUs; all 3 tokens signed by NVIDIA (ES384)"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-gpu-nonce",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "GPU evidence is fresh",
+        "ok": true,
+        "detail": "GPU evidence and every NVIDIA token carry the nonce made for this check"
+      },
+      {
+        "id": "model-openai/whisper-large-v3-gpu-secure",
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "label": "GPUs in secure mode",
+        "ok": true,
+        "detail": "Secure boot on, debug off, measurements match NVIDIA's reference, no warnings"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-tdx",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Genuine Intel TDX confidential VM",
+        "ok": true,
+        "detail": "Quote verified against Intel's collateral; TCB UpToDate"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-debug",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Debug mode off",
+        "ok": true,
+        "detail": "The quote's TD attributes have the debug bit clear"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-binds-key",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "The TEE made its signing key",
+        "ok": true,
+        "detail": "Quote report data holds signing key 4e7fa104be…c84cd1"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-binds-nonce",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Evidence is fresh",
+        "ok": true,
+        "detail": "Quote report data and the reply hold the nonce made for this check"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-rtmr3",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Boot log matches the quote",
+        "ok": true,
+        "detail": "2 boot events replay to the quote's RTMR3"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-compose",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Known software is running",
+        "ok": true,
+        "detail": "sha256 of the attested Docker compose (767c679a8846…) is the quote's mr_config"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-gpu",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "Genuine NVIDIA confidential GPU",
+        "ok": true,
+        "detail": "NVIDIA NRAS passed 2 GPUs; all 3 tokens signed by NVIDIA (ES384)"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-gpu-nonce",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "GPU evidence is fresh",
+        "ok": true,
+        "detail": "GPU evidence and every NVIDIA token carry the nonce made for this check"
+      },
+      {
+        "id": "model-Qwen/Qwen3.8-27B-gpu-secure",
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "label": "GPUs in secure mode",
+        "ok": true,
+        "detail": "Secure boot on, debug off, measurements match NVIDIA's reference, no warnings"
+      },
+      {
+        "id": "response-request",
+        "scope": "response",
+        "label": "Signed over exactly what was sent",
+        "ok": true,
+        "detail": "sha256 of the request bytes matches the signed text"
+      },
+      {
+        "id": "response-response",
+        "scope": "response",
+        "label": "Signed over exactly what came back",
+        "ok": true,
+        "detail": "sha256 of the response bytes matches the signed text"
+      },
+      {
+        "id": "response-model",
+        "scope": "response",
+        "label": "Signed for the model asked for",
+        "ok": true,
+        "detail": "Signed text names Qwen/Qwen3.8-27B"
+      },
+      {
+        "id": "response-signer",
+        "scope": "response",
+        "label": "Signed by an attested TEE",
+        "ok": true,
+        "detail": "Ed25519 signer 4e7fa104be…c84cd1 is the model TEE, bound in a verified quote"
+      },
+      {
+        "id": "response-e2ee",
+        "scope": "response",
+        "label": "Transcript encrypted to the attested model",
+        "ok": true,
+        "detail": "Encrypted on this Mac to Ed25519 key 4e7fa104be…c84cd1, bound in a verified quote; the reply came back encrypted to a key made for this request"
+      }
+    ],
+    "evidence": [
+      {
+        "scope": "gateway",
+        "signingAlgo": "ed25519",
+        "signingAddress": "c514ed6103078f6f08b603247928f0b7e062d1ad23c5ec9a83fcacae990cc748",
+        "nonce": "f72d3892730a4b7876c11018aeb04782b6df44bdc1196a6043bf54b93658cb3f",
+        "tcbStatus": "UpToDate",
+        "reportData": "c514ed6103078f6f08b603247928f0b7e062d1ad23c5ec9a83fcacae990cc748f72d3892730a4b7876c11018aeb04782b6df44bdc1196a6043bf54b93658cb3f",
+        "mrConfigId": "01767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371000000000000000000000000000000",
+        "composeHash": "767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371",
+        "verified": true
+      },
+      {
+        "scope": "model",
+        "model": "openai/whisper-large-v3",
+        "signingAlgo": "ecdsa",
+        "signingAddress": "29dfc94be702c38dc1c9d59b930169e9cf3f9aa8",
+        "nonce": "110c911b9a44527d33fec9122c5c0c05c8a1b50a0b75cbdb84c45602370e4710",
+        "tcbStatus": "UpToDate",
+        "reportData": "29dfc94be702c38dc1c9d59b930169e9cf3f9aa8000000000000000000000000110c911b9a44527d33fec9122c5c0c05c8a1b50a0b75cbdb84c45602370e4710",
+        "mrConfigId": "01767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371000000000000000000000000000000",
+        "composeHash": "767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371",
+        "verified": true
+      },
+      {
+        "scope": "model",
+        "model": "Qwen/Qwen3.8-27B",
+        "signingAlgo": "ed25519",
+        "signingAddress": "4e7fa104be06ddefc3ec79f99f33beaa1d5f9954323dccbf03cd36f5ebc84cd1",
+        "nonce": "f72d3892730a4b7876c11018aeb04782b6df44bdc1196a6043bf54b93658cb3f",
+        "tcbStatus": "UpToDate",
+        "reportData": "4e7fa104be06ddefc3ec79f99f33beaa1d5f9954323dccbf03cd36f5ebc84cd1f72d3892730a4b7876c11018aeb04782b6df44bdc1196a6043bf54b93658cb3f",
+        "mrConfigId": "01767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371000000000000000000000000000000",
+        "composeHash": "767c679a88464b11f731ebc5ad6be02873f7151fd1f8e8367fc4e017e520d371",
+        "verified": true,
+        "nvidiaToken": "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCIsImtpZCI6Im52LWVhdC1raWQtdGVzdCJ9.eyJpc3MiOiJodHRwczovL25yYXMuYXR0ZXN0YXRpb24ubnZpZGlhLmNvbSIsInN1YiI6Ik5WSURJQS1QTEFURk9STS1BVFRFU1RBVElPTiIsImVhdF9ub25jZSI6ImY3MmQzODkyNzMwYTRiNzg3NmMxMTAxOGFlYjA0NzgyYjZkZjQ0YmRjMTE5NmE2MDQzYmY1NGI5MzY1OGNiM2YiLCJleHAiOjE3OTM2MzU2NzEsImlhdCI6MTc5MzYzMjA3MSwieC1udmlkaWEtb3ZlcmFsbC1hdHQtcmVzdWx0Ijp0cnVlfQ.XOahYT7s6ghZ9XoFueUpfEjutLDTO3J6SdHwvyTAJBciQyzQfu5xHWVzVuEaP4rvcbF6UZdwp43QLcXFZDNRJ-odmeZEtN2kiXB0veTqdDqXFaByldjgz7z4nQhogfEP"
+      }
+    ],
+    "checkedAt": "2026-11-02T15:07:51.391Z",
+    "transcriptHash": "ef4c835605fff1b9307e22093629948a35320b5a6b733749c7d34f61e66fcaef",
+    "notesHash": "8f4611207c307f5478f421fcfedbb8a0c691be367af20befa6b4e831a81ebda3",
+    "yourNotesHash": "af5798557f49e4f39ca702cb99384fa593d97509b42a9f0017c0ba054b6e292c",
+    "dropped": {
+      "decisions": 0,
+      "actionItems": 0,
+      "followUps": 0
+    }
+  },
+  "notes": {
+    "title": "Export fix check-in",
+    "summary": "The export fix ships on Thursday; you send Sam a recap tonight.",
+    "decisions": [
+      {
+        "text": "Ship the export fix on Thursday",
+        "evidence": "ship the export fix on Thursday"
+      }
+    ],
+    "action_items": [
+      {
+        "text": "Send Sam the recap",
+        "owner": "You",
+        "due": "tonight",
+        "evidence": "send Sam the recap tonight"
+      }
+    ],
+    "followups": [
+      {
+        "type": "email",
+        "to_name": "Sam",
+        "subject": "Recap: export fix on Thursday",
+        "evidence": "send Sam the recap tonight"
+      }
+    ]
+  },
+  "yourNotes": "Thursday, not Friday.",
+  "yourNotesSalt": "812e2b7cdbb570175645e054ae7038023930e74b73c298205a31660fea3f0e3f"
+}

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { Check, Pause, Play, Plus, RefreshCw } from "lucide-react";
-import { CHAIN_NAME, exampleAccount, formatUsdc, isValidPayoutAddress, meetingLabel, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
-import { SignPageDown, contractFollowupId, near, signInWallet, waitFor, type WalletView } from "./near";
-import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast } from "./ui";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { Check, ExternalLink, Pause, Play, Plus, RefreshCw } from "lucide-react";
+import { CHAIN_NAME, exampleAccount, formatClock, formatUsdc, isValidPayoutAddress, meetingLabel, meetingTime, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
+import { SignPageDown, contractFollowupId, explorerTx, near, signInWallet, waitFor, type WalletView } from "./near";
+import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast, useRecalledFigure } from "./ui";
 import { isDesktop } from "./recorder";
 import { dailyCap as sampleDailyCap, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 
@@ -20,6 +21,21 @@ export interface BlockedPayment {
   followUp: PaymentFollowUp;
 }
 
+/** A payment that went out, with the meeting whose words asked for it. */
+interface PaidPayment {
+  meeting: Meeting;
+  f: PaymentFollowUp & { amount: bigint };
+}
+
+/** Paid follow-ups, newest meeting first, then latest paid. */
+function paidPayments(meetings: Meeting[], now = Date.now()): PaidPayment[] {
+  return meetings
+    .flatMap((meeting) =>
+      meeting.followUps.flatMap((f) => (f.kind === "payment" && f.status === "paid" && f.amount !== null ? [{ meeting, f: f as PaidPayment["f"] }] : [])),
+    )
+    .sort((a, b) => (meetingTime(b.meeting, now) ?? 0) - (meetingTime(a.meeting, now) ?? 0) || (b.f.doneAt ?? "").localeCompare(a.f.doneAt ?? ""));
+}
+
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
 const plain = (n: bigint) => formatUsdc(n).replace(/,/g, "");
 const short = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -32,6 +48,8 @@ const short = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)
 export function WalletScreen({
   blocked,
   samplePaid,
+  paymentsFrom,
+  onOpenMeeting,
   onOpenSettings,
   onResolved,
   onChanged,
@@ -39,6 +57,10 @@ export function WalletScreen({
   blocked: BlockedPayment[];
   /** What the sample meeting has paid: the browser preview's sample wallet counts it as spent today. */
   samplePaid: bigint;
+  /** Meetings whose paid follow-ups make up Recent payments. */
+  paymentsFrom: Meeting[];
+  /** Opens a meeting at a moment in its transcript (a payment's quote). */
+  onOpenMeeting: (id: string, at?: number) => void;
   onOpenSettings: () => void;
   /** A blocked payment was paid (approved) or dismissed (declined) on NEAR. */
   onResolved: (meetingId: string, followUpId: string, status: "paid" | "dismissed") => void;
@@ -143,10 +165,10 @@ export function WalletScreen({
   const today = Math.floor(Date.now() / 86_400_000);
   const spentToday = w.day === today ? BigInt(w.spent_today) : 0n;
   const left = cap > spentToday ? cap - spentToday : 0n;
-  const pct = cap > 0n ? Number((spentToday * 1000n) / cap) / 10 : 0;
   const busy = Boolean(waiting);
   // A payment on Solana or Base over a cap is refused, not parked: its quote would expire before your wallet approved it.
   const crossChain = (view.destinations ?? []).length > 0;
+  const payments = paidPayments(paymentsFrom);
 
   return (
     <Shell eyebrow={eyebrow} sample={!isDesktop} onRefresh={load}>
@@ -154,7 +176,7 @@ export function WalletScreen({
         <section aria-label="Balance" className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex flex-col gap-1">
             <span className="t-eyebrow text-muted">Balance</span>
-            <Balance value={balance} />
+            <Balance value={balance} payments={payments} />
           </div>
           <div className="flex gap-2">
             <Button disabled={busy} onClick={() => setSheet("withdraw")}>
@@ -165,23 +187,12 @@ export function WalletScreen({
             </Button>
           </div>
         </section>
-        <div className="flex flex-col gap-2 border-t border-hairline pt-[18px]">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="font-semibold">Spent today</span>
-            <span className="font-mono text-[13px]">
-              {formatUsdc(spentToday)} <span className="text-muted">of {formatUsdc(cap)}</span>
-            </span>
-          </div>
-          <div role="img" aria-label={`${formatUsdc(spentToday)} of ${formatUsdc(cap)} USDC spent today`} className="h-1.5 overflow-hidden rounded-full bg-well">
-            <div className="h-1.5 rounded-full bg-verdigris transition-[width] duration-(--dur-3) ease-calm" style={{ width: `${Math.min(100, pct)}%` }} />
-          </div>
-          <span className="text-xs text-muted">
-            <span className="font-mono">{formatUsdc(left)}</span> left today
-          </span>
-        </div>
+        <SpentToday balance={balance} spent={spentToday} cap={cap} />
       </Card>
 
-      <section aria-labelledby="h-limits" className="flex flex-col gap-3.5" style={rise(2)}>
+      <RecentPayments payments={payments} network={isDesktop ? network : null} onOpenMeeting={onOpenMeeting} style={rise(2)} />
+
+      <section aria-labelledby="h-limits" className="flex flex-col gap-3.5" style={rise(3)}>
         <SectionTitle id="h-limits" count="signed by you">
           Limits
         </SectionTitle>
@@ -229,7 +240,7 @@ export function WalletScreen({
         </div>
       </section>
 
-      <section aria-labelledby="h-wait" className="flex flex-col gap-3.5" style={rise(3)}>
+      <section aria-labelledby="h-wait" className="flex flex-col gap-3.5" style={rise(4)}>
         <SectionTitle id="h-wait" count={blocked.length || undefined}>
           Waiting for you
         </SectionTitle>
@@ -297,7 +308,7 @@ export function WalletScreen({
         )}
       </section>
 
-      <div className="flex flex-wrap gap-10" style={rise(4)}>
+      <div className="flex flex-wrap gap-10" style={rise(5)}>
         <section aria-labelledby="h-payees" className="flex min-w-0 flex-[999_1_400px] flex-col gap-2.5">
           <div className="flex items-baseline justify-between gap-3">
             <SectionTitle id="h-payees" count={view.payees.length}>
@@ -615,22 +626,39 @@ function Shell({ eyebrow, sample, onRefresh, children }: { eyebrow: string; samp
   );
 }
 
-/** The hero balance. Its digits roll when it changes; a deposit that lands floats "+25.00" off it. */
-function Balance({ value }: { value: bigint }) {
-  const before = useRef(value);
-  const [chip, setChip] = useState<{ key: number; text: string } | null>(null);
+/** When the balance rolls on arrival: once the page and its card have risen in. */
+const ARRIVE_MS = 420;
+
+/**
+ * The hero balance. Its digits roll when it changes, and a chip floats off it: "+25.00"
+ * for a deposit, "−50.00 · Designer" for a payment. Opened just after a change made
+ * elsewhere (a payment approved on a meeting page), it rolls from the figure before it.
+ */
+function Balance({ value, payments }: { value: bigint; payments: PaidPayment[] }) {
+  const text = formatUsdc(value);
+  const recalled = useRecalledFigure("wallet-balance", text);
+  const before = useRef(recalled === undefined ? value : (parseUsdcInput(recalled) ?? value));
+  const first = useRef(true);
+  const [chip, setChip] = useState<{ key: number; text: string; out: boolean; wait: number } | null>(null);
   useEffect(() => {
-    if (value > before.current) setChip({ key: Date.now(), text: `+${formatUsdc(value - before.current)}` });
+    const delta = value - before.current;
     before.current = value;
+    const wait = first.current ? ARRIVE_MS : 0;
+    first.current = false;
+    if (delta === 0n) return;
+    // Name the payee when the drop is exactly one payment's amount (the newest such).
+    const payee = delta < 0n ? payments.find((p) => p.f.amount === -delta)?.f.payeeName : undefined;
+    setChip({ key: Date.now(), out: delta < 0n, wait, text: delta > 0n ? `+${formatUsdc(delta)}` : `−${formatUsdc(-delta)}${payee ? ` · ${payee}` : ""}` });
+    // `payments` is read for the label only (not a dependency): the chip follows the balance.
   }, [value]);
   useEffect(() => {
     if (!chip) return;
-    const t = setTimeout(() => setChip(null), 1700);
+    const t = setTimeout(() => setChip(null), chip.wait + 1700);
     return () => clearTimeout(t);
   }, [chip]);
   return (
     <span className="relative inline-flex items-baseline gap-2.5 self-start">
-      <RollingNumber value={formatUsdc(value)} className="t-figure-xl" />
+      <RollingNumber value={text} from={recalled} remember="wallet-balance" delay={ARRIVE_MS} duration={620} className="t-figure-xl" />
       <span aria-hidden="true" className="font-mono text-[15px] text-muted">
         USDC
       </span>
@@ -638,13 +666,140 @@ function Balance({ value }: { value: bigint }) {
         <span
           key={chip.key}
           aria-hidden="true"
-          className="absolute top-1.5 left-full ml-2.5 inline-flex h-[26px] items-center rounded-full bg-verdigris-tint px-2.5 font-mono text-[13px] font-medium whitespace-nowrap text-verdigris"
-          style={{ animation: "ac-rise 1600ms var(--ease) both" }}
+          className={cx(
+            "absolute top-1.5 left-full ml-2.5 inline-flex h-[26px] items-center rounded-full px-2.5 font-mono text-[13px] font-medium whitespace-nowrap",
+            chip.out ? "bg-well text-ink" : "bg-verdigris-tint text-verdigris",
+          )}
+          style={{ animation: `ac-rise 1600ms var(--ease) ${chip.wait}ms both` }}
         >
           {chip.text}
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Today's spending against the daily cap. Opened just after a payment made elsewhere, the
+ * bar and figures move from before it, with the balance: the drop since the balance was
+ * last seen is taken off today's spending to find where they start.
+ */
+function SpentToday({ balance, spent, cap }: { balance: bigint; spent: bigint; cap: bigint }) {
+  const recalled = useRecalledFigure("wallet-balance", formatUsdc(balance));
+  const drop = recalled === undefined ? 0n : (parseUsdcInput(recalled) ?? balance) - balance;
+  const startSpent = drop > 0n && drop <= spent ? spent - drop : spent;
+  const [arrived, setArrived] = useState(startSpent === spent);
+  useEffect(() => {
+    if (arrived) return;
+    const t = setTimeout(() => setArrived(true), ARRIVE_MS);
+    return () => clearTimeout(t);
+  }, [arrived]);
+  const leftOf = (n: bigint) => (cap > n ? cap - n : 0n);
+  const shownSpent = arrived ? spent : startSpent;
+  const pct = cap > 0n ? Number((shownSpent * 1000n) / cap) / 10 : 0;
+  const from = startSpent === spent ? undefined : formatUsdc(startSpent);
+  return (
+    <div className="flex flex-col gap-2 border-t border-hairline pt-[18px]">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-semibold">Spent today</span>
+        <span className="font-mono text-[13px]">
+          <RollingNumber value={formatUsdc(spent)} from={from} delay={ARRIVE_MS} duration={620} /> <span className="text-muted">of {formatUsdc(cap)}</span>
+        </span>
+      </div>
+      <div role="img" aria-label={`${formatUsdc(spent)} of ${formatUsdc(cap)} USDC spent today`} className="h-1.5 overflow-hidden rounded-full bg-well">
+        <div className="h-1.5 rounded-full bg-verdigris transition-[width] duration-[620ms] ease-calm" style={{ width: `${Math.min(100, pct)}%` }} />
+      </div>
+      <span className="text-xs text-muted">
+        <RollingNumber value={formatUsdc(leftOf(spent))} from={from === undefined ? undefined : formatUsdc(leftOf(startSpent))} delay={ARRIVE_MS} duration={620} className="font-mono" /> left today
+      </span>
+    </div>
+  );
+}
+
+/**
+ * What the agent wallet paid, each with the words that asked for it. The meeting and
+ * the quote's time open the transcript there; the transaction opens on the NEAR explorer.
+ */
+function RecentPayments({
+  payments,
+  network,
+  onOpenMeeting,
+  style,
+}: {
+  payments: PaidPayment[];
+  /** Null in the browser preview, where nothing is on NEAR. */
+  network: Network | null;
+  onOpenMeeting: (id: string, at?: number) => void;
+  style?: CSSProperties;
+}) {
+  const [all, setAll] = useState(false);
+  const shown = all ? payments : payments.slice(0, 5);
+  return (
+    <section aria-labelledby="h-paid" className="flex flex-col gap-2.5" style={style}>
+      <SectionTitle id="h-paid" count={payments.length || undefined}>
+        Recent payments
+      </SectionTitle>
+      {payments.length === 0 ? (
+        <p className="m-0 text-ink-2">No payments yet. When Aftercall pays someone, it shows here with the words from the meeting that asked for it.</p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col border-t border-hairline p-0">
+          {shown.map(({ meeting, f }) => (
+            <li key={`${meeting.id}:${f.id}`} className="flex items-start gap-3.5 border-b border-hairline py-3.5">
+              <Avatar name={f.payeeName} size={32} decorative />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex items-baseline justify-between gap-4">
+                  <span className="truncate font-semibold">{f.payeeName}</span>
+                  <span className="shrink-0 font-mono">
+                    {formatUsdc(f.amount)} <span className="text-[13px] text-muted">USDC</span>
+                  </span>
+                </span>
+                <span className="t-quote text-[14px] text-ink-2">“{f.evidence.quote}”</span>
+                <span className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted">
+                  <span>
+                    Paid{f.doneAt ? ` ${f.doneAt}` : ""}
+                    {f.crossChain ? ` on ${CHAIN_NAME[f.crossChain.chain]}` : ""}
+                    {f.byAutopilot ? " by autopilot" : ""}
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenMeeting(meeting.id, f.evidence.at)}
+                    aria-label={`Open ${meeting.title} at ${formatClock(f.evidence.at)}, where it was said`}
+                    className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink"
+                  >
+                    {meeting.title}
+                    <span className="rounded-[5px] bg-well px-1.5 font-mono text-[12px] leading-[18px] text-ink-2">{formatClock(f.evidence.at)}</span>
+                  </button>
+                  {f.ref && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      {network ? (
+                        <button
+                          type="button"
+                          onClick={() => openUrl(explorerTx(network, f.ref!))}
+                          aria-label={`Open transaction ${short(f.ref)} on the NEAR explorer`}
+                          className="inline-flex items-center gap-1 font-mono text-[12px] text-verdigris hover:text-verdigris-hover"
+                        >
+                          {short(f.ref)}
+                          <ExternalLink size={12} strokeWidth={2} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <span className="font-mono text-[12px]">{short(f.ref)}</span>
+                      )}
+                    </>
+                  )}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {payments.length > 5 && (
+        <button type="button" onClick={() => setAll((v) => !v)} className="self-start text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+          {all ? "Show fewer" : `Show all ${payments.length}`}
+        </button>
+      )}
+    </section>
   );
 }
 

@@ -19,7 +19,8 @@ import {
   type ItemFields,
   type Meeting,
 } from "@aftercall/core";
-import { Avatar, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from "./ui";
+import { Avatar, Button, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from "./ui";
+import { AllDone, QuoteReveal, useAllDone, useQuoteReveal } from "./Quote";
 import { EditItemButton, EditedMark, ItemEditor, editButtonId, focusEditButton, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
 import { plural } from "./library";
@@ -89,7 +90,8 @@ export function ActionItemsScreen({
   onToggleItem: (meetingId: string, itemId: string) => void;
   onEditItem?: EditItem;
   originalOf?: OriginalOf;
-  onOpenMeeting: (id: string) => void;
+  /** Opens a meeting; with `at`, on its transcript at that second. */
+  onOpenMeeting: (id: string, at?: number) => void;
   onOpenAgents: () => void;
 }) {
   const [now] = useState(() => Date.now());
@@ -177,6 +179,9 @@ export function ActionItemsScreen({
           rows: list.filter((r) => visible(r) && r.group === g.id).sort((a, b) => (a.due ?? 0) - (b.due ?? 0)),
         }));
   const done = tab === "agents" ? [] : list.filter((r) => !visible(r));
+  const openHere = tab === "agents" ? 1 : openOf(list);
+  const allDone = useAllDone(openHere, list.length, `${tab}:${project ?? ""}`);
+  const empty = sections.every((s) => s.rows.length === 0);
   let n = 0;
 
   return (
@@ -216,17 +221,9 @@ export function ActionItemsScreen({
       </div>
 
       <TabPanel tabsId="actions" value={tab} className="-mt-3 flex flex-col">
-        {sections.every((s) => s.rows.length === 0) && (
+        {empty && (
           <div style={rise(2)}>
-            <Empty title={tab === "mine" ? "Nothing open for you" : tab === "others" ? "No one owes you anything open" : "No agent has taken an item yet"}>
-              {tab === "agents"
-                ? "With Coding agents on and claiming allowed, Claude Code or Codex can claim an action item and mark it done. You'll see it here."
-                : meetings.length === 0
-                  ? "Action items appear once a recorded meeting has notes."
-                  : done.length
-                    ? `${plural(done.length, "item")} already done.`
-                    : "Your meetings haven't named any here yet."}
-            </Empty>
+            <EmptyState tab={tab} meetings={meetings.length} done={done.length} openMine={openOf(byTab.mine)} onShowDone={() => setShowDone(true)} onMine={() => setTab("mine")} />
           </div>
         )}
         {sections.map((s, si) =>
@@ -257,10 +254,17 @@ export function ActionItemsScreen({
                   onCloseEditor={() => closeEditor(r)}
                   original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                   onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
+                  onJump={(at) => onOpenMeeting(r.meeting.id, at)}
                 />
               ))}
             </section>
           ),
+        )}
+
+        {tab !== "agents" && !empty && (
+          <AllDone show={openHere === 0} animate={allDone.animate}>
+            {tab === "mine" ? "Nothing of yours is open." : "Nothing anyone owes you is open."}
+          </AllDone>
         )}
 
         {done.length > 0 && (
@@ -290,6 +294,7 @@ export function ActionItemsScreen({
                     onCloseEditor={() => closeEditor(r)}
                     original={originalOf?.(r.meeting.id, r.item.id) ?? null}
                     onOpenMeeting={() => onOpenMeeting(r.meeting.id)}
+                    onJump={(at) => onOpenMeeting(r.meeting.id, at)}
                   />
                 ))}
               </section>
@@ -320,6 +325,69 @@ export function ActionItemsScreen({
   );
 }
 
+/** What an empty tab says: why it's empty, and where to go from here. */
+function EmptyState({
+  tab,
+  meetings,
+  done,
+  openMine,
+  onShowDone,
+  onMine,
+}: {
+  tab: Tab;
+  meetings: number;
+  done: number;
+  openMine: number;
+  onShowDone: () => void;
+  onMine: () => void;
+}) {
+  if (tab === "agents") {
+    return (
+      <Empty title="No agent has taken an item yet">
+        With Coding agents on and claiming allowed, Claude Code or Codex can claim an action item and mark it done. You'll see it here.
+      </Empty>
+    );
+  }
+  if (meetings === 0) {
+    return (
+      <Empty title="No action items yet">
+        Record a meeting and its notes list who said they'd do what, each with the exact words from the call. They gather here.
+      </Empty>
+    );
+  }
+  const showDone = done > 0 && (
+    <Button variant="secondary" size="sm" onClick={onShowDone}>
+      Show {plural(done, "done item")}
+    </Button>
+  );
+  if (tab === "mine") {
+    return done > 0 ? (
+      <Empty title="All clear" action={showDone}>
+        {done === 1 ? "Your one action item is done." : `All ${done} of your action items are done.`} New ones arrive with the next meeting's notes, each with the words that were said.
+      </Empty>
+    ) : (
+      <Empty title="Nothing for you yet">When someone on a call says you'll do something, it lands here with the exact words that were said.</Empty>
+    );
+  }
+  const toMine =
+    openMine > 0 ? (
+      <Button variant="secondary" size="sm" onClick={onMine}>
+        See your {plural(openMine, "open item")}
+      </Button>
+    ) : (
+      showDone
+    );
+  return done > 0 ? (
+    <Empty title="Nobody owes you anything open" action={toMine}>
+      {done === 1 ? "The one item someone else said they'd do is done." : `All ${done} items others said they'd do are done.`} New promises from your calls land here with their words.
+    </Empty>
+  ) : (
+    <Empty title="Nobody owes you anything yet" action={toMine}>
+      When someone on a call says “I'll send it” or “I'll check with legal”, it shows up here with their words, so you know what to chase.
+    </Empty>
+  );
+}
+
 function AgentBadge({ name }: { name: string }) {
   return (
     <span
@@ -343,6 +411,7 @@ function ItemRow({
   onCloseEditor,
   original,
   onOpenMeeting,
+  onJump,
 }: {
   row: Row;
   tab: Tab;
@@ -357,9 +426,13 @@ function ItemRow({
   onCloseEditor: () => void;
   original: ItemFields | null;
   onOpenMeeting: () => void;
+  /** Opens the meeting's transcript at the item's quote. */
+  onJump: (at: number) => void;
 }) {
   const textId = useId();
+  const quoteId = useId();
   const a = r.item;
+  const reveal = useQuoteReveal(!!a.evidence && !editing);
   const agent = a.completed?.agent ?? a.claimed?.agent;
   const line = agentLine(a, now);
   const mt = meetingTime(r.meeting, now);
@@ -390,60 +463,63 @@ function ItemRow({
   }
 
   return (
-    <div className="group flex items-center gap-3 border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }}>
-      <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} />
-      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
-        <span className="max-w-full self-start text-[15px] leading-[21px] text-ink">
-          <span id={textId} className="selectable">
-            <Strike on={a.done}>{a.text}</Strike>
+    <div className="group border-b border-hairline py-3" style={{ animation: `ac-in 280ms ${index * 40}ms var(--ease) both` }} {...reveal.bind}>
+      <div className="flex items-center gap-3">
+        <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} aria-describedby={a.evidence ? quoteId : undefined} />
+        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+          <span className="max-w-full self-start text-[15px] leading-[21px] text-ink">
+            <span id={textId} className="selectable">
+              <Strike on={a.done}>{a.text}</Strike>
+            </span>
+            <EditedMark item={a} />
           </span>
-          <EditedMark item={a} />
-        </span>
-        <span className="truncate text-[13px] leading-[19px]">
-          {tab === "others" && (
-            <>
-              <span className="font-medium text-ink">{r.ownerName}</span>
-              <span className="text-muted"> · </span>
-            </>
-          )}
-          {tab === "mine" && unassigned && <span className="text-muted">No owner named · </span>}
-          {line && (tab === "agents" || tab === "mine") && (
-            <>
-              <span className="font-medium text-verdigris">{line.lead}</span>
-              <span className="text-muted">{line.rest}</span>
-            </>
-          )}
-          <button type="button" onClick={onOpenMeeting} className="rounded-sm text-ink-2 underline decoration-border decoration-1 underline-offset-[3px] hover:text-ink">
-            {r.meeting.title}
-          </button>
-          <span className="text-muted">{when}</span>
-        </span>
-        {tab === "agents" && a.done && quote && <span className="selectable font-serif text-[15px] leading-[22px] text-ink-2 italic">“{quote}”</span>}
-      </span>
-      <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
-        <span className="relative">
-          {onEdit && <EditItemButton id={editButtonId(r.key)} text={a.text} onClick={onOpenEditor} />}
-          {label}
-        </span>
-      </span>
-      <span
-        className="flex w-[52px] shrink-0 justify-end"
-        role="img"
-        aria-label={tab === "agents" && agent ? agent : agent && tab === "mine" ? `You, with ${agent} on it` : tab === "others" ? r.ownerName : "You"}
-      >
-        {tab === "agents" && agent ? (
-          <AgentBadge name={agent} />
-        ) : (
-          <>
-            <Avatar name={tab === "others" ? r.ownerName : "You"} you={tab !== "others"} size={28} ring="raised" decorative />
-            {tab === "mine" && agent && (
-              <span className="-ml-1.5 inline-flex">
-                <AgentBadge name={agent} />
-              </span>
+          <span className="truncate text-[13px] leading-[19px]">
+            {tab === "others" && (
+              <>
+                <span className="font-medium text-ink">{r.ownerName}</span>
+                <span className="text-muted"> · </span>
+              </>
             )}
-          </>
-        )}
-      </span>
+            {tab === "mine" && unassigned && <span className="text-muted">No owner named · </span>}
+            {line && (tab === "agents" || tab === "mine") && (
+              <>
+                <span className="font-medium text-verdigris">{line.lead}</span>
+                <span className="text-muted">{line.rest}</span>
+              </>
+            )}
+            <button type="button" onClick={onOpenMeeting} className="rounded-sm text-ink-2 underline decoration-border decoration-1 underline-offset-[3px] hover:text-ink">
+              {r.meeting.title}
+            </button>
+            <span className="text-muted">{when}</span>
+          </span>
+          {tab === "agents" && a.done && quote && <span className="selectable font-serif text-[15px] leading-[22px] text-ink-2 italic">“{quote}”</span>}
+        </span>
+        <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
+          <span className="relative">
+            {onEdit && <EditItemButton id={editButtonId(r.key)} text={a.text} onClick={onOpenEditor} />}
+            {label}
+          </span>
+        </span>
+        <span
+          className="flex w-[52px] shrink-0 justify-end"
+          role="img"
+          aria-label={tab === "agents" && agent ? agent : agent && tab === "mine" ? `You, with ${agent} on it` : tab === "others" ? r.ownerName : "You"}
+        >
+          {tab === "agents" && agent ? (
+            <AgentBadge name={agent} />
+          ) : (
+            <>
+              <Avatar name={tab === "others" ? r.ownerName : "You"} you={tab !== "others"} size={28} ring="raised" decorative />
+              {tab === "mine" && agent && (
+                <span className="-ml-1.5 inline-flex">
+                  <AgentBadge name={agent} />
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+      {a.evidence && <QuoteReveal evidence={a.evidence} open={reveal.open} descId={quoteId} onJump={() => onJump(a.evidence!.at)} className="pr-[140px] pl-[34px]" />}
     </div>
   );
 }

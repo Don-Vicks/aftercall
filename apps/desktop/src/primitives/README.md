@@ -56,6 +56,8 @@ Reduced motion: nothing moves, things fade. The `ac-*` keyframes that move becom
 <MeProvider me={[account, "Victor"]}>…</MeProvider>   // which names are "you" (also matches "You", "Me")
 
 <RollingNumber value={balance} format={(n) => formatUsdc(n)} />   // inside t-figure-xl; no roll on mount
+<RollingNumber value={text} from={before} delay={420} duration={620} />   // shows `from`, then rolls to `value` once the page has arrived
+<RollingNumber value={text} remember="wallet-balance" />   // shared key: a copy mounting within 15 s of a change it missed rolls from the old figure, once (useRecalledFigure reads the same memory)
 <Meter level={rmsToLevel(rms)} tone="verdigris|ink|record" label="Your mic" />   // or levelRef={ref} for rAF updates
 <StageList stages={[{ id: "gateway", label: "Gateway", state: "done|active|todo", detail: "…" }]} />
 <Spinner size={14} tone="verdigris|current" label="Loading" />

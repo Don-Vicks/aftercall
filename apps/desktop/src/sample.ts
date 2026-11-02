@@ -75,15 +75,29 @@ export const syncWithAda: Meeting = {
     "Ship the API fix before Friday's demo.",
     "Refresh the deck with the designer, with a 50 USDC deposit now.",
   ],
+  // The words behind each decision and action item, word for word from the transcript below.
+  decisionEvidence: [
+    { quote: "If it slips, we move the demo, not the fix", at: 31 },
+    { quote: "pay the designer the fifty dollar deposit today", at: 134 },
+  ],
   actionItems: [
-    { id: "a1", text: "Send Ada the recap", owner: "You", due: "today", done: false },
-    { id: "a2", text: "Ship the API fix", owner: "You", due: "by Friday", done: false, claimed: { agent: "Claude Code", at: todayAt(14, 20) } },
+    { id: "a1", text: "Send Ada the recap", owner: "You", due: "today", done: false, evidence: { quote: "Send Ada the recap after this call", at: 134 } },
+    {
+      id: "a2",
+      text: "Ship the API fix",
+      owner: "You",
+      due: "by Friday",
+      done: false,
+      claimed: { agent: "Claude Code", at: todayAt(14, 20) },
+      evidence: { quote: "The API fix has to ship before the demo", at: 31 },
+    },
     {
       id: "a3",
       text: "Get deck feedback from Ada",
       owner: "You",
       done: true,
       closedNote: "Closed here · opened in Deck review, 3 Nov",
+      evidence: { quote: "Your feedback on the deck was useful", at: 72 },
     },
   ],
   followUps: [
@@ -139,7 +153,7 @@ export const syncWithAda: Meeting = {
  * restore the original in memory. A real meeting reads these from notes.json.
  */
 export const syncWithAdaSigned: Pick<Notes, "action_items"> = {
-  action_items: syncWithAda.actionItems.map((a) => ({ text: a.text, owner: a.owner, due: a.due ?? null, evidence: "" })),
+  action_items: syncWithAda.actionItems.map((a) => ({ text: a.text, owner: a.owner, due: a.due ?? null, evidence: a.evidence?.quote ?? "" })),
 };
 
 /**

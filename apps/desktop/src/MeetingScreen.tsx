@@ -1,18 +1,32 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
+import { decisionEvidence, formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type Evidence, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
 import { ExportMenu } from "./ExportMenu";
 import { EditItemButton, EditedMark, ItemEditor, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
-import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
+import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, RollingNumber, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
+import { AllDone, BackPill, QuoteReveal, flashLine, useAllDone, useQuoteReveal } from "./Quote";
 import { grow } from "./SettingsParts";
+import { freshKey, useFresh } from "./freshItems";
 
 type Tab = "notes" | "transcript";
 
 /** The board's entrance: each block rises in 40 ms after the one before. */
 const rise = (i: number, ms = 320): CSSProperties => ({ animation: `ac-in ${ms}ms ${Math.min(i, 10) * 40}ms var(--ease) both` });
+
+/**
+ * A jump to a transcript line: from a quote's time chip on the notes, or from another
+ * screen (`openAt`). `back` is where the notes were scrolled and which row to focus
+ * again on "Back to notes"; `n` replays the highlight when you jump to the same line twice.
+ */
+interface Jump {
+  at: number;
+  quote: string;
+  n: number;
+  back: { scrollTop: number; focusId?: string };
+}
 
 export function MeetingScreen({
   meeting,
@@ -63,25 +77,56 @@ export function MeetingScreen({
   onOpenAutopilot?: () => void;
 }) {
   const [tab, setTab] = useState<Tab>(openAt === undefined ? "notes" : "transcript");
-  const [target, setTarget] = useState<{ at: number; quote: string } | null>(openAt === undefined ? null : { at: openAt, quote: "" });
+  const [target, setTarget] = useState<Jump | null>(openAt === undefined ? null : { at: openAt, quote: "", n: 0, back: { scrollTop: 0 } });
   const [showFollowUp, setShowFollowUp] = useState<string | null>(null);
+  /** Back from a jump: the notes come back where they were, without their entrance. */
+  const [returned, setReturned] = useState(false);
+  const [said, setSaid] = useState("");
+  const scroller = useRef<HTMLElement>(null);
+  const restore = useRef<Jump["back"] | null>(null);
   const others = othersOn(meeting);
 
-  const jumpTo = (at: number, quote: string) => {
-    setTarget({ at, quote });
+  /** Shows a quote's line in the transcript, remembering where the notes were. */
+  const jumpTo = (at: number, quote: string, focusId?: string) => {
+    setTarget((t) => ({ at, quote, n: (t?.n ?? 0) + 1, back: { scrollTop: scroller.current?.scrollTop ?? 0, focusId } }));
     setTab("transcript");
+    setSaid(`Showing ${formatClock(at)} in the transcript.`);
   };
+  const backToNotes = () => {
+    restore.current = target?.back ?? null;
+    setTarget(null);
+    setReturned(true);
+    setTab("notes");
+    setSaid("");
+  };
+  const changeTab = (t: Tab) => (t === "notes" && target ? backToNotes() : setTab(t));
   const openFollowUp = (id: string) => {
     setShowFollowUp(id);
+    setTarget(null);
     setTab("notes");
   };
 
+  // Puts the notes back at the exact scroll position, and focus back on the row you jumped from.
+  useLayoutEffect(() => {
+    const back = restore.current;
+    if (tab !== "notes" || !back) return;
+    restore.current = null;
+    if (scroller.current) scroller.current.scrollTop = back.scrollTop;
+    const row = back.focusId ? document.getElementById(back.focusId) : null;
+    row?.focus({ preventScroll: true });
+  }, [tab]);
+
   return (
     <MeProvider me={me}>
-      <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
-        <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
+      <main ref={scroller} className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
+        <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised">
+          <BackPill show={tab === "transcript" && !!target} onBack={backToNotes} />
+        </div>
+        <span role="status" className="sr-only">
+          {said}
+        </span>
         <article className="mx-auto flex max-w-[680px] flex-col gap-9 px-12 pt-3 pb-24">
-          <header className="flex flex-col gap-3" style={rise(0)}>
+          <header className="flex flex-col gap-3" style={returned ? undefined : rise(0)}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="t-eyebrow text-muted">
                 {meeting.project} · {meetingLabel(meeting)} · {formatDuration(meeting.durationSec)}
@@ -127,7 +172,7 @@ export function MeetingScreen({
                 { id: "transcript", label: "Transcript" },
               ]}
               value={tab}
-              onChange={setTab}
+              onChange={changeTab}
             />
           </header>
 
@@ -142,6 +187,7 @@ export function MeetingScreen({
                 originalOf={originalOf}
                 handlers={{ ...handlers, onJumpTo: jumpTo }}
                 show={showFollowUp}
+                entrance={!returned}
                 autopilotOn={autopilotOn}
                 onOpenAgents={onOpenAgents}
                 onOpenAutopilot={onOpenAutopilot}
@@ -197,6 +243,7 @@ function Notes({
   originalOf,
   handlers,
   show,
+  entrance,
   autopilotOn,
   onOpenAgents,
   onOpenAutopilot,
@@ -210,12 +257,27 @@ function Notes({
   handlers: FollowUpHandlers;
   /** A follow-up to scroll to, from a chip in the transcript. */
   show: string | null;
+  /** Whether the blocks rise in (not when coming back from the transcript). */
+  entrance: boolean;
   autopilotOn?: boolean;
   onOpenAgents?: () => void;
   onOpenAutopilot?: () => void;
 }) {
   const open = meeting.actionItems.filter((a) => !a.done).length;
   const agents = meeting.actionItems.some((a) => a.claimed || a.completed);
+  const allDone = useAllDone(open, meeting.actionItems.length);
+  const r = (i: number) => (entrance ? rise(i) : undefined);
+  const jump = (e: Evidence, focusId: string) => handlers.onJumpTo(e.at, e.quote, focusId);
+  // Items new since the notes were made keep a verdigris edge for a few seconds on screen, then it fades.
+  const fresh = useFresh(meeting.id);
+  useEffect(() => {
+    if (!fresh.any) return;
+    const t = setTimeout(fresh.seen, 6000);
+    return () => {
+      clearTimeout(t);
+      fresh.seen();
+    };
+  }, [fresh.any, fresh.seen]);
 
   useEffect(() => {
     if (show) document.getElementById(`followup-${show}`)?.scrollIntoView({ block: "center" });
@@ -223,12 +285,12 @@ function Notes({
 
   return (
     <>
-      <p className="t-reading selectable m-0" style={rise(1)}>
+      <p className="t-reading selectable m-0" style={r(1)}>
         {meeting.summary}
       </p>
 
       {meeting.yourNotes && (
-        <section aria-labelledby="your-notes" className="flex flex-col gap-2.5" style={rise(2)}>
+        <section aria-labelledby="your-notes" className="flex flex-col gap-2.5" style={r(2)}>
           <h2 id="your-notes" className="t-section m-0 flex items-center gap-2 text-ink">
             <Avatar name="You" you size={22} decorative />
             Your notes <span className="font-medium text-muted">typed during the call</span>
@@ -238,22 +300,29 @@ function Notes({
       )}
 
       {meeting.decisions.length > 0 && (
-        <section aria-labelledby="decisions" className="flex flex-col gap-2.5" style={rise(3)}>
+        <section aria-labelledby="decisions" className="flex flex-col gap-2.5" style={r(3)}>
           <SectionTitle id="decisions" count={meeting.decisions.length}>
             Decisions
           </SectionTitle>
-          <ol className="t-reading selectable m-0 flex list-decimal flex-col gap-1.5 pl-[22px] leading-7">
+          <ol className="t-reading m-0 flex list-decimal flex-col gap-1.5 pl-[22px] leading-7 marker:text-muted">
             {meeting.decisions.map((d, i) => (
-              <li key={`${i}-${d}`}>{d}</li>
+              <DecisionRow key={`${i}-${d}`} id={`decision-${i}`} text={d} evidence={decisionEvidence(meeting, i)} fresh={fresh.isNew(freshKey.decision(i))} onJump={(e) => jump(e, `decision-${i}`)} />
             ))}
           </ol>
         </section>
       )}
 
       {meeting.actionItems.length > 0 && (
-        <section aria-labelledby="actions" className="flex flex-col gap-1.5" style={rise(4)}>
+        <section aria-labelledby="actions" className="flex flex-col gap-1.5" style={r(4)}>
           <div className="mb-1 flex items-baseline justify-between gap-3">
-            <SectionTitle id="actions" count={`${open} open`}>
+            <SectionTitle
+              id="actions"
+              count={
+                <>
+                  <RollingNumber value={open} /> open
+                </>
+              }
+            >
               Action items
             </SectionTitle>
             {agents && onOpenAgents && (
@@ -271,14 +340,19 @@ function Notes({
                 onToggle={() => onToggleItem(item.id)}
                 onEdit={onEditItem && ((fields) => onEditItem(item.id, fields))}
                 original={originalOf?.(item.id) ?? null}
+                fresh={fresh.isNew(freshKey.action(item.id))}
+                onJump={(e) => jump(e, `action-${item.id}`)}
               />
             ))}
           </ul>
+          <AllDone show={open === 0} animate={allDone.animate}>
+            Every action item from this meeting is ticked.
+          </AllDone>
           {agents && <p className="m-0 mt-1.5 text-[13px] text-ink-2">Agents can claim and finish action items. They can't send, pay or change your rules.</p>}
         </section>
       )}
 
-      <div style={rise(5)}>
+      <div style={r(5)}>
         <FollowUps
           meetingId={meeting.id}
           followUps={meeting.followUps}
@@ -291,7 +365,7 @@ function Notes({
       </div>
 
       {dropped.length > 0 && (
-        <div style={rise(6)}>
+        <div style={r(6)}>
           <DroppedItems items={dropped} />
         </div>
       )}
@@ -372,16 +446,24 @@ function ActionRow({
   onToggle,
   onEdit,
   original,
+  fresh = false,
+  onJump,
 }: {
   rowKey: string;
   item: ActionItem;
   onToggle: () => void;
   onEdit?: (fields: ItemFields | null) => void;
   original: ItemFields | null;
+  /** New since the notes were made and not seen yet. */
+  fresh?: boolean;
+  /** Shows the item's quote in the transcript. */
+  onJump: (e: Evidence) => void;
 }) {
   const textId = useId();
+  const quoteId = useId();
   const you = useIsYou();
   const edit = useItemEditing(rowKey);
+  const quote = useQuoteReveal(!!item.evidence && !edit.editing);
   const working = !item.done && !!item.claimed;
   const owner = item.owner && item.owner !== "Unassigned" ? item.owner : null;
 
@@ -427,22 +509,56 @@ function ActionRow({
   }
 
   return (
-    <li className="group flex items-center gap-3 border-b border-hairline py-[13px]">
-      <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} />
-      <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
-        <span className="self-start text-[15px] leading-[21px] text-ink">
-          <span id={textId} className="selectable">
-            <Strike on={item.done}>{item.text}</Strike>
+    <li id={`action-${item.id}`} tabIndex={-1} className={cx("group border-b border-hairline py-[13px] outline-none transition-shadow duration-[1200ms] ease-calm", fresh && "shadow-[inset_2px_0_0_var(--verdigris)]")} {...quote.bind}>
+      <div className="flex items-center gap-3">
+        <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} aria-describedby={item.evidence ? quoteId : undefined} />
+        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+          <span className="self-start text-[15px] leading-[21px] text-ink">
+            <span id={textId} className="selectable">
+              <Strike on={item.done}>{item.text}</Strike>
+            </span>
+            <EditedMark item={item} />
           </span>
-          <EditedMark item={item} />
+          {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
         </span>
-        {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
-      </span>
-      <span className="relative inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
-        {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
-        {owner && <Avatar name={owner} size={20} />}
-        {item.due}
-      </span>
+        <span className="relative inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+          {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
+          {owner && <Avatar name={owner} size={20} />}
+          {item.due}
+        </span>
+      </div>
+      {item.evidence && <QuoteReveal evidence={item.evidence} open={quote.open} descId={quoteId} onJump={() => onJump(item.evidence!)} className="pr-6 pl-[34px]" />}
+    </li>
+  );
+}
+
+/** A decision, with the words behind it on hover or focus; ↵ jumps to them in the transcript. */
+function DecisionRow({ id, text, evidence, fresh = false, onJump }: { id: string; text: string; evidence?: Evidence; fresh?: boolean; onJump: (e: Evidence) => void }) {
+  const quoteId = useId();
+  const quote = useQuoteReveal(!!evidence);
+  if (!evidence) {
+    return (
+      <li id={id} className={cx("transition-shadow duration-[1200ms] ease-calm", fresh && "shadow-[-10px_0_0_-8px_var(--verdigris)]")}>
+        <span className="selectable">{text}</span>
+      </li>
+    );
+  }
+  return (
+    <li
+      id={id}
+      tabIndex={0}
+      aria-describedby={quoteId}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && e.target === e.currentTarget) {
+          e.preventDefault();
+          onJump(evidence);
+        }
+      }}
+      className={cx("rounded-sm transition-shadow duration-[1200ms] ease-calm", fresh && "shadow-[-10px_0_0_-8px_var(--verdigris)]")}
+      {...quote.bind}
+    >
+      <span className="selectable">{text}</span>
+      <QuoteReveal evidence={evidence} open={quote.open} descId={quoteId} onJump={() => onJump(evidence)} className="pb-0.5" />
     </li>
   );
 }
@@ -478,18 +594,25 @@ function Transcript({
 }: {
   meeting: Meeting;
   others: Attendee[];
-  target: { at: number; quote: string } | null;
+  target: Jump | null;
   onOpenFollowUp: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const targetRef = useRef<HTMLParagraphElement>(null);
+  const still = useReducedMotion();
   const live = meeting.followUps.filter((f) => f.status !== "dismissed");
   const named = others.length === 1;
   const them = speakerLabel("others", others);
 
+  // Scrolls the line you jumped to into view, highlights it (fading over about 1.5 s) and
+  // focuses it, so the keyboard and screen readers land there too.
   useEffect(() => {
-    targetRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [target]);
+    const line = targetRef.current;
+    if (!line) return;
+    line.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+    line.focus({ preventScroll: true });
+    return flashLine(line);
+  }, [target, still]);
 
   const q = query.trim().toLowerCase();
   const lines = meeting.transcript.filter((l) => !q || l.text.toLowerCase().includes(q));
@@ -517,7 +640,7 @@ function Transcript({
           const you = turn.speaker === "you";
           const label = you ? "You" : them;
           return (
-            <div key={`${turn.lines[0].at}-${ti}`} className={cx("flex flex-col gap-1.5", you ? "items-end" : "items-start")} style={rise(ti, 280)}>
+            <div key={`${turn.lines[0].at}-${ti}`} className={cx("flex flex-col gap-1.5", you ? "items-end" : "items-start")} style={target ? undefined : rise(ti, 280)}>
               <span className="inline-flex items-center gap-2 text-[12px] text-muted">
                 {you ? (
                   <>
@@ -541,13 +664,14 @@ function Transcript({
                   <BubbleWithChips key={`${line.at}-${i}`} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
                     <p
                       ref={isTarget ? targetRef : undefined}
+                      tabIndex={isTarget ? -1 : undefined}
                       className={cx(
                         "selectable m-0 max-w-[78%] scroll-mt-16 px-4 py-3 font-serif text-[17px] leading-[26px] text-ink",
                         you ? "bg-verdigris-tint" : "bg-elevated shadow-1",
                       )}
-                      style={{ borderRadius: corners(you, i, turn.lines.length), boxShadow: isTarget ? "0 0 0 2px var(--verdigris)" : undefined }}
+                      style={{ borderRadius: corners(you, i, turn.lines.length) }}
                     >
-                      <Highlighted text={line.text} quotes={evidence.map((f) => f.evidence.quote)} />
+                      <Highlighted text={line.text} quotes={evidence.map((f) => f.evidence.quote)} jumped={isTarget ? target?.quote : undefined} />
                     </p>
                   </BubbleWithChips>
                 );
@@ -598,12 +722,16 @@ function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence
   );
 }
 
-/** Marks every evidence quote in a line. */
-function Highlighted({ text, quotes }: { text: string; quotes: string[] }) {
-  const spans = [...new Set(quotes)]
+/**
+ * Marks every follow-up's evidence quote in a line, and the quote you jumped to
+ * (`jumped`, marked for the highlight to light up; it rests unmarked unless a follow-up shares it).
+ */
+function Highlighted({ text, quotes, jumped }: { text: string; quotes: string[]; jumped?: string }) {
+  const followUp = new Set(quotes);
+  const spans = [...new Set([...(jumped ? [jumped] : []), ...quotes])]
     .map((q) => ({ q, start: text.indexOf(q) }))
-    .filter((x) => x.start >= 0)
-    .sort((a, b) => a.start - b.start);
+    .filter((x) => x.q && x.start >= 0)
+    .sort((a, b) => a.start - b.start || b.q.length - a.q.length);
   if (spans.length === 0) return <>{text}</>;
   const parts: ReactNode[] = [];
   let cursor = 0;
@@ -611,7 +739,7 @@ function Highlighted({ text, quotes }: { text: string; quotes: string[] }) {
     if (start < cursor) continue;
     parts.push(text.slice(cursor, start));
     parts.push(
-      <mark key={start} className="rounded-[4px] bg-caution-tint px-0.5 text-ink">
+      <mark key={start} data-jump-quote={q === jumped ? "" : undefined} className={cx("-mx-0.5 rounded-[4px] px-0.5 text-ink box-decoration-clone", followUp.has(q) ? "bg-caution-tint" : "bg-transparent")}>
         {q}
       </mark>,
     );

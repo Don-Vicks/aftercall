@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderOpen, KeyRound } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -10,19 +10,27 @@ import {
   plainNearAiError,
   processRecording,
   YourNotesDrafts,
+  type AudioChunk,
   type CalendarEvent,
   type Stage as PipelineStage,
   type TeeCheck,
+  type TranscribedChunk,
+  type TranscriptCache,
 } from "@aftercall/core";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { nearAiKey, nearAiTransport, recordingFiles, serializeNotes, transcriptCache, type SavedNotes } from "./nearai";
 import { proofErrorLine, proofMissLine, tryRecordProof } from "./proofs";
+import { isFirstProof } from "./firstProof";
+import { FirstTransaction } from "./FirstTransaction";
+import type { ProofOnChain } from "./near";
 import type { Payee } from "@aftercall/core";
 import { Button, Pill, SectionTitle } from "./ui";
 import { NearAiConnect } from "./NearAiConnect";
 import { calendar } from "./calendar";
 import { sampleScriptFor } from "./sampleRecordings";
-import { FailedPanel, ProcessHeader, ProcessingSteps, STEP_IDS, StoppedPill, VerifiedSeal, type StepId } from "./recording/processing";
+import { FailedPanel, NotesReady, ProcessHeader, ProcessingSteps, STEP_IDS, StoppedPill, type StepId } from "./recording/processing";
+import { notesDigest, statsFromChunks, type NotesDigest, type TranscriptStats } from "./notesDigest";
+import { markFresh } from "./freshItems";
 import { notesReady, showingRecording } from "./recording/notify";
 import { forgetAutoProcess, wantsAutoProcess } from "./recording/session";
 import { NotesArea, SavedLabel } from "./recording/YourNotes";
@@ -44,13 +52,33 @@ export function recordingStartedAt(r: SavedRecording): string {
   return meetingLabel({ id: r.id, startedAt: new Date(r.startedAt * 1000).toISOString() });
 }
 
-/** How long the Verified seal shows before the meeting opens by itself. */
-const SEAL_MS = 1600;
-
 type Run =
   | { state: "idle" }
-  | { state: "running"; at: number; part?: string; times: number[] }
-  | { state: "done"; times: number[]; checks: TeeCheck[]; onChain: boolean; proofNote?: string; proofFailed?: boolean }
+  | {
+      state: "running";
+      at: number;
+      part?: string;
+      times: number[];
+      /** When the running step started (Date.now()). */
+      since: number;
+      /** Audio parts whose transcript is back, of all of them. */
+      parts?: { done: number; total: number };
+      /** Counted on this Mac once Whisper is done. */
+      transcript?: TranscriptStats;
+    }
+  | {
+      state: "done";
+      times: number[];
+      checks: TeeCheck[];
+      onChain: boolean;
+      proofNote?: string;
+      proofFailed?: boolean;
+      /** Set when this proof was this Mac's first on NEAR: the page says what happened. */
+      firstTx?: ProofOnChain;
+      /** What the notes hold, counted from them as saved. */
+      digest: NotesDigest;
+      transcript?: TranscriptStats;
+    }
   | { state: "failed"; at: number; error: string; times: number[] };
 
 /**
@@ -59,7 +87,7 @@ type Run =
  */
 const runs = new Map<string, Run>();
 const listeners = new Map<string, Set<(r: Run) => void>>();
-/** Opens the meeting now instead of after the seal, once per run. */
+/** Hands the notes over and opens the meeting, once per run: Open notes, ↵, or leaving the page. */
 const finishers = new Map<string, () => void>();
 
 function report(id: string, r: Run) {
@@ -82,8 +110,10 @@ function useRun(id: string): Run {
 
 /** Called once the notes are saved; `proofError` says why the proof didn't go on NEAR when that was an error, not a missing account. */
 type OnProcessed = (id: string, notes: string, proofError?: string) => void;
+/** Open notes (or ↵, or leaving the done page): show the meeting. */
+type OnOpenNotes = (id: string) => void;
 
-async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: OnProcessed) {
+async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed: OnProcessed, onOpenNotes: OnOpenNotes) {
   const id = recording.id;
   const current = runs.get(id)?.state;
   if (current === "running" || current === "done") return;
@@ -91,14 +121,45 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
   const times: number[] = [];
   let at = 0;
   let since = performance.now();
-  const moveTo = (step: StepId, part?: string) => {
+  let startedAt = Date.now();
+  let part: string | undefined;
+  let parts: { done: number; total: number } | undefined;
+  let transcript: TranscriptStats | undefined;
+  const show = () => report(id, { state: "running", at, part, times: [...times], since: startedAt, parts, transcript });
+  const moveTo = (step: StepId, detail?: string) => {
     for (const next = STEP_IDS.indexOf(step); at < next; at++) {
       times[at] = (performance.now() - since) / 1000;
       since = performance.now();
+      startedAt = Date.now();
     }
-    report(id, { state: "running", at, part, times: [...times] });
+    part = step === "transcribe" ? detail : undefined;
+    show();
   };
-  report(id, { state: "running", at: 0, times: [] });
+  // Each part's transcript as it comes back (from Whisper or this Mac's cache), so the bar
+  // fills and the transcript can be counted here. Counts only leave this function.
+  const heard: TranscribedChunk[] = [];
+  const keep = (c: AudioChunk, raw: string) => {
+    try {
+      heard.push({ speaker: c.speaker, index: c.index, result: JSON.parse(raw) });
+    } catch {
+      // The pipeline reads it too, and stops with the error if it's broken.
+    }
+    if (parts) parts = { ...parts, done: Math.min(parts.done + 1, parts.total) };
+    show();
+  };
+  const cache = transcriptCache(id);
+  const watched: TranscriptCache = {
+    get: async (c) => {
+      const raw = await cache.get(c);
+      if (raw !== null) keep(c, raw);
+      return raw;
+    },
+    set: async (c, raw) => {
+      keep(c, raw);
+      await cache.set(c, raw);
+    },
+  };
+  show();
   try {
     // Exactly what you last typed, saved to your-notes.json first, so the model, the
     // proof's salted hash and the file agree. The list's copy can be older.
@@ -107,6 +168,7 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
     });
     const chunks = await recordingFiles.chunks(id);
     if (chunks.length === 0) throw new Error("This recording has no audio left to transcribe.");
+    parts = { done: 0, total: chunks.length };
     const result = await processRecording(
       nearAiTransport,
       {
@@ -119,14 +181,18 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
         chunks,
         payees,
         vocabulary: [recording.project, ...payees.map((p) => p.name)],
-        transcriptCache: transcriptCache(id),
+        transcriptCache: watched,
         // What you typed during the call: context for the model, covered by the proof's salted hash.
         yourNotes,
         // Your "I've told everyone" tick goes into the proof as your statement. A sample is a made-up call: none.
         notice: recording.label ? undefined : recording.notice,
       },
-      (stage: PipelineStage, detail?: string) => moveTo(stage, stage === "transcribe" ? detail : undefined),
+      (stage: PipelineStage, detail?: string) => {
+        if (stage === "summarise" && heard.length) transcript = statsFromChunks(heard, 300);
+        moveTo(stage, detail);
+      },
     );
+    heard.length = 0;
     // The calendar event names the meeting and fills recap addresses. The proof
     // doesn't cover either, so this changes nothing on the Verify page.
     // A sample is a made-up call: it never takes the name or guests of a real event.
@@ -155,13 +221,30 @@ async function makeNotes(recording: SavedRecording, payees: Payee[], onProcessed
       finished = true;
       finishers.delete(id);
       report(id, { state: "idle" });
-      onProcessed(id, notes, proofError);
+      onOpenNotes(id);
     };
     finishers.set(id, finish);
-    report(id, { state: "done", times: [...times], checks: result.checks, onChain: Boolean(saved.onChain), proofNote, proofFailed: Boolean(proofError) });
+    const firstTx = saved.onChain && isFirstProof(id) ? saved.onChain : undefined;
+    report(id, {
+      state: "done",
+      times: [...times],
+      checks: result.checks,
+      onChain: Boolean(saved.onChain),
+      proofNote,
+      proofFailed: Boolean(proofError),
+      firstTx,
+      digest: notesDigest(meeting),
+      transcript,
+    });
+    // The app has the notes at once (Today, the sidebar and autopilot see them); only the
+    // move to the meeting page waits for Open notes.
+    onProcessed(id, notes, proofError);
+    // Everything in these notes is new until the meeting page has shown it.
+    markFresh(meeting);
     void notesReady(meeting);
-    // The seal shows for a moment, then the meeting opens (Open notes skips the wait).
-    window.setTimeout(finish, SEAL_MS);
+    // Nothing moves on by itself while this page is on screen: Open notes or ↵ opens the
+    // notes. Away from the page (or once it's left), they're handed over at once.
+    if (!listeners.get(id)?.size) finish();
   } catch (e) {
     report(id, { state: "failed", at, error: plainNearAiError(e), times: [...times] });
   }
@@ -184,12 +267,14 @@ export function RecordingScreen({
   recording,
   payees,
   onProcessed,
+  onOpenNotes,
   onDelete,
 }: {
   recording: SavedRecording;
   payees: Payee[];
   /** Called once the notes are saved, even if the user has left this screen. */
   onProcessed: OnProcessed;
+  onOpenNotes: OnOpenNotes;
   onDelete: () => void;
 }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
@@ -200,12 +285,16 @@ export function RecordingScreen({
   const [auto] = useState(() => wantsAutoProcess(recording.id));
   const start = () => {
     forgetAutoProcess(recording.id);
-    void makeNotes(recording, payees, onProcessed);
+    void makeNotes(recording, payees, onProcessed, onOpenNotes);
   };
 
   useEffect(() => {
     showingRecording(recording.id, true);
-    return () => showingRecording(recording.id, false);
+    return () => {
+      showingRecording(recording.id, false);
+      // Done and waiting for Open notes, and the page is left: hand the notes over now.
+      if (runs.get(recording.id)?.state === "done") finishers.get(recording.id)?.();
+    };
   }, [recording.id]);
 
   useEffect(() => {
@@ -219,6 +308,8 @@ export function RecordingScreen({
       .catch(() => setHasKey(false));
     if (!recording.label) calendar.eventFor(recording).then(setEvent);
   }, []);
+
+  const openNotes = useCallback(() => finishers.get(recording.id)?.(), [recording.id]);
 
   const others = (event?.attendees ?? []).map((a) => a.name || a.email.split("@")[0]).filter(Boolean);
   const eyebrow = [
@@ -245,15 +336,16 @@ export function RecordingScreen({
         ) : run.state === "running" ? (
           <>
             <ProcessHeader eyebrow={eyebrow} title={title} lede="Making your notes in NEAR AI secure hardware. Every step is checked as it happens." />
-            <ProcessingSteps view={{ at: run.at, times: run.times, part: run.part, others: one }} />
+            <ProcessingSteps view={{ at: run.at, times: run.times, part: run.part, parts: run.parts, transcript: run.transcript, since: run.since, others: one }} />
             <p className="m-0 text-ink-2">You can leave this page. Aftercall tells you when your notes are ready.</p>
           </>
         ) : run.state === "done" ? (
           <>
-            <ProcessHeader eyebrow={eyebrow} title={title} lede="Your notes are ready." />
-            <VerifiedSeal checks={run.checks} onChain={run.onChain} proofFailed={run.proofFailed} onOpen={() => finishers.get(recording.id)?.()} />
+            <ProcessHeader eyebrow={eyebrow} title={title} />
+            <NotesReady checks={run.checks} onChain={run.onChain} proofFailed={run.proofFailed} digest={run.digest} onOpen={openNotes} />
+            {run.firstTx && <FirstTransaction onChain={run.firstTx} delay={260} />}
             <ProcessingSteps
-              view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, onChain: run.onChain, proofNote: run.proofNote, others: one }}
+              view={{ at: STEP_IDS.length, times: run.times, checks: run.checks, onChain: run.onChain, proofNote: run.proofNote, transcript: run.transcript, others: one }}
             />
           </>
         ) : (

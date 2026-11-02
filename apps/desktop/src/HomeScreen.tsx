@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ArrowRight, Check, KeyRound, Link2, Mic, ShieldCheck } from "lucide-react";
 import { formatClock, formatUsdc, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
@@ -10,7 +10,7 @@ import { nearAiKey } from "./nearai";
 import { near } from "./near";
 import { calendar } from "./calendar";
 import { MeetingRow, meetingRow, shortWhen } from "./MeetingRow";
-import { Avatar, AvatarStack, Button, Card, LayoutMotion, Pill, SectionTitle, Spinner, cx, deferred, exit, springs, type DeferredHandle } from "./ui";
+import { Avatar, AvatarStack, Button, Card, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, deferred, enter, exit, springs, type DeferredHandle } from "./ui";
 import { sampleScripts, type SampleScript } from "./sampleRecordings";
 
 /** A recording in progress, for the live card. Wired by the live-recording work. */
@@ -327,6 +327,8 @@ function NeedsYou({
   onOpenWallet: () => void;
   style?: CSSProperties;
 }) {
+  // Rows close up as they leave, and the clear line opens; with reduced motion they only fade.
+  const still = useReducedMotion();
   /** Rows whose Approve or Dismiss is waiting out its Undo. */
   const [held, setHeld] = useState<Record<string, "approve" | "dismiss">>({});
   const handles = useRef<Record<string, DeferredHandle>>({});
@@ -379,24 +381,35 @@ function NeedsYou({
 
   return (
     <section aria-labelledby="h-needs" className="flex flex-col gap-3.5" style={style}>
-      <SectionTitle id="h-needs" count={shown.length || undefined}>
+      <SectionTitle id="h-needs" count={shown.length ? <RollingNumber value={shown.length} /> : undefined}>
         Needs you
       </SectionTitle>
-      {shown.length === 0 ? (
-        <p className="m-0 flex items-center gap-2 text-ink-2">
-          <Check size={14} className="text-verdigris" aria-hidden="true" /> Nothing waiting. Follow-ups to approve show up here.
-        </p>
-      ) : (
-        <LayoutMotion>
-          <div className="flex flex-col gap-2.5">
-            <AnimatePresence initial={false}>
-              {shown.slice(0, 6).map((n) => (
+      <LayoutMotion>
+        <div className="flex flex-col gap-2.5">
+          {/* Not on first render: the clear line folds in only when the last item is handled here. */}
+          <AnimatePresence initial={false}>
+            {shown.length === 0 ? (
+              <m.p
+                key="clear"
+                role="status"
+                initial={{ opacity: 0, y: -6, scale: 0.97, height: still ? "auto" : 0 }}
+                animate={{ opacity: 1, y: 0, scale: 1, height: "auto", transition: { ...springs.bouncy, height: springs.gentle, opacity: enter } }}
+                exit={{ opacity: 0, transition: exit }}
+                className="m-0 flex origin-top-left items-center gap-2 text-ink-2"
+              >
+                <Check size={14} strokeWidth={2.25} className="text-verdigris" aria-hidden="true" />
+                <span>
+                  <span className="font-semibold text-ink">Nothing needs you.</span> Follow-ups to approve show up here.
+                </span>
+              </m.p>
+            ) : (
+              shown.slice(0, 6).map((n) => (
                 <m.div
                   key={n.key}
                   layout
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0, transition: springs.gentle }}
-                  exit={{ opacity: 0, scale: 0.98, transition: exit }}
+                  exit={{ opacity: 0, scale: 0.98, ...(still ? {} : { height: 0 }), transition: exit }}
                 >
                   {n.kind === "notes" ? (
                     <NeedRow
@@ -424,11 +437,11 @@ function NeedsYou({
                     />
                   )}
                 </m.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </LayoutMotion>
-      )}
+              ))
+            )}
+          </AnimatePresence>
+        </div>
+      </LayoutMotion>
     </section>
   );
 }

@@ -17,7 +17,7 @@ import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
 import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
 import { ConnectNear } from "./ConnectNear";
-import { VerifySheet } from "./VerifySheet";
+import { SampleVerifySheet, VerifySheet } from "./VerifySheet";
 import { HomeScreen } from "./HomeScreen";
 import { SearchScreen } from "./SearchScreen";
 import { WalletScreen, type BlockedPayment } from "./WalletScreen";
@@ -104,6 +104,8 @@ export default function App() {
   /** notes.json of processed recordings, by id: the proof and checks behind each meeting. */
   const [saved, setSaved] = useState<Record<string, SavedNotes>>({});
   const [verifyId, setVerifyId] = useState<string | null>(null);
+  /** The sample meeting's Verify sheet: the real checks re-run on a test proof. */
+  const [sampleVerify, setSampleVerify] = useState(false);
   /** Why a meeting's proof failed to go on NEAR when its notes were made, by id, until it is recorded. */
   const [proofErrors, setProofErrors] = useState<Record<string, string>>({});
   /**
@@ -601,7 +603,6 @@ export default function App() {
     diskNotes.current[id] = notes;
     setRecordings((all) => all.map((r) => (r.id === id ? updated : r)));
     addProcessed([updated]);
-    setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v));
     const processed = parseNotes(notes).meeting;
     setTimeout(() => scheduleAutopilot(processed), 0);
   };
@@ -648,6 +649,8 @@ export default function App() {
   const library = useMemo(() => libraryMeetings(Object.values(meetings).filter((m) => !hidden[m.id]), syncWithAda.id), [meetings, hidden]);
   const sampleIds = new Set([syncWithAda.id, ...recordings.filter((r) => r.label === "Sample").map((r) => r.id)]);
   const openMeeting = (id: string, at?: number) => setView(meetings[id] ? { name: "meeting", id, at } : { name: "recording", id });
+  /** The agent wallet's figure: from NEAR on this Mac; the sample wallet less what the sample paid in the browser preview. */
+  const walletBalance = isDesktop ? balance : sampleBalance - paidBySample(meetings[syncWithAda.id]);
 
   return (
     <MotionProvider>
@@ -659,7 +662,7 @@ export default function App() {
           projects={projects}
           sample={meetings[syncWithAda.id] ? { id: syncWithAda.id, title: syncWithAda.title, when: "Sample", toApprove: 0 } : null}
           account={account}
-          balance={balance}
+          balance={walletBalance}
           current={view.name}
           selectedMeetingId={selectedMeetingId}
           selectedProjectId={view.name === "project" ? view.id : null}
@@ -715,7 +718,9 @@ export default function App() {
                 onOpenVerify={() =>
                   saved[meeting.id]
                     ? setVerifyId(meeting.id)
-                    : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
+                    : meeting.id === syncWithAda.id
+                      ? setSampleVerify(true)
+                      : setView({ name: "placeholder", title: "Verify", milestone: "This is sample data, so there is no proof to check. Record a meeting to see real checks." })
                 }
               />
             )}
@@ -726,6 +731,7 @@ export default function App() {
                 payees={openRecording.label ? samplePayees : payees}
                 onDelete={() => removeRecording(openRecording.id)}
                 onProcessed={(id, notes, proofError) => onProcessedRef.current(id, notes, proofError)}
+                onOpenNotes={(id) => setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v))}
               />
             )}
             {view.name === "home" && (
@@ -762,6 +768,9 @@ export default function App() {
               <WalletScreen
                 blocked={blocked}
                 samplePaid={paidBySample(meetings[syncWithAda.id])}
+                // Paid follow-ups are the payment history: real meetings on this Mac; the sample's in the browser preview.
+                paymentsFrom={shownMeetings.filter((m) => (isDesktop ? saved[m.id] : m.id === syncWithAda.id))}
+                onOpenMeeting={openMeeting}
                 onOpenSettings={() => setView({ name: "settings" })}
                 onResolved={(meetingId, fuId, status) => {
                   patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
@@ -802,7 +811,7 @@ export default function App() {
                 onToggleItem={toggleItem}
                 onEditItem={editItem}
                 originalOf={originalOf}
-                onOpenMeeting={(id) => openMeeting(id)} onOpenAgents={() => setView({ name: "agents" })} />
+                onOpenMeeting={openMeeting} onOpenAgents={() => setView({ name: "agents" })} />
             )}
             {view.name === "privacy" && <PrivacyScreen onBack={() => setView({ name: "settings" })} onOpenSettings={() => setView({ name: "settings" })} />}
             {view.name === "agents" && (
@@ -827,6 +836,7 @@ export default function App() {
         <LivePill onOpenLive={() => setView({ name: "live" })} />
         </div>
         <AnimatePresence>
+          {sampleVerify && <SampleVerifySheet key="sample-verify" meeting={meetings[syncWithAda.id] ?? syncWithAda} onClose={() => setSampleVerify(false)} />}
           {verifyId && saved[verifyId] && (
             <VerifySheet
               key={verifyId}
@@ -875,7 +885,7 @@ export default function App() {
               key="palette"
               meetings={shownMeetings}
               recordings={shownRecordings}
-              balance={balance}
+              balance={walletBalance}
               sampleId={syncWithAda.id}
               onClose={() => setPaletteOpen(false)}
               onNewRecording={() => setRecordOpen(true)}

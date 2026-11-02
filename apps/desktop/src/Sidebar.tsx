@@ -66,6 +66,7 @@ export function Sidebar({
   /** The built-in sample meeting, shown apart and labelled. */
   sample: SidebarMeeting | null;
   account: string | null;
+  /** The agent wallet's balance (the sample wallet's in the browser preview); none until it's read. */
   balance: bigint | null;
   /** The screen on show, by name ("home", "search", "ask", "actions", "people", "meetings", "project", "wallet", "agents", "settings"). Other names highlight no nav row. */
   current: string;
@@ -188,7 +189,13 @@ export function Sidebar({
           {navRow("Today", "home", onOpenHome, <House {...icon} />)}
           {navRow("Search", "search", onOpenSearch, <Search {...icon} />, shortcut("⌘K"))}
           {navRow("Ask your meetings", "ask", onOpenAsk, <MessageCircle {...icon} />, shortcut("⌘J"))}
-          {navRow("Action items", "actions", onOpenActions, <CircleCheck {...icon} />, openActions > 0 ? shortcut(String(openActions)) : undefined)}
+          {navRow(
+            "Action items",
+            "actions",
+            onOpenActions,
+            <CircleCheck {...icon} />,
+            openActions > 0 ? <RollingNumber value={openActions} className="font-mono text-[11px] font-normal text-muted" /> : undefined,
+          )}
           {navRow("People", "people", onOpenPeople, <Users {...icon} />)}
         </div>
 
@@ -241,7 +248,7 @@ export function Sidebar({
                     <span className="min-w-0 flex-1 truncate py-[7px] pr-2 pl-2">{g.name}</span>
                   )}
                   <span className={cx("pr-2.5 font-mono text-[11px] font-normal text-muted", isProject && "transition-opacity group-focus-within:opacity-0 group-hover:opacity-0")}>
-                    {meetings.length}
+                    <RollingNumber value={meetings.length} />
                   </span>
                   {isProject && (
                     <span className="absolute top-1/2 right-1 -translate-y-1/2">
@@ -294,7 +301,8 @@ export function Sidebar({
             "wallet",
             onOpenWallet,
             <Wallet {...icon} />,
-            balance === null ? undefined : <RollingNumber value={formatUsdc(balance)} className="font-mono text-xs font-normal text-ink" />,
+            // Remembered, so the wallet page opened just after a payment rolls from the old figure too.
+            balance === null ? undefined : <RollingNumber value={formatUsdc(balance)} remember="wallet-balance" duration={520} className="font-mono text-xs font-normal text-ink" />,
           )}
           {navRow("Coding agents", "agents", onOpenAgents, <Bot {...icon} />)}
           {navRow("Settings", "settings", onOpenSettings, <Settings {...icon} />)}
