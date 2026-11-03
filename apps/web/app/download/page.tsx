@@ -2,6 +2,7 @@ import { CopyButton } from "../client";
 import { Icon, Pill, REPO_URL, SiteFooter, SiteHeader, vars, type IconName } from "../ui";
 import { DOWNLOAD_URL, HAS_DOWNLOAD, REPO_PUBLIC, TESTERS_CHAT_URL } from "../site";
 import d from "./download.module.css";
+import { Waitlist } from "./Waitlist";
 
 export const metadata = {
   title: "Install · Aftercall",
@@ -175,6 +176,22 @@ export default function Download() {
                 </pre>
               </div>
             )}
+          </div>
+        </section>
+
+        <section aria-labelledby="wh" className={d.section}>
+          <div className={`${d.wrap} ${d.wait}`}>
+            <div className={d.waitText}>
+              <h2 id="wh" className={d.h2}>
+                Can&apos;t run it yet?
+              </h2>
+              <p className={d.intro}>
+                {HAS_DOWNLOAD
+                  ? "The test build is for Apple silicon Macs on NEAR testnet. Join the waitlist for an Intel or Windows build, for mainnet and a signed app, or just for news."
+                  : "Join the waitlist for a signed build, an Intel or Windows build, mainnet, or just news."}
+              </p>
+            </div>
+            <Waitlist />
           </div>
         </section>
 

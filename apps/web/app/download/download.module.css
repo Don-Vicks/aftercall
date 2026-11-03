@@ -257,3 +257,86 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+/* The waitlist: who it's for on the left, the form on the right; stacked on narrow screens. */
+.wait {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 20px 56px;
+  align-items: start;
+  padding: 28px;
+  border-radius: var(--radius-md);
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.waitText {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.waitForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.waitWants {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-size: 15px;
+}
+.waitWants legend {
+  width: 100%;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.waitWant {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.waitWant input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--verdigris);
+}
+.waitRow {
+  display: flex;
+  gap: 10px;
+}
+.waitRow .btn {
+  flex-shrink: 0;
+  height: 48px;
+}
+.waitTrap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.waitError {
+  margin: 0;
+  font-size: 14px;
+  color: var(--record);
+}
+.waitDone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 16px;
+  color: var(--verdigris);
+}
+@media (max-width: 760px) {
+  .wait {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 20px;
+  }
+  .waitRow {
+    flex-direction: column;
+  }
+}
