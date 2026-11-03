@@ -25,7 +25,7 @@ import { droppedLine, encodePublicProof, noticeLine, proofHash, verifyProof, ver
 import { NOTES_SYSTEM_PROMPT, OVERALL_SYSTEM_PROMPT } from "./schema.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { decryptWith, encryptTo } from "../tee/e2ee.ts";
-import { attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey, type TeeKey } from "../tee/testkit.ts";
+import { GATEWAY_TLS, attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey, type TeeKey } from "../tee/testkit.ts";
 import type { StreamProgress } from "./stream.ts";
 
 interface FakeOpts {
@@ -72,6 +72,18 @@ interface FakeOpts {
   refuseOnly?: number;
   /** Each streamed reply takes this long, so requests overlap. */
   delayMs?: number;
+  /**
+   * The gateway's TLS certificate key changes after the first attestation: the next
+   * report binds the new key ("once"), or the connection keeps presenting a key no
+   * attestation binds ("always").
+   */
+  tlsRotate?: "once" | "always";
+  /** The gateway sends this TLS fingerprint without binding it in its quote. */
+  tlsUnbound?: boolean;
+  /** The summary nodes NEAR AI serves change after the first attestation (no 421 needed). */
+  rotateSummaryNodes?: boolean;
+  /** The signature's `signature_kind`: provider_tee unless given ("none" leaves it out). */
+  signatureKind?: "gateway" | "none";
 }
 
 /**
@@ -93,6 +105,11 @@ async function fakeNearAi(opts: FakeOpts) {
   let maxInFlight = 0;
   let nonceCounter = 0;
   let rotated = false;
+  /** The TLS key the gateway's attestation binds, and the one its connection presents. */
+  let attestedTls = GATEWAY_TLS;
+  let liveTls = GATEWAY_TLS;
+  let reports = 0;
+  const pins: string[] = [];
 
   const transport: NotesTransport = {
     randomHex: () => (++nonceCounter).toString(16).padStart(64, "0"),
@@ -101,10 +118,17 @@ async function fakeNearAi(opts: FakeOpts) {
       const q = new URLSearchParams(path.split("?")[1]);
       if (path.startsWith("attestation/report")) {
         const nonce = q.get("nonce")!;
-        const model = q.get("model")!;
-        const nodes = model.startsWith("Qwen") ? summaryNodes : whisperNodes;
+        const model = q.get("model") ?? "";
+        reports++;
+        if (opts.rotateSummaryNodes && model.startsWith("Qwen") && reports > 2) summaryNodes.splice(0, summaryNodes.length, ...summaryNodes.map(() => teeKey("ed25519")));
+        const nodes = model.startsWith("Qwen") ? summaryNodes : model ? whisperNodes : [];
+        const tls = q.get("include_tls_fingerprint") === "true" ? attestedTls : undefined;
         return JSON.stringify({
-          gateway_attestation: attestationFor(gateway, nonce, { gpu: false, quote: opts.badQuote === "gateway" ? { status: "Revoked" } : {} }),
+          gateway_attestation: attestationFor(gateway, nonce, {
+            gpu: false,
+            quote: opts.badQuote === "gateway" ? { status: "Revoked" } : {},
+            ...(tls ? (opts.tlsUnbound ? { tlsSent: tls } : { tls }) : {}),
+          }),
           model_attestations: nodes.map((k, i) => {
             const att = attestationFor(k, nonce, { quote: opts.badQuote === model || (opts.badSecondNode && i > 0) || (rotated && opts.staleKeyBadNodes) ? { rtMr3: "00".repeat(48) } : {} });
             if (opts.noE2eeKey && model.startsWith("Qwen")) delete att.signing_public_key;
@@ -115,8 +139,13 @@ async function fakeNearAi(opts: FakeOpts) {
       const chat = chats.get(decodeURIComponent(path.split("?")[0].replace("signature/", "")))!;
       const response = opts.tamper ? `${chat.response} ` : chat.response;
       const signer = opts.rogueSigner ? teeKey("ed25519") : chat.signer;
+      if (opts.signatureKind === "gateway") {
+        // The gateway rewrote the stream and signed what it returned with its own key.
+        const text = `${sha256Hex(chat.request)}:${sha256Hex(response)}`;
+        return JSON.stringify({ text, signature: gateway.sign(text), signing_address: gateway.address, signing_algo: "ed25519", signature_kind: "gateway" });
+      }
       const text = `Qwen/Qwen3.8-27B:${sha256Hex(chat.request)}:${sha256Hex(response)}`;
-      return JSON.stringify({ text, signature: signer.sign(text), signing_address: signer.address, signing_algo: "ed25519", signature_kind: "provider_tee" });
+      return JSON.stringify({ text, signature: signer.sign(text), signing_address: signer.address, signing_algo: "ed25519", ...(opts.signatureKind === "none" ? {} : { signature_kind: "provider_tee" }) });
     },
     async verifyQuote(hex) {
       return decodeQuote(hex);
@@ -127,7 +156,18 @@ async function fakeNearAi(opts: FakeOpts) {
     async nvidiaKeys() {
       return JSON.stringify(nv.jwks);
     },
-    async transcribe(path, _model, prompt) {
+    async transcribe(path, _model, prompt, tlsPin) {
+      if (opts.tlsRotate && pins.length === 0) {
+        // The gateway's certificate changes after the app attested it.
+        liveTls = sha256Hex("rotated gateway SPKI DER");
+        if (opts.tlsRotate === "once") attestedTls = liveTls;
+      }
+      pins.push(tlsPin);
+      // As the transports do: the connection's key is checked before anything is sent.
+      if (tlsPin !== liveTls) {
+        calls.push(`transcribe refused ${path}`);
+        throw new Error(`TLS_PIN_MISMATCH: the gateway's TLS key isn't the attested one; nothing was uploaded`);
+      }
       calls.push(`transcribe ${path} [${prompt}]`);
       if (opts.segments) {
         const segments = opts.segments(path);
@@ -186,7 +226,7 @@ async function fakeNearAi(opts: FakeOpts) {
       return opts.unsignedBytes ? `${opts.unsignedBytes}${response}` : response;
     },
   };
-  return { transport, calls, seenByGateway, seenByTee, summaryNodes, gateway, maxInFlight: () => maxInFlight };
+  return { transport, calls, seenByGateway, seenByTee, summaryNodes, gateway, pins, maxInFlight: () => maxInFlight };
 }
 
 /** cloud-api's answer when no node serves the pinned model key (NoPubKeyProvider → 421), through the Rust transport. */
@@ -865,4 +905,95 @@ test("Whisper's prompt: names first, then words to expect, no repeats, capped by
   const long = whisperVocabulary(["Fundraise"], Array.from({ length: 30 }, (_, i) => `${"x".repeat(38)}${i}`));
   assert.ok(long.join(", ").length <= WHISPER_PROMPT_MAX);
   assert.equal(long[0], "Fundraise", "the app's own names are never pushed out");
+});
+
+// ---------- the audio's TLS pin, attestation freshness and the signer ----------
+
+test("the audio is uploaded only to the gateway's attested TLS key, and the proof records that key", async () => {
+  const ai = await fakeNearAi({ notes });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.deepEqual(ai.pins, [GATEWAY_TLS, GATEWAY_TLS], "every chunk pinned to the key bound in the gateway's quote");
+  const tls = r.checks.find((c) => c.id === "gateway-tls");
+  assert.equal(tls?.ok, true);
+  assert.equal(tls?.label, "Gateway's TLS key is in its quote");
+  const gw = r.proof.evidence.find((e) => e.scope === "gateway");
+  assert.equal(gw?.tlsCertFingerprint, GATEWAY_TLS);
+  assert.deepEqual(failed(verifyProof(r.proof, null, r.notes)), ["on-chain", "matches"]);
+});
+
+test("a TLS key the gateway sends but doesn't bind in its quote stops everything before any audio leaves", async () => {
+  const ai = await fakeNearAi({ notes, tlsUnbound: true });
+  await assert.rejects(processRecording(ai.transport, input, undefined, noWait), /Secure hardware check failed for the NEAR AI gateway \(The TEE made its signing key, Gateway's TLS key is in its quote\)\. Nothing was sent\./);
+  assert.deepEqual(ai.pins, []);
+  assert.ok(!ai.calls.some((c) => c.startsWith("transcribe") || c.startsWith("chat")));
+});
+
+test("a gateway certificate that changed: the gateway is attested once more and the upload pinned to its new key", async () => {
+  const ai = await fakeNearAi({ notes, tlsRotate: "once" });
+  const r = await processRecording(ai.transport, input, undefined, noWait);
+  assert.equal(ai.calls.filter((c) => c.startsWith("transcribe refused")).length, 1, "the first try sent nothing");
+  assert.equal(ai.calls.filter((c) => c === "get attestation/report").length, 3, "summary, Whisper, then the gateway alone");
+  assert.equal(ai.pins.length, 3);
+  assert.notEqual(ai.pins[1], GATEWAY_TLS);
+  assert.equal(ai.pins[2], ai.pins[1]);
+  assert.deepEqual(
+    r.proof.evidence.filter((e) => e.scope === "gateway").map((e) => e.tlsCertFingerprint),
+    [GATEWAY_TLS, ai.pins[1]],
+    "both gateways the audio was pinned to are in the proof",
+  );
+  assert.deepEqual(failed(r.checks), []);
+});
+
+test("a gateway certificate that keeps failing the pin stops with the audio still on the Mac", async () => {
+  const ai = await fakeNearAi({ notes, tlsRotate: "always" });
+  await assert.rejects(processRecording(ai.transport, input, undefined, noWait), {
+    message:
+      "The NEAR AI gateway's TLS certificate didn't carry the key bound in its attestation, even after checking the gateway again, so the audio wasn't sent. It stays on this Mac; try again later.",
+  });
+  assert.ok(!ai.calls.some((c) => /^transcribe \//.test(c)), "no chunk was uploaded");
+  assert.ok(!ai.calls.some((c) => c.startsWith("chat")));
+});
+
+test("after a long transcription the summary model is attested again and the notes encrypted to a fresh key", async () => {
+  // Without a delay: one attestation of each model, nothing more.
+  const quick = await fakeNearAi({ notes });
+  await processRecording(quick.transport, input, undefined, noWait);
+  assert.equal(quick.calls.filter((c) => c === "get attestation/report").length, 2);
+
+  const ai = await fakeNearAi({ notes, rotateSummaryNodes: true });
+  let now = 1_800_000_000_000;
+  const slow = { ...ai.transport, transcribe: async (...a: Parameters<NotesTransport["transcribe"]>) => ((now += 4 * 60_000), ai.transport.transcribe(...a)) };
+  const before = ai.summaryNodes[0].address;
+  const r = await processRecording(slow, { ...input, clock: () => now }, undefined, noWait);
+  assert.equal(ai.calls.filter((c) => c === "get attestation/report").length, 3, "the summary model again, just before the notes");
+  assert.notEqual(ai.summaryNodes[0].address, before, "NEAR AI now serves other nodes");
+  assert.equal(r.proof.e2ee.modelKey, ai.summaryNodes[0].address, "encrypted to a key from the fresh quotes");
+  const summaryEvidence = r.proof.evidence.filter((e) => e.model === "Qwen/Qwen3.8-27B");
+  assert.deepEqual(summaryEvidence.map((e) => e.nonce), [r.proof.attestationNonce.summary], "the proof records the attestation used");
+  assert.notEqual(r.proof.attestationNonce.summary, r.proof.evidence.find((e) => e.scope === "gateway")?.nonce);
+  assert.deepEqual(failed(r.checks), []);
+  assert.deepEqual(failed(verifyProof(r.proof, null, r.notes)), ["on-chain", "matches"]);
+});
+
+test("the notes' signature must be the model TEE's own: a gateway signature or one of unstated kind isn't verified", async () => {
+  for (const kind of ["gateway", "none"] as const) {
+    const r = await processRecording((await fakeNearAi({ notes, signatureKind: kind })).transport, input, undefined, noWait);
+    assert.equal(r.meeting.verified, false, kind);
+    assert.ok(failed(r.checks).includes("response-signer"), kind);
+  }
+});
+
+test("a key, credit or rate answer to the signature lookup isn't retried", async () => {
+  const ai = await fakeNearAi({ notes });
+  let lookups = 0;
+  const t: NotesTransport = {
+    ...ai.transport,
+    get: async (path) => {
+      if (!path.startsWith("signature/")) return ai.transport.get(path);
+      lookups++;
+      throw new Error("NEAR AI 402 Payment Required: insufficient credits");
+    },
+  };
+  await assert.rejects(processRecording(t, input, undefined, noWait), /NEAR AI 402/);
+  assert.equal(lookups, 1);
 });

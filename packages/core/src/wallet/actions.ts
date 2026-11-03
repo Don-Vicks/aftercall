@@ -25,11 +25,23 @@ function near(amount: string): string {
   return (BigInt(whole) * 10n ** 24n + BigInt((frac + "0".repeat(24)).slice(0, 24))).toString();
 }
 
+/** "50000000000000000000000" yocto -> "0.05 NEAR". */
+function nearText(yocto: string): string {
+  const n = BigInt(yocto);
+  const frac = (n % 10n ** 24n).toString().padStart(24, "0").replace(/0+$/, "");
+  return `${n / 10n ** 24n}${frac ? `.${frac}` : ""} NEAR`;
+}
+
 export type OwnerAction =
   | { kind: "register" }
   | { kind: "authorise-key"; publicKey: string }
   | { kind: "set-cap"; dailyCap: string }
   | { kind: "set-payment-cap"; perPaymentCap: string }
+  /** Most Aftercall may pay on Solana or Base in a day; 0 turns those payments off. */
+  | { kind: "set-cross-chain-cap"; crossChainCap: string }
+  /** NEAR (yocto) added to, or taken back from, the wallet's storage credit. */
+  | { kind: "add-storage-credit"; yoctoNear: string }
+  | { kind: "withdraw-storage-credit"; yoctoNear: string }
   | { kind: "add-payee"; account: string; label: string; registerWithUsdc: boolean; destination?: PayeeDestination }
   /** Opts a listed payee in to (or, with null, out of) payment on Solana or Base through NEAR Intents. */
   | { kind: "set-payee-destination"; account: string; label: string; destination: PayeeDestination | null }
@@ -103,6 +115,12 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
       return [call(r.contract, "set_cap", { daily_cap: a.dailyCap })];
     case "set-payment-cap":
       return [call(r.contract, "set_payment_cap", { per_payment_cap: a.perPaymentCap })];
+    case "set-cross-chain-cap":
+      return [call(r.contract, "set_cross_chain_cap", { cross_chain_daily_cap: a.crossChainCap })];
+    case "add-storage-credit":
+      return [call(r.contract, "add_storage_credit", {}, a.yoctoNear)];
+    case "withdraw-storage-credit":
+      return [call(r.contract, "withdraw_storage_credit", { amount: a.yoctoNear })];
     case "add-payee":
       return [
         // The payee must be able to hold USDC, or every payment to them would bounce.
@@ -142,7 +160,13 @@ export function describe(r: SignRequest): Description {
     `Your wallet will ask you to call ${method} on ${r.contract} with ${deposit} attached. That's normal: it proves the signature came from you, not from Aftercall.`;
   switch (a.kind) {
     case "register":
-      return { title: "Create your agent wallet", intro: "A wallet on the Aftercall contract that only you control.", rows: [{ label: "Storage", value: "0.1 NEAR, kept as your storage credit" }], walletNote: note("register", "0.1 NEAR"), confirm: "Create wallet" };
+      return {
+        title: "Create your agent wallet",
+        intro: "A wallet on the Aftercall contract that only you control.",
+        rows: [{ label: "Storage", value: "0.1 NEAR: a little pays for the wallet's own record, the rest is your storage credit for proofs, payments and payees" }],
+        walletNote: note("register", "0.1 NEAR"),
+        confirm: "Create wallet",
+      };
     case "authorise-key":
       return {
         title: "Authorise this Mac",
@@ -166,6 +190,31 @@ export function describe(r: SignRequest): Description {
         walletNote: note("set_payment_cap"),
         confirm: "Set cap",
       };
+    case "set-cross-chain-cap":
+      return {
+        title: "Change your cap for other chains",
+        intro:
+          "The most Aftercall can pay on Solana or Base in one day, through NEAR Intents. Those payments count towards your daily cap too, and over either cap they're refused, not held for your wallet. Keep it small: the contract can't check where NEAR Intents sends the money. 0 turns payments on other chains off.",
+        rows: [{ label: "New cap for other chains", value: usdc(a.crossChainCap), mono: true }],
+        walletNote: note("set_cross_chain_cap"),
+        confirm: "Set cap",
+      };
+    case "add-storage-credit":
+      return {
+        title: "Top up storage credit",
+        intro: "Adds NEAR to your agent wallet's storage credit, which pays for the proofs, payments and payees it keeps on NEAR.",
+        rows: [{ label: "Amount", value: nearText(a.yoctoNear), mono: true }],
+        walletNote: note("add_storage_credit", nearText(a.yoctoNear)),
+        confirm: "Top up",
+      };
+    case "withdraw-storage-credit":
+      return {
+        title: "Take back storage credit",
+        intro: "Sends unused storage credit back to your NEAR account. Records already stored stay paid for. With too little credit left, new proofs and payments are refused until you top up.",
+        rows: [{ label: "Amount", value: nearText(a.yoctoNear), mono: true }, { label: "To", value: r.owner, mono: true }],
+        walletNote: note("withdraw_storage_credit"),
+        confirm: "Take back",
+      };
     case "add-payee":
       return {
         title: "Add a payee",
@@ -183,7 +232,8 @@ export function describe(r: SignRequest): Description {
       return a.destination
         ? {
             title: `Pay ${a.label} on ${CHAIN_NAME[a.destination.chain]}`,
-            intro: "Lets Aftercall pay this payee outside NEAR through NEAR Intents, within the same caps. A payment over a cap is refused, not held for your wallet, because the quote would expire.",
+            intro:
+              "Lets Aftercall pay this payee outside NEAR through NEAR Intents, within the same caps and your cap for other chains (0 until you set one in Agent wallet). A payment over a cap is refused, not held for your wallet, because the quote would expire.",
             rows: [{ label: "Payee", value: `${a.label} · ${a.account}` }, ...destinationRows(a.destination)],
             walletNote: note("set_payee_destination"),
             confirm: "Allow in wallet",
@@ -274,7 +324,7 @@ export function decodeSignRequest(fragment: string): SignRequest {
   if (!isNetwork(r.network)) throw new Error("BAD_NETWORK");
   if (!ACCOUNT.test(r.contract) || !ACCOUNT.test(r.owner)) throw new Error("BAD_ACCOUNT");
   const a = r.action as OwnerAction;
-  const amounts = ["dailyCap", "perPaymentCap", "amount"] as const;
+  const amounts = ["dailyCap", "perPaymentCap", "crossChainCap", "yoctoNear", "amount"] as const;
   for (const k of amounts) if (k in a && !DIGITS.test((a as Record<string, string>)[k])) throw new Error("BAD_AMOUNT");
   if ("account" in a && !ACCOUNT.test(a.account)) throw new Error("BAD_ACCOUNT");
   if ("payee" in a && !ACCOUNT.test(a.payee)) throw new Error("BAD_ACCOUNT");

@@ -34,3 +34,12 @@ test("waiting for the next day is offered only when the amount fits the daily ca
   // The wallet couldn't be read: no promise about tomorrow.
   assert.doesNotMatch(crossChainCapRefusal(usdc(180), "OVER_CAP", usdc(150), null), /midnight|tomorrow/);
 });
+
+test("over the cap for other chains says whether it's off, too small for the amount, or used up today", () => {
+  assert.match(crossChainCapRefusal(usdc(10), "OVER_CROSS_CHAIN_CAP", usdc(150), usdc(200), { cap: 0n, left: 0n }), /^Payments on other chains are off/);
+  const tooBig = crossChainCapRefusal(usdc(30), "OVER_CROSS_CHAIN_CAP", usdc(150), usdc(200), { cap: usdc(20), left: usdc(20) });
+  assert.match(tooBig, /^Over your cap for other chains of 20\.00 USDC a day/);
+  assert.doesNotMatch(tooBig, /midnight/);
+  assert.match(crossChainCapRefusal(usdc(15), "OVER_CROSS_CHAIN_CAP", usdc(150), usdc(200), { cap: usdc(20), left: usdc(5) }), /\(5\.00 USDC\).*after midnight UTC/);
+  assert.doesNotMatch(crossChainCapRefusal(usdc(15), "OVER_CROSS_CHAIN_CAP", usdc(150), usdc(200)), /midnight/);
+});

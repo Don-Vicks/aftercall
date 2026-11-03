@@ -8,6 +8,8 @@ test("every owner method carries exactly 1 yoctoNEAR, as the contract requires",
   for (const action of [
     { kind: "set-cap", dailyCap: "200000000" },
     { kind: "set-payment-cap", perPaymentCap: "50000000" },
+    { kind: "set-cross-chain-cap", crossChainCap: "20000000" },
+    { kind: "withdraw-storage-credit", yoctoNear: "10000000000000000000000" },
     { kind: "remove-payee", account: "designer.testnet", label: "Designer" },
     { kind: "withdraw", amount: "1000000" },
     { kind: "approve", followupId: "m1-f3", payee: "designer.testnet", amount: "5000000000" },
@@ -26,6 +28,27 @@ test("adding a payee can register them with USDC first, in the same signing", ()
   assert.deepEqual(txs.map((t) => t.receiverId), [USDC_CONTRACT.testnet, base.contract]);
   const reg = txs[0].actions[0];
   assert.ok(reg.type === "FunctionCall" && reg.params.methodName === "storage_deposit" && reg.params.deposit === "1250000000000000000000");
+});
+
+test("topping up storage credit attaches the NEAR itself, to the caller's own wallet", () => {
+  const r: SignRequest = { ...base, action: { kind: "add-storage-credit", yoctoNear: "50000000000000000000000" } };
+  const [tx] = toTransactions(r);
+  const a = tx.actions[0];
+  assert.ok(a.type === "FunctionCall");
+  assert.deepEqual([tx.receiverId, a.params.methodName, a.params.args, a.params.deposit], [base.contract, "add_storage_credit", {}, "50000000000000000000000"]);
+  assert.deepEqual(describe(r).rows[0], { label: "Amount", value: "0.05 NEAR", mono: true });
+  assert.deepEqual(decodeSignRequest(encodeSignRequest(r)), r);
+  assert.throws(() => decodeSignRequest(encodeSignRequest({ ...base, action: { kind: "add-storage-credit", yoctoNear: "0.05" } } as SignRequest)));
+});
+
+test("the cross-chain cap is its own owner method, and its page says 0 turns other chains off", () => {
+  const r: SignRequest = { ...base, action: { kind: "set-cross-chain-cap", crossChainCap: "20000000" } };
+  const a = toTransactions(r)[0].actions[0];
+  assert.ok(a.type === "FunctionCall");
+  assert.deepEqual([a.params.methodName, a.params.args], ["set_cross_chain_cap", { cross_chain_daily_cap: "20000000" }]);
+  const d = describe(r);
+  assert.deepEqual(d.rows[0].value, "20.00 USDC");
+  assert.match(d.intro, /0 turns payments on other chains off/);
 });
 
 test("deposits go to the USDC contract as ft_transfer_call to the agent wallet", () => {

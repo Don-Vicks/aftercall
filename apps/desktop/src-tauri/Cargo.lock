@@ -42,6 +42,8 @@ dependencies = [
  "objc2-foundation",
  "reqwest 0.12.28",
  "ringbuf",
+ "rustls",
+ "rustls-webpki",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -51,6 +53,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tokio",
+ "webpki-roots",
  "zeroize",
 ]
 

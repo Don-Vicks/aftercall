@@ -332,9 +332,12 @@ export function checkAnswer(raw: z.infer<typeof askSchema>, excerpts: Excerpt[])
  * the gateway and the model TEEs with a fresh nonce (Intel TDX and NVIDIA), and stop
  * there, sending nothing, unless the gateway passed and a verified model TEE offers an
  * attested Ed25519 key; encrypt the question and excerpts to that key; decrypt the
- * reply with a key made for this request; keep only quotes found in the excerpts
- * (`onAnswer` gets this as soon as it's ready); then check the reply's signature.
- * There is no fallback to an unencrypted request. With no excerpts, nothing is sent.
+ * reply with a key made for this request; keep only quotes found in the excerpts;
+ * then check the reply's signature, which must be the model TEE's own. Only then does
+ * `onAnswer` get the answer: the gateway sees the key the reply is encrypted to, so
+ * until the signature checks out the reply could have been written by anyone in
+ * between. An answer whose signature fails isn't shown. There is no fallback to an
+ * unencrypted request. With no excerpts, nothing is sent.
  */
 export async function askMeetings(
   t: NearAiTransport,
@@ -363,6 +366,9 @@ export async function askMeetings(
     model: SUMMARY_MODEL,
     stream: false,
     max_tokens: ASK_MAX_TOKENS,
+    // No thinking first, as for the notes: the answer only has to quote the excerpts, and
+    // reasoning would eat into the cap. A plaintext control, like max_tokens.
+    chat_template_kwargs: { enable_thinking: false },
     messages: encryptMessages(askMessages(question, excerpts, input.now, input.briefs), modelKey),
     response_format: { type: "json_schema", json_schema: { name: "meeting_answer", strict: true, schema: askJsonSchema } },
   });
@@ -377,15 +383,16 @@ export async function askMeetings(
   const completion = JSON.parse(response) as Completion;
   // finish_reason sits outside the encrypted content.
   requireComplete(completion, ASK_MAX_TOKENS, "the answer would be incomplete. Nothing is shown.");
+  const sealed = completion.choices?.[0]?.message?.content ?? "";
+  if (!sealed.trim()) throw new Error("The model sent back an empty answer, so there is nothing to show. Try asking again.");
   let content: string;
   try {
-    content = decryptWith(completion.choices?.[0]?.message?.content ?? "", client.x25519Secret);
+    content = decryptWith(sealed, client.x25519Secret);
   } catch {
     throw new Error("The answer didn't come back encrypted to this Mac, so it isn't shown.");
   }
   const raw = askSchema.parse(JSON.parse(content.replace(/^\s*<think>[\s\S]*?<\/think>\s*/, "")));
   const answer = checkAnswer(raw, excerpts);
-  hooks.onAnswer?.(answer);
 
   hooks.onStage?.("signature");
   let signed: TeeCheck[];
@@ -404,6 +411,10 @@ export async function askMeetings(
     detail: `Encrypted on this Mac to Ed25519 key ${short(modelKey)}, bound in a verified quote; the answer came back encrypted to a key made for this question`,
   };
   const checks = [...gateway, ...node.checks, ...signed, e2ee];
+  if (!signed.every((c) => c.ok)) {
+    throw new Error(`The answer's signature didn't check out (${failedLabels(signed)}), so it isn't shown: it can't be shown to come from the attested model.`);
+  }
+  hooks.onAnswer?.(answer);
   const cost = estimateCost({ chat: { model: SUMMARY_MODEL, usage: completion.usage } });
   return { ...answer, verified: checks.every((c) => c.ok), checks, modelKey, cost };
 }

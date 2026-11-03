@@ -14,6 +14,7 @@ import {
   isNetwork,
   noticeLine,
   proofHash,
+  recordedAtMs,
   verifyProof,
   verifyProofGpu,
   type Check,
@@ -153,7 +154,7 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
   const allOk = !!done && passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
   const dateOpts = { day: "numeric", month: "short", year: "numeric" } as const;
   const when = done?.onChain
-    ? new Date(done.onChain.recorded_at / 1e6).toLocaleDateString([], dateOpts)
+    ? new Date(recordedAtMs(done.onChain)).toLocaleDateString([], dateOpts)
     : hasFullChecks(proof.bundle)
       ? new Date(proof.bundle.checkedAt).toLocaleDateString([], dateOpts)
       : null;

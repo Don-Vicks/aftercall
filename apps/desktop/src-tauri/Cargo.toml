@@ -43,6 +43,11 @@ zeroize = "1"
 dcap-qvl = "0.7"
 # Already in the tree through Tauri and reqwest; the notes stream's idle timeout needs its timer.
 tokio = { version = "1", features = ["time"] }
+# Already in the tree through reqwest: the audio upload's TLS check, which runs the usual
+# WebPKI validation and also requires the attested gateway key (nearai.rs, PinnedKey).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-webpki = { version = "0.103", default-features = false, features = ["std"] }
+webpki-roots = "1"
 
 [dev-dependencies]
 # Chunks are written by at_rest::AudioWriter; tests read the decrypted WAV back with hound.

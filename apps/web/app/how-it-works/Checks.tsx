@@ -20,8 +20,9 @@ const ALL3 = "gateway, Whisper, Qwen";
 const BEFORE: Group[] = [
   { key: "tdx", title: "Intel TDX", meta: `6 checks · ${ALL3}`, where: ALL3, means: "Each machine's Intel quote verifies against Intel's collateral, and debug mode is off.", cant: "pass off an ordinary server, or one in debug mode, as secure hardware.", checks: ["Genuine Intel TDX confidential VM", "Debug mode off"] },
   { key: "bind", title: "Key and nonce binding", meta: `6 checks · ${ALL3}`, where: ALL3, means: "The quote holds the TEE's signing key and the nonce your Mac made for this run.", cant: "replay an old quote, or sign with a key made outside the TEE.", checks: ["The TEE made its signing key", "Evidence is fresh"] },
+  { key: "tls", title: "Gateway TLS key", meta: "1 check · gateway", where: "gateway", means: "The gateway's quote binds the public key of its TLS certificate, and the audio is uploaded only on a connection whose certificate carries that key.", cant: "take the audio at a TLS endpoint whose key the gateway's quote doesn't bind.", checks: ["Gateway's TLS key is in its quote"] },
   { key: "boot", title: "Boot log", meta: `3 checks · ${ALL3}`, where: ALL3, means: "Every boot event in the log replays to the RTMR3 value in the quote.", cant: "hide what the machine loaded when it booted.", checks: ["Boot log matches the quote"] },
-  { key: "sw", title: "Software", meta: `3 checks · ${ALL3}`, where: ALL3, means: "The sha256 of the TEE's Docker compose matches the mr_config in its quote.", cant: "show one Docker compose while running another.", checks: ["Known software is running"] },
+  { key: "sw", title: "Software", meta: `3 checks · ${ALL3}`, where: ALL3, means: "The sha256 of the TEE's Docker compose matches the mr_config in its quote. The images it names are listed by digest, not checked against a list of NEAR's releases.", cant: "show one Docker compose while running another.", checks: ["Attested setup file matches the hardware"] },
   { key: "gpu", title: "NVIDIA GPUs", meta: "6 checks · Whisper, Qwen", where: "Whisper, Qwen", means: "NVIDIA signs a token for each GPU, with this run's nonce, secure boot on and debug off.", cant: "use a GPU outside confidential mode, or replay old GPU evidence.", checks: ["Genuine NVIDIA confidential GPU", "GPU evidence is fresh", "GPUs in secure mode"] },
 ];
 const AFTER: Group[] = [
@@ -73,7 +74,7 @@ function Groups({ list, base, open, toggle }: { list: Group[]; base: number; ope
   );
 }
 
-/** "Checked every time": the 24 checks before sending and 5 on the reply, each group opening to its checks. */
+/** "Checked every time": the 25 checks before sending and 5 on the reply, each group opening to its checks. */
 export function Checks() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [failed, setFailed] = useState(false);
@@ -84,7 +85,7 @@ export function Checks() {
       <div className={h.checksWrap} style={{ gap: 6 }}>
         <div className={h.groupHead}>
           <h3 className="t-section">
-            Before anything leaves your Mac <span className="count">24 checks</span>
+            Before anything leaves your Mac <span className="count">25 checks</span>
           </h3>
           <span className="muted" style={{ fontSize: 12 }}>
             Counted for one node per model; each extra node adds its own set

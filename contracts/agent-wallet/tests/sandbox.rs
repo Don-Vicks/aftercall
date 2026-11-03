@@ -10,6 +10,8 @@ const USDC: u128 = 1_000_000; // 6 decimals
 
 struct Env {
     worker: Worker<Sandbox>,
+    /// The agent-wallet code, to deploy a second copy.
+    wallet_wasm: Vec<u8>,
     wallet: Contract,
     usdc: Contract,
     victor: Account,
@@ -31,6 +33,7 @@ async fn setup() -> anyhow::Result<Env> {
         .transact().await?.into_result()?;
 
     let wallet = worker.dev_deploy(&wallet_wasm).await?;
+    // Only the contract account itself may initialise it (`new` is private).
     wallet.call("new").args_json(json!({ "usdc": usdc.id() })).transact().await?.into_result()?;
 
     // The wallet contract and the payee must be registered on the token.
@@ -51,7 +54,7 @@ async fn setup() -> anyhow::Result<Env> {
         .args_json(json!({ "receiver_id": wallet.id(), "amount": (300 * USDC).to_string(), "msg": "" }))
         .deposit(NearToken::from_yoctonear(1)).max_gas().transact().await?.into_result()?;
 
-    Ok(Env { worker, wallet, usdc, victor, designer })
+    Ok(Env { worker, wallet_wasm, wallet, usdc, victor, designer })
 }
 
 async fn ft_balance(e: &Env, who: &Account) -> anyhow::Result<u128> {
@@ -218,13 +221,26 @@ async fn failed_transfer_refunds_everything() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn callback_is_private() -> anyhow::Result<()> {
+async fn callbacks_and_init_are_private() -> anyhow::Result<()> {
     let e = setup().await?;
-    let r = e.victor.call(e.wallet.id(), "on_pay_complete")
-        .args_json(json!({ "owner": e.victor.id(), "followup_id": "x", "amount": (1_000 * USDC).to_string(), "counts_to_cap": false }))
-        .transact().await?;
-    assert!(r.is_failure(), "anyone calling the callback must fail");
+    let amount = (1_000 * USDC).to_string();
+    for (method, args) in [
+        ("on_pay_complete", json!({ "owner": e.victor.id(), "followup_id": "x", "amount": amount, "day": 0, "cross_chain": false })),
+        ("on_withdraw_complete", json!({ "owner": e.victor.id(), "amount": amount })),
+        ("on_deposit_address_registered", json!({ "owner": e.victor.id(), "followup_id": "x", "amount": amount, "day": 0, "deposit_address": DEPOSIT })),
+    ] {
+        let r = e.victor.call(e.wallet.id(), method).args_json(args).max_gas().transact().await?;
+        assert!(r.is_failure(), "anyone calling {method} must fail");
+    }
     assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+
+    // A deployed but not yet initialised copy can't be initialised by someone else first.
+    let fresh = e.worker.dev_deploy(&e.wallet_wasm).await?;
+    let front_run = e.victor.call(fresh.id(), "new").args_json(json!({ "usdc": e.victor.id() })).transact().await?;
+    assert!(format!("{:?}", front_run.into_result().unwrap_err()).contains("is private"));
+    fresh.call("new").args_json(json!({ "usdc": e.usdc.id() })).transact().await?.into_result()?;
+    let usdc: String = fresh.view("get_usdc").await?.json()?;
+    assert_eq!(usdc, e.usdc.id().as_str());
     Ok(())
 }
 
@@ -439,12 +455,16 @@ const DEPOSIT: &str = "69f5eccee1e146961b47ac7cecb0f5caada2b6e1ee124e72e8b47aded
 const SOL: &str = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 
 async fn pay_cross_chain(e: &Env, signer: &Account, payee: &str, amount: u128, followup_id: &str) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    pay_cross_chain_with_gas(e, signer, payee, amount, followup_id, 100).await
+}
+
+async fn pay_cross_chain_with_gas(e: &Env, signer: &Account, payee: &str, amount: u128, followup_id: &str, tgas: u64) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
     Ok(signer.call(e.wallet.id(), "pay")
         .args_json(json!({
             "payee": payee, "amount": amount.to_string(), "memo": "deposit", "followup_id": followup_id,
             "cross_chain": { "deposit_address": DEPOSIT, "quote_id": "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7" },
         }))
-        .gas(near_workspaces::types::Gas::from_tgas(100))
+        .gas(near_workspaces::types::Gas::from_tgas(tgas))
         .transact().await?)
 }
 
@@ -454,6 +474,25 @@ async fn opt_in_designer(e: &Env) -> anyhow::Result<()> {
         .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
     Ok(())
 }
+
+async fn set_cross_chain_cap(e: &Env, cap: u128) -> anyhow::Result<()> {
+    e.victor.call(e.wallet.id(), "set_cross_chain_cap")
+        .args_json(json!({ "cross_chain_daily_cap": cap.to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    Ok(())
+}
+
+async fn usdc_owner_call(e: &Env, method: &str, args: serde_json::Value) -> anyhow::Result<()> {
+    e.victor.call(e.usdc.id(), method).args_json(args).transact().await?.into_result()?;
+    Ok(())
+}
+
+async fn is_paid(e: &Env, followup_id: &str) -> anyhow::Result<bool> {
+    Ok(e.wallet.view("is_paid").args_json(json!({ "owner": e.victor.id(), "followup_id": followup_id })).await?.json()?)
+}
+
+/// 0.00125 NEAR: what registering a deposit address with USDC costs the owner's storage credit.
+const REGISTRATION_FEE: u128 = 1_250_000_000_000_000_000_000;
 
 #[tokio::test]
 async fn cross_chain_pays_the_deposit_address_within_caps() -> anyhow::Result<()> {
@@ -466,7 +505,15 @@ async fn cross_chain_pays_the_deposit_address_within_caps() -> anyhow::Result<()
     let dests: serde_json::Value = e.wallet.view("get_payee_destinations").args_json(json!({ "owner": e.victor.id() })).await?.json()?;
     assert_eq!(dests[0]["address"], SOL);
 
+    // Opted in, but the cross-chain cap is still 0: refused, nothing parked, nothing moved.
     let app = limited_key(&e).await?;
+    let off = pay_cross_chain(&e, &app, e.designer.id().as_str(), 150 * USDC, "x-0").await?;
+    let out: serde_json::Value = off.json()?;
+    assert_eq!((out["status"].as_str(), out["reason"].as_str()), (Some("blocked"), Some("OVER_CROSS_CHAIN_CAP")));
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+
+    set_cross_chain_cap(&e, 200 * USDC).await?;
+    assert_eq!(wallet_field(&e, "cross_chain_daily_cap").await?, 200 * USDC);
     let r = pay_cross_chain(&e, &app, e.designer.id().as_str(), 150 * USDC, "x-1").await?;
     assert!(r.is_success(), "{:?}", r.failures());
     assert_eq!(r.json::<serde_json::Value>()?["status"], "sending");
@@ -474,6 +521,7 @@ async fn cross_chain_pays_the_deposit_address_within_caps() -> anyhow::Result<()
     assert_eq!(v.parse::<u128>()?, 150 * USDC, "the USDC went to the deposit address");
     assert_eq!(ft_balance(&e, &e.designer).await?, 0, "not to the payee's NEAR account");
     assert_eq!(wallet_field(&e, "spent_today").await?, 150 * USDC);
+    assert_eq!(wallet_field(&e, "cross_chain_spent_today").await?, 150 * USDC);
     let rec: serde_json::Value = e.wallet.view("get_cross_chain_payment").args_json(json!({ "owner": e.victor.id(), "followup_id": "x-1" })).await?.json()?;
     assert_eq!((rec["chain"].as_str(), rec["address"].as_str(), rec["deposit_address"].as_str()), (Some("solana"), Some(SOL), Some(DEPOSIT)));
     assert_eq!(rec["quote_id"], "ecb38db7-2b32-450a-8ef2-0efc83ec6ea7");
@@ -518,5 +566,129 @@ async fn cross_chain_refuses_unlisted_unopted_paused_and_other_callers() -> anyh
     let paused = pay_cross_chain(&e, &app, e.designer.id().as_str(), USDC, "x-d").await?;
     assert!(format!("{:?}", paused.into_result().unwrap_err()).contains("PAUSED"));
     assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+    Ok(())
+}
+
+/// Both ways a cross-chain payment can fail, at exactly the 70 TGas floor so the whole chain
+/// (storage_deposit, the callback, ft_transfer, its callback) is shown to fit.
+#[tokio::test]
+async fn failed_cross_chain_payment_is_refunded() -> anyhow::Result<()> {
+    let e = setup().await?;
+    opt_in_designer(&e).await?;
+    set_cross_chain_cap(&e, 200 * USDC).await?;
+    let app = limited_key(&e).await?;
+    let designer = e.designer.id().as_str();
+    let credit = wallet_field(&e, "storage_credit").await?;
+
+    // 1. Registering the deposit address fails (the token now wants more than 0.00125 NEAR):
+    // everything is undone and the fee comes back to the storage credit.
+    usdc_owner_call(&e, "set_storage_min", json!({ "min": "2000000000000000000000" })).await?;
+    let r = pay_cross_chain_with_gas(&e, &app, designer, 150 * USDC, "x-1", 70).await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    assert!(r.logs().iter().any(|l| l.contains("PAYMENT_FAILED")), "logs: {:?}", r.logs());
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+    assert_eq!(wallet_field(&e, "spent_today").await?, 0);
+    assert_eq!(wallet_field(&e, "cross_chain_spent_today").await?, 0);
+    assert_eq!(wallet_field(&e, "storage_credit").await?, credit, "fee, record and paid mark all refunded");
+    assert!(!is_paid(&e, "x-1").await?);
+    let rec: Option<serde_json::Value> = e.wallet.view("get_cross_chain_payment").args_json(json!({ "owner": e.victor.id(), "followup_id": "x-1" })).await?.json()?;
+    assert!(rec.is_none());
+
+    // 2. The address registers, but the transfer is refused (Circle-style blocklist): the USDC and
+    // the caps come back; the fee was spent registering the address, so it stays spent.
+    usdc_owner_call(&e, "set_storage_min", json!({ "min": null })).await?;
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": DEPOSIT, "blocked": true })).await?;
+    let r = pay_cross_chain_with_gas(&e, &app, designer, 150 * USDC, "x-2", 70).await?;
+    assert!(r.logs().iter().any(|l| l.contains("PAYMENT_FAILED")), "logs: {:?}", r.logs());
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+    assert_eq!(wallet_field(&e, "cross_chain_spent_today").await?, 0);
+    assert_eq!(wallet_field(&e, "storage_credit").await?, credit - REGISTRATION_FEE);
+    let registered: Option<serde_json::Value> = e.usdc.view("storage_balance_of").args_json(json!({ "account_id": DEPOSIT })).await?.json()?;
+    assert!(registered.is_some());
+    assert!(!is_paid(&e, "x-2").await?, "a failed payment can be retried");
+
+    // 3. Retried once the address can receive: it goes through.
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": DEPOSIT, "blocked": false })).await?;
+    let r = pay_cross_chain_with_gas(&e, &app, designer, 150 * USDC, "x-2", 70).await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    let v: String = e.usdc.view("ft_balance_of").args_json(json!({ "account_id": DEPOSIT })).await?.json()?;
+    assert_eq!(v.parse::<u128>()?, 150 * USDC);
+    assert!(is_paid(&e, "x-2").await?);
+    let stats: serde_json::Value = e.wallet.view("get_stats").await?.json()?;
+    assert_eq!(stats["payments"], 1, "the two refunded payments aren't counted");
+    Ok(())
+}
+
+/// Every record is paid from the owner's storage credit, the wallet record and each paid mark
+/// included. When it runs out, the app's proofs and payments stop; the owner's wallet tops it up.
+#[tokio::test]
+async fn storage_credit_runs_out_then_is_topped_up() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    let credit = wallet_field(&e, "storage_credit").await?;
+    assert!(credit < NearToken::from_millinear(100).as_yoctonear(), "the wallet record came out of the 0.1 NEAR");
+
+    // Victor takes back all but 10 bytes' worth; the NEAR lands in his account.
+    let keep = 10 * 10_000_000_000_000_000_000u128;
+    let near_before = e.victor.view_account().await?.balance.as_yoctonear();
+    e.victor.call(e.wallet.id(), "withdraw_storage_credit").args_json(json!({ "amount": (credit - keep).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    assert_eq!(wallet_field(&e, "storage_credit").await?, keep);
+    let near_after = e.victor.view_account().await?.balance.as_yoctonear();
+    assert!(near_after + NearToken::from_millinear(5).as_yoctonear() > near_before + (credit - keep), "refunded, less gas");
+
+    // Out of credit: a proof and a payment (its paid mark) are both refused.
+    let proof = app.call(e.wallet.id(), "record_proof")
+        .args_json(json!({ "meeting_id": "m-1", "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }))
+        .transact().await?;
+    assert!(format!("{:?}", proof.into_result().unwrap_err()).contains("STORAGE_CREDIT_LOW"));
+    let paid = pay(&e, &app, 10 * USDC, "f-1").await?;
+    assert!(format!("{:?}", paid.into_result().unwrap_err()).contains("STORAGE_CREDIT_LOW"));
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+
+    // The app's key can't top up: the method isn't on its list, and it can't attach NEAR.
+    let by_app = app.call(e.wallet.id(), "add_storage_credit").deposit(NearToken::from_millinear(50)).transact().await;
+    assert!(by_app.is_err() || by_app.unwrap().is_failure());
+
+    // Victor's wallet tops up; both work again.
+    e.victor.call(e.wallet.id(), "add_storage_credit").deposit(NearToken::from_millinear(50)).transact().await?.into_result()?;
+    assert_eq!(wallet_field(&e, "storage_credit").await?, keep + NearToken::from_millinear(50).as_yoctonear());
+    app.call(e.wallet.id(), "record_proof")
+        .args_json(json!({ "meeting_id": "m-1", "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }))
+        .transact().await?.into_result()?;
+    let paid = pay(&e, &app, 10 * USDC, "f-1").await?;
+    assert_eq!(paid.json::<serde_json::Value>()?["status"], "sending");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 10 * USDC);
+    Ok(())
+}
+
+/// A withdrawal that bounces comes back to the balance through its own callback and never
+/// touches a payment's paid mark. Withdraw and approve run at their 50 TGas floor, and refuse less.
+#[tokio::test]
+async fn failed_withdrawal_is_refunded_and_leaves_payments_alone() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    pay(&e, &app, 50 * USDC, "f-1").await?.into_result()?;
+
+    let withdraw = |tgas: u64| e.victor.call(e.wallet.id(), "withdraw").args_json(json!({ "amount": (10 * USDC).to_string() }))
+        .deposit(NearToken::from_yoctonear(1)).gas(near_workspaces::types::Gas::from_tgas(tgas)).transact();
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": e.victor.id(), "blocked": true })).await?;
+    let r = withdraw(50).await?;
+    assert!(r.logs().iter().any(|l| l.contains("WITHDRAW_FAILED")), "logs: {:?}", r.logs());
+    assert_eq!(wallet_field(&e, "balance").await?, 250 * USDC);
+    assert!(is_paid(&e, "f-1").await?, "the payment is still marked paid");
+
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": e.victor.id(), "blocked": false })).await?;
+    let before = ft_balance(&e, &e.victor).await?;
+    withdraw(50).await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.victor).await?, before + 10 * USDC);
+    let low = withdraw(30).await?;
+    assert!(format!("{:?}", low.into_result().unwrap_err()).contains("NEEDS_50_TGAS"));
+
+    // Approving a parked payment at exactly 50 TGas pays it.
+    pay(&e, &app, 220 * USDC, "f-big").await?.into_result()?;
+    e.victor.call(e.wallet.id(), "approve_pending").args_json(json!({ "followup_id": "f-big" }))
+        .deposit(NearToken::from_yoctonear(1)).gas(near_workspaces::types::Gas::from_tgas(50)).transact().await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.designer).await?, 270 * USDC);
     Ok(())
 }

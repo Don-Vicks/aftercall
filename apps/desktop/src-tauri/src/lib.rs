@@ -19,7 +19,7 @@ mod your_notes;
 #[doc(hidden)]
 pub mod test_api {
     pub use crate::attest::{QuoteReport, decode_hex, nvidia_keys, verify_quote, verify_quote_with};
-    pub use crate::nearai::{E2ee, StreamProgress, chat, chat_stream_with, check_key, transcribe};
+    pub use crate::nearai::{E2ee, StreamProgress, TLS_PIN_MISMATCH, chat, chat_stream_with, check_key, spki_sha256, transcribe, transcribe_with_roots};
 }
 
 use std::path::PathBuf;
@@ -865,10 +865,11 @@ fn nearai_clear_key() -> Result<(), String> {
     nearai::clear_key()
 }
 
+/// `tls_pin`: the gateway's attested TLS key fingerprint; the upload goes only to a certificate carrying it.
 #[tauri::command]
-async fn nearai_transcribe(app: AppHandle, path: String, model: String, prompt: String) -> Result<String, String> {
+async fn nearai_transcribe(app: AppHandle, path: String, model: String, prompt: String, tls_pin: String) -> Result<String, String> {
     let file = nearai::check_audio_path(std::path::Path::new(&path), &recordings_dir(&app)?)?;
-    nearai::transcribe(file, model, prompt).await
+    nearai::transcribe(file, model, prompt, tls_pin).await
 }
 
 /// `e2ee` carries the two public keys the request is end-to-end encrypted to; there is no plaintext request.

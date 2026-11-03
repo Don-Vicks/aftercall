@@ -24,7 +24,7 @@ import { Footnote, rise } from "./PagePieces";
 import { plural } from "./library";
 import { PAY_STATUS } from "./PersonScreen";
 
-type Phase = "search" | "none" | "preview" | "nokey" | "attest" | "send" | "answer" | "done" | "error";
+type Phase = "search" | "none" | "preview" | "nokey" | "attest" | "send" | "signature" | "answer" | "done" | "error";
 
 interface Turn {
   id: number;
@@ -88,7 +88,7 @@ export function AskScreen({
   const askedInitial = useRef(false);
   const chips = useMemo(() => suggestions(meetings, me), [meetings, me]);
   // Busy until the signature is checked, so one question is in flight at a time.
-  const busy = turns.some((t) => t.phase === "search" || t.phase === "attest" || t.phase === "send" || (t.phase === "answer" && !t.result));
+  const busy = turns.some((t) => t.phase === "search" || t.phase === "attest" || t.phase === "send" || t.phase === "signature" || (t.phase === "answer" && !t.result));
   const inputId = useId();
 
   const patch = (id: number, p: Partial<Turn>) => setTurns((all) => all.map((t) => (t.id === id ? { ...t, ...p } : t)));
@@ -114,7 +114,7 @@ export function AskScreen({
         nearAiTransport,
         { question: q, excerpts: picked.excerpts, briefs },
         {
-          onStage: (s) => s !== "signature" && patch(id, { phase: s }),
+          onStage: (s) => patch(id, { phase: s }),
           onAnswer: (answer) => patch(id, { phase: "answer", answer }),
         },
       );
@@ -269,7 +269,7 @@ function TurnView({
 }) {
   const n = t.excerpts.length;
   const found = `${plural(n, "excerpt")} in ${plural(t.meetings, "meeting")}`;
-  const sending = t.phase === "attest" || t.phase === "send";
+  const sending = t.phase === "attest" || t.phase === "send" || t.phase === "signature";
   const answered = t.phase === "answer" || t.phase === "done" || !!t.answer;
   const words = useReveal(t.answer?.answer ?? "", answered);
   const revealed = !t.answer?.answer || words >= t.answer.answer.split(" ").length;
@@ -287,7 +287,11 @@ function TurnView({
             {t.phase === "search" ? "Searching your meetings on this Mac…" : "Searched your meetings on this Mac"}
           </Step>
           {sending && (
-            <Step busy>{t.phase === "attest" ? `Checking the Qwen TEE's secure hardware before sending ${plural(n, "excerpt")}…` : `Sending ${plural(n, "excerpt")}, encrypted to the Qwen TEE…`}</Step>
+            <Step busy>{t.phase === "attest"
+                ? `Checking the Qwen TEE's secure hardware before sending ${plural(n, "excerpt")}…`
+                : t.phase === "signature"
+                  ? "Checking the answer's signature before showing it…"
+                  : `Sending ${plural(n, "excerpt")}, encrypted to the Qwen TEE…`}</Step>
           )}
         </ol>
       )}

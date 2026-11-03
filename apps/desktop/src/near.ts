@@ -59,7 +59,7 @@ export const near = {
 export interface PayOutcome {
   txHash: string;
   status: "paid" | "failed" | "blocked";
-  reason: "OVER_CAP" | "OVER_PAYMENT_CAP" | null;
+  reason: "OVER_CAP" | "OVER_PAYMENT_CAP" | "OVER_CROSS_CHAIN_CAP" | null;
   leftToday: string | null;
 }
 
@@ -74,6 +74,9 @@ export interface WalletView {
     pending_count: number;
     storage_credit: string;
     per_payment_cap: string;
+    /** Most the app may pay on Solana or Base a day; 0 means off. */
+    cross_chain_daily_cap: string;
+    cross_chain_spent_today: string;
   } | null;
   payees: { account: string; label: string }[];
   /** Payees the owner opted in to payment on Solana or Base (get_payee_destinations). */

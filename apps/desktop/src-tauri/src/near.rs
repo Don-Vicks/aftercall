@@ -332,7 +332,7 @@ pub struct PayOutcome {
     /// "paid", "failed" (the transfer bounced and was refunded) or "blocked" (over a cap: parked for
     /// the owner's wallet, or for a cross-chain payment refused with nothing parked).
     pub status: String,
-    /// OVER_CAP or OVER_PAYMENT_CAP when blocked.
+    /// OVER_CAP, OVER_PAYMENT_CAP or (cross-chain only) OVER_CROSS_CHAIN_CAP when blocked.
     pub reason: Option<String>,
     pub left_today: Option<String>,
 }

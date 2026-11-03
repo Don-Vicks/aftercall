@@ -4,18 +4,23 @@ import { mergeSectionNotes, overallRequestText, planSections, sectionHeading, ty
 import { decryptPieces, parseChatStream, type StreamProgress } from "./stream.ts";
 import { mergeTranscript, numberedTranscript, type TranscribedChunk, type WhisperResult } from "./transcript.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
-import { attestModel, attestedKeys, failedLabels, gatewayChecks, loadNvidiaKeys, modelChecks, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
+import { attestGateway, attestModel, attestedKeys, failedLabels, gatewayChecks, gatewayTlsPin, loadNvidiaKeys, modelChecks, tlsPinMismatch, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
 import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse, type TeeCheck } from "../tee/checks.ts";
 import { encryptMessages, newClientKeys } from "../tee/e2ee.ts";
+import { decodeJwt } from "../tee/nvidia.ts";
 import type { Meeting, NoticeLog, Speaker } from "../meeting.ts";
 import { estimateCost, type CostEstimate, type Usage } from "../cost.ts";
 import { e2eeStaleKey, isNearAiAccountError, nearAiErrorText, nearAiStatus } from "../errors.ts";
 
 export const WHISPER_MODEL = "openai/whisper-large-v3";
 export const SUMMARY_MODEL = "Qwen/Qwen3.8-27B";
-/** Same Confidential TEE tier; used if the main model is unavailable. Smaller output cap. */
-export const FALLBACK_SUMMARY_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
 
+/**
+ * The summary model's attestation is redone just before the transcript is encrypted to
+ * it when it is older than this (or NVIDIA's token for it has expired): transcribing a
+ * long call takes a while, and the key should be one a healthy TEE serves now.
+ */
+export const MAX_ATTESTATION_AGE_MS = 5 * 60_000;
 /**
  * Output cap for the notes call of a call that goes in one request. Generous until
  * output is measured on live runs: Qwen3.8-27B allows 65,536 output tokens, so an
@@ -41,8 +46,14 @@ export interface E2eeKeys {
  * read straight from disk, and the attestation services are reachable (no CORS).
  */
 export interface NearAiTransport extends TeeTransport {
-  /** POST /v1/audio/transcriptions with the file at `path`; returns the raw response body. */
-  transcribe(path: string, model: string, prompt: string): Promise<string>;
+  /**
+   * POST /v1/audio/transcriptions with the file at `path`; returns the raw response body.
+   * `tlsPin` is the gateway's attested TLS key fingerprint (hex sha256 of its certificate's
+   * SPKI DER): the upload goes only over a connection whose certificate passes the usual
+   * WebPKI checks and carries that key. Otherwise it rejects with `TLS_PIN_MISMATCH` in
+   * the message and nothing is uploaded.
+   */
+  transcribe(path: string, model: string, prompt: string, tlsPin: string): Promise<string>;
   /** POST /v1/chat/completions with exactly these bytes and the E2EE headers; returns exactly the bytes received. */
   chat(body: string, e2ee: E2eeKeys): Promise<string>;
 }
@@ -114,6 +125,8 @@ export interface ProcessInput {
    * spelling prompt, which goes with the audio over TLS.
    */
   brief?: ProjectBrief;
+  /** Milliseconds now; for tests of how old an attestation is. */
+  clock?: () => number;
 }
 
 // ---------- project brief ----------
@@ -434,6 +447,7 @@ const enc = new TextEncoder();
  */
 function requireAttested(summary: ModelAttestation, whisper: ModelAttestation): VerifiedTee {
   const gw = gatewayChecks(summary);
+  // The gateway checks include its TLS key, which the audio upload is pinned to.
   if (!gw.every((c) => c.ok)) throw new Error(`Secure hardware check failed for the NEAR AI gateway (${failedLabels(gw)}). Nothing was sent.`);
   // Audio can't be pinned to one Whisper node, so every node must pass.
   const w = modelChecks(whisper);
@@ -493,7 +507,10 @@ function cleanNotice(n: NoticeLog | undefined): NoticeLog | undefined {
   return { by: "you", at: n.at, ...(n.how ? { how: n.how } : {}) };
 }
 
-/** Waits for the signature, which NEAR AI publishes a moment after the response. */
+/**
+ * Waits for the signature, which NEAR AI publishes a moment after the response (it may
+ * be on another node at first). A key, credit or rate answer isn't retried.
+ */
 export async function fetchSignature(t: NearAiTransport, chatId: string, model: string, wait: (ms: number) => Promise<void>): Promise<SignatureResponse> {
   const q = new URLSearchParams({ model, signing_algo: "ed25519" });
   for (let attempt = 0; ; attempt++) {
@@ -503,7 +520,7 @@ export async function fetchSignature(t: NearAiTransport, chatId: string, model: 
       if (!sig.text || !sig.signature) throw new Error(`Signature not available: ${JSON.stringify(sig).slice(0, 200)}`);
       return sig;
     } catch (e) {
-      if (attempt >= 10) throw e;
+      if (attempt >= 10 || isNearAiAccountError(e)) throw e;
       await wait(2000);
     }
   }
@@ -582,15 +599,51 @@ export async function processRecording(
   wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
 ): Promise<ProcessResult> {
   onStage("attest");
+  const clock = input.clock ?? Date.now;
   const jwks = await loadNvidiaKeys(t);
   // Ed25519 for the summary model: its key is both the E2EE key and the response signer.
   const [firstSummaryAttest, whisperAttest] = await Promise.all([
     attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks }),
     attestModel(t, WHISPER_MODEL, "ecdsa", { withGateway: false, jwks }),
   ]);
-  // Replaced if NEAR AI asks for a fresh attestation before the notes are written.
+  const attestedAt = clock();
+  // Replaced just before the notes are written when it is too old, or if NEAR AI asks for a fresh one.
   let summaryAttest = firstSummaryAttest;
-  const node = requireAttested(summaryAttest, whisperAttest);
+  let node = requireAttested(summaryAttest, whisperAttest);
+
+  // The gateway whose TLS key the audio is pinned to. Every gateway the audio went through is in the proof.
+  let audioGateway = summaryAttest.gateway as VerifiedTee;
+  const audioGateways: VerifiedTee[] = [audioGateway];
+  let tlsPin = gatewayTlsPin(audioGateway);
+  if (!tlsPin) throw new Error("The NEAR AI gateway's TLS key isn't bound in its attestation, so the audio wasn't sent. It stays on this Mac.");
+  let repinned = false;
+  const AUDIO_PIN_FAILED =
+    "The NEAR AI gateway's TLS certificate didn't carry the key bound in its attestation, even after checking the gateway again, so the audio wasn't sent. It stays on this Mac; try again later.";
+  /**
+   * Uploads one chunk pinned to the attested TLS key. If the gateway's certificate key
+   * changed, attest the gateway once more and try once with the new key; otherwise stop.
+   */
+  const upload = async (chunk: AudioChunk, prompt: string): Promise<string> => {
+    try {
+      return await t.transcribe(chunk.path, WHISPER_MODEL, prompt, tlsPin as string);
+    } catch (e) {
+      if (!tlsPinMismatch(e)) throw e;
+      if (repinned) throw new Error(AUDIO_PIN_FAILED);
+      repinned = true;
+      const fresh = (await attestGateway(t, "ed25519", { jwks })).gateway;
+      tlsPin = gatewayTlsPin(fresh);
+      if (!fresh || !tlsPin) {
+        throw new Error(`The NEAR AI gateway's TLS certificate changed and its fresh attestation didn't pass (${failedLabels(fresh?.checks ?? []) || "no gateway attestation"}), so the audio wasn't sent. It stays on this Mac.`);
+      }
+      audioGateway = fresh;
+      audioGateways.push(fresh);
+      try {
+        return await t.transcribe(chunk.path, WHISPER_MODEL, prompt, tlsPin);
+      } catch (again) {
+        throw tlsPinMismatch(again) ? new Error(AUDIO_PIN_FAILED) : again;
+      }
+    }
+  };
 
   const brief = cleanBrief(input.brief);
   // Your words to expect join the names Whisper should spell right; they go with the audio over TLS.
@@ -603,7 +656,7 @@ export async function processRecording(
     let raw = (await input.transcriptCache?.get(chunk).catch(() => null)) ?? null;
     const fresh = raw === null;
     if (raw === null) {
-      raw = await t.transcribe(chunk.path, WHISPER_MODEL, prompt);
+      raw = await upload(chunk, prompt);
       await input.transcriptCache?.set(chunk, raw).catch(() => {});
     }
     const result = JSON.parse(raw) as WhisperResult;
@@ -723,6 +776,19 @@ export async function processRecording(
     }
     return e;
   };
+  // Transcribing a long call takes a while: if the summary attestation is now older than
+  // MAX_ATTESTATION_AGE_MS or NVIDIA's token for the node has expired, attest the summary
+  // model again and encrypt to a key from the fresh quotes. Never to the old key instead.
+  const tokenExp = decodeJwt(node.platformToken ?? "")?.exp;
+  if (clock() - attestedAt > MAX_ATTESTATION_AGE_MS || (typeof tokenExp === "number" && clock() / 1000 >= tokenExp)) {
+    summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: false, jwks });
+    const fresh = e2eeNode(summaryAttest);
+    if (!fresh) {
+      throw new Error(`The summary model's fresh attestation before the notes didn't pass with an attested key (${failedLabels(modelChecks(summaryAttest)) || "no attested Ed25519 key"}). The transcript wasn't sent.`);
+    }
+    node = fresh;
+  }
+
   // There is no TLS fallback: if NEAR AI turns the encrypted request down, nothing else is sent.
   let written: { calls: CallResult[]; notes: Notes };
   let modelKey = node.evidence.signingAddress;
@@ -734,11 +800,11 @@ export async function processRecording(
     // The node set may have changed: attest again and send encrypted once more, to a
     // key from the new quotes. Every request of a long call goes again, so the proof
     // rests on one attestation.
-    summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: true, jwks });
-    const gw = gatewayChecks(summaryAttest);
-    const fresh = gw.every((c) => c.ok) ? e2eeNode(summaryAttest) : undefined;
+    // Only the model nodes hold the key; the gateway relays ciphertext and stays as checked.
+    summaryAttest = await attestModel(t, SUMMARY_MODEL, "ed25519", { withGateway: false, jwks });
+    const fresh = e2eeNode(summaryAttest);
     if (!fresh) {
-      throw new Error(`NEAR AI asked for a fresh attestation and no summary TEE passed it with an attested key (${failedLabels([...gw, ...modelChecks(summaryAttest)]) || "no attested Ed25519 key"}). The transcript wasn't sent again.`);
+      throw new Error(`NEAR AI asked for a fresh attestation and no summary TEE passed it with an attested key (${failedLabels(modelChecks(summaryAttest)) || "no attested Ed25519 key"}). The transcript wasn't sent again.`);
     }
     try {
       written = await writeAll(fresh);
@@ -756,9 +822,11 @@ export async function processRecording(
   onStage("signature");
   const sigs = await Promise.all(calls.map((c) => fetchSignature(t, c.id, SUMMARY_MODEL, wait)));
   const modelSigners = attestedKeys(summaryAttest.nodes);
-  const gatewaySigners = attestedKeys([summaryAttest.gateway]);
+  const gatewaySigners = attestedKeys([audioGateway]);
   const signedAll = calls.map((c, i) => {
-    const r = responseChecks({ sig: sigs[i], algo: "ed25519", requestBody: c.request, responseBody: c.response, model: SUMMARY_MODEL, modelSigners, gatewaySigners });
+    // Only the TEE the transcript was encrypted to may have signed the notes: a gateway
+    // signature or one of unstated kind doesn't show the model wrote them.
+    const r = responseChecks({ sig: sigs[i], algo: "ed25519", requestBody: c.request, responseBody: c.response, model: SUMMARY_MODEL, modelSigners: [modelKey], gatewaySigners: [] });
     if (!split) return r;
     // Several requests: each check says which one it is about.
     const which = c.spec.role === "overall" ? "overall summary" : `part ${c.spec.part}`;
@@ -776,12 +844,12 @@ export async function processRecording(
       : `Encrypted on this Mac to Ed25519 key ${short(modelKey)}, bound in a verified quote; the reply came back encrypted to a key made for this request`,
   };
 
-  const checks = [...gatewayChecks(summaryAttest), ...modelChecks(whisperAttest), ...modelChecks(summaryAttest), ...signedAll.flatMap((s) => s.checks), e2eeCheck];
+  const checks = [...audioGateway.checks, ...modelChecks(whisperAttest), ...modelChecks(summaryAttest), ...signedAll.flatMap((s) => s.checks), e2eeCheck];
   // "Verified" means attested and signed. The E2EE line always passes: nothing is sent without it.
   const verified = checks.every((c) => c.ok);
 
   // Keep NVIDIA's platform token for the node that signed, so the Verify page can check it.
-  const evidence = [summaryAttest.gateway, ...whisperAttest.nodes, ...summaryAttest.nodes]
+  const evidence = [...audioGateways, ...whisperAttest.nodes, ...summaryAttest.nodes]
     .filter((n): n is VerifiedTee => !!n)
     .map((n) => (n.platformToken && n.evidence.model === SUMMARY_MODEL && signers.has(n.evidence.signingAddress) ? { ...n.evidence, nvidiaToken: n.platformToken } : n.evidence));
 

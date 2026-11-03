@@ -4,7 +4,8 @@ import type { SignatureResponse } from "../tee/checks.ts";
 import type { NoticeLog } from "../meeting.ts";
 import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
-import { expectedMrConfig, expectedReportData, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
+import { bindsIdentity, expectedMrConfig, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
+import type { TeeEvidence } from "../tee/attest.ts";
 import { verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
 
 /**
@@ -32,12 +33,24 @@ export function proofHash(bundle: ProofBundle): string {
 export interface OnChainProof {
   proof_hash: string;
   model: string;
-  /** Block timestamp in nanoseconds. */
-  recorded_at: number;
+  /** Block timestamp in nanoseconds, as a decimal string (the contract's U64: it is above 2^53). */
+  recorded_at: string;
 }
 
-/** Models whose summaries Aftercall treats as private (NEAR AI Confidential TEE tier). */
-export const CONFIDENTIAL_MODELS = ["Qwen/Qwen3.8-27B", "Qwen/Qwen3.6-35B-A3B-FP8"];
+/** When a proof was recorded on NEAR, in milliseconds since 1970. */
+export function recordedAtMs(onChain: OnChainProof): number {
+  return Number(BigInt(onChain.recorded_at) / 1_000_000n);
+}
+
+/**
+ * The summary models Aftercall uses (NEAR AI Confidential TEE tier). "Private model" also
+ * needs, in proofs with full checks, a verified attestation of the model in the proof:
+ * an anonymised model has no TEE to attest.
+ */
+export const CONFIDENTIAL_MODELS = ["Qwen/Qwen3.8-27B"];
+
+/** The recorded report data binds the TEE's key and nonce (with its TLS key, when it sent one). */
+const bound = (e: TeeEvidence) => bindsIdentity(e.reportData, e.signingAddress, e.nonce, e.tlsCertFingerprint, e.scope);
 
 export interface Check {
   id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes";
@@ -73,7 +86,7 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
       label: "Proof recorded on NEAR",
       ok: onChain !== null,
       detail: onChain
-        ? `Recorded ${new Date(onChain.recorded_at / 1e6).toISOString().replace("T", " ").slice(0, 16)} UTC`
+        ? `Recorded ${new Date(recordedAtMs(onChain)).toISOString().replace("T", " ").slice(0, 16)} UTC`
         : "No proof for this meeting on the agent-wallet contract",
     },
     {
@@ -83,12 +96,7 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
       detail: onChain ? (onChain.proof_hash === hash ? `sha256 ${hash.slice(0, 16)}…` : "The hash on NEAR is different") : "Nothing on NEAR to compare",
     },
     ...(bundle.version === 3 ? signatureChecksV3(bundle) : bundle.version === 2 ? signatureChecksV2(bundle) : signatureChecksV1(bundle)),
-    {
-      id: "confidential",
-      label: "Private model",
-      ok: CONFIDENTIAL_MODELS.includes(bundle.summaryModel),
-      detail: `${bundle.summaryModel} on NEAR AI Confidential TEE · transcription by ${bundle.whisperModel}`,
-    },
+    confidentialCheck(bundle),
   ];
 
   if (shownNotes !== undefined) {
@@ -103,6 +111,23 @@ export function verifyProof(bundle: ProofBundle, onChain: OnChainProof | null, s
   const yours = yourNotes ? yourNotesCheck(bundle, yourNotes) : null;
   if (yours) checks.push(yours);
   return checks;
+}
+
+/** "Private model": a model Aftercall uses, and (in full proofs) a verified TEE attestation of it and of Whisper. */
+function confidentialCheck(bundle: ProofBundle): Check {
+  const listed = CONFIDENTIAL_MODELS.includes(bundle.summaryModel);
+  const attested = (model: string) => !hasFullChecks(bundle) || bundle.evidence.some((e) => e.scope === "model" && e.model === model && e.verified);
+  const ok = listed && attested(bundle.summaryModel) && attested(bundle.whisperModel);
+  return {
+    id: "confidential",
+    label: "Private model",
+    ok,
+    detail: ok
+      ? `${bundle.summaryModel} on NEAR AI Confidential TEE · transcription by ${bundle.whisperModel}`
+      : !listed
+        ? `${bundle.summaryModel} isn't a model Aftercall sends meetings to`
+        : `The proof has no verified TEE attestation of ${attested(bundle.summaryModel) ? bundle.whisperModel : bundle.summaryModel}`,
+  };
 }
 
 /**
@@ -167,20 +192,20 @@ function signedCall(bundle: ProofBundleV2 | ProofBundleV3, sig: SignatureRespons
       (e.scope === "gateway" || e.model === bundle.summaryModel) &&
       e.signingAddress === strip0x(signer) &&
       e.nonce === bundle.attestationNonce.summary &&
-      e.reportData === expectedReportData(e.signingAddress, e.nonce),
+      bound(e),
   );
   return { signer, coversExchange, tee };
 }
 
 const algoName = (b: ProofBundleV2 | ProofBundleV3) => (b.signingAlgo === "ed25519" ? "Ed25519" : "ECDSA");
 
-/** "Signer ran the attested software", for one TEE that signed. */
+/** "Signer's setup file matches its hardware", for one TEE that signed. Not that the images in it are NEAR's releases. */
 function composeCheck(tee: ProofBundleV2["evidence"][number]): Check {
   return {
     id: "compose",
-    label: "Signer ran the attested software",
+    label: "Signer's setup file matches its hardware",
     ok: tee.composeHash.length === 64 && tee.mrConfigId === expectedMrConfig(tee.composeHash),
-    detail: `Recorded mr_config is 01 + sha256 of the attested compose (${tee.composeHash.slice(0, 12)}…)`,
+    detail: `Recorded mr_config is 01 + sha256 of the attested Docker compose (${tee.composeHash.slice(0, 12)}…); its images aren't checked against a list of NEAR's releases`,
   };
 }
 
@@ -190,7 +215,7 @@ function e2eeCheck(bundle: ProofBundleV2 | ProofBundleV3): Check {
   return {
     id: "e2ee",
     label: "Transcript encrypted to the attested model",
-    ok: !!e2eeTee && e2eeTee.reportData === expectedReportData(e2eeTee.signingAddress, e2eeTee.nonce),
+    ok: !!e2eeTee && bound(e2eeTee),
     detail: bundle.e2ee.used
       ? e2eeTee
         ? "The key the app encrypted to is bound in the summary TEE's recorded report data"
@@ -321,7 +346,7 @@ export function groupChecks(checks: TeeCheck[], models: { whisperModel: string; 
 
 /** Shown with the Whisper checks: what attestation can and can't say about transcription. */
 export const WHISPER_NOTE =
-  "Transcription runs in an attested TEE but isn't signed per response. The audio travels over TLS through the attested gateway; it isn't end-to-end encrypted.";
+  "Transcription runs in an attested TEE but isn't signed per response. The audio isn't end-to-end encrypted: it travels over TLS, uploaded only on a connection whose certificate key is the one bound in the gateway's attestation.";
 
 /** What the proof does not show; shown under the checks so nobody reads more into them. */
 export const NOT_PROVEN = [

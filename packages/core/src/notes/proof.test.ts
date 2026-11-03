@@ -36,7 +36,7 @@ function signed(): { bundle: ProofBundle; notes: object } {
   };
 }
 
-const onChainFor = (bundle: ProofBundle): OnChainProof => ({ proof_hash: proofHash(bundle), model: bundle.summaryModel, recorded_at: 1_793_006_500_000_000_000 });
+const onChainFor = (bundle: ProofBundle): OnChainProof => ({ proof_hash: proofHash(bundle), model: bundle.summaryModel, recorded_at: "1793006500000000000" });
 
 test("canonical JSON sorts keys at every level and ignores key order", () => {
   assert.equal(canonicalJson({ b: 1, a: { d: [1, { z: 1, y: 2 }], c: "x" } }), '{"a":{"c":"x","d":[1,{"y":2,"z":1}]},"b":1}');
@@ -127,6 +127,18 @@ async function signedV2() {
         nvidiaToken: platform,
         verified: true,
       },
+      {
+        scope: "model",
+        model: "openai/whisper-large-v3",
+        signingAlgo: "ecdsa",
+        signingAddress: "ab".repeat(20),
+        nonce: "22".repeat(32),
+        tcbStatus: "UpToDate",
+        reportData: expectedReportData("ab".repeat(20), "22".repeat(32)),
+        mrConfigId: expectedMrConfig(composeHash),
+        composeHash,
+        verified: true,
+      },
     ],
     checkedAt: "2026-11-02T10:00:00.000Z",
     transcriptHash: sha256Hex("[]"),
@@ -154,13 +166,14 @@ test("a v2 proof re-checks its Ed25519 signature, key binding, compose and E2EE 
 
 test("v2 tampering is caught: report data, nonce, E2EE key, recorded failure", async () => {
   const { bundle } = await signedV2();
-  const ev = bundle.evidence[0];
+  const [ev, ...rest] = bundle.evidence;
   const fail = (b: ProofBundleV2) => verifyProof(b, null).filter((x) => !x.ok && x.id !== "on-chain" && x.id !== "matches").map((x) => x.id);
-  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, reportData: expectedReportData(teeKey("ed25519").address, ev.nonce) }] }), ["attested", "e2ee"]);
+  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, reportData: expectedReportData(teeKey("ed25519").address, ev.nonce) }, ...rest] }), ["attested", "e2ee"]);
   assert.deepEqual(fail({ ...bundle, attestationNonce: { ...bundle.attestationNonce, summary: "33".repeat(32) } }), ["attested"]);
   assert.deepEqual(fail({ ...bundle, e2ee: { used: true, modelKey: teeKey("ed25519").address } }), ["e2ee"]);
-  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, verified: false }] }), ["attested"]);
-  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, mrConfigId: expectedMrConfig(sha256Hex("other")) }] }), ["compose"]);
+  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, verified: false }, ...rest] }), ["attested", "confidential"], "no verified attestation of the summary model");
+  assert.deepEqual(fail({ ...bundle, evidence: [ev] }), ["confidential"], "no attestation of Whisper");
+  assert.deepEqual(fail({ ...bundle, evidence: [{ ...ev, mrConfigId: expectedMrConfig(sha256Hex("other")) }, ...rest] }), ["compose"]);
   assert.deepEqual(fail({ ...bundle, responseHash: sha256Hex("other") }), ["signed"]);
 });
 

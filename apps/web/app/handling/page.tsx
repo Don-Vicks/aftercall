@@ -40,7 +40,7 @@ const STEPS: { where: Where; title: string; body: string; travels?: string }[] =
     where: "tee",
     title: "Transcribed by Whisper in an attested TEE",
     travels: "TLS, not end to end",
-    body: "The audio goes in five-minute chunks over TLS through the attested gateway to Whisper in a NEAR AI TEE. It isn't end-to-end encrypted, because NEAR AI doesn't offer that for transcription. Project and payee names go with it as spelling hints.",
+    body: "The audio goes in five-minute chunks to Whisper in a NEAR AI TEE, over TLS pinned to the gateway's TLS key from its attestation: the Mac checks that key is bound in the gateway's verified quote, and uploads only on a connection whose certificate carries it. It isn't end-to-end encrypted, because NEAR AI doesn't offer that for transcription. Project and payee names go with it as spelling hints.",
   },
   {
     where: "tee",

@@ -4,7 +4,8 @@ import { gpuChecks, nrasTokens, verifyNrasJwt } from "./nvidia.ts";
 import { fakeNras, randomNonce } from "./testkit.ts";
 
 const where = { scope: "model" as const, model: "Qwen/Qwen3.8-27B" };
-const payload = (nonce: string) => JSON.stringify({ nonce, evidence_list: [] });
+/** NEAR's GPU evidence for `gpus` GPUs (NRAS answers for 2 unless told otherwise). */
+const payload = (nonce: string, gpus = 2) => JSON.stringify({ nonce, evidence_list: Array.from({ length: gpus }, (_, i) => ({ certificate: `c${i}`, evidence: `e${i}` })) });
 
 test("NRAS tokens signed with NVIDIA's key verify; others don't", async () => {
   const nv = await fakeNras();
@@ -40,7 +41,7 @@ test("NRAS's two-part answer yields the platform token then one per GPU", () => 
 test("a passing GPU answer passes all three GPU checks", async () => {
   const nv = await fakeNras();
   const nonce = randomNonce();
-  const r = await gpuChecks({ payload: payload(nonce), nras: await nv.answer(nonce, { gpus: 8 }), jwks: nv.jwks, nonce, now: nv.now, where });
+  const r = await gpuChecks({ payload: payload(nonce, 8), nras: await nv.answer(nonce, { gpus: 8 }), jwks: nv.jwks, nonce, now: nv.now, where });
   assert.deepEqual(r.checks.map((c) => [c.id.split("-").slice(-2).join("-"), c.ok]), [["27B-gpu", true], ["gpu-nonce", true], ["gpu-secure", true]]);
   assert.match(r.checks[0].detail, /8 GPUs; all 9 tokens signed by NVIDIA/);
   assert.ok(r.platformToken);
@@ -61,7 +62,17 @@ test("each GPU failure is caught", async () => {
   assert.deepEqual(await failedIds({ gpu: { eat_nonce: randomNonce() } }), ["gpu-nonce"], "per-GPU nonce");
   assert.deepEqual(await failedIds({ platform: { eat_nonce: randomNonce() } }), ["gpu-nonce"], "platform nonce");
   assert.deepEqual(await failedIds({}, payload(randomNonce())), ["gpu-nonce"], "evidence made for another nonce");
-  assert.deepEqual(await failedIds({ gpus: 0 }), ["gpu", "gpu-secure"], "no GPUs is not a pass");
+  assert.deepEqual(await failedIds({ gpus: 0 }, payload(nonce, 0)), ["gpu", "gpu-secure"], "no GPUs is not a pass");
+  // Per-GPU claims the skill's table names, and every yes/no claim NVIDIA sends.
+  assert.deepEqual(await failedIds({ gpu: { hwmodel: undefined } }), ["gpu-secure"], "no hardware model");
+  assert.deepEqual(await failedIds({ gpu: { ueid: "" } }), ["gpu-secure"], "no GPU identifier");
+  assert.deepEqual(await failedIds({ gpu: { "x-nvidia-gpu-attestation-report-nonce-match": false } }), ["gpu-secure"]);
+  assert.deepEqual(await failedIds({ gpu: { "x-nvidia-gpu-driver-rim-fetched": false } }), ["gpu-secure"]);
+  assert.deepEqual(await failedIds({ gpu: { "x-nvidia-gpu-arch-check": false } }), ["gpu-secure"]);
+  // NVIDIA's tokens must cover the GPUs NEAR sent evidence for, no more and no fewer.
+  assert.deepEqual(await failedIds({ gpus: 1 }), ["gpu"], "a GPU missing from NVIDIA's answer");
+  assert.deepEqual(await failedIds({ gpus: 3 }), ["gpu"], "an extra GPU in NVIDIA's answer");
+  assert.deepEqual(await failedIds({ platform: { submods: { "GPU-0": [], "GPU-7": [] } } }), ["gpu"], "the platform token lists other GPUs");
 });
 
 test("missing evidence, NRAS errors, missing keys and bad signatures fail closed", async () => {

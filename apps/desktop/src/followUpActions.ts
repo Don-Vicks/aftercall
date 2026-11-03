@@ -85,6 +85,7 @@ export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): P
 
 function plainPayError(e: unknown): string {
   const message = e instanceof Error ? e.message : String(e);
+  if (message.includes("STORAGE_CREDIT_LOW")) return "Your agent wallet's storage credit has run out. Top it up from your NEAR wallet, then try again.";
   return message.includes("NO_DESTINATION")
     ? "This payee isn't set up to be paid on another chain any more. Check them in your agent wallet."
     : message.includes("UNKNOWN_PAYEE")
@@ -136,10 +137,14 @@ export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: 
     if (out.status === "blocked") {
       // Nothing is parked: the quote would expire before the owner could approve it. The daily
       // cap says whether waiting for the next day could ever let it through.
-      const w = await near.wallet().catch(() => null);
-      const dailyCap = w?.wallet ? BigInt(w.wallet.daily_cap) : null;
+      const w = (await near.wallet().catch(() => null))?.wallet;
+      const dailyCap = w ? BigInt(w.daily_cap) : null;
       const leftToday = out.leftToday === null ? null : BigInt(out.leftToday);
-      return apply({ status: "proposed", error: crossChainCapRefusal(f.amount, out.reason, leftToday, dailyCap) });
+      // The refused pay rolled the contract's day, so the wallet's cross-chain spending is today's.
+      const crossCap = w ? BigInt(w.cross_chain_daily_cap) : 0n;
+      const crossSpent = w ? BigInt(w.cross_chain_spent_today) : 0n;
+      const crossChain = w ? { cap: crossCap, left: crossCap > crossSpent ? crossCap - crossSpent : 0n } : null;
+      return apply({ status: "proposed", error: crossChainCapRefusal(f.amount, out.reason, leftToday, dailyCap, crossChain) });
     }
     if (out.status === "failed") {
       return apply({ status: "failed", ref: out.txHash, error: "The transfer to NEAR Intents bounced and the amount went back to your agent wallet." });

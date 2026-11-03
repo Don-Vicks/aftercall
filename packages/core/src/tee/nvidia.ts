@@ -84,10 +84,19 @@ export function nrasTokens(body: unknown): { name: string; token: string }[] | n
   return [{ name: "platform", token: body[0][1] }, ...gpus.filter(([, t]) => typeof t === "string").map(([name, token]) => ({ name, token: token as string }))];
 }
 
-/** A GPU token passes when secure boot is on, debug off, measurements match and nothing is flagged. */
+/**
+ * A GPU token passes when it names the GPU (`hwmodel`, `ueid`), secure boot is on,
+ * debug off, measurements match and nothing is flagged: every yes/no claim NVIDIA
+ * sends (RIMs fetched, schema and certificates validated, signatures verified, nonce
+ * matched, report parsed, architecture checked…) must be true. Which of those claims
+ * NRAS sends isn't pinned here, so a token that omits one isn't failed for it.
+ */
 export function gpuClaimsOk(c: JwtClaims): boolean {
-  const flags = Object.entries(c).filter(([k]) => /^x-nvidia-.*-(verified|validated)$/.test(k));
+  const flags = Object.entries(c).filter(([k]) => /^x-nvidia-.*-(verified|validated|fetched|available|match|parsed|conflict|check)$/.test(k));
+  const named = (v: unknown) => (typeof v === "string" && v.trim() !== "") || typeof v === "number";
   return (
+    named(c.hwmodel) &&
+    named(c.ueid) &&
     c.secboot === true &&
     c.dbgstat === "disabled" &&
     c.measres === "success" &&
@@ -133,6 +142,16 @@ export async function gpuChecks(args: {
   const gpus = claims.slice(1);
   const nonce = strip0x(args.nonce);
   const n = gpus.length;
+  // One token per GPU NEAR sent evidence for, and the platform token lists exactly those GPUs.
+  let evidenceCount = -1;
+  try {
+    const list = JSON.parse(args.payload).evidence_list;
+    if (Array.isArray(list)) evidenceCount = list.length;
+  } catch {
+    /* checked above */
+  }
+  const submods = platform.submods && typeof platform.submods === "object" ? Object.keys(platform.submods as object).sort() : null;
+  const tied = evidenceCount === n && (submods === null || JSON.stringify(submods) === JSON.stringify(gpus.map((g) => g.name).sort()));
   return {
     platformToken: tokens[0].token,
     checks: [
@@ -140,8 +159,10 @@ export async function gpuChecks(args: {
         w,
         "gpu",
         "Genuine NVIDIA confidential GPU",
-        platform["x-nvidia-overall-att-result"] === true && n > 0,
-        `NVIDIA NRAS passed ${n} GPU${n === 1 ? "" : "s"}; all ${tokens.length} tokens signed by NVIDIA (ES384)`,
+        platform["x-nvidia-overall-att-result"] === true && n > 0 && tied,
+        tied
+          ? `NVIDIA NRAS passed ${n} GPU${n === 1 ? "" : "s"}; all ${tokens.length} tokens signed by NVIDIA (ES384)`
+          : `NVIDIA answered for ${n} GPU${n === 1 ? "" : "s"}, but NEAR sent evidence for ${evidenceCount < 0 ? "an unknown number" : evidenceCount}${submods && evidenceCount === n ? ", and the platform token lists other GPUs" : ""}`,
       ),
       check(
         w,

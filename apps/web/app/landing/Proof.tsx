@@ -13,12 +13,12 @@ import { Moment } from "./motion";
  * commands and what it can't prove. The live run is stated, not linked: its proof isn't on NEAR.
  */
 
-const TDX = ["Genuine Intel TDX confidential VM", "Debug mode off", "The TEE made its signing key", "Evidence is fresh", "Boot log matches the quote", "Known software is running"];
+const TDX = ["Genuine Intel TDX confidential VM", "Debug mode off", "The TEE made its signing key", "Evidence is fresh", "Boot log matches the quote", "Attested setup file matches the hardware"];
 const GPU = ["Genuine NVIDIA confidential GPU", "GPU evidence is fresh", "GPUs in secure mode"];
 const GROUPS: { name: string; n: number; checks: string[]; extra?: string }[] = [
-  { name: "Gateway TEE", n: 6, checks: TDX },
-  { name: "Whisper TEE", n: 9, checks: GPU, extra: "The gateway's six, plus" },
-  { name: "Qwen TEE", n: 9, checks: GPU, extra: "The gateway's six, plus" },
+  { name: "Gateway TEE", n: 7, checks: [...TDX, "Gateway's TLS key is in its quote"] },
+  { name: "Whisper TEE", n: 9, checks: GPU, extra: "The same six CPU checks, plus" },
+  { name: "Qwen TEE", n: 9, checks: GPU, extra: "The same six CPU checks, plus" },
   {
     name: "On the reply",
     n: 5,
@@ -29,7 +29,7 @@ const GROUPS: { name: string; n: number; checks: string[]; extra?: string }[] = 
 const COMMANDS: [string, string][] = [
   [
     "pnpm install && pnpm verify --quick",
-    "Typechecks every package and runs 337 core, 28 backend and 20 MCP server tests, the desktop Rust tests and the contract's unit tests. Nothing calls NEAR AI.",
+    "Typechecks every package and runs 353 core, 28 backend and 20 MCP server tests, the desktop Rust tests and the contract's unit tests. Nothing calls NEAR AI.",
   ],
   ["pnpm dev:ui", "The whole Mac interface in a browser at localhost:1420, on the sample meeting. Recording is simulated there."],
 ];
@@ -60,9 +60,9 @@ export function Proof() {
               <SealMark size={88} id="seal-proof" />
               <div>
                 <p id="band-h" className={l.bandTitle}>
-                  29 checks with one node per model
+                  30 checks with one node per model
                 </p>
-                <p className={l.bandSub}>24 before anything is sent. If the gateway or Whisper fails, or no Qwen node passes, nothing leaves your Mac. 5 more on the reply.</p>
+                <p className={l.bandSub}>25 before anything is sent. If the gateway or Whisper fails, or no Qwen node passes, nothing leaves your Mac. 5 more on the reply.</p>
               </div>
             </div>
             <ul className={l.bandChips}>
@@ -95,7 +95,7 @@ export function Proof() {
                 ))}
               </div>
             </details>
-            <p className={l.bandCaveat}>Audio goes over TLS through the checked gateway and isn&apos;t end-to-end encrypted. The transcript is end-to-end encrypted to the checked model, or not sent.</p>
+            <p className={l.bandCaveat}>Audio goes over TLS pinned to the checked gateway&apos;s key and isn&apos;t end-to-end encrypted. The transcript is end-to-end encrypted to the checked model, or not sent.</p>
           </Moment>
 
           <div className={l.runCol}>

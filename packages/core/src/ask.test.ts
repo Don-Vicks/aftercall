@@ -6,7 +6,7 @@ import type { Meeting, TranscriptLine } from "./meeting.ts";
 import type { E2eeKeys, NearAiTransport } from "./notes/pipeline.ts";
 import { sha256Hex } from "./notes/verify.ts";
 import { decryptWith, encryptTo } from "./tee/e2ee.ts";
-import { attestationFor, decodeQuote, fakeNras, teeKey } from "./tee/testkit.ts";
+import { GATEWAY_TLS, attestationFor, decodeQuote, fakeNras, teeKey } from "./tee/testkit.ts";
 
 const NOW = new Date(2026, 10, 4, 18).getTime(); // Wednesday 4 November 2026
 const idAt = (mo: number, d: number, h = 10) => String(new Date(2026, mo - 1, d, h).getTime() / 1000);
@@ -125,6 +125,8 @@ interface FakeOpts {
   tamper?: boolean;
   usage?: object;
   finishReason?: string;
+  /** The reply's content is empty (as when a model puts everything in its reasoning). */
+  emptyContent?: boolean;
 }
 
 /** NEAR AI with real keys: attests, decrypts the request inside the "TEE", encrypts the reply, signs the exchange. */
@@ -145,7 +147,7 @@ async function fakeNearAi(opts: FakeOpts) {
         const q = new URLSearchParams(path.split("?")[1]);
         const n = q.get("nonce")!;
         return JSON.stringify({
-          gateway_attestation: attestationFor(gateway, n, { gpu: false, quote: opts.badGateway ? { status: "Revoked" } : {} }),
+          gateway_attestation: attestationFor(gateway, n, { gpu: false, quote: opts.badGateway ? { status: "Revoked" } : {}, tls: q.get("include_tls_fingerprint") === "true" ? GATEWAY_TLS : undefined }),
           model_attestations: [attestationFor(node, n, { quote: opts.badModel ? { rtMr3: "00".repeat(48) } : {} })],
         });
       }
@@ -171,7 +173,7 @@ async function fakeNearAi(opts: FakeOpts) {
       const reply = typeof opts.reply === "function" ? opts.reply(plaintext) : opts.reply;
       const response = JSON.stringify({
         id: "chatcmpl-ask",
-        choices: [{ message: { content: encryptTo(JSON.stringify(reply), e2ee.clientPubKey) }, ...(opts.finishReason ? { finish_reason: opts.finishReason } : {}) }],
+        choices: [{ message: { content: opts.emptyContent ? "" : encryptTo(JSON.stringify(reply), e2ee.clientPubKey) }, ...(opts.finishReason ? { finish_reason: opts.finishReason } : {}) }],
         ...(opts.usage ? { usage: opts.usage } : {}),
       });
       last = { request: body, response };
@@ -199,7 +201,7 @@ test("asks the attested TEE end-to-end encrypted and keeps only quotes found in 
   const events: string[] = [];
   const r = await askMeetings(ai.transport, { question, excerpts, now: NOW }, { onStage: (s) => events.push(s), onAnswer: () => events.push("answer") }, noWait);
 
-  assert.deepEqual(events, ["attest", "send", "answer", "signature"], "the answer shows before the signature check");
+  assert.deepEqual(events, ["attest", "send", "signature", "answer"], "the answer shows only once its signature is checked");
   assert.equal(r.answer, good.answer);
   assert.deepEqual(
     r.quotes.map((q) => [q.n, q.quote, q.who]),
@@ -268,15 +270,26 @@ test("no unencrypted fallback when NEAR AI refuses E2EE", async () => {
   );
 });
 
-test("a reply that doesn't match its signature is shown but not verified", async () => {
+test("a reply that doesn't match its signature is never shown", async () => {
   const ai = await fakeNearAi({ reply: good, tamper: true });
-  const r = await askMeetings(ai.transport, { question, excerpts }, {}, noWait);
-  assert.equal(r.answer, good.answer);
-  assert.equal(r.verified, false);
-  assert.deepEqual(
-    r.checks.filter((c) => !c.ok).map((c) => c.id),
-    ["response-response"],
-  );
+  let answered = false;
+  await assert.rejects(askMeetings(ai.transport, { question, excerpts }, { onAnswer: () => (answered = true) }, noWait), {
+    message: "The answer's signature didn't check out (Signed over exactly what came back), so it isn't shown: it can't be shown to come from the attested model.",
+  });
+  assert.equal(answered, false, "nothing reached the screen before the check");
+});
+
+test("Ask turns Qwen's thinking off, as the notes do", async () => {
+  const ai = await fakeNearAi({ reply: good });
+  await askMeetings(ai.transport, { question, excerpts, now: NOW }, {}, noWait);
+  assert.deepEqual(JSON.parse(ai.seenByGateway[0]).chat_template_kwargs, { enable_thinking: false });
+});
+
+test("an empty answer says so, instead of blaming the encryption", async () => {
+  const ai = await fakeNearAi({ reply: good, emptyContent: true });
+  await assert.rejects(askMeetings(ai.transport, { question, excerpts, now: NOW }, {}, noWait), {
+    message: "The model sent back an empty answer, so there is nothing to show. Try asking again.",
+  });
 });
 
 test("no excerpts: no network at all", async () => {

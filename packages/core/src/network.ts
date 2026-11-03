@@ -84,6 +84,7 @@ const REFUSALS: Record<string, string> = {
   UNKNOWN_PAYEE: "That account isn't on your payee list.",
   TOO_MANY_PAYEES: "Your payee list is full. Remove one first.",
   NO_SUCH_PENDING: "That payment isn't waiting any more.",
+  STORAGE_CREDIT_LOW: "Your agent wallet's storage credit has run out. Top it up from your NEAR wallet.",
 };
 
 /**

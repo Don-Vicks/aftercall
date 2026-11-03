@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createServer, type IncomingMessage } from "node:http";
+import { createServer as createTlsServer } from "node:https";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,7 +14,7 @@ import { formatSampleNotes, runSampleNotes } from "./sampleNotes.ts";
 import type { NotesTransport } from "../notes/pipeline.ts";
 import { sha256Hex } from "../notes/verify.ts";
 import { encryptTo } from "../tee/e2ee.ts";
-import { attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey } from "../tee/testkit.ts";
+import { GATEWAY_TLS, attestationFor, decodeQuote, fakeNras, piecesOf, sseStream, teeKey } from "../tee/testkit.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..", "..");
@@ -80,10 +81,41 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
     assert.equal(chat.headers["x-model-pub-key"], "b2".repeat(32));
     assert.equal(chat.headers["x-encryption-version"], "2");
 
+    // Audio never goes over plain HTTP, pinned or not.
     const wav = join(samples, "designer-kickoff", "mic-000.wav");
-    assert.equal(await t.transcribe(wav, "openai/whisper-large-v3", "Ines, Designer"), '{"text":"hi"}');
+    await assert.rejects(t.transcribe(wav, "openai/whisper-large-v3", "Ines", "ab".repeat(32)), /only uploaded over TLS/);
+    assert.equal(seen.filter((s) => s.url === "/v1/audio/transcriptions").length, 0);
+
+    await assert.rejects(t.get("signature/chatcmpl-1?model=x"), /NEAR AI 404: not yet/);
+    await assert.rejects(t.get("models"), /Not an allowed NEAR AI path/);
+    assert.equal(seen.filter((s) => s.url === "/v1/models").length, 0, "a refused path is never requested");
+    assert.match(t.randomHex(), /^[0-9a-f]{64}$/);
+  } finally {
+    server.close();
+  }
+});
+
+/** The test CA and two server certificates with different keys (apps/desktop/src-tauri/tests/fixtures/tls, test-only). */
+const tlsDir = join(repo, "apps", "desktop", "src-tauri", "tests", "fixtures", "tls");
+const tlsFile = (name: string) => readFileSync(join(tlsDir, name), "utf8");
+
+test("the audio upload goes only over TLS whose certificate carries the attested key; a different key gets nothing", async () => {
+  const seen: { url: string; headers: IncomingMessage["headers"]; body: Buffer }[] = [];
+  const server = createTlsServer({ key: tlsFile("leaf-a.key"), cert: tlsFile("leaf-a.pem") }, async (req, res) => {
+    seen.push({ url: req.url!, headers: req.headers, body: await body(req) });
+    res.end('{"text":"hi"}');
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address() as { port: number };
+  try {
+    const t = nodeNearAiTransport({ apiKey: "sk-test", baseUrl: `https://localhost:${port}/v1`, ca: tlsFile("ca.pem") });
+    const wav = join(samples, "designer-kickoff", "mic-000.wav");
+    const pinA = tlsFile("leaf-a.spki-sha256").trim();
+
+    assert.equal(await t.transcribe(wav, "openai/whisper-large-v3", "Ines, Designer", pinA), '{"text":"hi"}');
     const upload = seen.at(-1)!;
     const form = upload.body.toString("latin1");
+    assert.equal(upload.headers.authorization, "Bearer sk-test");
     assert.match(String(upload.headers["content-type"]), /^multipart\/form-data/);
     assert.match(form, /name="file"; filename="mic-000.wav"\r\nContent-Type: audio\/wav/);
     assert.match(form, /name="model"\r\n\r\nopenai\/whisper-large-v3/);
@@ -91,11 +123,16 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
     assert.match(form, /name="prompt"\r\n\r\nInes, Designer/);
     assert.ok(upload.body.length > readFileSync(wav).length, "the whole file is uploaded");
 
-    await assert.rejects(t.get("signature/chatcmpl-1?model=x"), /NEAR AI 404: not yet/);
-    await assert.rejects(t.get("models"), /Not an allowed NEAR AI path/);
-    assert.equal(seen.filter((s) => s.url === "/v1/models").length, 0, "a refused path is never requested");
-    assert.match(t.randomHex(), /^[0-9a-f]{64}$/);
+    // Another key (a certificate NEAR AI's attestation doesn't bind): refused before sending.
+    await assert.rejects(t.transcribe(wav, "openai/whisper-large-v3", "", tlsFile("leaf-b.spki-sha256").trim()), /TLS_PIN_MISMATCH/);
+    await assert.rejects(t.transcribe(wav, "openai/whisper-large-v3", "", ""), /TLS_PIN_MISMATCH/, "no pin, no upload");
+    assert.equal(seen.length, 1, "nothing reached the server without the pinned key");
+    // The usual certificate checks still apply: without the test CA the right key isn't enough.
+    const untrusted = nodeNearAiTransport({ apiKey: "sk-test", baseUrl: `https://localhost:${port}/v1` });
+    await assert.rejects(untrusted.transcribe(wav, "openai/whisper-large-v3", "", pinA), /certificate/i);
+    assert.equal(seen.length, 1);
   } finally {
+    server.closeAllConnections();
     server.close();
   }
 });
@@ -146,7 +183,8 @@ async function fakeNearAi(notes: object): Promise<NotesTransport> {
   let n = 0;
   return {
     randomHex: () => (++n).toString(16).padStart(64, "0"),
-    async transcribe(path) {
+    async transcribe(path, _model, _prompt, tlsPin) {
+      assert.equal(tlsPin, GATEWAY_TLS, "pinned to the gateway's attested TLS key");
       const script = JSON.parse(readFileSync(join(dirname(path), "script.json"), "utf8")) as { lines: { at: number; speaker: string; text: string }[] };
       const speaker = path.endsWith("mic-000.wav") ? "you" : "others";
       const segments = script.lines.filter((l) => l.speaker === speaker).map((l) => ({ start: l.at, end: l.at + 3, text: ` ${l.text}` }));
@@ -165,7 +203,8 @@ async function fakeNearAi(notes: object): Promise<NotesTransport> {
       if (path.startsWith("attestation/report")) {
         const nonce = q.get("nonce")!;
         const node = q.get("model")!.startsWith("Qwen") ? summary : whisper;
-        return JSON.stringify({ gateway_attestation: attestationFor(gateway, nonce, { gpu: false }), model_attestations: [attestationFor(node, nonce)] });
+        const tls = q.get("include_tls_fingerprint") === "true" ? GATEWAY_TLS : undefined;
+        return JSON.stringify({ gateway_attestation: attestationFor(gateway, nonce, { gpu: false, tls }), model_attestations: [attestationFor(node, nonce)] });
       }
       const text = `Qwen/Qwen3.8-27B:${sha256Hex(last.request)}:${sha256Hex(last.response)}`;
       return JSON.stringify({ text, signature: summary.sign(text), signing_address: summary.address, signing_algo: "ed25519", signature_kind: "provider_tee" });

@@ -4,9 +4,23 @@
 //! view can only ask for three things: transcribe an audio file inside Aftercall's
 //! recordings folder, send a chat completion, and read an attestation report or a
 //! response signature. Meeting content goes nowhere else.
+//!
+//! The audio is the one thing not end-to-end encrypted, so its upload is pinned: the
+//! TLS connection must pass the usual WebPKI checks for cloud-api.near.ai and its
+//! certificate must carry the public key the gateway's attestation binds in its TDX
+//! quote (`tls_cert_fingerprint`, sha256 of the certificate's SubjectPublicKeyInfo DER).
+//! The check runs in the handshake, before a byte of the request is written.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use rustls::client::WebPkiServerVerifier;
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{CertificateError, DigitallySignedStruct, RootCertStore, SignatureScheme};
+use sha2::{Digest, Sha256};
 
 const BASE: &str = "https://cloud-api.near.ai/v1";
 
@@ -145,7 +159,112 @@ pub fn check_audio_path(path: &Path, recordings: &Path) -> Result<PathBuf, Strin
     Ok(file)
 }
 
-pub async fn transcribe(file: PathBuf, model: String, prompt: String) -> Result<String, String> {
+/// The web view's sign that the gateway's TLS key wasn't the pinned one (core: `TLS_PIN_MISMATCH`).
+pub const TLS_PIN_MISMATCH: &str = "TLS_PIN_MISMATCH";
+
+/// sha256 of a certificate's SubjectPublicKeyInfo DER: what NEAR AI binds as `tls_cert_fingerprint`.
+pub fn spki_sha256(cert: &CertificateDer<'_>) -> Result<[u8; 32], rustls::Error> {
+    let ee = webpki::EndEntityCert::try_from(cert).map_err(|_| rustls::Error::InvalidCertificate(CertificateError::BadEncoding))?;
+    Ok(Sha256::digest(ee.subject_public_key_info().as_ref()).into())
+}
+
+/// The attested fingerprint, as the web view passes it: 32 bytes in hex.
+pub fn parse_pin(hex: &str) -> Result<[u8; 32], String> {
+    let bad = || format!("{TLS_PIN_MISMATCH}: no attested TLS key to pin the upload to, so nothing was uploaded");
+    if hex.len() != 64 {
+        return Err(bad());
+    }
+    let mut out = [0u8; 32];
+    for (i, b) in out.iter_mut().enumerate() {
+        *b = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).map_err(|_| bad())?;
+    }
+    Ok(out)
+}
+
+/// Normal WebPKI validation, then the leaf's SPKI must hash to the attested fingerprint.
+/// The handshake signature is checked against that same leaf key, so the server proved it
+/// holds the attested key's private half.
+#[derive(Debug)]
+struct PinnedKey {
+    webpki: Arc<WebPkiServerVerifier>,
+    pin: [u8; 32],
+    /// Set when the chain was fine but the key wasn't the pinned one.
+    mismatch: Arc<AtomicBool>,
+}
+
+impl ServerCertVerifier for PinnedKey {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        ocsp_response: &[u8],
+        now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        let verified = self.webpki.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)?;
+        if spki_sha256(end_entity)? != self.pin {
+            self.mismatch.store(true, Ordering::SeqCst);
+            return Err(rustls::Error::InvalidCertificate(CertificateError::ApplicationVerificationFailure));
+        }
+        Ok(verified)
+    }
+
+    fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        self.webpki.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &DigitallySignedStruct) -> Result<HandshakeSignatureValid, rustls::Error> {
+        self.webpki.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.webpki.supported_verify_schemes()
+    }
+}
+
+/// The roots reqwest's own rustls setup trusts (Mozilla's, via webpki-roots).
+fn public_roots() -> RootCertStore {
+    RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() }
+}
+
+/// A client that only talks HTTPS, to a server whose certificate chains to `roots` and
+/// carries the pinned key. No session resumption: every connection is checked in full.
+fn pinned_client(pin: [u8; 32], roots: RootCertStore) -> Result<(reqwest::Client, Arc<AtomicBool>), String> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let webpki = WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone()).build().map_err(|e| e.to_string())?;
+    let mismatch = Arc::new(AtomicBool::new(false));
+    let mut tls = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|e| e.to_string())?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(PinnedKey { webpki, pin, mismatch: mismatch.clone() }))
+        .with_no_client_auth();
+    tls.resumption = rustls::client::Resumption::disabled();
+    tls.alpn_protocols = vec![b"http/1.1".to_vec()];
+    let client = reqwest::Client::builder()
+        .use_preconfigured_tls(tls)
+        .https_only(true)
+        .connect_timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(180))
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok((client, mismatch))
+}
+
+/// Uploads one chunk over TLS pinned to the gateway's attested key (`tls_pin`, hex).
+pub async fn transcribe(file: PathBuf, model: String, prompt: String, tls_pin: String) -> Result<String, String> {
+    transcribe_with_roots(file, model, prompt, tls_pin, public_roots()).await
+}
+
+/// `transcribe` with other trusted roots; the integration tests pass their own test CA.
+pub async fn transcribe_with_roots(file: PathBuf, model: String, prompt: String, tls_pin: String, roots: RootCertStore) -> Result<String, String> {
+    // The pin is checked before the audio is even read.
+    let pin = parse_pin(&tls_pin)?;
+    let url = format!("{}/audio/transcriptions", base());
+    if !url.starts_with("https://") {
+        return Err("The audio is only uploaded over TLS".into());
+    }
+    let (client, mismatch) = pinned_client(pin, roots)?;
     let bytes = tokio_read(&file).await?;
     let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("audio.wav").to_string();
     let part = reqwest::multipart::Part::bytes(bytes).file_name(name).mime_str("audio/wav").map_err(|e| e.to_string())?;
@@ -156,13 +275,13 @@ pub async fn transcribe(file: PathBuf, model: String, prompt: String) -> Result<
     if !prompt.is_empty() {
         form = form.text("prompt", prompt);
     }
-    let res = client()?
-        .post(format!("{}/audio/transcriptions", base()))
-        .bearer_auth(api_key()?)
-        .multipart(form)
-        .send()
-        .await
-        .map_err(send_error)?;
+    let res = client.post(url).bearer_auth(api_key()?).multipart(form).send().await.map_err(|e| {
+        if mismatch.load(Ordering::SeqCst) {
+            format!("{TLS_PIN_MISMATCH}: NEAR AI's TLS certificate didn't carry the key bound in the gateway's attestation, so nothing was uploaded")
+        } else {
+            send_error(e)
+        }
+    })?;
     body_text(res).await
 }
 
@@ -351,6 +470,33 @@ pub async fn get(path: String) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fixture(name: &str) -> String {
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tls").join(name)).unwrap()
+    }
+
+    fn cert(name: &str) -> CertificateDer<'static> {
+        use rustls::pki_types::pem::PemObject;
+        CertificateDer::from_pem_slice(fixture(name).as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn the_pin_is_sha256_of_the_certificates_spki_der_as_near_ai_computes_it() {
+        // The .spki-sha256 files are `openssl x509 -pubkey | openssl pkey -pubin -outform der | sha256`.
+        for leaf in ["leaf-a", "leaf-b"] {
+            let got: String = spki_sha256(&cert(&format!("{leaf}.pem"))).unwrap().iter().map(|b| format!("{b:02x}")).collect();
+            assert_eq!(got, fixture(&format!("{leaf}.spki-sha256")).trim(), "{leaf}");
+        }
+        let a = fixture("leaf-a.spki-sha256");
+        assert_eq!(parse_pin(a.trim()).unwrap(), spki_sha256(&cert("leaf-a.pem")).unwrap());
+    }
+
+    #[test]
+    fn a_missing_or_malformed_pin_uploads_nothing() {
+        for bad in ["", "ab", &"zz".repeat(32), &"ab".repeat(33)] {
+            assert!(parse_pin(bad).unwrap_err().starts_with(TLS_PIN_MISMATCH), "{bad:?}");
+        }
+    }
 
     #[test]
     fn pasted_keys_are_cleaned() {

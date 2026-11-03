@@ -94,15 +94,72 @@ async fn malformed_e2ee_keys_send_nothing() {
     assert!(rx.recv_timeout(std::time::Duration::from_millis(300)).is_err(), "no request reached the server");
 }
 
-#[tokio::test]
-async fn transcribe_uploads_the_file_as_multipart() {
-    let _g = LOCK.lock().unwrap();
-    let (url, rx) = fake_server(r#"{"text":"hello","segments":[]}"#);
-    point_at(&url);
-    let file = std::env::temp_dir().join(format!("mic-000-{}.wav", std::process::id()));
-    std::fs::write(&file, b"RIFF-fake-audio").unwrap();
+/// The test CA and server certificates in tests/fixtures/tls (test-only keys for localhost).
+fn tls_fixture(name: &str) -> String {
+    std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tls").join(name)).unwrap()
+}
 
-    let got = aftercall_desktop_lib::test_api::transcribe(file.clone(), "openai/whisper-large-v3".into(), "Ada, Designer".into()).await.unwrap();
+fn test_roots() -> rustls::RootCertStore {
+    use rustls::pki_types::{CertificateDer, pem::PemObject};
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add(CertificateDer::from_pem_slice(tls_fixture("ca.pem").as_bytes()).unwrap()).unwrap();
+    roots
+}
+
+/// Serves one HTTPS request with `leaf`'s certificate, sending back what it received, or
+/// "no request" with whatever bytes arrived when the client gave up in the handshake.
+fn tls_server(leaf: &'static str, reply: &'static str) -> (String, mpsc::Receiver<(String, Vec<u8>)>) {
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("https://localhost:{}/v1", listener.local_addr().unwrap().port());
+    let chain = vec![CertificateDer::from_pem_slice(tls_fixture(&format!("{leaf}.pem")).as_bytes()).unwrap()];
+    let key = PrivateKeyDer::from_pem_slice(tls_fixture(&format!("{leaf}.key")).as_bytes()).unwrap();
+    let config = rustls::ServerConfig::builder_with_provider(std::sync::Arc::new(rustls::crypto::ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_no_client_auth()
+        .with_single_cert(chain, key)
+        .unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let (tcp, _) = listener.accept().unwrap();
+        let conn = rustls::ServerConnection::new(std::sync::Arc::new(config)).unwrap();
+        let mut stream = rustls::StreamOwned::new(conn, tcp);
+        let mut got = Vec::new();
+        let mut byte = [0u8; 1];
+        // Read the head byte by byte; a refused handshake ends here with nothing read.
+        while !got.ends_with(b"\r\n\r\n") {
+            match stream.read(&mut byte) {
+                Ok(1) => got.push(byte[0]),
+                _ => return tx.send(("no request".into(), got)).unwrap(),
+            }
+        }
+        let head = String::from_utf8_lossy(&got).to_string();
+        let length: usize = head.lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse().unwrap())).unwrap_or(0);
+        let mut body = vec![0; length];
+        stream.read_exact(&mut body).unwrap();
+        write!(stream, "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{reply}", reply.len()).unwrap();
+        stream.flush().unwrap();
+        tx.send((head, body)).unwrap();
+    });
+    (url, rx)
+}
+
+fn fake_wav(tag: &str) -> std::path::PathBuf {
+    let file = std::env::temp_dir().join(format!("mic-000-{tag}-{}.wav", std::process::id()));
+    std::fs::write(&file, b"RIFF-fake-audio").unwrap();
+    file
+}
+
+#[tokio::test]
+async fn transcribe_uploads_the_file_as_multipart_over_tls_pinned_to_the_attested_key() {
+    let _g = LOCK.lock().unwrap();
+    let (url, rx) = tls_server("leaf-a", r#"{"text":"hello","segments":[]}"#);
+    point_at(&url);
+    let file = fake_wav("pin-ok");
+    let pin = tls_fixture("leaf-a.spki-sha256").trim().to_string();
+
+    let got = aftercall_desktop_lib::test_api::transcribe_with_roots(file.clone(), "openai/whisper-large-v3".into(), "Ada, Designer".into(), pin, test_roots()).await.unwrap();
     assert_eq!(got, r#"{"text":"hello","segments":[]}"#);
     let (head, sent) = rx.recv().unwrap();
     let sent = String::from_utf8_lossy(&sent);
@@ -111,6 +168,54 @@ async fn transcribe_uploads_the_file_as_multipart() {
     for part in ["name=\"model\"", "openai/whisper-large-v3", "name=\"response_format\"", "verbose_json", "name=\"prompt\"", "Ada, Designer", "RIFF-fake-audio"] {
         assert!(sent.contains(part), "upload is missing {part}");
     }
+    std::fs::remove_file(file).unwrap();
+}
+
+#[tokio::test]
+async fn a_certificate_with_another_key_gets_no_audio_even_from_a_trusted_ca() {
+    let _g = LOCK.lock().unwrap();
+    // leaf-b chains to the same trusted CA and names localhost: WebPKI alone would accept it.
+    let (url, rx) = tls_server("leaf-b", "{}");
+    point_at(&url);
+    let file = fake_wav("pin-bad");
+    let pin = tls_fixture("leaf-a.spki-sha256").trim().to_string();
+
+    let err = aftercall_desktop_lib::test_api::transcribe_with_roots(file.clone(), "openai/whisper-large-v3".into(), "Ada".into(), pin, test_roots()).await.unwrap_err();
+    assert!(err.starts_with(aftercall_desktop_lib::test_api::TLS_PIN_MISMATCH), "{err}");
+    let (head, got) = rx.recv().unwrap();
+    assert_eq!(head, "no request");
+    assert!(got.is_empty(), "not a byte of the request reached the server");
+    std::fs::remove_file(file).unwrap();
+}
+
+#[tokio::test]
+async fn the_attested_key_from_an_untrusted_issuer_is_still_refused() {
+    let _g = LOCK.lock().unwrap();
+    let (url, rx) = tls_server("leaf-a", "{}");
+    point_at(&url);
+    let file = fake_wav("pin-untrusted");
+    let pin = tls_fixture("leaf-a.spki-sha256").trim().to_string();
+    // The public roots, as the app uses: the test CA isn't among them, so WebPKI fails first.
+    let err = aftercall_desktop_lib::test_api::transcribe(file.clone(), "openai/whisper-large-v3".into(), "".into(), pin).await.unwrap_err();
+    assert!(!err.starts_with(aftercall_desktop_lib::test_api::TLS_PIN_MISMATCH), "a chain failure, not a pin failure: {err}");
+    let (head, got) = rx.recv().unwrap();
+    assert_eq!(head, "no request");
+    assert!(got.is_empty());
+    std::fs::remove_file(file).unwrap();
+}
+
+#[tokio::test]
+async fn audio_is_never_uploaded_over_plain_http_or_without_a_pin() {
+    let _g = LOCK.lock().unwrap();
+    let (url, rx) = fake_server("{}");
+    point_at(&url);
+    let file = fake_wav("pin-http");
+    let pin = tls_fixture("leaf-a.spki-sha256").trim().to_string();
+    let err = aftercall_desktop_lib::test_api::transcribe(file.clone(), "openai/whisper-large-v3".into(), "".into(), pin).await.unwrap_err();
+    assert_eq!(err, "The audio is only uploaded over TLS");
+    let err = aftercall_desktop_lib::test_api::transcribe(file.clone(), "openai/whisper-large-v3".into(), "".into(), String::new()).await.unwrap_err();
+    assert!(err.starts_with(aftercall_desktop_lib::test_api::TLS_PIN_MISMATCH));
+    assert!(rx.recv_timeout(std::time::Duration::from_millis(200)).is_err(), "nothing was sent");
     std::fs::remove_file(file).unwrap();
 }
 

@@ -36,6 +36,9 @@ function paidPayments(meetings: Meeting[], now = Date.now()): PaidPayment[] {
     .sort((a, b) => (meetingTime(b.meeting, now) ?? 0) - (meetingTime(a.meeting, now) ?? 0) || (b.f.doneAt ?? "").localeCompare(a.f.doneAt ?? ""));
 }
 
+/** The browser preview's cap for payments on other chains: 20.00 USDC a day. */
+const SAMPLE_CROSS_CHAIN_CAP = 20_000_000n;
+
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
 const plain = (n: bigint) => formatUsdc(n).replace(/,/g, "");
 const short = (address: string) => `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -76,6 +79,7 @@ export function WalletScreen({
   const [sheet, setSheet] = useState<"deposit" | "withdraw" | "payee" | null>(null);
   const [capText, setCapText] = useState("");
   const [paymentCapText, setPaymentCapText] = useState("");
+  const [crossCapText, setCrossCapText] = useState("");
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -86,6 +90,7 @@ export function WalletScreen({
       setNetwork("mainnet");
       setCapText(plain(sampleDailyCap));
       setPaymentCapText(plain(samplePerPaymentCap));
+      setCrossCapText(plain(SAMPLE_CROSS_CHAIN_CAP));
       return;
     }
     try {
@@ -99,6 +104,7 @@ export function WalletScreen({
       if (v.wallet) {
         setCapText(plain(BigInt(v.wallet.daily_cap)));
         setPaymentCapText(plain(BigInt(v.wallet.per_payment_cap)));
+        setCrossCapText(plain(BigInt(v.wallet.cross_chain_daily_cap ?? "0")));
       }
     } catch (e) {
       setLoadError(String(e));
@@ -162,6 +168,7 @@ export function WalletScreen({
   const balance = BigInt(w.balance);
   const cap = BigInt(w.daily_cap);
   const perCap = BigInt(w.per_payment_cap);
+  const crossCap = BigInt(w.cross_chain_daily_cap ?? "0");
   const today = Math.floor(Date.now() / 86_400_000);
   const spentToday = w.day === today ? BigInt(w.spent_today) : 0n;
   const left = cap > spentToday ? cap - spentToday : 0n;
@@ -237,6 +244,25 @@ export function WalletScreen({
               )
             }
           />
+          {crossChain && (
+            <CapField
+              label="Other chains, a day"
+              // The contract checks it on every payment on Solana or Base, inside the daily cap; 0 turns them off.
+              hint={crossCap > 0n ? "Most Aftercall pays on Solana or Base in a day, inside the daily cap. More is refused." : "At 0.00, payments on Solana or Base are off."}
+              value={crossCapText}
+              saved={crossCap}
+              busy={busy}
+              onChange={setCrossCapText}
+              onSave={(v) =>
+                signAndWait(
+                  "Set cap for other chains",
+                  { kind: "set-cross-chain-cap", crossChainCap: v.toString() },
+                  (x) => x.wallet?.cross_chain_daily_cap === v.toString(),
+                  () => (v === 0n ? "Payments on other chains are off on NEAR" : `Cap for other chains is ${formatUsdc(v)} USDC a day on NEAR`),
+                )
+              }
+            />
+          )}
         </div>
       </section>
 
@@ -590,6 +616,8 @@ function sampleWallet(paid: bigint, parked: number): WalletView {
       pending_count: parked,
       storage_credit: "0",
       per_payment_cap: samplePerPaymentCap.toString(),
+      cross_chain_daily_cap: SAMPLE_CROSS_CHAIN_CAP.toString(),
+      cross_chain_spent_today: "0",
     },
     payees: [
       { account: "designer.near", label: "Designer" },

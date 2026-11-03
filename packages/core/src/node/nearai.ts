@@ -1,10 +1,13 @@
-import { randomBytes } from "node:crypto";
+import { X509Certificate, createHash, randomBytes } from "node:crypto";
+import { request as httpsRequest } from "node:https";
+import { connect as tlsConnect, type TLSSocket } from "node:tls";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { createRequire } from "node:module";
 import type { E2eeKeys, NotesTransport } from "../notes/pipeline.ts";
 import type { StreamProgress } from "../notes/stream.ts";
 import type { QuoteReport } from "../tee/checks.ts";
+import { TLS_PIN_MISMATCH } from "../tee/attest.ts";
 
 /**
  * NEAR AI Cloud from Node, for `pnpm sample:notes`. It mirrors the Mac app's Rust
@@ -85,19 +88,88 @@ export const STREAM_IDLE_MS = 60_000;
 /** A streamed reply larger than this is refused (a notes reply is tens of kilobytes). */
 export const STREAM_MAX_BYTES = 32 * 1024 * 1024;
 
-export function nodeNearAiTransport(opts: { apiKey: string; baseUrl?: string; fetch?: typeof fetch; idleMs?: number; firstByteMs?: number }): NotesTransport {
+/** sha256 of a certificate's SubjectPublicKeyInfo DER, in hex: what NEAR AI binds as `tls_cert_fingerprint`. */
+export function spkiSha256(cert: X509Certificate): string {
+  return createHash("sha256").update(cert.publicKey.export({ type: "spki", format: "der" })).digest("hex");
+}
+
+/**
+ * A TLS connection to `url`'s host that passed Node's usual certificate checks and whose
+ * certificate carries the pinned key. Nothing is written on it before both pass.
+ */
+function pinnedSocket(url: URL, pin: string, ca: string | undefined, timeoutMs: number): Promise<TLSSocket> {
+  return new Promise((resolve, reject) => {
+    const socket = tlsConnect({ host: url.hostname, port: Number(url.port || 443), servername: url.hostname === "127.0.0.1" ? undefined : url.hostname, ALPNProtocols: ["http/1.1"], ...(ca ? { ca } : {}) });
+    socket.setTimeout(timeoutMs, () => socket.destroy(new Error("NEAR AI took too long to answer, so Aftercall stopped waiting.")));
+    socket.once("error", reject);
+    socket.once("secureConnect", () => {
+      const cert = socket.getPeerX509Certificate();
+      const got = cert ? spkiSha256(cert) : "";
+      if (got !== pin.toLowerCase()) {
+        socket.destroy();
+        return reject(new Error(`${TLS_PIN_MISMATCH}: the gateway's TLS key (SPKI sha256 ${got.slice(0, 12) || "none"}…) isn't the attested one; nothing was uploaded`));
+      }
+      socket.off("error", reject);
+      resolve(socket);
+    });
+  });
+}
+
+/** A multipart/form-data body: text fields, then the file. */
+function multipart(fields: [string, string][], file: { name: string; type: string; data: Buffer }): { body: Buffer; type: string } {
+  const boundary = `----aftercall${randomBytes(12).toString("hex")}`;
+  const head = (extra: string) => Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; ${extra}\r\n`);
+  const parts: Buffer[] = [head(`name="file"; filename="${file.name.replace(/"/g, "")}"`), Buffer.from(`Content-Type: ${file.type}\r\n\r\n`), file.data, Buffer.from("\r\n")];
+  for (const [k, v] of fields) parts.push(head(`name="${k}"`), Buffer.from(`\r\n${v}\r\n`));
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), type: `multipart/form-data; boundary=${boundary}` };
+}
+
+export function nodeNearAiTransport(opts: {
+  apiKey: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+  idleMs?: number;
+  firstByteMs?: number;
+  /** Extra trusted root for the audio upload's TLS checks (tests only). */
+  ca?: string;
+}): NotesTransport {
   const base = (opts.baseUrl ?? NEAR_AI_BASE).replace(/\/$/, "");
   const doFetch = opts.fetch ?? fetch;
   const auth = { authorization: `Bearer ${opts.apiKey}` };
   return {
-    async transcribe(path, model, prompt) {
+    /** The audio, over TLS pinned to the gateway's attested key (as nearai.rs does): checked before a byte is sent. */
+    async transcribe(path, model, prompt, tlsPin) {
       if (!path.endsWith(".wav")) throw new Error("Only WAV recordings can be transcribed");
-      const form = new FormData();
-      form.append("file", new Blob([await readFile(path)], { type: "audio/wav" }), basename(path));
-      form.append("model", model);
-      form.append("response_format", "verbose_json");
-      if (prompt) form.append("prompt", prompt);
-      return bodyText(await doFetch(`${base}/audio/transcriptions`, { method: "POST", headers: auth, body: form, signal: AbortSignal.timeout(180_000) }));
+      if (!/^[0-9a-f]{64}$/i.test(tlsPin ?? "")) throw new Error(`${TLS_PIN_MISMATCH}: no attested TLS key to pin the upload to; nothing was uploaded`);
+      const url = new URL(`${base}/audio/transcriptions`);
+      if (url.protocol !== "https:") throw new Error("The audio is only uploaded over TLS");
+      const fields: [string, string][] = [["model", model], ["response_format", "verbose_json"], ...(prompt ? [["prompt", prompt] as [string, string]] : [])];
+      const form = multipart(fields, { name: basename(path), type: "audio/wav", data: await readFile(path) });
+      const socket = await pinnedSocket(url, tlsPin, opts.ca, 180_000);
+      return new Promise<string>((resolve, reject) => {
+        const req = httpsRequest(
+          url,
+          // No agent, so the request goes on this socket and nowhere else (an agent would open its own).
+          { method: "POST", createConnection: () => socket, headers: { ...auth, "content-type": form.type, "content-length": String(form.body.length) } },
+          (res) => {
+            const parts: Buffer[] = [];
+            res.on("data", (c: Buffer) => parts.push(c));
+            res.on("error", reject);
+            res.on("end", () => {
+              try {
+                const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Buffer.concat(parts));
+                if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) return reject(new Error(`NEAR AI ${res.statusCode}: ${text.slice(0, 300)}`));
+                resolve(text);
+              } catch (e) {
+                reject(e);
+              }
+            });
+          },
+        );
+        req.on("error", reject);
+        req.end(form.body);
+      });
     },
     async chat(body, e2ee) {
       const res = await doFetch(`${base}/chat/completions`, {

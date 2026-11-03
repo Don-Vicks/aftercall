@@ -7,7 +7,8 @@ import type { ProofOnChain } from "./near";
  * in the Keychain and can reach services that don't allow browser requests.
  */
 export const nearAiTransport: NotesTransport = {
-  transcribe: (path, model, prompt) => invoke<string>("nearai_transcribe", { path, model, prompt }),
+  // Rust uploads only over TLS whose certificate carries `tlsPin`, the gateway's attested key.
+  transcribe: (path, model, prompt, tlsPin) => invoke<string>("nearai_transcribe", { path, model, prompt, tlsPin }),
   chat: (body, e2ee) => invoke<string>("nearai_chat", { body, e2ee }),
   // The notes, streamed: Rust keeps every byte for the signature check and sends counts as they arrive.
   chatStream: (body, e2ee, onProgress) => {

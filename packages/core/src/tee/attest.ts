@@ -1,5 +1,5 @@
 import { sha256Hex } from "../notes/verify.ts";
-import { appCompose, cpuChecks, signingIdentity, strip0x, type AttestationReport, type QuoteReport, type SigningAlgo, type TeeAttestation, type TeeCheck, type Where } from "./checks.ts";
+import { appCompose, cpuChecks, isSha256Hex, signingIdentity, strip0x, type AttestationReport, type QuoteReport, type SigningAlgo, type TeeAttestation, type TeeCheck, type Where } from "./checks.ts";
 import { gpuChecks, type Jwks } from "./nvidia.ts";
 
 /**
@@ -37,6 +37,12 @@ export interface TeeEvidence {
   reportData: string;
   mrConfigId: string;
   composeHash: string;
+  /**
+   * The TLS key fingerprint bound in this TEE's report data (hex sha256 of the TLS
+   * certificate's SPKI DER), when it sent one. For the gateway, the key the audio
+   * upload was pinned to. Absent in older proofs.
+   */
+  tlsCertFingerprint?: string;
   /** NVIDIA's platform token, kept for the node that signed the summary. */
   nvidiaToken?: string;
   /** Every check for this TEE passed. */
@@ -92,6 +98,7 @@ async function verifyTee(t: TeeTransport, att: TeeAttestation, nonce: string, al
 
   const compose = appCompose(att);
   const verified = checks.every((c) => c.ok);
+  const fp = att.tls_cert_fingerprint ? strip0x(att.tls_cert_fingerprint) : "";
   return {
     att,
     checks,
@@ -108,6 +115,7 @@ async function verifyTee(t: TeeTransport, att: TeeAttestation, nonce: string, al
       reportData: strip0x(quote?.reportData ?? ""),
       mrConfigId: strip0x(quote?.mrConfigId ?? ""),
       composeHash: compose ? sha256Hex(compose) : "",
+      ...(isSha256Hex(fp) ? { tlsCertFingerprint: fp } : {}),
       verified,
     },
   };
@@ -125,7 +133,9 @@ export async function loadNvidiaKeys(t: TeeTransport): Promise<Jwks | null> {
 
 /**
  * Fetches the attestation report for `model` with a fresh nonce and verifies
- * every TEE in it. `withGateway` also verifies the gateway TEE from the same report.
+ * every TEE in it. `withGateway` also verifies the gateway TEE from the same report,
+ * asking for its TLS key fingerprint to be bound into its quote
+ * (`include_tls_fingerprint=true`), so the audio upload can be pinned to that key.
  */
 export async function attestModel(
   t: TeeTransport,
@@ -134,7 +144,7 @@ export async function attestModel(
   opts: { withGateway: boolean; jwks: Jwks | null; now?: number },
 ): Promise<ModelAttestation> {
   const nonce = t.randomHex();
-  const q = new URLSearchParams({ model, signing_algo: algo, nonce, include_tls_fingerprint: "false" });
+  const q = new URLSearchParams({ model, signing_algo: algo, nonce, include_tls_fingerprint: opts.withGateway ? "true" : "false" });
   const report = JSON.parse(await t.get(`attestation/report?${q}`)) as AttestationReport;
   const now = opts.now ?? Math.floor(Date.now() / 1000);
   const nodes = report.model_attestations ?? [];
@@ -144,6 +154,29 @@ export async function attestModel(
   ]);
   return { model, nonce, algo, gateway, nodes: verifiedNodes as VerifiedTee[] };
 }
+
+/**
+ * The gateway alone (a report without `model`), with a fresh nonce and its TLS key
+ * fingerprint bound in: for pinning the audio upload again when the gateway's
+ * certificate changed. Null when the report has no gateway attestation.
+ */
+export async function attestGateway(t: TeeTransport, algo: SigningAlgo, opts: { jwks: Jwks | null; now?: number }): Promise<{ nonce: string; gateway: VerifiedTee | null }> {
+  const nonce = t.randomHex();
+  const q = new URLSearchParams({ signing_algo: algo, nonce, include_tls_fingerprint: "true" });
+  const report = JSON.parse(await t.get(`attestation/report?${q}`)) as AttestationReport;
+  const now = opts.now ?? Math.floor(Date.now() / 1000);
+  return { nonce, gateway: report.gateway_attestation ? await verifyTee(t, report.gateway_attestation, nonce, algo, { scope: "gateway" }, opts.jwks, now) : null };
+}
+
+/** The TLS key the audio upload is pinned to: a verified gateway's bound fingerprint, or null. */
+export const gatewayTlsPin = (gw: VerifiedTee | null): string | null => (gw?.verified && gw.evidence.tlsCertFingerprint ? gw.evidence.tlsCertFingerprint : null);
+
+/**
+ * The transports' answer when the gateway's TLS certificate key isn't the pinned one:
+ * nothing was uploaded on that connection.
+ */
+export const TLS_PIN_MISMATCH = "TLS_PIN_MISMATCH";
+export const tlsPinMismatch = (e: unknown) => (e instanceof Error ? e.message : String(e)).includes(TLS_PIN_MISMATCH);
 
 /** Every check for a model, including a failing line when NEAR returned no TEE for it. */
 export function modelChecks(a: ModelAttestation): TeeCheck[] {

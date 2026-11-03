@@ -36,14 +36,17 @@ export const EVENT_LOG: EventLogEntry[] = [
   { imr: 3, event_type: 134217729, event: "app-id", event_payload: "abcd" },
   { imr: 3, event_type: 134217729, event: "compose-hash", event_payload: "0102" },
 ];
-export const COMPOSE = '{"docker_compose_file":"services:\\n  vllm:\\n    image: nearaidev/vllm@sha256:00"}';
+export const IMAGE_DIGEST = "f75c2a8f1a3d8a36ed6cd7479e848edf0a0e814381d7b83993a703201594bc14";
+export const COMPOSE = `{"docker_compose_file":"services:\\n  vllm:\\n    image: nearaidev/vllm@sha256:${IMAGE_DIGEST}"}`;
+/** A gateway TLS key fingerprint: sha256 of a certificate's SPKI DER, in hex. */
+export const GATEWAY_TLS = sha256Hex("gateway SPKI DER");
 
 /** A quote as the Rust side reports it after dcap-qvl verified it. Encoded as the "quote" hex. */
-export function quoteFor(key: TeeKey, nonce: string, over: Partial<QuoteReport> = {}): QuoteReport {
+export function quoteFor(key: TeeKey, nonce: string, over: Partial<QuoteReport> = {}, tls?: string): QuoteReport {
   return {
     status: "UpToDate",
     advisoryIds: [],
-    reportData: expectedReportData(key.address, nonce),
+    reportData: expectedReportData(key.address, nonce, tls),
     mrConfigId: expectedMrConfig(sha256Hex(COMPOSE)),
     tdAttributes: "0000001000000000",
     rtMr3: replayRtmr3(EVENT_LOG).rtmr3,
@@ -54,16 +57,29 @@ export function quoteFor(key: TeeKey, nonce: string, over: Partial<QuoteReport> 
 export const encodeQuote = (q: QuoteReport) => bytesToHex(utf8ToBytes(JSON.stringify(q)));
 export const decodeQuote = (hex: string): QuoteReport => JSON.parse(new TextDecoder().decode(Uint8Array.from(hex.match(/../g)!.map((b) => parseInt(b, 16)))));
 
-export function attestationFor(key: TeeKey, nonce: string, opts: { quote?: Partial<QuoteReport>; gpu?: boolean; nonceInPayload?: string } = {}): TeeAttestation {
+/**
+ * One TEE's attestation. `tls`: a TLS key fingerprint bound into the report data and
+ * sent as `tls_cert_fingerprint` (`tlsSent` sends another one instead). `gpus`: how many
+ * GPUs the evidence is for (NRAS answers for 2 by default).
+ */
+export function attestationFor(
+  key: TeeKey,
+  nonce: string,
+  opts: { quote?: Partial<QuoteReport>; gpu?: boolean; nonceInPayload?: string; tls?: string; tlsSent?: string; gpus?: number } = {},
+): TeeAttestation {
+  const sent = opts.tlsSent ?? opts.tls;
   return {
     signing_address: key.address,
     signing_algo: key.algo,
     ...(key.publicKey ? { signing_public_key: key.publicKey } : {}),
     request_nonce: nonce,
-    intel_quote: encodeQuote(quoteFor(key, nonce, opts.quote)),
+    intel_quote: encodeQuote(quoteFor(key, nonce, opts.quote, opts.tls)),
     event_log: JSON.stringify(EVENT_LOG),
     info: { tcb_info: JSON.stringify({ app_compose: COMPOSE }) },
-    ...(opts.gpu === false ? {} : { nvidia_payload: JSON.stringify({ nonce: opts.nonceInPayload ?? nonce, evidence_list: [] }) }),
+    ...(sent ? { tls_cert_fingerprint: sent } : {}),
+    ...(opts.gpu === false
+      ? {}
+      : { nvidia_payload: JSON.stringify({ nonce: opts.nonceInPayload ?? nonce, evidence_list: Array.from({ length: opts.gpus ?? 2 }, (_, i) => ({ certificate: `cert-${i}`, evidence: `ev-${i}`, arch: "HOPPER" })) }) }),
   };
 }
 
@@ -88,6 +104,7 @@ export async function fakeNras() {
     exp: now + 3600,
     iat: now,
     hwmodel: "GH100 A01 GSP BROM",
+    ueid: "642960189298007511250958030500749152730221142468",
     secboot: true,
     dbgstat: "disabled",
     measres: "success",
@@ -99,7 +116,8 @@ export async function fakeNras() {
   const answer = async (nonce: string, opts: { gpus?: number; gpu?: object; platform?: object } = {}) => {
     const gpus: Record<string, string> = {};
     for (let i = 0; i < (opts.gpus ?? 2); i++) gpus[`GPU-${i}`] = await sign({ ...gpuClaims(nonce), ...opts.gpu });
-    const platform = await sign({ iss: "https://nras.attestation.nvidia.com", sub: "NVIDIA-PLATFORM-ATTESTATION", eat_nonce: nonce, exp: now + 3600, iat: now, "x-nvidia-overall-att-result": true, ...opts.platform });
+    const submods = Object.fromEntries(Object.keys(gpus).map((name) => [name, ["DIGEST", ["SHA-256", sha256Hex(gpus[name])]]]));
+    const platform = await sign({ iss: "https://nras.attestation.nvidia.com", sub: "NVIDIA-PLATFORM-ATTESTATION", eat_nonce: nonce, exp: now + 3600, iat: now, "x-nvidia-overall-att-result": true, submods, ...opts.platform });
     return [["JWT", platform], gpus];
   };
   return { jwks, sign, answer, gpuClaims, now };

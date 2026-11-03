@@ -54,7 +54,7 @@ export default function HowItWorks() {
                 Checked every time, before it’s sent and when it comes back
               </h2>
               <p className={h.intro}>
-                Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it, then checks the signed reply: 24 checks before anything is sent and 5 on the signed reply, on a typical meeting with one node per model.
+                Each recording gets a fresh nonce. Your Mac checks the gateway, Whisper and Qwen against it, then checks the signed reply: 25 checks before anything is sent and 5 on the signed reply, on a typical meeting with one node per model.
               </p>
             </div>
             <Checks />
@@ -73,7 +73,7 @@ export default function HowItWorks() {
                 <span>
                   <span style={{ fontWeight: 600 }}>Audio isn&apos;t end-to-end encrypted</span>
                   <span className="ink-2">
-                    NEAR AI doesn&apos;t offer it for transcription. Audio goes over TLS through the attested gateway, and transcriptions aren&apos;t signed per response. The Verify sheet says so next to the Whisper checks.
+                    NEAR AI doesn&apos;t offer it for transcription. Audio goes over TLS pinned to the gateway&apos;s TLS key from its attestation, and transcriptions aren&apos;t signed per response. The Verify sheet says so next to the Whisper checks.
                   </span>
                 </span>
               </div>

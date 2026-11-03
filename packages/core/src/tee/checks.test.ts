@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { sha384 } from "@noble/hashes/sha512";
 import { bytesToHex } from "@noble/hashes/utils";
 import { sha256Hex } from "../notes/verify.ts";
-import { cpuChecks, expectedMrConfig, expectedReportData, replayRtmr3, responseChecks, signerOf, verifyEd25519, type TeeCheck } from "./checks.ts";
-import { attestationFor, COMPOSE, quoteFor, randomNonce, teeKey } from "./testkit.ts";
+import { cpuChecks, expectedMrConfig, expectedReportData, imageDigests, replayRtmr3, responseChecks, signerOf, verifyEd25519, type TeeCheck } from "./checks.ts";
+import { attestationFor, COMPOSE, GATEWAY_TLS, IMAGE_DIGEST, quoteFor, randomNonce, teeKey, type TeeKey } from "./testkit.ts";
 
 const failed = (checks: TeeCheck[]) => checks.filter((c) => !c.ok).map((c) => c.id);
 const where = { scope: "model" as const, model: "Qwen/Qwen3.8-27B" };
@@ -67,16 +67,61 @@ test("OutOfDate TCB passes as NEAR's verifier allows; Revoked or a failed quote 
 test("each binding failure is caught by its own check", () => {
   const key = teeKey("ecdsa");
   const nonce = randomNonce();
-  const att = attestationFor(key, nonce);
-  const ids = (q: ReturnType<typeof quoteFor>, a = att, n = nonce) => failed(cpuChecks(a, n, q, null, { scope: "gateway" }));
-  assert.deepEqual(ids(quoteFor(key, nonce, { tdAttributes: "0100000000000000" })), ["gateway-debug"]);
-  assert.deepEqual(ids(quoteFor(teeKey("ecdsa"), nonce)), ["gateway-binds-key"], "someone else's key");
-  assert.deepEqual(ids(quoteFor(key, randomNonce())), ["gateway-binds-nonce"], "a replayed quote");
-  assert.deepEqual(ids(quoteFor(key, nonce), { ...att, request_nonce: randomNonce() }), ["gateway-binds-nonce"]);
-  assert.deepEqual(ids(quoteFor(key, nonce, { rtMr3: "00".repeat(48) })), ["gateway-rtmr3"]);
-  assert.deepEqual(ids(quoteFor(key, nonce, { mrConfigId: expectedMrConfig(sha256Hex("other")) })), ["gateway-compose"]);
-  assert.deepEqual(ids(quoteFor(key, nonce), { ...att, event_log: undefined }), ["gateway-rtmr3"]);
-  assert.deepEqual(ids(quoteFor(key, nonce), { ...att, info: {} }), ["gateway-compose"]);
+  const att = attestationFor(key, nonce, { tls: GATEWAY_TLS });
+  const q = (k: TeeKey, n: string, over = {}) => quoteFor(k, n, over, GATEWAY_TLS);
+  const ids = (quote: ReturnType<typeof quoteFor>, a = att, n = nonce) => failed(cpuChecks(a, n, quote, null, { scope: "gateway" }));
+  assert.deepEqual(ids(q(key, nonce)), []);
+  assert.deepEqual(ids(q(key, nonce, { tdAttributes: "0100000000000000" })), ["gateway-debug"]);
+  assert.deepEqual(ids(q(teeKey("ecdsa"), nonce)), ["gateway-binds-key", "gateway-tls"], "someone else's key");
+  assert.deepEqual(ids(q(key, randomNonce())), ["gateway-binds-nonce"], "a replayed quote");
+  assert.deepEqual(ids(q(key, nonce), { ...att, request_nonce: randomNonce() }), ["gateway-binds-nonce"]);
+  assert.deepEqual(ids(q(key, nonce, { rtMr3: "00".repeat(48) })), ["gateway-rtmr3"]);
+  assert.deepEqual(ids(q(key, nonce, { mrConfigId: expectedMrConfig(sha256Hex("other")) })), ["gateway-compose"]);
+  assert.deepEqual(ids(q(key, nonce), { ...att, event_log: undefined }), ["gateway-rtmr3"]);
+  assert.deepEqual(ids(q(key, nonce), { ...att, info: {} }), ["gateway-compose"]);
+});
+
+test("the gateway's TLS key must be sent and bound in its quote; a model TEE may bind its key alone", () => {
+  const key = teeKey("ed25519");
+  const nonce = randomNonce();
+  const gw = { scope: "gateway" as const };
+  // No fingerprint: the audio would have nothing to pin to.
+  assert.deepEqual(failed(cpuChecks(attestationFor(key, nonce), nonce, quoteFor(key, nonce), null, gw)), ["gateway-tls"]);
+  // A fingerprint the quote doesn't bind (the quote binds the key alone, padded).
+  assert.deepEqual(failed(cpuChecks(attestationFor(key, nonce, { tlsSent: GATEWAY_TLS }), nonce, quoteFor(key, nonce), null, gw)), ["gateway-binds-key", "gateway-tls"]);
+  // Another fingerprint than the one bound.
+  assert.deepEqual(failed(cpuChecks(attestationFor(key, nonce, { tls: GATEWAY_TLS, tlsSent: sha256Hex("other") }), nonce, quoteFor(key, nonce, {}, GATEWAY_TLS), null, gw)), ["gateway-binds-key", "gateway-tls"]);
+  const ok = cpuChecks(attestationFor(key, nonce, { tls: GATEWAY_TLS }), nonce, quoteFor(key, nonce, {}, GATEWAY_TLS), null, gw);
+  assert.match(ok.find((c) => c.id === "gateway-tls")!.detail, /SPKI sha256/);
+  // A model node that sends a fingerprint but binds its key alone still binds its key; it has no TLS check.
+  const model = cpuChecks(attestationFor(key, nonce, { tlsSent: GATEWAY_TLS }), nonce, quoteFor(key, nonce), null, where);
+  assert.deepEqual(failed(model), []);
+  assert.ok(!model.some((c) => c.id.endsWith("-tls")));
+});
+
+test("the setup-file check names what it proves and lists the images by digest; OutOfDate is a pass with a caution", () => {
+  const key = teeKey("ed25519");
+  const nonce = randomNonce();
+  const checks = cpuChecks(attestationFor(key, nonce), nonce, quoteFor(key, nonce), null, where);
+  const compose = checks.find((c) => c.id.endsWith("-compose"))!;
+  assert.equal(compose.label, "Attested setup file matches the hardware");
+  assert.match(compose.detail, new RegExp(`Images: nearaidev/vllm@sha256:${IMAGE_DIGEST.slice(0, 12)}…; not checked against a list of NEAR's releases`));
+  assert.deepEqual(imageDigests(COMPOSE), [`nearaidev/vllm@sha256:${IMAGE_DIGEST}`]);
+  const old = cpuChecks(attestationFor(key, nonce), nonce, quoteFor(key, nonce, { status: "OutOfDate", advisoryIds: ["INTEL-SA-00837"] }), null, where)[0];
+  assert.equal(old.ok, true);
+  assert.equal(old.caution, true);
+  assert.equal(old.label, "Genuine Intel TDX confidential VM, firmware out of date");
+  assert.match(old.detail, /INTEL-SA-00837.*Caution/);
+  assert.equal(checks[0].caution, undefined, "UpToDate has no caution");
+});
+
+test("a signature that doesn't state its kind is refused, whoever signed it", () => {
+  const k = teeKey("ed25519");
+  const text = `${MODEL}:${sha256Hex(req)}:${sha256Hex(res)}`;
+  const sig = { text, signature: k.sign(text), signing_address: k.address };
+  const r = responseChecks({ sig, algo: "ed25519", requestBody: req, responseBody: res, model: MODEL, modelSigners: [k.address], gatewaySigners: [k.address] });
+  assert.deepEqual(failed(r.checks), ["response-signer"]);
+  assert.match(r.checks.find((c) => c.id === "response-signer")!.detail, /doesn't say which TEE made it/);
 });
 
 const req = '{"model":"Qwen/Qwen3.8-27B","messages":[]}';
