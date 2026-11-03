@@ -10,16 +10,18 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PER_HOUR = 10;
 
 /**
- * Joins the waitlist: stores the email, what they're waiting for, the channel and the time.
+ * Joins the waitlist: stores the name, email, what they're waiting for, the channel and the time.
  * The email is used only to say when that's ready, as the form says.
  */
 export async function POST(req: NextRequest) {
   if (!redis) return NextResponse.json({ error: "The waitlist isn't open yet." }, { status: 503 });
 
-  const body = (await req.json().catch(() => null)) as { email?: unknown; wants?: unknown; company?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { name?: unknown; email?: unknown; wants?: unknown; company?: unknown } | null;
   // The hidden "company" field is for bots; people never see it.
   if (!body || (typeof body.company === "string" && body.company)) return NextResponse.json({ ok: true });
 
+  const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+  if (!name || name.length > 80) return NextResponse.json({ error: "Add your name (up to 80 characters)." }, { status: 400 });
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (email.length > 254 || !EMAIL.test(email)) return NextResponse.json({ error: "That email doesn't look right." }, { status: 400 });
   const wants = (Array.isArray(body.wants) ? body.wants : []).filter((w): w is Want => WANTS.includes(w as Want));
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
   // Keep when and where they first joined; add anything new they're waiting for.
   await redis
     .pipeline()
-    .hset(key, { email, wants: merged.join(","), ref: prev?.ref ?? ref, at: prev?.at ?? new Date().toISOString() })
+    .hset(key, { name, email, wants: merged.join(","), ref: prev?.ref ?? ref, at: prev?.at ?? new Date().toISOString() })
     .sadd("w:all", email)
     .exec();
   return NextResponse.json({ ok: true, already: Boolean(prev?.at) });

@@ -12,8 +12,9 @@ const OPTIONS: [string, string][] = [
   ["updates", "Just the news"],
 ];
 
-/** Joins the waitlist: an email and what they're waiting for. */
+/** Joins the waitlist: a name, an email and what they're waiting for. */
 export function Waitlist() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [wants, setWants] = useState<string[]>([]);
   const [company, setCompany] = useState("");
@@ -29,11 +30,14 @@ export function Waitlist() {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, wants, company }),
+        body: JSON.stringify({ name, email, wants, company }),
       });
       const out = (await res.json().catch(() => ({}))) as { error?: string; already?: boolean };
       if (!res.ok) throw new Error(out.error ?? "Something went wrong. Try again.");
-      setMessage(out.already ? "You're already on it. We've added what you picked." : "You're on the list. We'll email you when it's ready.");
+      const first = name.trim().split(/\s+/)[0];
+      setMessage(
+        out.already ? `You're already on it, ${first}. We've added what you picked.` : `You're on the list, ${first}. We'll email you when it's ready.`,
+      );
       setState("done");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -66,7 +70,21 @@ export function Waitlist() {
           );
         })}
       </div>
-      <div className={d.waitRow}>
+      <div className={d.waitFields}>
+        <label htmlFor="wait-name" className="sr-only">
+          Name
+        </label>
+        <input
+          id="wait-name"
+          className="field"
+          type="text"
+          required
+          maxLength={80}
+          autoComplete="name"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <label htmlFor="wait-email" className="sr-only">
           Email
         </label>
@@ -80,6 +98,8 @@ export function Waitlist() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+      </div>
+      <div className={d.waitRow}>
         <button type="submit" className="btn btn-primary press" disabled={state === "sending"}>
           {state === "sending" ? "Joining…" : "Join the waitlist"}
         </button>

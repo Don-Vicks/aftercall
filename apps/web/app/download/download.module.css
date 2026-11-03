@@ -318,6 +318,11 @@
   outline: 2px solid var(--verdigris);
   outline-offset: 2px;
 }
+.waitFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 10px;
+}
 .waitRow {
   display: flex;
   gap: 10px;
@@ -351,6 +356,9 @@
   .wait {
     grid-template-columns: minmax(0, 1fr);
     padding: 20px;
+  }
+  .waitFields {
+    grid-template-columns: minmax(0, 1fr);
   }
   .waitRow {
     flex-direction: column;
