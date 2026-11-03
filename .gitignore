@@ -14,3 +14,6 @@ contracts/target/
 artifacts/
 .vercel
 .env*
+
+# Test builds, uploaded with the site by `vercel deploy`, not kept in git.
+apps/web/public/releases/
