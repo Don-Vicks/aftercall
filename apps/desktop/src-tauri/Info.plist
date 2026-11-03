@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Aftercall records your side of the call to make private meeting notes. The audio is deleted after transcription.</string>
+  <string>Aftercall records your side of the call to make private meeting notes. The audio is deleted once the notes are saved.</string>
   <key>NSAudioCaptureUsageDescription</key>
-  <string>Aftercall records the call's audio to make private meeting notes. The audio is deleted after transcription.</string>
+  <string>Aftercall records the call's audio to make private meeting notes. The audio is deleted once the notes are saved.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
   <string>Aftercall reads the meeting you're recording from your calendar to name the notes and suggest who gets the recap. It never changes your calendar.</string>
   <key>NSCalendarsUsageDescription</key>
