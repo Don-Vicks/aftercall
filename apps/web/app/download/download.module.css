@@ -252,3 +252,8 @@
   line-height: 20px;
   color: var(--ink-2);
 }
+/* The install command wraps, so the whole line shows on narrow screens too. */
+.terminal pre.wrapCommand {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

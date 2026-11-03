@@ -129,7 +129,7 @@ export default function Download() {
                     </span>
                     <CopyButton text={INSTALL} label="Copy the install command" />
                   </div>
-                  <pre tabIndex={0} aria-label="Install command">
+                  <pre tabIndex={0} aria-label="Install command" className={d.wrapCommand}>
                     {INSTALL}
                   </pre>
                   <p className={d.installNote}>
