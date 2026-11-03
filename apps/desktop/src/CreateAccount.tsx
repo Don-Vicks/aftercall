@@ -4,6 +4,7 @@ import { explorerAccountUrl, formatNear, newTestnetNameProblem } from "@aftercal
 import { METEOR_IMPORT_URL, nearAccount, type CreatedAccount } from "./nearAccount";
 import { isDesktop } from "./recorder";
 import type { PhraseWords } from "./RecoveryPhrase";
+import { walletKit } from "./recoveryKit";
 import { CheckCircle } from "./primitives/Check";
 import { Button, Spinner, cx } from "./ui";
 import { Pop, Why, errorText, rise } from "./SettingsParts";
@@ -52,8 +53,8 @@ export function walletPhraseWords(account: string): PhraseWords {
     title: "Your NEAR wallet's phrase",
     intro: (
       <>
-        These 12 words are <span className="font-mono text-[13px] text-ink">{account}</span>: whoever has them controls the account. Write them on paper, in
-        order. Aftercall forgets them when you continue.
+        These 12 words are <span className="font-mono text-[13px] text-ink">{account}</span>: whoever has them controls the account. Write them on paper in
+        order, or save a recovery kit. Aftercall forgets them when you continue.
       </>
     ),
     name: `NEAR wallet phrase for ${account}`,
@@ -70,12 +71,14 @@ export function walletPhraseWords(account: string): PhraseWords {
             Not Aftercall's recovery phrase. That one comes later, on its own screen, for this Mac's limited key. Keep the two apart.
           </span>
         </p>
-        <Why label="Why on paper?">
+        <Why label="Why offline?">
           You'll type these words into Meteor in a minute, and they bring the account back if you lose that wallet. Aftercall doesn't keep them anywhere: not in the
-          Keychain, not on disk. Don't photograph them or paste them anywhere.
+          Keychain, not on disk. A kit goes only where you save it. Aftercall clears a copied phrase from the clipboard after 60 seconds, or when you leave this
+          step, but a clipboard app may keep its own copy. Don't photograph the words.
         </Why>
       </>
     ),
+    kit: walletKit(account),
   };
 }
 
@@ -277,7 +280,7 @@ export function ImportStep({ created, checking, error, onNext }: { created: Crea
     <AssistantStep
       icon={<CheckCircle size={30} play />}
       title={`${account} is yours`}
-      intro="Your wallet signs the two setup steps next, so put the account in one: import the 12 words you wrote down."
+      intro="Your wallet signs the two setup steps next, so put the account in one: import the 12 words you wrote down or saved."
       back={<span />}
       primary={
         <Button variant="primary" loading={checking} onClick={onNext}>
@@ -329,7 +332,7 @@ export function ImportStep({ created, checking, error, onNext }: { created: Crea
             not Aftercall's.
           </GuideRow>
           <GuideRow dense n={4} title="Type your 12 words">
-            Pick the recovery phrase option, type the words from your paper in order, and continue. Meteor finds{" "}
+            Pick the recovery phrase option, type the words from your paper or kit in order, and continue. Meteor finds{" "}
             <span className="font-mono text-ink">{account}</span> from them.
           </GuideRow>
         </Inset>

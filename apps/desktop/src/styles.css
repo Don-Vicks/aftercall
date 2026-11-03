@@ -511,10 +511,11 @@
   box-shadow: 0 0 0 1px var(--record);
 }
 
-/* Printing (Export → Print or save as PDF): only the printable page in ExportMenu.tsx, ink on
-   white in the light tokens whatever the theme, margins included. Everything else in the window
-   stays off the page, but only while a meeting's printable page is mounted, so printing any
-   other screen still prints it. */
+/* Printing (Export → Print or save as PDF, and a phrase's recovery kit): only the printable
+   page (ExportMenu.tsx, or RecoveryPhrase.tsx's kit), ink on white in the light tokens whatever
+   the theme, margins included. Everything else in the window stays off the page, but only while
+   a printable page is mounted, so printing any other screen still prints it. While a kit prints,
+   body.printing-kit keeps any other printable page off the paper too. */
 .print-only {
   display: none;
 }
@@ -531,7 +532,8 @@
     height: auto;
     background: #fff !important;
   }
-  body:has(> .print-only) > :not(.print-only) {
+  body:has(> .print-only) > :not(.print-only),
+  body.printing-kit > .print-only:not(.kit-print) {
     display: none !important;
   }
   .print-only {

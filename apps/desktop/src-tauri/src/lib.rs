@@ -11,6 +11,7 @@ mod notes_file;
 mod projects;
 mod recorder;
 mod recovery;
+mod recovery_kit;
 mod samples;
 mod wipe;
 mod your_notes;
@@ -1043,6 +1044,20 @@ async fn near_create_testnet_account(account_id: String, public_key: String) -> 
     Ok(created)
 }
 
+/// Writes a recovery kit (the words, numbered, and how to restore them) to the path you
+/// picked in the Save dialog, readable by you alone. Refuses Aftercall's own folders.
+/// The text is wiped from memory afterwards and never logged. Returns the saved path.
+#[tauri::command]
+fn recovery_save_kit(app: AppHandle, path: String, text: String) -> Result<String, String> {
+    let text = zeroize::Zeroizing::new(text);
+    let p = app.path();
+    let app_dirs: Vec<PathBuf> = [p.app_data_dir(), p.app_local_data_dir(), p.app_config_dir(), p.app_cache_dir(), p.app_log_dir()]
+        .into_iter()
+        .filter_map(Result::ok)
+        .collect();
+    recovery_kit::save(std::path::Path::new(&path), &text, &app_dirs).map(|saved| saved.display().to_string())
+}
+
 /// Writes an encrypted backup to Downloads; returns its path.
 #[tauri::command]
 fn backup_export(app: AppHandle, local: std::collections::BTreeMap<String, String>) -> Result<String, String> {
@@ -1153,6 +1168,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        // A recovery phrase's Copy button, and the Save dialog for its kit (recovery_kit.rs).
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         // ⌘⇧R from any app, unless you turned that off in Settings. Registered in setup,
         // where a clash is logged instead of stopping the app; it is then handled only
         // inside Aftercall (App.tsx).
@@ -1245,6 +1263,7 @@ pub fn run() {
             near_new_wallet_phrase,
             near_testnet_name_free,
             near_create_testnet_account,
+            recovery_save_kit,
             backup_export,
             backup_import,
             delete_all_data

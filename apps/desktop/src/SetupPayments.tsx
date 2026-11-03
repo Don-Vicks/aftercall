@@ -165,7 +165,7 @@ export function SetupPayments({ near: n, start, onClose }: { near: NearSetup; st
           error={null}
           intro={
             <>
-              Type three of your wallet's words from the paper: one from each third. Then Aftercall forgets them and creates{" "}
+              Type three of your wallet's words from your paper or kit: one from each third. Then Aftercall forgets them and creates{" "}
               <span className="font-mono text-[13px] text-ink">{newName}.testnet</span>.
             </>
           }
