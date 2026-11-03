@@ -12,3 +12,5 @@ contracts/target/
 
 # Screenshots from scripts/screens.mjs
 artifacts/
+.vercel
+.env*
