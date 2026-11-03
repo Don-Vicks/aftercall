@@ -44,7 +44,7 @@ const PERMS: { icon: IconName; name: string; where: string; lead?: string; why: 
  */
 const OPEN: [string, string][] = [
   ["Drag it to Applications", "Open the downloaded file and drag Aftercall into Applications."],
-  ["Open it once", "macOS says it can't check Aftercall for malware, because this build isn't notarized yet. Click Done."],
+  ["Open it once", "macOS says “Apple could not verify ‘Aftercall’ is free of malware”, because this build isn't notarized yet. Click Done, not Move to Bin."],
   ["Allow it", "In System Settings › Privacy & Security, scroll down and click Open Anyway next to Aftercall. macOS asks once; after that it opens like any app."],
 ];
 
