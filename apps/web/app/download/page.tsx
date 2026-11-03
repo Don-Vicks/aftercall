@@ -1,16 +1,19 @@
 import { CopyButton } from "../client";
 import { Icon, Pill, REPO_URL, SiteFooter, SiteHeader, vars, type IconName } from "../ui";
-import { REPO_PUBLIC } from "../site";
+import { DOWNLOAD_URL, HAS_DOWNLOAD, REPO_PUBLIC } from "../site";
 import d from "./download.module.css";
 
 export const metadata = {
   title: "Install · Aftercall",
-  description: "No signed build of Aftercall is published yet. Build it from source on your Mac, and see what it asks for and why.",
+  description: HAS_DOWNLOAD
+    ? "Download the Aftercall test build for Mac. It runs on NEAR testnet, with test money. See how to open it and what it asks for."
+    : "No signed build of Aftercall is published yet. Build it from source on your Mac, and see what it asks for and why.",
 };
 
 /**
- * No signed build has been published, so this page offers none: it says so, and
- * gives the README's Run it steps. When a release is published, it can link to it here.
+ * With NEXT_PUBLIC_DOWNLOAD_URL set, this page is the tester guide: it links the test
+ * build and says how to open it. Without it, no build is published, so it gives the
+ * README's Run it steps instead.
  */
 const BUILD = `git clone ${REPO_URL}.git aftercall
 cd aftercall
@@ -35,14 +38,26 @@ const PERMS: { icon: IconName; name: string; where: string; lead?: string; why: 
   { icon: "key", name: "Keychain", where: "Your login keychain, on this Mac", why: "Holds the key that seals your recordings and notes, your NEAR AI key, and the app's limited NEAR key.", ...NEEDED },
 ];
 
-/** What building and running it takes (README, Run it). */
+/**
+ * The test build isn't notarized by Apple, so macOS blocks the first open. These are the
+ * steps past that, for macOS 14.2 and later.
+ */
+const OPEN: [string, string][] = [
+  ["Drag it to Applications", "Open the downloaded file and drag Aftercall into Applications."],
+  ["Open it once", "macOS says it can't check Aftercall for malware, because this build isn't notarized yet. Click Done."],
+  ["Allow it", "In System Settings › Privacy & Security, scroll down and click Open Anyway next to Aftercall. macOS asks once; after that it opens like any app."],
+];
+
+/** What building and running it takes (README, Run it), or, for the test build, running it. */
 const NEEDS: [string, string][] = [
   ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only."],
-  ["Node 24, pnpm 10 and Rust stable", "To install, check and build the app from source."],
+  ...(HAS_DOWNLOAD
+    ? ([["A NEAR testnet account, to try payments", "Optional. Settings › NEAR walks you through one. Test USDC is free from Circle's faucet at faucet.circle.com: pick NEAR Testnet."]] as [string, string][])
+    : ([["Node 24, pnpm 10 and Rust stable", "To install, check and build the app from source."]] as [string, string][])),
   ["Your own NEAR AI key", "From cloud.near.ai. Notes run on it, and each run shows an estimated cost."],
 ];
 
-/** V2Download, until a signed build is published. */
+/** V2Download: the tester guide while a test build is published, the build steps otherwise. */
 export default function Download() {
   return (
     <>
@@ -53,44 +68,83 @@ export default function Download() {
             <div className={d.heroText}>
               <span className={`${d.eyebrow} enter`}>Install · for Mac</span>
               <h1 id="dh" className={`${d.h1} enter`} style={vars({ d: "40ms", dur: "360ms" })}>
-                Build Aftercall on your Mac
+                {HAS_DOWNLOAD ? "Try the Aftercall test build" : "Build Aftercall on your Mac"}
               </h1>
               <p className={`${d.lede} enter`} style={vars({ d: "80ms", dur: "360ms" })}>
-                No signed build is published yet. Until one is, you build the app from source. It&apos;s open source, MIT
-                {REPO_PUBLIC ? "." : ", and the repository opens with the hackathon submission; the steps below work from then."}
+                {HAS_DOWNLOAD ? (
+                  <>
+                    A build for early testers. Notes are real; money isn&apos;t: payments run on NEAR testnet with test USDC. Recaps open in your own
+                    Mail app, since Send through Aftercall and claim links need a server this build doesn&apos;t have.
+                  </>
+                ) : (
+                  <>
+                    No signed build is published yet. Until one is, you build the app from source. It&apos;s open source, MIT
+                    {REPO_PUBLIC ? "." : ", and the repository opens with the hackathon submission; the steps below work from then."}
+                  </>
+                )}
               </p>
               <div className={`${d.getRow} enter`} style={vars({ d: "120ms", dur: "360ms" })}>
-                <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
-                  <Icon name="laptop" size={19} />
-                  Build it on your Mac
-                </a>
-                <a href={`${REPO_URL}#check-it-in-five-minutes`} className="arrow-link">
-                  Check it in five minutes
-                  <Icon name="external" size={12} />
-                </a>
+                {HAS_DOWNLOAD ? (
+                  <a href={DOWNLOAD_URL} download className="btn btn-primary btn-xl press">
+                    <Icon name="laptop" size={19} />
+                    Download for Mac
+                  </a>
+                ) : (
+                  <>
+                    <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
+                      <Icon name="laptop" size={19} />
+                      Build it on your Mac
+                    </a>
+                    <a href={`${REPO_URL}#check-it-in-five-minutes`} className="arrow-link">
+                      Check it in five minutes
+                      <Icon name="external" size={12} />
+                    </a>
+                  </>
+                )}
               </div>
               <span className={`${d.platform} enter`} style={vars({ d: "140ms", dur: "360ms" })}>
-                Mac only · macOS 14.2 or later · your own NEAR AI key
+                {HAS_DOWNLOAD ? "Test build · NEAR testnet · macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
               </span>
             </div>
 
-            <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
-              <div className={d.terminalHead}>
-                <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
-                  Terminal
-                </span>
-                <CopyButton text={BUILD} label="Copy the build commands" />
-              </div>
-              <pre tabIndex={0} aria-label="Build commands">
-                {BUILD.split("\n").map((line) => (
-                  <span key={line}>
-                    {line}
-                    {COMMENTS[line] && <span className="muted">{`   ${COMMENTS[line]}`}</span>}
-                    {"\n"}
+            {HAS_DOWNLOAD ? (
+              <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
+                <div className={d.terminalHead}>
+                  <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                    Open it the first time
                   </span>
-                ))}
-              </pre>
-            </div>
+                </div>
+                <ol className={`${d.steps} ${d.openSteps}`}>
+                  {OPEN.map(([lead, rest], i) => (
+                    <li key={lead}>
+                      <span className={d.stepNo}>{String(i + 1).padStart(2, "0")}</span>
+                      <span className={d.stepText}>
+                        <span>{lead}</span>
+                        <span>{rest}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : (
+              <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
+                <div className={d.terminalHead}>
+                  <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                    Terminal
+                  </span>
+                  <CopyButton text={BUILD} label="Copy the build commands" />
+                </div>
+                <pre tabIndex={0} aria-label="Build commands">
+                  {BUILD.split("\n").map((line) => (
+                    <span key={line}>
+                      {line}
+                      {COMMENTS[line] && <span className="muted">{`   ${COMMENTS[line]}`}</span>}
+                      {"\n"}
+                    </span>
+                  ))}
+                </pre>
+              </div>
+            )}
           </div>
         </section>
 
@@ -147,17 +201,21 @@ export default function Download() {
                   </li>
                 ))}
               </ul>
-              <p className="ink-2">
-                macOS only lets a bundled app capture system audio, so build the app to record, then open the{" "}
-                <span className="mono ink" style={{ fontSize: 13 }}>
-                  .app
-                </span>{" "}
-                it makes.
-              </p>
-              <a href={`${REPO_URL}#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
-                Run it, in the README
-                <Icon name="external" size={12} />
-              </a>
+              {!HAS_DOWNLOAD && (
+                <>
+                  <p className="ink-2">
+                    macOS only lets a bundled app capture system audio, so build the app to record, then open the{" "}
+                    <span className="mono ink" style={{ fontSize: 13 }}>
+                      .app
+                    </span>{" "}
+                    it makes.
+                  </p>
+                  <a href={`${REPO_URL}#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
+                    Run it, in the README
+                    <Icon name="external" size={12} />
+                  </a>
+                </>
+              )}
             </div>
 
             <div className={d.col}>
@@ -190,7 +248,11 @@ export default function Download() {
                   <span className={d.stepNo}>04</span>
                   <span className={d.stepText}>
                     <span>Approve the follow-ups</span>
-                    <span>Approve the recap and payments you want. Connect NEAR in Settings when you&apos;re ready to pay from your agent wallet.</span>
+                    <span>
+                      {HAS_DOWNLOAD
+                        ? "Draft the recaps you want in Mail. To try a payment, connect a NEAR testnet account in Settings and approve it from your agent wallet: it's test money."
+                        : "Approve the recap and payments you want. Connect NEAR in Settings when you're ready to pay from your agent wallet."}
+                    </span>
                   </span>
                 </li>
               </ol>

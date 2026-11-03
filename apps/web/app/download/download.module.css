@@ -236,3 +236,11 @@
   white-space: pre;
   overflow-x: auto;
 }
+/* The tester build's "Open it" steps, inside the same well as the build commands. */
+.openSteps {
+  padding: 4px 16px 4px;
+  border-bottom: 0;
+}
+.openSteps li:first-child {
+  border-top: 0;
+}

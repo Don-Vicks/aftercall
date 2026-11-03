@@ -236,7 +236,7 @@ export function Seal({ size = 148, id, fine, className, style }: { size?: number
 
 /**
  * "Download for Mac": the one primary action, in the header, the landing hero and its close.
- * It goes to DOWNLOAD_URL once a signed build is published, and to the Install page until then.
+ * It opens the Install page, which links the test build when one is published.
  * `note` adds the mono line under it (hero and close only).
  */
 export function DownloadCta({ size = "lg", note, className }: { size?: "sm" | "lg"; note?: boolean; className?: string }) {
