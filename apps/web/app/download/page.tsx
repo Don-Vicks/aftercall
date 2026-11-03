@@ -48,6 +48,9 @@ const OPEN: [string, string][] = [
   ["Allow it", "In System Settings › Privacy & Security, scroll down and click Open Anyway next to Aftercall. macOS asks once; after that it opens like any app."],
 ];
 
+/** The test build's one-line install (public/install.sh): no "could not verify" warning, since curl doesn't mark the file as downloaded. */
+const INSTALL = "curl -fsSL https://getaftercall.vercel.app/install.sh | sh";
+
 /** What building and running it takes (README, Run it), or, for the test build, running it. */
 const NEEDS: [string, string][] = [
   HAS_DOWNLOAD
@@ -118,23 +121,40 @@ export default function Download() {
             </div>
 
             {HAS_DOWNLOAD ? (
-              <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
-                <div className={d.terminalHead}>
-                  <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
-                    Open it the first time
-                  </span>
+              <div className={d.col}>
+                <div className={`${d.terminal} enter`} style={vars({ d: "150ms", dur: "360ms" })}>
+                  <div className={d.terminalHead}>
+                    <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                      Quickest: install from Terminal
+                    </span>
+                    <CopyButton text={INSTALL} label="Copy the install command" />
+                  </div>
+                  <pre tabIndex={0} aria-label="Install command">
+                    {INSTALL}
+                  </pre>
+                  <p className={d.installNote}>
+                    It downloads the same build, checks its fingerprint, puts Aftercall in Applications and opens it, with no macOS warning. That
+                    skips Apple&apos;s check, so you&apos;re trusting this site instead.
+                  </p>
                 </div>
-                <ol className={`${d.steps} ${d.openSteps}`}>
-                  {OPEN.map(([lead, rest], i) => (
-                    <li key={lead}>
-                      <span className={d.stepNo}>{String(i + 1).padStart(2, "0")}</span>
-                      <span className={d.stepText}>
-                        <span>{lead}</span>
-                        <span>{rest}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
+                <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>
+                  <div className={d.terminalHead}>
+                    <span className="muted" style={{ fontSize: 12, fontWeight: 500 }}>
+                      Or download it, then open it the first time
+                    </span>
+                  </div>
+                  <ol className={`${d.steps} ${d.openSteps}`}>
+                    {OPEN.map(([lead, rest], i) => (
+                      <li key={lead}>
+                        <span className={d.stepNo}>{String(i + 1).padStart(2, "0")}</span>
+                        <span className={d.stepText}>
+                          <span>{lead}</span>
+                          <span>{rest}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               </div>
             ) : (
               <div className={`${d.terminal} enter`} style={vars({ d: "160ms", dur: "360ms" })}>

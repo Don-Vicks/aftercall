@@ -244,3 +244,11 @@
 .openSteps li:first-child {
   border-top: 0;
 }
+/* The line under the one-line install, saying what it does and what it trusts. */
+.installNote {
+  margin: 0;
+  padding: 0 16px 14px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--ink-2);
+}
