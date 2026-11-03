@@ -49,7 +49,7 @@ const ROWS: Row[] = [
       ["one_yocto_rule_holds_even_if_key_lists_owner_methods", "sandbox.rs"],
       ["over_cap_is_blocked_then_owner_approves", "sandbox.rs"],
     ],
-    note: "On a local NEAR node; testnet deploy pending.",
+    note: "Tested on a local NEAR node. The contract is live on NEAR testnet.",
     visual: (
       <div className={`${l.vCard} ${l.vKey}`}>
         <p className={l.vKeyHead}>This Mac&apos;s key</p>

@@ -27,7 +27,7 @@ const STEPS: Step[] = [
     ),
     detail: "Audio then goes over TLS through the checked gateway; the transcript is end-to-end encrypted to the Qwen model, or not sent.",
     screen: () => <Processing />,
-    caption: "Processing, as the app shows it. Times are illustrative. Proof recording is tested on a local NEAR node; testnet deploy pending.",
+    caption: "Processing, as the app shows it. Times are illustrative. Proof recording runs on NEAR testnet.",
   },
   {
     n: 2,

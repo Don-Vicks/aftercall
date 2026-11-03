@@ -52,7 +52,7 @@ export function Proof() {
           title="Checked by name, every run."
           lead="Your Mac runs these checks on NEAR AI's secure hardware for every recording, and the Verify sheet lists them for each meeting. A proof's hash goes in a NEAR contract, so anyone with the link can re-check it in a browser at /verify; what a browser can't re-run is marked as recorded by the app."
         >
-          <p className={l.status}>Proof recording is tested on a local NEAR node; testnet deploy pending.</p>
+          <p className={l.status}>Proof recording runs on NEAR testnet today; mainnet comes later.</p>
         </SectionHead>
         <div className={l.proofGrid}>
           <Moment className={l.proofBand} threshold={0.4} role="group" aria-labelledby="band-h">
