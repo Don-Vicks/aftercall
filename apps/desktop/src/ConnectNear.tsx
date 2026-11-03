@@ -29,11 +29,11 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
   /** Set up payments, open at a step ("auto": the first one not done). */
   const [setup, setSetup] = useState<SetupStep | "auto" | null>(null);
 
-  const toSign = n.saved && n.status && !n.connected ? 2 - n.signed : 0;
+  const toSign = Boolean(n.saved && n.status && !n.connected);
   const index: { id: string; label: string; done?: boolean; pill?: string }[] = [
     { id: "settings-near-ai", label: "NEAR AI", done: nearAi },
     { id: "settings-key", label: "Recovery phrase", done: Boolean(n.recoveryStatus?.fromPhrase) },
-    { id: "settings-account", label: "NEAR account", done: n.connected, pill: toSign ? `${toSign} to sign` : undefined },
+    { id: "settings-account", label: "NEAR account", done: n.connected, pill: toSign ? "To sign" : undefined },
     { id: "settings-calendar", label: "Calendar", done: calendar === "granted" },
     { id: "settings-shortcut", label: "Shortcut" },
     { id: "settings-autopilot", label: "Autopilot" },
@@ -176,7 +176,7 @@ function NearStatusCard({ n, onSetup }: { n: NearSetup; onSetup: (step: SetupSte
             n.connected
               ? "Each meeting's proof goes on NEAR, and Aftercall can pay within your caps."
               : started
-                ? `${n.signed === 1 ? "One signature" : "Two signatures"} left before this Mac can record proofs and pay.`
+                ? "One approval in your wallet left before this Mac can record proofs and pay."
                 : "Optional. Adds a public proof for each meeting and an agent wallet that pays within your caps."
           }
         >

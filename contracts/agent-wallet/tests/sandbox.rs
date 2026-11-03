@@ -692,3 +692,29 @@ async fn failed_withdrawal_is_refunded_and_leaves_payments_alone() -> anyhow::Re
     assert_eq!(ft_balance(&e, &e.designer).await?, 270 * USDC);
     Ok(())
 }
+
+/// The app's first-time setup signs `register` and `set_cap` as two actions of one
+/// transaction (packages/core toTransactions, kind "setup"): NEAR runs them in order, so
+/// set_cap finds the wallet register just made, and a failure in either undoes both.
+#[tokio::test]
+async fn setup_registers_and_sets_the_cap_in_one_transaction() -> anyhow::Result<()> {
+    use near_workspaces::operations::Function;
+    let e = setup().await?;
+    let get = |who: &Account| e.wallet.view("get_wallet").args_json(json!({ "owner": who.id() }));
+
+    e.designer.batch(e.wallet.id())
+        .call(Function::new("register").args_json(json!({})).deposit(NearToken::from_millinear(100)))
+        .call(Function::new("set_cap").args_json(json!({ "daily_cap": (25 * USDC).to_string() })).deposit(NearToken::from_yoctonear(1)))
+        .transact().await?.into_result()?;
+    let w: serde_json::Value = get(&e.designer).await?.json()?;
+    assert_eq!(w["daily_cap"], (25 * USDC).to_string());
+
+    // Victor is registered already: the batch fails at register, and set_cap doesn't stick either.
+    let again = e.victor.batch(e.wallet.id())
+        .call(Function::new("register").args_json(json!({})).deposit(NearToken::from_millinear(100)))
+        .call(Function::new("set_cap").args_json(json!({ "daily_cap": "1" })).deposit(NearToken::from_yoctonear(1)))
+        .transact().await?;
+    assert!(again.is_failure());
+    assert_eq!(wallet_field(&e, "daily_cap").await?, 200 * USDC);
+    Ok(())
+}

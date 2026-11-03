@@ -2,13 +2,13 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import { createPortal } from "react-dom";
 import { AnimatePresence, type Variant } from "motion/react";
 import * as m from "motion/react-m";
-import { Archive, ArrowRight, Check, Copy, Download, KeyRound, Lock, Printer, ShieldAlert, X } from "lucide-react";
+import { Archive, ArrowRight, Check, Copy, Download, KeyRound, Printer, ShieldAlert, Wallet, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
 import { KIT_KEEP, SCREEN_KEEP, appKit, kitDate, kitText, saveKit, syncedFolder, usePhraseClipboard, type KitAbout } from "./recoveryKit";
 import { isDesktop } from "./recorder";
 import { CheckCircle } from "./primitives/Check";
-import { Button, Card, Dialog, Input, Pill, SectionTitle, Spinner, Tick, cx, exit, springs, toast, useConfirm } from "./ui";
+import { Button, Card, Dialog, Input, Pill, SectionTitle, Spinner, cx, exit, springs, toast, useConfirm } from "./ui";
 import { CardRow, IconDisc, Why, errorText, rise } from "./SettingsParts";
 import { QuietAction, StepActions } from "./Flow";
 import { AssistantStep, BackButton } from "./SetupAssistant";
@@ -57,14 +57,12 @@ export interface PhraseWords {
   kit: KitAbout;
 }
 
-/** Aftercall's own recovery phrase. `afterWallet` when a NEAR account's phrase was just written down too. */
-export function appPhraseWords(count: number, afterWallet = false): PhraseWords {
+/** Aftercall's own recovery phrase, for this Mac's limited key. */
+export function appPhraseWords(count: number): PhraseWords {
   return {
     icon: <KeyRound size={22} strokeWidth={1.75} />,
-    title: `Write these ${count} words down`,
-    intro: afterWallet
-      ? "A second phrase, and a different one: Aftercall's own, for this Mac's limited key. These words bring that key back on a new Mac. Write them on paper in order, or save a recovery kit."
-      : "This Mac gets its own NEAR key for proofs and payments. These words bring it back on a new Mac. Write them on paper in order, or save a recovery kit.",
+    title: "Save this Mac's recovery phrase",
+    intro: `These ${count} words bring this Mac's key back on a new Mac. Aftercall can't show them again.`,
     name: "Aftercall recovery phrase",
     label: (
       <>
@@ -72,26 +70,27 @@ export function appPhraseWords(count: number, afterWallet = false): PhraseWords 
       </>
     ),
     notes: (
-      <>
-        <p className="m-0 flex items-center gap-2 text-[13px] leading-[18px] text-ink-2">
-          <Lock size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted" />
-          Aftercall never stores the phrase, so it can't show these words again.
-        </p>
-        <Why label="Why offline?">
-          Paper and a USB drive can't be read over the internet; iCloud, email and chat can. A kit goes only where you save it. Copy is for pasting into a
-          password manager: Aftercall clears the clipboard after 60 seconds, but a clipboard app may keep its own copy. Don't photograph the words.
-        </Why>
-      </>
+      <Why label="Why offline?">
+        Paper and a USB drive can't be read over the internet; iCloud, email and chat can. Aftercall never stores the phrase, and a kit goes only where you
+        save it. Copy is for pasting into a password manager: Aftercall clears the clipboard after 60 seconds, but a clipboard app may keep its own copy.
+        Don't photograph the words.
+      </Why>
     ),
     kit: appKit(),
   };
 }
 
-/** Step: the words, once, ways to keep them (paper, Copy, a saved or printed kit), and a tick that they're kept. */
+/**
+ * Step: the words, once. Saving a recovery kit is the main way on (the native Save
+ * dialog, then Rust writes the file); writing them on paper is the other. Copy and Print
+ * sit on the well. Either way the three-word check comes next, so this needs no tick.
+ * A kit saved into a folder that syncs to the cloud stops here with a warning.
+ */
 export function PhraseStep({
   words,
   error,
   says,
+  aside,
   onBack,
   onContinue,
 }: {
@@ -99,13 +98,37 @@ export function PhraseStep({
   error: string | null;
   /** What the screen says; Aftercall's own phrase unless given. */
   says?: PhraseWords;
+  /** Under the words: which of your two phrases this is (TwoPhrases). */
+  aside?: ReactNode;
   onBack: () => void;
-  onContinue: () => void;
+  /** On to the check; with where the kit went, when it was saved. */
+  onContinue: (savedTo?: string) => void;
 }) {
-  const [wrote, setWrote] = useState(false);
   const count = words.length || 12;
-  const tickLabel = useId();
   const say = says ?? appPhraseWords(count);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  /** Fixed when the step opens, so the file and the printout say the same day. */
+  const date = useMemo(() => kitDate(), []);
+  const synced = saved !== null && syncedFolder(saved);
+
+  const save = async () => {
+    setProblem(null);
+    setSaving(true);
+    try {
+      const path = await saveKit(say.kit, kitText(say.kit, words, date));
+      if (!path) return;
+      setSaved(path);
+      // Somewhere safe: on to the check. A synced folder: stay, and say what to do.
+      if (!syncedFolder(path)) onContinue(path);
+    } catch (e) {
+      setProblem(errorText(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <AssistantStep
       icon={say.icon}
@@ -113,10 +136,21 @@ export function PhraseStep({
       intro={say.intro}
       back={<BackButton onClick={onBack} />}
       primary={
-        <Button variant="primary" disabled={!wrote} onClick={onContinue}>
-          Continue
-          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
-        </Button>
+        synced ? (
+          <Button variant="primary" onClick={() => onContinue(saved ?? undefined)}>
+            I've moved it
+            <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
+          </Button>
+        ) : (
+          <>
+            <Button variant="ghost" disabled={!words.length} onClick={() => onContinue()}>
+              I wrote them down
+            </Button>
+            <Button variant="primary" loading={saving} disabled={!words.length} onClick={save} icon={<Download size={14} strokeWidth={2} aria-hidden="true" />}>
+              Save recovery kit…
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-3" style={rise(1)}>
@@ -125,7 +159,7 @@ export function PhraseStep({
         ) : words.length === 0 ? (
           <Spinner label="Making your phrase" />
         ) : (
-          <PhraseWell words={words} says={say} />
+          <PhraseWell words={words} says={say} date={date} saved={saved} problem={problem} />
         )}
         <p className="m-0 flex items-start gap-2 rounded-md bg-caution-tint px-3 py-2 text-[13px] leading-[19px] text-ink">
           <ShieldAlert size={14} strokeWidth={1.75} aria-hidden="true" className="mt-[2.5px] shrink-0 text-caution" />
@@ -133,39 +167,23 @@ export function PhraseStep({
             {say.kit.risk} {SCREEN_KEEP}
           </span>
         </p>
-        {say.notes}
       </div>
-      <Card interactive onClick={() => words.length && setWrote(!wrote)} pad="none" style={rise(2)}>
-        <div className="flex items-center gap-3 px-4 py-3">
-          {/* The tick is the checkbox; the rest of the card is a bigger target for the pointer. */}
-          <span onClick={(e) => e.stopPropagation()} className="inline-flex">
-            <Tick checked={wrote} onChange={setWrote} disabled={!words.length} aria-labelledby={tickLabel} />
-          </span>
-          <span id={tickLabel} className="flex-1 text-[15px] leading-5 font-semibold text-ink">
-            I've written them down or saved a kit
-          </span>
-          <span className="text-[13px] text-muted">all {count}, in order</span>
-        </div>
-      </Card>
+      {aside && <div style={rise(2)}>{aside}</div>}
+      <div style={rise(3)}>{say.notes}</div>
     </AssistantStep>
   );
 }
 
 /**
  * The words in a well, with the quiet ways to keep them in its header: Copy (cleared after
- * 60 seconds), Save kit (the native Save dialog, then Rust writes the file) and Print (the
- * same kit as a print-only page, removed once the print panel is done). Writing them down
- * stays the first way; these are secondary.
+ * 60 seconds) and Print (the kit as a print-only page, removed once the print panel is
+ * done). Saving the kit is the step's own primary button; where it went shows here.
  */
-function PhraseWell({ words, says }: { words: string[]; says: PhraseWords }) {
+function PhraseWell({ words, says, date, saved, problem: saveProblem }: { words: string[]; says: PhraseWords; date: string; saved: string | null; problem: string | null }) {
   const kit = says.kit;
   const clip = usePhraseClipboard(words.join(" "));
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
-  /** Fixed when the step opens, so the file and the printout say the same day. */
-  const date = useMemo(() => kitDate(), []);
 
   const copy = async () => {
     setProblem(null);
@@ -175,20 +193,9 @@ function PhraseWell({ words, says }: { words: string[]; says: PhraseWords }) {
       setProblem(`Couldn't copy: ${errorText(e)}`);
     }
   };
-  const save = async () => {
-    setProblem(null);
-    setSaving(true);
-    try {
-      const path = await saveKit(kit, kitText(kit, words, date));
-      if (path) setSaved(path);
-    } catch (e) {
-      setProblem(errorText(e));
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const action = "h-7! px-2! text-ink-2 hover:text-ink";
+  const shown = problem ?? saveProblem;
   return (
     <div className="flex flex-col rounded-md bg-well shadow-[inset_0_0_0_1px_var(--hairline)]">
       <div className="flex items-center gap-2 pt-1.5 pr-2 pl-3.5">
@@ -196,9 +203,6 @@ function PhraseWell({ words, says }: { words: string[]; says: PhraseWords }) {
         <span role="group" aria-label="Keep a copy" className="flex shrink-0 items-center">
           <Button variant="ghost" size="sm" className={action} onClick={copy} icon={<Copy size={13} strokeWidth={2} aria-hidden="true" />}>
             Copy
-          </Button>
-          <Button variant="ghost" size="sm" className={action} loading={saving} onClick={save} icon={<Download size={13} strokeWidth={2} aria-hidden="true" />}>
-            Save kit…
           </Button>
           <Button
             variant="ghost"
@@ -249,10 +253,58 @@ function PhraseWell({ words, says }: { words: string[]; says: PhraseWords }) {
         {saved && syncedFolder(saved) && (
           <p className="m-0 text-[13px] leading-[19px] text-caution">That folder syncs to the cloud. Move the kit to a USB drive, or print it and delete the file.</p>
         )}
-        {problem && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{problem}</p>}
+        {shown && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{shown}</p>}
       </div>
       {printing && <KitPrint kit={kit} words={words} date={date} onDone={() => setPrinting(false)} />}
     </div>
+  );
+}
+
+/**
+ * Your two phrases, side by side, said once and drawn rather than explained: the NEAR
+ * wallet's (your account, kept by your wallet app) and Aftercall's (this Mac's limited
+ * key). The one on screen is marked. `made`: the wallet's phrase was made in this setup.
+ */
+export function TwoPhrases({ current, made }: { current: "wallet" | "app"; made: boolean }) {
+  const items = [
+    {
+      id: "wallet",
+      icon: <Wallet size={15} strokeWidth={1.75} />,
+      title: "NEAR wallet phrase",
+      detail: made ? "Your account. It goes into Meteor." : "Your account. It stays in your wallet app.",
+    },
+    { id: "app", icon: <KeyRound size={15} strokeWidth={1.75} />, title: "Aftercall recovery phrase", detail: "This Mac's limited key. Brings it back." },
+  ] as const;
+  return (
+    <section aria-label="Your two phrases" className="flex flex-col gap-2">
+      <h2 className="t-eyebrow m-0 text-muted">You keep two phrases, apart</h2>
+      <ul className="m-0 grid list-none grid-cols-2 gap-2 p-0">
+        {items.map((p) => {
+          const on = p.id === current;
+          return (
+            <li
+              key={p.id}
+              aria-current={on || undefined}
+              className={cx(
+                "flex items-start gap-2.5 rounded-md px-3.5 py-3",
+                on ? "bg-elevated shadow-[0_0_0_1.5px_var(--verdigris)]" : "shadow-[inset_0_0_0_1px_var(--hairline)]",
+              )}
+            >
+              <span aria-hidden="true" className={cx("mt-px shrink-0", on ? "text-verdigris" : "text-muted")}>
+                {on ? <Check size={15} strokeWidth={2.5} /> : p.icon}
+              </span>
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className={cx("text-[13px] leading-[18px] font-semibold", on ? "text-ink" : "text-ink-2")}>
+                  {p.title}
+                  {on && <span className="sr-only">, the one on screen</span>}
+                </span>
+                <span className="text-[12px] leading-4 text-muted">{p.detail}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -361,9 +413,10 @@ export function ConfirmStep({
   ask,
   busy,
   error,
-  intro = "Type three of your words from your paper or kit, not from memory: one from each third.",
+  intro,
   icon = <KeyRound size={22} strokeWidth={1.75} />,
   confirmLabel = "Continue",
+  savedTo,
   onBack,
   onConfirm,
 }: {
@@ -375,6 +428,8 @@ export function ConfirmStep({
   icon?: ReactNode;
   /** The primary button, once all three match. */
   confirmLabel?: string;
+  /** Where the recovery kit was just saved, said once under the words. */
+  savedTo?: string | null;
   onBack: () => void;
   onConfirm: () => void;
 }) {
@@ -384,6 +439,8 @@ export function ConfirmStep({
   /** A counter per field; each bump plays the shake again. */
   const [shakes, setShakes] = useState<Record<number, number>>({});
   const id = useId();
+  const fields = useRef<Record<number, HTMLInputElement | null>>({});
+  const confirmButton = useRef<HTMLButtonElement>(null);
 
   const typed = (i: number) => (answers[i] ?? "").trim().toLowerCase();
   const matches = (i: number) => typed(i) === words[i];
@@ -400,11 +457,11 @@ export function ConfirmStep({
   return (
     <AssistantStep
       icon={icon}
-      title="Check you have them"
-      intro={intro}
+      title="Type three words back"
+      intro={intro ?? `From your kit or paper, not from memory: words ${ask.map((i) => i + 1).join(", ").replace(/, (\d+)$/, " and $1")}.`}
       back={<BackButton onClick={onBack}>Show words again</BackButton>}
       primary={
-        <Button variant="primary" disabled={!all} loading={busy} onClick={onConfirm}>
+        <Button ref={confirmButton} variant="primary" disabled={!all} loading={busy} onClick={onConfirm}>
           {confirmLabel}
           <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
         </Button>
@@ -427,13 +484,22 @@ export function ConfirmStep({
                   variants={{ rest: { x: 0 }, a: shake, b: shake }}
                 >
                   <Input
+                    ref={(el) => {
+                      fields.current[i] = el;
+                    }}
                     id={`${id}-${i}`}
                     mono
+                    autoFocus={row === 0}
                     invalid={bad}
                     value={answers[i] ?? ""}
                     onChange={(e) => {
-                      setAnswers({ ...answers, [i]: e.target.value });
+                      const next = { ...answers, [i]: e.target.value };
+                      setAnswers(next);
                       setChecked({ ...checked, [i]: false });
+                      // A word that matches moves you on: to the next one not done, or to the button.
+                      if (e.target.value.trim().toLowerCase() !== words[i]) return;
+                      const left = ask.find((k) => (next[k] ?? "").trim().toLowerCase() !== words[k]);
+                      requestAnimationFrame(() => (left === undefined ? confirmButton.current : fields.current[left])?.focus());
                     }}
                     onBlur={() => typed(i) && mark([i])}
                     onKeyDown={(e) => {
@@ -482,6 +548,15 @@ export function ConfirmStep({
             );
           })}
         </div>
+        {savedTo && (
+          <p className="m-0 flex flex-wrap items-center gap-x-2 text-[13px] leading-[19px] text-ink-2">
+            <Check size={13} strokeWidth={2.5} aria-hidden="true" className="text-verdigris" />
+            Kit saved to <span className="t-mono selectable min-w-0 break-all text-ink">{savedTo}</span>
+            <button type="button" onClick={() => revealItemInDir(savedTo)} className="press rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
+              Show in Finder
+            </button>
+          </p>
+        )}
         {firstWrong !== undefined && (
           <p id={`${id}-error`} className="m-0 text-[13px] leading-[18px] text-record">
             Word {firstWrong + 1} doesn't match. Check what you wrote down or saved.

@@ -114,3 +114,56 @@ test("a link with a malformed payout address is refused", () => {
     assert.throws(() => decodeSignRequest(encodeSignRequest(bad)), /BAD_DESTINATION/);
   }
 });
+
+const KEY = "ed25519:3w4RMJEvhWGNAjEWrrFgVNeXTqhiGrMvj4jHgYG67b6S";
+
+test("first-time setup is one approval: USDC registration, register then set_cap in one transaction, and the limited key", () => {
+  const r: SignRequest = { ...base, action: { kind: "setup", register: true, dailyCap: "25000000", publicKey: KEY, registerUsdc: true } };
+  const txs = toTransactions(r);
+  assert.deepEqual(txs.map((t) => t.receiverId), [USDC_CONTRACT.testnet, base.contract, base.owner]);
+
+  const [usdc, wallet, key] = txs;
+  const reg = usdc.actions[0];
+  assert.ok(reg.type === "FunctionCall");
+  assert.deepEqual([reg.params.methodName, reg.params.args, reg.params.deposit], ["storage_deposit", { account_id: base.owner, registration_only: true }, "1250000000000000000000"]);
+
+  // One transaction, so NEAR runs register before set_cap and drops both if either fails.
+  assert.deepEqual(
+    wallet.actions.map((a) => a.type === "FunctionCall" && [a.params.methodName, a.params.args, a.params.deposit]),
+    [["register", {}, "100000000000000000000000"], ["set_cap", { daily_cap: "25000000" }, "1"]],
+  );
+
+  // The same limited key as authorise-key, nothing wider.
+  assert.deepEqual(key, toTransactions({ ...base, action: { kind: "authorise-key", publicKey: KEY } })[0]);
+
+  const d = describe(r);
+  assert.match(d.walletNote, /^Your wallet will ask you to approve 3 transactions at once: register and set_cap on wallet\.victor\.testnet, a limited key on victor\.testnet and storage_deposit on the USDC contract\./);
+  assert.deepEqual(d.rows.map((x) => x.label), ["Agent wallet", "Daily cap", "This Mac's key", "May call", "Fee allowance", "USDC"]);
+  assert.equal(d.rows[1].value, "25.00 USDC a day, all payments together");
+  assert.deepEqual(decodeSignRequest(encodeSignRequest(r)), r);
+});
+
+test("setup asks only for what's missing: a new key alone is one AddKey transaction", () => {
+  const r: SignRequest = { ...base, action: { kind: "setup", register: false, publicKey: KEY, registerUsdc: false } };
+  const txs = toTransactions(r);
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0].receiverId, base.owner);
+  assert.equal(txs[0].actions[0].type, "AddKey");
+  assert.equal(describe(r).title, "Authorise this Mac");
+  assert.match(describe(r).walletNote, /^Your wallet will ask you to approve one transaction: a limited key on victor\.testnet\./);
+
+  // No key yet: register (and the cap) only.
+  assert.equal(describe({ ...base, action: { kind: "setup", register: false, registerUsdc: true } }).title, "Register with USDC");
+  const walletOnly = toTransactions({ ...base, action: { kind: "setup", register: true, dailyCap: "0", registerUsdc: false } });
+  assert.deepEqual(walletOnly.map((t) => [t.receiverId, t.actions.length]), [[base.contract, 2]]);
+});
+
+test("setup links with nothing to sign, a bad key, a bad cap or missing flags are refused", () => {
+  const bad = (action: object) => assert.throws(() => decodeSignRequest(encodeSignRequest({ ...base, action } as SignRequest)));
+  bad({ kind: "setup", register: false, registerUsdc: false });
+  bad({ kind: "setup", register: true, publicKey: "secp256k1:abc", registerUsdc: false });
+  bad({ kind: "setup", register: true, dailyCap: "25.5", registerUsdc: false });
+  bad({ kind: "setup", register: true, dailyCap: null, registerUsdc: false });
+  bad({ kind: "setup", register: "yes", registerUsdc: false });
+  bad({ kind: "setup", register: true });
+});

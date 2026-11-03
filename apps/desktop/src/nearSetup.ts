@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { accountFitsNetwork } from "@aftercall/core";
+import { accountFitsNetwork, type OwnerAction } from "@aftercall/core";
 import { builtInContract, near, setupCommands, signInWallet, waitFor, type NearConfig, type NearStatus, type SetupCheck } from "./near";
 import { isDesktop } from "./recorder";
 import { recovery, type RecoveryStatus } from "./recovery";
@@ -11,17 +11,20 @@ export interface Found {
   contract?: SetupCheck["contract"];
 }
 
+/** What first-time setup still needs the owner's wallet for, as one signing request. */
+export type SetupAction = Extract<OwnerAction, { kind: "setup" }>;
+
 /** A signature the owner was waited on for that didn't show on NEAR in time; "Check again" looks once more. */
 export interface Unseen {
   label: string;
-  kind: "register" | "authorise-key";
+  action: SetupAction;
 }
 
 /**
  * Everything Settings and Set up payments need to connect NEAR: the account (the
  * contract is Aftercall's own for the network, unless the owner points at their own
- * deployment), this Mac's key (from the recovery phrase), and the two signatures that
- * register the agent wallet and authorise the key. The app holds its own limited
+ * deployment), this Mac's key (from the recovery phrase), and the one wallet approval
+ * that registers the agent wallet, sets its daily cap and authorises the key. The app holds its own limited
  * key; the owner authorises it once from their own wallet or near-cli, so the app
  * can only record proofs and pay within the contract's caps.
  */
@@ -102,7 +105,6 @@ export function useNearSetup() {
   const found: Found = checked && same(checked.config) ? checked.found : {};
   /** The saved account still matches what's typed, and nothing found it wanting. */
   const accountDone = Boolean(same(saved) && ready && found.account !== false && (found.contract === undefined || found.contract === "ok"));
-  const signed = (status?.registered ? 1 : 0) + (status?.keyAdded ? 1 : 0);
 
   const edit = (next: NearConfig) => {
     // Switching network swaps in that network's contract, unless the owner typed their own.
@@ -150,15 +152,15 @@ export function useNearSetup() {
     }
   };
 
-  /** Whether the step has landed on NEAR, reading the status once. */
-  const landed = async (kind: Unseen["kind"]) => {
+  /** Whether everything the request asked for has landed on NEAR, reading the status once. */
+  const landed = async (action: SetupAction) => {
     const s = await near.status();
     setStatus(s);
-    return kind === "register" ? s.registered : s.keyAdded;
+    return (!action.register || s.registered) && (!action.publicKey || s.keyAdded);
   };
 
-  /** Opens the signing page in the browser and checks NEAR every 3 s for two minutes until the step lands. */
-  const signStep = async (label: string, kind: "register" | "authorise-key") => {
+  /** Opens the signing page in the browser and checks NEAR every 3 s for two minutes until the request lands. */
+  const signSetup = async (label: string, action: SetupAction) => {
     setError(null);
     setErrorFrom("sign");
     setUnseen(null);
@@ -171,10 +173,10 @@ export function useNearSetup() {
           return false;
         }
       }
-      await signInWallet(kind === "register" ? { kind } : { kind, publicKey });
+      await signInWallet(action);
       setWaiting(label);
-      const done = await waitFor(() => landed(kind));
-      if (!done) setUnseen({ label, kind });
+      const done = await waitFor(() => landed(action));
+      if (!done) setUnseen({ label, action });
       return done;
     } catch (e) {
       setError(errorText(e));
@@ -191,7 +193,7 @@ export function useNearSetup() {
     setErrorFrom("sign");
     setRechecking(true);
     try {
-      const done = await landed(unseen.kind);
+      const done = await landed(unseen.action);
       if (done) setUnseen(null);
       return done;
     } catch (e) {
@@ -225,9 +227,8 @@ export function useNearSetup() {
     commands,
     connected,
     accountDone,
-    signed,
     check,
-    signStep,
+    signSetup,
     checkAgain,
     keyChanged,
   };

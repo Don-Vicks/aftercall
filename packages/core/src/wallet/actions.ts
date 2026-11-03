@@ -35,6 +35,12 @@ function nearText(yocto: string): string {
 export type OwnerAction =
   | { kind: "register" }
   | { kind: "authorise-key"; publicKey: string }
+  /**
+   * First-time setup in one wallet approval: whichever of these is still missing. One
+   * transaction to the contract (`register`, then `set_cap`, in order, as one receipt),
+   * one AddKey on the owner's own account, and the owner's USDC registration.
+   */
+  | { kind: "setup"; register: boolean; dailyCap?: string; publicKey?: string; registerUsdc: boolean }
   | { kind: "set-cap"; dailyCap: string }
   | { kind: "set-payment-cap"; perPaymentCap: string }
   /** Most Aftercall may pay on Solana or Base in a day; 0 turns those payments off. */
@@ -82,6 +88,20 @@ export interface WalletTransaction {
   )[];
 }
 
+/** Registers an account with USDC (NEP-145), so it can hold USDC. A no-op refund if it already is. */
+const USDC_STORAGE = "1250000000000000000000";
+
+/** The limited key: only pay and record_proof on the contract, with 0.25 NEAR for fees. */
+const addKey = (r: SignRequest, publicKey: string): WalletTransaction => ({
+  receiverId: r.owner,
+  actions: [
+    {
+      type: "AddKey",
+      params: { publicKey, accessKey: { permission: { receiverId: r.contract, allowance: near("0.25"), methodNames: ["pay", "record_proof"] } } },
+    },
+  ],
+});
+
 const call = (receiverId: string, methodName: string, args: Record<string, unknown>, deposit = ONE_YOCTO, gas = TGAS(30)): WalletTransaction => ({
   receiverId,
   actions: [{ type: "FunctionCall", params: { methodName, args, gas, deposit } }],
@@ -97,20 +117,22 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
     case "register":
       return [call(r.contract, "register", {}, near("0.1"))];
     case "authorise-key":
-      return [
-        {
-          receiverId: r.owner,
-          actions: [
-            {
-              type: "AddKey",
-              params: {
-                publicKey: a.publicKey,
-                accessKey: { permission: { receiverId: r.contract, allowance: near("0.25"), methodNames: ["pay", "record_proof"] } },
-              },
-            },
-          ],
-        },
+      return [addKey(r, a.publicKey)];
+    case "setup": {
+      const txs: WalletTransaction[] = [];
+      // The owner's own USDC registration first: the faucet's USDC would bounce without it.
+      if (a.registerUsdc) txs.push(call(token, "storage_deposit", { account_id: r.owner, registration_only: true }, USDC_STORAGE));
+      // register then set_cap as two actions of one transaction: NEAR runs them in order, and
+      // if either fails neither sticks. set_cap needs the wallet register makes.
+      const wallet = [
+        ...(a.register ? call(r.contract, "register", {}, near("0.1")).actions : []),
+        ...(a.dailyCap !== undefined ? call(r.contract, "set_cap", { daily_cap: a.dailyCap }).actions : []),
       ];
+      if (wallet.length) txs.push({ receiverId: r.contract, actions: wallet });
+      if (a.publicKey) txs.push(addKey(r, a.publicKey));
+      if (!txs.length) throw new Error("NOTHING_TO_SIGN");
+      return txs;
+    }
     case "set-cap":
       return [call(r.contract, "set_cap", { daily_cap: a.dailyCap })];
     case "set-payment-cap":
@@ -124,7 +146,7 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
     case "add-payee":
       return [
         // The payee must be able to hold USDC, or every payment to them would bounce.
-        ...(a.registerWithUsdc ? [call(token, "storage_deposit", { account_id: a.account, registration_only: true }, "1250000000000000000000")] : []),
+        ...(a.registerWithUsdc ? [call(token, "storage_deposit", { account_id: a.account, registration_only: true }, USDC_STORAGE)] : []),
         call(r.contract, "add_payee", { payee: a.account, label: a.label }),
         ...(a.destination ? [call(r.contract, "set_payee_destination", { payee: a.account, destination: a.destination })] : []),
       ];
@@ -179,6 +201,32 @@ export function describe(r: SignRequest): Description {
         walletNote: "Your wallet will ask you to add a limited access key to your account.",
         confirm: "Authorise",
       };
+    case "setup": {
+      const parts = [
+        ...(a.register || a.dailyCap !== undefined ? [`${[a.register && "register", a.dailyCap !== undefined && "set_cap"].filter(Boolean).join(" and ")} on ${r.contract}`] : []),
+        ...(a.publicKey ? [`a limited key on ${r.owner}`] : []),
+        ...(a.registerUsdc ? ["storage_deposit on the USDC contract"] : []),
+      ];
+      const n = toTransactions(r).length;
+      return {
+        title: a.register ? "Set up your agent wallet" : a.publicKey ? "Authorise this Mac" : "Register with USDC",
+        intro: "One approval does all of it. Only your wallet can change these later.",
+        rows: [
+          ...(a.register ? [{ label: "Agent wallet", value: `Created on ${r.contract}, with 0.1 NEAR kept as your storage credit` }] : []),
+          ...(a.dailyCap !== undefined ? [{ label: "Daily cap", value: `${usdc(a.dailyCap)} a day, all payments together` }] : []),
+          ...(a.publicKey
+            ? [
+                { label: "This Mac's key", value: a.publicKey, mono: true },
+                { label: "May call", value: `pay and record_proof on ${r.contract}`, mono: true },
+                { label: "Fee allowance", value: "0.25 NEAR" },
+              ]
+            : []),
+          ...(a.registerUsdc ? [{ label: "USDC", value: "Registers your account with USDC, so it can hold some: 0.00125 NEAR, once" }] : []),
+        ],
+        walletNote: `Your wallet will ask you to approve ${n === 1 ? "one transaction" : `${n} transactions at once`}: ${listText(parts)}. That's everything; Aftercall's own key could do none of it.`,
+        confirm: "Approve in wallet",
+      };
+    }
     case "set-cap":
       return { title: "Change your daily cap", intro: "The most Aftercall can pay in one day without your wallet.", rows: [{ label: "New daily cap", value: usdc(a.dailyCap), mono: true }], walletNote: note("set_cap"), confirm: "Set cap" };
     case "set-payment-cap":
@@ -289,6 +337,11 @@ export function describe(r: SignRequest): Description {
   }
 }
 
+/** "a, b and c". */
+function listText(parts: string[]): string {
+  return parts.length < 2 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 function destinationRows(d: PayeeDestination) {
   return [
     { label: "Paid on", value: `${CHAIN_NAME[d.chain]}, through NEAR Intents` },
@@ -332,7 +385,8 @@ export function decodeSignRequest(fragment: string): SignRequest {
     const d = a.destination as PayeeDestination;
     if (!PAYOUT_CHAINS.includes(d.chain) || !isValidPayoutAddress(d.chain, d.address)) throw new Error("BAD_DESTINATION");
   }
-  if (a.kind === "authorise-key" && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.publicKey)) throw new Error("BAD_KEY");
+  if ((a.kind === "authorise-key" || (a.kind === "setup" && a.publicKey !== undefined)) && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.publicKey ?? "")) throw new Error("BAD_KEY");
+  if (a.kind === "setup" && (typeof a.register !== "boolean" || typeof a.registerUsdc !== "boolean")) throw new Error("BAD_ACTION");
   toTransactions(r); // throws on an unknown kind
   if (!describe(r)) throw new Error("BAD_ACTION");
   return r;

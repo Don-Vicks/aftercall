@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ChevronLeft, ExternalLink, X } from "lucide-react";
+import { Check, ChevronLeft, ExternalLink, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button, Dialog, IconButton, cx } from "./ui";
 import { StepPage } from "./Flow";
@@ -9,7 +9,7 @@ import { IconDisc, rise } from "./SettingsParts";
 /**
  * The frame for Set up payments, in the manner of a Mac setup assistant: one sheet
  * over the window at a fixed size, so steps swap in place instead of the page
- * jumping. The progress bars and the close button stay put; each step brings its
+ * jumping. The stage rail and the close button stay put; each step brings its
  * icon, serif title, one paragraph, its content, and a footer with Back on the left
  * and the one primary action on the right.
  */
@@ -22,7 +22,7 @@ export function AssistantSheet({
   children,
 }: {
   label: string;
-  /** Where the bars stand, or null on the welcome step (no bars yet). */
+  /** The stages, and where you are: -1 before the first, names.length when all are done. */
   phase: { index: number; names: readonly string[] } | null;
   /** Escape and a click outside leave. False while a phrase is on screen: only the close button does then. */
   dismissible: boolean;
@@ -52,27 +52,37 @@ export function AssistantSheet({
   );
 }
 
-/** "Step 2 of 5 · Recovery phrase" with a bar per step; the one you reach fills as you arrive. */
+/**
+ * The rail: every stage by name, always in view, so the whole job reads at a glance. A
+ * stage done gets a tick, the current one a filled dot and its name in ink. `index` -1
+ * is before the first (the welcome), names.length is all done.
+ */
 function AssistantProgress({ index, names }: { index: number; names: readonly string[] }) {
   return (
-    <div className="flex min-w-0 items-center gap-4">
-      <span aria-hidden="true" className="flex gap-1">
-        {names.map((n, i) => (
-          <span key={n} className="relative h-1 w-6 overflow-hidden rounded-full bg-hairline">
-            {i <= index && (
-              <span
-                key={i === index ? `now-${index}` : "done"}
-                className="absolute inset-0 origin-left rounded-full bg-verdigris"
-                style={i === index ? { animation: "ac-strike 520ms 200ms var(--ease) both" } : undefined}
-              />
-            )}
-          </span>
-        ))}
-      </span>
-      <span className="t-eyebrow truncate text-muted">
-        Step {index + 1} of {names.length} · <span className="text-ink-2">{names[index]}</span>
-      </span>
-    </div>
+    <ol aria-label="Setup stages" className="m-0 flex min-w-0 list-none items-center gap-2 p-0">
+      {names.map((n, i) => {
+        const done = i < index;
+        const now = i === index;
+        return (
+          <li key={n} className="flex min-w-0 items-center gap-2" aria-current={now ? "step" : undefined}>
+            {i > 0 && <span aria-hidden="true" className={cx("h-px w-5 shrink-0 transition-colors duration-[var(--dur-2)]", done || now ? "bg-verdigris" : "bg-hairline")} />}
+            <span
+              aria-hidden="true"
+              className={cx(
+                "inline-flex size-[18px] shrink-0 items-center justify-center rounded-full transition-colors duration-[var(--dur-2)]",
+                done ? "bg-verdigris text-on-verdigris" : now ? "shadow-[inset_0_0_0_1.5px_var(--verdigris)]" : "shadow-[inset_0_0_0_1.5px_var(--border)]",
+              )}
+            >
+              {done ? <Check size={11} strokeWidth={3} /> : now ? <span className="size-2 rounded-full bg-verdigris" /> : null}
+            </span>
+            <span className={cx("truncate text-[13px] leading-[18px]", now ? "font-semibold text-ink" : done ? "text-ink-2" : "text-muted")}>
+              {n}
+              <span className="sr-only">{done ? ", done" : now ? ", now" : ""}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

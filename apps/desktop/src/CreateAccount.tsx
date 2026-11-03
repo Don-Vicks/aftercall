@@ -1,24 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, ExternalLink, Lock, RotateCcw, UserPlus, Wallet } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, RotateCcw, UserPlus, Wallet } from "lucide-react";
 import { explorerAccountUrl, formatNear, newTestnetNameProblem } from "@aftercall/core";
 import { METEOR_IMPORT_URL, nearAccount, type CreatedAccount } from "./nearAccount";
 import { isDesktop } from "./recorder";
 import type { PhraseWords } from "./RecoveryPhrase";
 import { walletKit } from "./recoveryKit";
-import { CheckCircle } from "./primitives/Check";
 import { Button, Spinner, cx } from "./ui";
 import { Pop, Why, errorText, rise } from "./SettingsParts";
-import { AssistantStep, BackButton, DetailRow, GuideRow, Inset, LinkButton, openLink } from "./SetupAssistant";
+import { AssistantStep, BackButton, GuideRow, Inset, LinkButton, openLink } from "./SetupAssistant";
 
 /**
- * Making a NEAR testnet account inside Set up payments: pick a name (checked free on
- * NEAR), write down the new account's own 12 words, type three back, and Aftercall asks
- * NEAR's testnet helper to create it. Then Meteor imports the words, since a wallet signs
- * the two setup steps. The phrase lives only in this flow's state and is dropped when the
+ * Making a NEAR testnet account inside Set up payments: a suggested name (checked free on
+ * NEAR), the new account's own 12 words saved or written down, three typed back, and
+ * Aftercall asks NEAR's testnet helper to create it. Meteor imports the words on the
+ * signing step, since a wallet signs setup. The phrase lives only in this flow's state and is dropped when the
  * words are checked; Rust keeps nothing (recovery::new_wallet).
  */
 
-/** About 0.35 NEAR: the two setup signatures (0.1 storage + 0.25 fee allowance). */
+/** About 0.35 NEAR: what the setup approval attaches (0.1 storage + 0.25 fee allowance). */
 const SETUP_NEAR = 35n * 10n ** 22n;
 
 /** The new account's phrase, once, and the three positions to ask back. The public key stays after the phrase is dropped. */
@@ -50,11 +49,10 @@ export type WalletPhrase = ReturnType<typeof useWalletPhrase>;
 export function walletPhraseWords(account: string): PhraseWords {
   return {
     icon: <Wallet size={22} strokeWidth={1.75} />,
-    title: "Your NEAR wallet's phrase",
+    title: "Save your account's 12 words",
     intro: (
       <>
-        These 12 words are <span className="font-mono text-[13px] text-ink">{account}</span>: whoever has them controls the account. Write them on paper in
-        order, or save a recovery kit. Aftercall forgets them when you continue.
+        They control <span className="font-mono text-[13px] text-ink">{account}</span>. Aftercall shows them once, then forgets them.
       </>
     ),
     name: `NEAR wallet phrase for ${account}`,
@@ -64,22 +62,19 @@ export function walletPhraseWords(account: string): PhraseWords {
       </>
     ),
     notes: (
-      <>
-        <p className="m-0 flex items-start gap-2 text-[13px] leading-[19px] text-ink-2">
-          <Lock size={14} strokeWidth={1.75} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
-          <span>
-            Not Aftercall's recovery phrase. That one comes later, on its own screen, for this Mac's limited key. Keep the two apart.
-          </span>
-        </p>
-        <Why label="Why offline?">
-          You'll type these words into Meteor in a minute, and they bring the account back if you lose that wallet. Aftercall doesn't keep them anywhere: not in the
-          Keychain, not on disk. A kit goes only where you save it. Aftercall clears a copied phrase from the clipboard after 60 seconds, or when you leave this
-          step, but a clipboard app may keep its own copy. Don't photograph the words.
-        </Why>
-      </>
+      <Why label="Why offline?">
+        You'll type these words into Meteor when you sign, and they bring the account back if you lose that wallet. Aftercall doesn't keep them anywhere: not in
+        the Keychain, not on disk. A kit goes only where you save it. Aftercall clears a copied phrase from the clipboard after 60 seconds, or when you leave
+        this step, but a clipboard app may keep its own copy. Don't photograph the words.
+      </Why>
     ),
     kit: walletKit(account),
   };
+}
+
+/** A free-looking testnet name to start from: "aftercall-" and five digits. Checked against NEAR like a typed one. */
+export function suggestedName(): string {
+  return `aftercall-${String(Math.floor(10000 + Math.random() * 90000))}`;
 }
 
 type NameState = { kind: "idle" } | { kind: "checking" } | { kind: "free" } | { kind: "taken" } | { kind: "problem"; text: string } | { kind: "error"; text: string };
@@ -90,6 +85,7 @@ export function CreateNameStep({
   onName,
   onBack,
   onNext,
+  onHave,
   onWalletApp,
 }: {
   /** The part before .testnet. */
@@ -97,7 +93,9 @@ export function CreateNameStep({
   onName: (name: string) => void;
   onBack: () => void;
   onNext: () => void;
-  /** "Use a wallet app instead": the Meteor guide. */
+  /** "I already have an account": the account field. */
+  onHave: () => void;
+  /** "Make it in Meteor instead": the Meteor guide. */
   onWalletApp: () => void;
 }) {
   const account = `${name}.testnet`;
@@ -133,8 +131,8 @@ export function CreateNameStep({
   return (
     <AssistantStep
       icon={<UserPlus size={22} strokeWidth={1.75} />}
-      title="Pick your account name"
-      intro="Aftercall asks NEAR's testnet helper to create it for you, with free test NEAR for setup. Testnet is NEAR's practice network: nothing there is worth money."
+      title="Create your NEAR account"
+      intro="Free on testnet. Keep this name or type your own."
       back={<BackButton onClick={onBack} />}
       primary={
         <Button variant="primary" disabled={!free || !isDesktop} onClick={onNext}>
@@ -165,7 +163,6 @@ export function CreateNameStep({
           <input
             id="new-account"
             value={name}
-            autoFocus
             placeholder="yourname"
             spellCheck={false}
             autoCapitalize="off"
@@ -199,23 +196,30 @@ export function CreateNameStep({
         </span>
       </form>
 
-      <Inset as="dl" style={rise(2)}>
-        <DetailRow label="Network">Testnet only. On mainnet, create your account in a wallet app.</DetailRow>
-        <DetailRow label="You get">An account with its own 12-word phrase, which you write down and import into Meteor.</DetailRow>
-        <DetailRow label="Aftercall keeps">Only the name. It shows the phrase once and forgets it.</DetailRow>
-      </Inset>
+      <p className="m-0 text-center text-[14px] leading-5" style={rise(2)}>
+        <button type="button" onClick={onHave} className="press rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
+          I already have an account
+        </button>
+      </p>
 
       {!isDesktop && (
         <p className="m-0 text-[13px] leading-[19px] text-ink-2" style={rise(3)}>
           Creating an account works in the Mac app, not the browser preview.
         </p>
       )}
-      <p className="m-0 text-[13px] leading-[19px] text-ink-2" style={rise(3)}>
-        Rather use a wallet app?{" "}
-        <button type="button" onClick={onWalletApp} className="press rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
-          Create one in Meteor instead
-        </button>
-      </p>
+      <div style={rise(3)}>
+        <Why>
+          <span className="flex flex-col gap-2">
+            <span>
+              Testnet is NEAR's practice network: nothing there is worth money. NEAR's testnet helper creates the account with free test NEAR for setup. You get
+              its 12-word phrase next; Aftercall shows it once and keeps only the name. On mainnet, create your account in a wallet app.
+            </span>
+            <button type="button" onClick={onWalletApp} className="press w-fit rounded-sm font-semibold text-verdigris hover:text-verdigris-hover">
+              Make it in Meteor instead
+            </button>
+          </span>
+        </Why>
+      </div>
     </AssistantStep>
   );
 }
@@ -271,76 +275,49 @@ export function CreatingStep({
   );
 }
 
-/** Step: the account exists. Meteor imports the words, with the exact clicks, because the wallet signs the next two steps. */
-export function ImportStep({ created, checking, error, onNext }: { created: CreatedAccount; checking: boolean; error: string | null; onNext: () => void }) {
+/**
+ * On the signing step, when the account was made here: the account has to be in a wallet
+ * before the wallet can sign, so Meteor imports the 12 words first. The exact clicks, in
+ * two rows; the balance and NearBlocks link for the curious.
+ */
+export function MeteorImport({ created }: { created: CreatedAccount }) {
   const account = created.accountId;
   const balance = created.balance ? BigInt(created.balance) : null;
   const low = balance !== null && balance < SETUP_NEAR;
   return (
-    <AssistantStep
-      icon={<CheckCircle size={30} play />}
-      title={`${account} is yours`}
-      intro="Your wallet signs the two setup steps next, so put the account in one: import the 12 words you wrote down or saved."
-      back={<span />}
-      primary={
-        <Button variant="primary" loading={checking} onClick={onNext}>
-          I've imported it
-          <ArrowRight size={15} strokeWidth={2} aria-hidden="true" />
-        </Button>
-      }
-    >
-      <p className="m-0 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px] leading-[19px] text-ink-2" style={rise(1)}>
-        <span>
-          {balance === null ? (
-            "Balance not read yet"
-          ) : (
-            <>
-              Balance <span className="font-mono text-ink">{formatNear(balance)}</span> test NEAR, worth nothing
-            </>
-          )}
+    <section aria-labelledby="import-h" className="flex flex-col gap-2">
+      <h2 id="import-h" className="t-eyebrow m-0 text-muted">
+        First, put {account} in Meteor
+      </h2>
+      <Inset as="ol">
+        <GuideRow dense n={1} title="Open Meteor's import page" action={<LinkButton href={METEOR_IMPORT_URL}>Open Meteor</LinkButton>}>
+          It runs in your browser. Keep this window open.
+        </GuideRow>
+        <GuideRow dense n={2} title="Import your 12 words">
+          Pick <b className="font-semibold text-ink">Testnet</b> at the top, set a Meteor password if it asks, choose the recovery phrase option and type the words
+          in order.
+        </GuideRow>
+      </Inset>
+      {low && <p className="m-0 text-[13px] leading-[19px] text-caution">Setup needs about 0.35 NEAR. Get more free test NEAR from NEAR's faucet first.</p>}
+      <Why label="Another wallet?">
+        <span className="flex flex-col gap-1.5">
+          <span>Any NEAR wallet that imports a 12-word phrase can hold this account. Import the same words there instead.</span>
+          <span>
+            {balance !== null && (
+              <>
+                Balance <span className="font-mono text-ink">{formatNear(balance)}</span> test NEAR.{" "}
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => openLink(explorerAccountUrl("testnet", account))}
+              className="press inline-flex items-center gap-1 rounded-sm font-semibold text-verdigris hover:text-verdigris-hover"
+            >
+              See it on NearBlocks <ExternalLink size={12} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </span>
         </span>
-        <span aria-hidden="true" className="text-faint">
-          ·
-        </span>
-        <button
-          type="button"
-          onClick={() => openLink(explorerAccountUrl("testnet", account))}
-          className="press inline-flex items-center gap-1 rounded-sm font-semibold text-verdigris hover:text-verdigris-hover"
-        >
-          See it on NearBlocks <ExternalLink size={12} strokeWidth={2} aria-hidden="true" />
-        </button>
-      </p>
-      {low && (
-        <p className="m-0 text-[13px] leading-[19px] text-caution" style={rise(1)}>
-          Setup needs about 0.35 NEAR. Get more free test NEAR from NEAR's faucet before the two signatures.
-        </p>
-      )}
-
-      <section aria-labelledby="import-h" className="-mt-1 flex flex-col gap-2" style={rise(2)}>
-        <h2 id="import-h" className="t-eyebrow m-0 text-muted">
-          Import it into Meteor
-        </h2>
-        <Inset as="ol">
-          <GuideRow dense n={1} title="Open Meteor's import page" action={<LinkButton href={METEOR_IMPORT_URL}>Open Meteor</LinkButton>}>
-            Meteor Wallet runs in your browser. Keep this window open.
-          </GuideRow>
-          <GuideRow dense n={2} title="Switch to Testnet">
-            Click the network button at the top of Meteor's page and pick <b className="font-semibold text-ink">Testnet</b>.
-          </GuideRow>
-          <GuideRow dense n={3} title="Set a Meteor password">
-            New to Meteor? It asks for one first: type it twice, tick the terms, press <b className="font-semibold text-ink">Continue</b>. It's Meteor's,
-            not Aftercall's.
-          </GuideRow>
-          <GuideRow dense n={4} title="Type your 12 words">
-            Pick the recovery phrase option, type the words from your paper or kit in order, and continue. Meteor finds{" "}
-            <span className="font-mono text-ink">{account}</span> from them.
-          </GuideRow>
-        </Inset>
-      </section>
-      <div className="flex flex-col gap-2" style={rise(3)}>
-        {error && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{error}</p>}
-        <Why label="Another wallet?">Any NEAR wallet that imports a 12-word phrase can hold this account. Import the same words there instead.</Why>
-      </div>
-    </AssistantStep>
+      </Why>
+    </section>
   );
 }

@@ -103,8 +103,8 @@ export async function signInWallet(action: OwnerAction): Promise<void> {
   const config = await near.getConfig();
   if (!config) throw new Error("Connect your NEAR account first.");
   if (isDesktop && !(await signPageAnswers())) {
-    // Settings has near-cli commands for the two setup signatures only.
-    const cli = action.kind === "register" || action.kind === "authorise-key" ? ", or use the near-cli commands in Settings" : ", then try again";
+    // Settings has near-cli commands for the setup signatures only.
+    const cli = action.kind === "register" || action.kind === "authorise-key" || action.kind === "setup" ? ", or use the near-cli commands in Settings" : ", then try again";
     throw new SignPageDown(
       LOCAL_WEB
         ? `The signing page isn't running. Start it with pnpm --filter @aftercall/web dev${cli}.`
@@ -135,7 +135,7 @@ export function explorerTx(network: NearConfig["network"], txHash: string): stri
   return explorerTxUrl(network, txHash);
 }
 
-/** What the two setup signatures attach, as packages/core/src/wallet/actions.ts sends them. */
+/** What the setup approval attaches, as packages/core/src/wallet/actions.ts sends it. */
 export const REGISTER_DEPOSIT = "0.1 NEAR";
 export const KEY_ALLOWANCE = "0.25 NEAR";
 /** The two methods this Mac's limited key may call. */
