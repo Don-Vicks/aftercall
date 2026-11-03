@@ -33,7 +33,7 @@ export function Waitlist() {
       });
       const out = (await res.json().catch(() => ({}))) as { error?: string; already?: boolean };
       if (!res.ok) throw new Error(out.error ?? "Something went wrong. Try again.");
-      setMessage(out.already ? "You're already on it. We've added what you ticked." : "You're on the list. We'll email you when it's ready.");
+      setMessage(out.already ? "You're already on it. We've added what you picked." : "You're on the list. We'll email you when it's ready.");
       setState("done");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -100,7 +100,7 @@ export function Waitlist() {
         </p>
       )}
       <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-        Only to tell you when what you ticked is ready. Never shared, never sold.
+        Only to tell you when what you picked is ready. Never shared, never sold.
       </p>
     </form>
   );
