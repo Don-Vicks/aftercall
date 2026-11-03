@@ -3,6 +3,7 @@ import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
+import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
 import { MeetingScreen } from "./MeetingScreen";
 import { ProcessingScreen } from "./ProcessingScreen";
@@ -545,6 +546,8 @@ export default function App() {
     for (const f of m.followUps) {
       // A payment on another chain needs a fresh quote the person has seen: never autopilot.
       if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
+      // Recaps go out through the backend; a build without one leaves them for Draft in Mail.
+      if (f.kind === "email" && !HAS_BACKEND) continue;
       if (!autopilotDecision(f, rules, limits).run) continue;
       queuedHere.current.add(`${m.id}:${f.id}`);
       patchFollowUp(m.id, f.id, { autopilotAt: at });
