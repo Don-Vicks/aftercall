@@ -50,7 +50,9 @@ const OPEN: [string, string][] = [
 
 /** What building and running it takes (README, Run it), or, for the test build, running it. */
 const NEEDS: [string, string][] = [
-  ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only."],
+  HAS_DOWNLOAD
+    ? ["An Apple silicon Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only. The test build is for M-series Macs."]
+    : ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only."],
   ...(HAS_DOWNLOAD
     ? ([["A NEAR testnet account, to try payments", "Optional. Settings › NEAR walks you through one. Test USDC is free from Circle's faucet at faucet.circle.com: pick NEAR Testnet."]] as [string, string][])
     : ([["Node 24, pnpm 10 and Rust stable", "To install, check and build the app from source."]] as [string, string][])),
@@ -103,7 +105,7 @@ export default function Download() {
                 )}
               </div>
               <span className={`${d.platform} enter`} style={vars({ d: "140ms", dur: "360ms" })}>
-                {HAS_DOWNLOAD ? "Test build · NEAR testnet · macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
+                {HAS_DOWNLOAD ? "Test build · NEAR testnet · Apple silicon, macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
               </span>
             </div>
 
