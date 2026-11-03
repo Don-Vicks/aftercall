@@ -29,6 +29,7 @@ import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, d
 import { parseUsdcInput } from "./WalletScreen";
 import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
+import { HAS_BACKEND } from "./backend";
 import { TimeChip } from "./Quote";
 
 /** Everything a follow-up row can ask the app to do. */
@@ -432,17 +433,19 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
                   Draft in Mail keeps it on this Mac. <span className="font-semibold hover:text-ink">Why?</span>
                 </summary>
                 <p className="m-0 mt-1.5 max-w-[440px]">
-                  Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it. Send through Aftercall passes it through
-                  Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy.
+                  Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it.
+                  {HAS_BACKEND && " Send through Aftercall passes it through Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy."}
                 </p>
               </details>
               <span className="ml-auto flex flex-wrap justify-end gap-2">
                 <Button variant="quiet" onClick={() => c.dismiss(f)}>
                   Dismiss
                 </Button>
-                <Button variant="quiet" onClick={send} disabled={!f.to}>
-                  Send through Aftercall
-                </Button>
+                {HAS_BACKEND && (
+                  <Button variant="quiet" onClick={send} disabled={!f.to}>
+                    Send through Aftercall
+                  </Button>
+                )}
                 {/* The private default: the recap opens in your own mail app and no Aftercall server sees it. */}
                 <Button variant="primary" onClick={() => h.onDraft(f.id)}>
                   Draft in Mail
@@ -734,7 +737,8 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
                   Confirm in wallet
                 </Button>
               ) : (
-                !f.claim && (
+                !f.claim &&
+                HAS_BACKEND && (
                   <Button onClick={() => h.onClaimLink(f.id)} disabled={f.amount === null} icon={<Link2 size={13} aria-hidden="true" />}>
                     Send claim link
                   </Button>

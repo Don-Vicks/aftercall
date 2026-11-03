@@ -18,7 +18,7 @@ import {
   type PaymentFollowUp,
   type PayoutPreview,
 } from "@aftercall/core";
-import { backend } from "./backend";
+import { HAS_BACKEND, backend } from "./backend";
 import { contractFollowupId, near, oneClick, signInWallet, waitFor, VERIFY_URL, WEB_URL } from "./near";
 import type { SavedNotes } from "./nearai";
 
@@ -51,6 +51,7 @@ export async function draftInMail(meeting: Meeting, f: EmailFollowUp, saved?: Sa
 
 /** Sends the recap through the Aftercall backend (Resend), signed in with this Mac's key. */
 export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply, saved?: SavedNotes): Promise<void> {
+  if (!HAS_BACKEND) return apply({ error: "Sending through Aftercall isn't available in this build. Use Draft in Mail." });
   apply({ status: "sending", error: undefined });
   try {
     const config = await near.getConfig();
@@ -210,6 +211,7 @@ export async function confirmClaim(f: PaymentFollowUp, apply: Apply): Promise<vo
 
 /** Accounts payees have shared through claim links, by claim id. */
 export async function claimedAccounts(): Promise<Record<string, string>> {
+  if (!HAS_BACKEND) return {};
   const claims = await backend.claims();
   return Object.fromEntries(claims.filter((c) => c.claimedAccount).map((c) => [c.id, c.claimedAccount!]));
 }

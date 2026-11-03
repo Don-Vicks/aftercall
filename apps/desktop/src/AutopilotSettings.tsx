@@ -5,6 +5,7 @@ import { UNDO_SECONDS, formatUsdc, type AutopilotRules } from "@aftercall/core";
 import { loadRules, saveRules } from "./autopilot";
 import { near } from "./near";
 import { isDesktop } from "./recorder";
+import { HAS_BACKEND } from "./backend";
 import { Card, Field, Input, SectionTitle, Toggle, enter, exit } from "./ui";
 import { Why, grow } from "./SettingsParts";
 
@@ -69,12 +70,17 @@ export function AutopilotSettings() {
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="t-title">Send recaps to your team</span>
               <span className="text-[13px] leading-[19px] text-ink-2">
-                {recapsOn ? "Recaps to these email domains go out by themselves." : "Off. Every recap waits for you."}
+                {!HAS_BACKEND
+                  ? "Needs Send through Aftercall, which this build doesn't have. Recaps wait for you to draft them in Mail."
+                  : recapsOn
+                    ? "Recaps to these email domains go out by themselves."
+                    : "Off. Every recap waits for you."}
               </span>
             </span>
             <Toggle
               aria-label="Send recaps to your team"
-              checked={recapsOn}
+              checked={recapsOn && HAS_BACKEND}
+              disabled={!HAS_BACKEND}
               onChange={(on) => {
                 setRecapsOn(on);
                 update({ ...rules, recapDomains: on ? parseDomains(domains) : [] });
