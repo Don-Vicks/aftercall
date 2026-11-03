@@ -52,15 +52,20 @@ export function Waitlist() {
 
   return (
     <form className={d.waitForm} onSubmit={submit}>
-      <fieldset className={d.waitWants}>
-        <legend className="muted">I&apos;m waiting for</legend>
-        {OPTIONS.map(([value, label]) => (
-          <label key={value} className={d.waitWant}>
-            <input type="checkbox" checked={wants.includes(value)} onChange={() => toggle(value)} />
-            {label}
-          </label>
-        ))}
-      </fieldset>
+      <div className={d.waitWants} role="group" aria-labelledby="wait-for">
+        <span id="wait-for" className={d.waitLegend}>
+          I&apos;m waiting for
+        </span>
+        {OPTIONS.map(([value, label]) => {
+          const on = wants.includes(value);
+          return (
+            <button key={value} type="button" className={d.waitChip} aria-pressed={on} onClick={() => toggle(value)}>
+              {on && <Icon name="check" size={13} stroke={2.6} />}
+              {label}
+            </button>
+          );
+        })}
+      </div>
       <div className={d.waitRow}>
         <label htmlFor="wait-email" className="sr-only">
           Email

@@ -279,37 +279,53 @@
   gap: 14px;
 }
 .waitWants {
-  margin: 0;
-  padding: 0;
-  border: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
-  font-size: 15px;
+  gap: 8px;
 }
-.waitWants legend {
+.waitLegend {
   width: 100%;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
   font-size: 13px;
+  color: var(--muted);
 }
-.waitWant {
+/* What they're waiting for, as toggles: a hairline pill that fills with verdigris when on. */
+.waitChip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms;
 }
-.waitWant input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--verdigris);
+.waitChip:hover {
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+.waitChip[aria-pressed="true"] {
+  border-color: var(--verdigris);
+  background: var(--verdigris-tint);
+  color: var(--verdigris);
+}
+.waitChip:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
 }
 .waitRow {
   display: flex;
   gap: 10px;
 }
-.waitRow .btn {
+.waitRow :global(.btn) {
   flex-shrink: 0;
   height: 48px;
+  padding: 0 20px;
 }
 .waitTrap {
   position: absolute;
