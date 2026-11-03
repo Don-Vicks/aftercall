@@ -7,6 +7,9 @@ export const DOWNLOAD_URL = process.env.NEXT_PUBLIC_DOWNLOAD_URL ?? "";
 export const HAS_DOWNLOAD = DOWNLOAD_URL.length > 0;
 export const DOWNLOAD_HREF = "/download";
 
+/** Where testers report bugs and questions (a Telegram invite link). The Install page links it when set. */
+export const TESTERS_CHAT_URL = process.env.NEXT_PUBLIC_TESTERS_CHAT_URL ?? "";
+
 /**
  * The GitHub repo stays private until the hackathon submission (README, M7: "Make the repo
  * public"). Until NEXT_PUBLIC_REPO_PUBLIC=1 is set, the landing and the site's header and

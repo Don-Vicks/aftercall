@@ -1,6 +1,6 @@
 import { CopyButton } from "../client";
 import { Icon, Pill, REPO_URL, SiteFooter, SiteHeader, vars, type IconName } from "../ui";
-import { DOWNLOAD_URL, HAS_DOWNLOAD, REPO_PUBLIC } from "../site";
+import { DOWNLOAD_URL, HAS_DOWNLOAD, REPO_PUBLIC, TESTERS_CHAT_URL } from "../site";
 import d from "./download.module.css";
 
 export const metadata = {
@@ -87,10 +87,18 @@ export default function Download() {
               </p>
               <div className={`${d.getRow} enter`} style={vars({ d: "120ms", dur: "360ms" })}>
                 {HAS_DOWNLOAD ? (
-                  <a href={DOWNLOAD_URL} download className="btn btn-primary btn-xl press">
-                    <Icon name="laptop" size={19} />
-                    Download for Mac
-                  </a>
+                  <>
+                    <a href={DOWNLOAD_URL} download className="btn btn-primary btn-xl press">
+                      <Icon name="laptop" size={19} />
+                      Download for Mac
+                    </a>
+                    {TESTERS_CHAT_URL && (
+                      <a href={TESTERS_CHAT_URL} className="arrow-link" target="_blank" rel="noopener noreferrer">
+                        Join the testers&apos; chat on Telegram
+                        <Icon name="external" size={12} />
+                      </a>
+                    )}
+                  </>
                 ) : (
                   <>
                     <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
