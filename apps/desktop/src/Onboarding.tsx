@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { ArrowRight, AudioLines, Check, FileDown, KeyRound, Laptop, Mic, MonitorSpeaker, Send, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, Check, FileDown, KeyRound, Laptop, Mic, MonitorSpeaker, Send, ShieldCheck, Trash2 } from "lucide-react";
 import { isDesktop, recorder } from "./recorder";
 import { useShortcutEverywhere } from "./recording/session";
 import { deleteRecording } from "./projects";
@@ -43,7 +43,18 @@ const POSITION: Record<Step, number> = { welcome: 0, restore: 0, audio: 1, neara
  */
 export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => void }) {
   const [step, setStep] = useState<Step>("welcome");
-  const go = (s: Step) => setStep(s);
+  /** The steps behind this one, so Back returns to where you came from (Restore or Welcome). */
+  const [trail, setTrail] = useState<Step[]>([]);
+  const go = (s: Step) => {
+    setTrail([...trail, step]);
+    setStep(s);
+  };
+  const back = () => {
+    const prev = trail[trail.length - 1];
+    if (!prev) return;
+    setTrail(trail.slice(0, -1));
+    setStep(prev);
+  };
   /** A backup was imported: the app reloads at the end to show it. */
   const [imported, setImported] = useState(false);
   const finish = (record: boolean) => {
@@ -55,6 +66,19 @@ export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => vo
   return (
     <Dialog placement="full" aria-label="Set up Aftercall" dismissible={false} onClose={() => {}}>
       <AnimatePresence initial={false}>
+        {step !== "welcome" && trail.length > 0 && (
+          <m.div
+            key="back"
+            className="absolute top-3.5 left-[18px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: enter }}
+            exit={{ opacity: 0, transition: exit }}
+          >
+            <Button variant="quiet" size="sm" onClick={back} icon={<ArrowLeft size={14} aria-hidden="true" />}>
+              Back
+            </Button>
+          </m.div>
+        )}
         {step === "welcome" && (
           <m.div
             key="skip"
@@ -78,7 +102,7 @@ export function Onboarding({ onDone }: { onDone: (startRecording: boolean) => vo
         )}
         {step === "restore" && (
           <StepPage key="restore">
-            <Restore onBack={() => go("welcome")} onImported={() => setImported(true)} onNext={() => go("audio")} />
+            <Restore onBack={back} onImported={() => setImported(true)} onNext={() => go("audio")} />
           </StepPage>
         )}
         {step === "audio" && (
