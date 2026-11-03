@@ -1,0 +1,9 @@
+# Vercel uploads this checkout to build apps/web; keep it to source.
+**/target
+**/node_modules
+artifacts
+samples
+.env*
+**/.env*
+apps/desktop/src-tauri/tests/fixtures
+*.wav
