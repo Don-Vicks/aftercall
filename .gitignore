@@ -17,3 +17,6 @@ artifacts/
 
 # Test builds, uploaded with the site by `vercel deploy`, not kept in git.
 apps/web/public/releases/
+
+# The browser demo, built by apps/desktop (pnpm build:demo) and uploaded by `vercel deploy`.
+apps/web/public/demo/
