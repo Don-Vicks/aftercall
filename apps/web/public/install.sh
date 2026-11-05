@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs the Aftercall test build (NEAR testnet) on an Apple silicon Mac:
+# Installs the Aftercall test build (NEAR testnet) on a Mac, Apple silicon or Intel:
 #   curl -fsSL https://getaftercall.vercel.app/install.sh | sh
 #
 # It downloads the same DMG as getaftercall.vercel.app/download, checks its SHA-256, copies
@@ -12,14 +12,13 @@
 set -eu
 
 DMG_URL="https://getaftercall.vercel.app/releases/Aftercall-0.1.0-testnet.dmg"
-DMG_SHA256="2e8d966b70bfcceedfc34f0aff018f86ad16a79073e98a5207e0ac66f21ef614"
+DMG_SHA256="c33e344603ce2a74f03b183d86bdde298aa51d52855b002038a04d160565ec94"
 BUNDLE_ID="dev.aftercall.app"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'Aftercall install: %s\n' "$*" >&2; exit 1; }
 
 [ "$(uname -s)" = "Darwin" ] || fail "this is a Mac app."
-[ "$(uname -m)" = "arm64" ] || fail "the test build needs an Apple silicon Mac (M1 or later)."
 os=$(sw_vers -productVersion)
 major=${os%%.*}
 rest=${os#*.}
