@@ -97,6 +97,10 @@ export default function Download() {
                       <Icon name="laptop" size={19} />
                       Download for Mac
                     </a>
+                    <a href="/demo" className="arrow-link">
+                      Or try it in your browser
+                      <Icon name="external" size={12} />
+                    </a>
                     {TESTERS_CHAT_URL && (
                       <a href={TESTERS_CHAT_URL} className="arrow-link" target="_blank" rel="noopener noreferrer">
                         Join the testers&apos; chat on Telegram
