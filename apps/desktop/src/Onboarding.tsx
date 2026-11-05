@@ -12,10 +12,13 @@ import { NearAiConnect } from "./NearAiConnect";
 import { ImportBackup, RestorePhrase } from "./RecoveryPhrase";
 import { IconDisc, errorText, rise } from "./SettingsParts";
 import { QuietAction, StepActions, StepHeading, StepPage, StepProgress } from "./Flow";
+import { IS_DEMO } from "./demo";
 
 const KEY = "aftercall.onboarded";
 
 export function needsOnboarding(): boolean {
+  // The browser demo opens straight on the sample meetings; setup is for the Mac app.
+  if (IS_DEMO) return false;
   try {
     return localStorage.getItem(KEY) !== "1";
   } catch {

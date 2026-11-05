@@ -9,7 +9,8 @@
     "build": "pnpm build:mcp && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:demo": "VITE_DEMO=1 VITE_WEB_URL=https://getaftercall.vercel.app vite build --base=/demo/ --outDir dist-demo --emptyOutDir"
   },
   "dependencies": {
     "@aftercall/core": "workspace:*",

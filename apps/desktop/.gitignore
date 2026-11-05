@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# The browser demo build (pnpm build:demo), copied into apps/web/public/demo to publish.
+dist-demo
