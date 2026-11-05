@@ -2,8 +2,8 @@ import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server
 import { cleanRef, count, type Kind } from "./app/metrics";
 
 /**
- * Counts launch traffic by channel (app/metrics.ts): page visits, DMG downloads and
- * install-script fetches. A link's ?ref= names the channel and is kept for a day in a
+ * Counts launch traffic by channel (app/metrics.ts): page visits, browser-demo opens,
+ * DMG downloads and install-script fetches. A link's ?ref= names the channel and is kept for a day in a
  * first-party cookie, so a visit from X that clicks Download later still counts for X.
  * Nothing identifies the visitor: only the channel and the day are stored.
  */
@@ -18,6 +18,7 @@ function kindOf(req: NextRequest): Kind | null {
   // Only real page loads: not prefetches or client-side data requests.
   const prefetch = req.headers.get("next-router-prefetch") || req.headers.get("purpose") === "prefetch" || req.headers.get("rsc");
   if (!prefetch && (path === "/" || path === "/download")) return "visit";
+  if (!prefetch && (path === "/demo" || path === "/demo/")) return "demo";
   return null;
 }
 
@@ -38,5 +39,5 @@ export function proxy(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ["/", "/download", "/install.sh", "/releases/:file*"],
+  matcher: ["/", "/download", "/demo", "/demo/", "/install.sh", "/releases/:file*"],
 };

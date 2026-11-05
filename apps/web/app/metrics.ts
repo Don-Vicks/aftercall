@@ -9,9 +9,9 @@ const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 export const redis = url && token ? new Redis({ url, token }) : null;
 
-/** What gets counted: a visit to the site, a DMG download, a fetch of the install script. */
-export type Kind = "visit" | "download" | "install";
-export const KINDS: Kind[] = ["visit", "download", "install"];
+/** What gets counted: a visit to the site, an opening of the browser demo, a DMG download, a fetch of the install script. */
+export type Kind = "visit" | "demo" | "download" | "install";
+export const KINDS: Kind[] = ["visit", "demo", "download", "install"];
 
 /** Where it came from, from ?ref= on a link (x, telegram, …). Anything else is "other". */
 export function cleanRef(raw: string | null | undefined): string {
@@ -37,6 +37,7 @@ export async function readMetrics(days = 14) {
   const dates = Array.from({ length: days }, (_, i) => new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
   const out: Record<Kind, { total: Record<string, number>; byDay: { date: string; counts: Record<string, number> }[] }> = {
     visit: { total: {}, byDay: [] },
+    demo: { total: {}, byDay: [] },
     download: { total: {}, byDay: [] },
     install: { total: {}, byDay: [] },
   };

@@ -5,7 +5,7 @@ import { KINDS, readMetrics, redis, type Kind } from "../metrics";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Launch · Aftercall", robots: { index: false, follow: false } };
 
-const LABEL: Record<Kind, string> = { visit: "Visits", download: "DMG downloads", install: "Terminal installs" };
+const LABEL: Record<Kind, string> = { visit: "Visits", demo: "Demo opens", download: "DMG downloads", install: "Terminal installs" };
 
 /** Only with ?key= matching LAUNCH_STATS_KEY; anything else is a plain 404. */
 function allowed(key: string | undefined): boolean {
