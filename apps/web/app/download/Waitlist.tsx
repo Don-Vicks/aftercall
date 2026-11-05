@@ -6,7 +6,6 @@ import d from "./download.module.css";
 
 /** The boxes, in the order the API stores them (app/api/waitlist/route.ts). */
 const OPTIONS: [string, string][] = [
-  ["intel", "An Intel Mac build"],
   ["windows", "Windows"],
   ["mainnet", "Mainnet and a signed app"],
   ["updates", "Just the news"],

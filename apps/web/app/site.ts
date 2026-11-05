@@ -20,7 +20,7 @@ export const REPO_PUBLIC = process.env.NEXT_PUBLIC_REPO_PUBLIC === "1";
 
 /** The mono line under the hero and closing buttons. */
 export const DOWNLOAD_NOTE = HAS_DOWNLOAD
-  ? "Test build on NEAR testnet · Apple silicon · macOS 14.2 or later"
+  ? "Test build on NEAR testnet · macOS 14.2 or later"
   : REPO_PUBLIC
     ? "Signed build coming soon · build it from source today"
     : "Signed build coming soon · source opens with the hackathon submission";

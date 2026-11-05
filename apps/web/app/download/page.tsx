@@ -56,7 +56,7 @@ const INSTALL = "curl -fsSL https://getaftercall.vercel.app/install.sh | sh";
 /** What building and running it takes (README, Run it), or, for the test build, running it. */
 const NEEDS: [string, string][] = [
   HAS_DOWNLOAD
-    ? ["An Apple silicon Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only. The test build is for M-series Macs."]
+    ? ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only. The test build runs on both Apple silicon and Intel."]
     : ["A Mac on macOS 14.2 or later", "Aftercall records the call's audio with a Core Audio tap, so it runs on a Mac only."],
   ...(HAS_DOWNLOAD
     ? ([["A NEAR testnet account, to try payments", "Optional. Settings › NEAR walks you through one. Test USDC is free from Circle's faucet at faucet.circle.com: pick NEAR Testnet."]] as [string, string][])
@@ -122,7 +122,7 @@ export default function Download() {
                 )}
               </div>
               <span className={`${d.platform} enter`} style={vars({ d: "140ms", dur: "360ms" })}>
-                {HAS_DOWNLOAD ? "Test build · NEAR testnet · Apple silicon, macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
+                {HAS_DOWNLOAD ? "Test build · NEAR testnet · macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
               </span>
             </div>
 
@@ -194,8 +194,8 @@ export default function Download() {
                 </h2>
                 <p className={d.intro}>
                   {HAS_DOWNLOAD
-                    ? "The test build is for Apple silicon Macs on NEAR testnet. Join the waitlist for an Intel or Windows build, for mainnet and a signed app, or just for news."
-                    : "Join the waitlist for a signed build, an Intel or Windows build, mainnet, or just news."}
+                    ? "The test build runs on Macs with macOS 14.2 or later, on NEAR testnet. Join the waitlist for a Windows build, for mainnet and a signed app, or just for news."
+                    : "Join the waitlist for a signed build, a Windows build, mainnet, or just news."}
                 </p>
               </div>
               <Waitlist />
