@@ -1,6 +1,8 @@
-import { ReceiptText } from "lucide-react";
+import { Coins, ReceiptText } from "lucide-react";
+import { formatCost, typicalMeetingCost } from "@aftercall/core";
 import { NearAiConnect } from "./NearAiConnect";
 import { CardRow, IconDisc, Why } from "./SettingsParts";
+import { LinkButton } from "./SetupAssistant";
 import { aboutCost, pricesDay, type Spend } from "./costs";
 import { plural } from "./library";
 import { Card, SectionTitle } from "./ui";
@@ -21,6 +23,7 @@ export function NearAiSettings({ onChange, spend, sample }: { onChange?: (connec
         What NEAR AI itself keeps is set by NEAR AI.
       </Why>
       {spend && <SpendRow spend={spend} sample={sample} />}
+      <StakingCard spend={spend} sample={sample} />
     </section>
   );
 }
@@ -49,6 +52,55 @@ function SpendRow({ spend, sample }: { spend: Spend; sample?: boolean }) {
           </>
         }
       />
+    </Card>
+  );
+}
+
+/** Where staking for NEAR AI credits starts: the organization's Credits page, after a NEAR wallet sign-in. */
+const NEAR_AI_CLOUD_URL = "https://cloud.near.ai";
+const STAKING_DOCS_URL = "https://docs.near.ai/cloud/staking-for-inference/overview";
+
+/**
+ * NEAR AI's Staking for Inference, explained and linked out: the stake, the wallet and the
+ * organization stay the person's own. Only what docs/staking-for-inference.md confirms;
+ * no minimum, unstaking delay or rate, since those aren't published.
+ */
+function StakingCard({ spend, sample }: { spend?: Spend | null; sample?: boolean }) {
+  const typical = typicalMeetingCost(30);
+  const average = spend && spend.meetings > 0 && spend.cost.usd !== null ? formatCost(spend.cost.usd / spend.meetings) : null;
+  const yours = !average ? null : sample ? `The sample meeting cost ${average}.` : spend!.meetings === 1 ? `Your meeting here cost ${average}.` : `Your meetings here averaged ${average} each.`;
+  return (
+    <Card pad="none">
+      <CardRow
+        divider
+        icon={
+          <IconDisc>
+            <Coins size={16} strokeWidth={1.75} />
+          </IconDisc>
+        }
+        title="Pay by staking"
+        detail="Stake NEAR instead of buying credits. You keep the NEAR; its staking rewards pay for your notes."
+      >
+        <LinkButton href={NEAR_AI_CLOUD_URL}>Open cloud.near.ai</LinkButton>
+      </CardRow>
+      <ul className="m-0 flex list-disc flex-col gap-1.5 py-4 pr-5 pl-10 text-[13px] leading-[19px] text-ink-2 marker:text-muted">
+        <li>The rewards become NEAR AI Cloud credits, 1 credit for $1 of use. They're spent before any credits you buy.</li>
+        <li>Unstake any time to get your NEAR back. The credits stop when you do.</li>
+        <li>Mainnet only: it takes real NEAR, not testnet NEAR.</li>
+        <li>Your key, your organization, your stake. Aftercall never holds NEAR or a NEAR AI sign-in; it only uses the API key you paste above.</li>
+        <li>
+          A 30-minute meeting costs {formatCost(typical.usd ?? 0)} at NEAR AI's prices on {pricesDay(typical.pricesAsOf)}. {yours}
+        </li>
+      </ul>
+      <Why label="How do I start?" className="border-t border-hairline px-5 py-3">
+        <span className="flex flex-col gap-2">
+          <span>
+            Sign in to cloud.near.ai with your NEAR wallet, not email, and stake from your organization's Credits page. Then make the API key in that same
+            organization, so its credits pay for your notes.
+          </span>
+          <LinkButton href={STAKING_DOCS_URL}>How staking works</LinkButton>
+        </span>
+      </Why>
     </Card>
   );
 }
