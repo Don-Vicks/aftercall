@@ -44,7 +44,7 @@ test("the total cap, the per-IP daily cap and bad install ids are enforced", asy
   await assert.rejects(keys.issue(42, "1.1.1.1"), /BAD_INSTALL_ID/);
   await keys.issue("install-aaaaaaaaaaaaaaaa", "1.1.1.1");
   await keys.issue("install-bbbbbbbbbbbbbbbb", "1.1.1.1");
-  await assert.rejects(keys.issue("install-cccccccccccccccc", "1.1.1.1"), /DAILY_LIMIT/);
+  await assert.rejects(keys.issue("install-cccccccccccccccc", "1.1.1.1"), /IP_DAILY_LIMIT/);
   now += 86_400_000;
   await keys.issue("install-cccccccccccccccc", "1.1.1.1");
   assert.deepEqual(await keys.status(), { available: false, spendLimitUsd: 0.25 });

@@ -84,7 +84,7 @@ export class TesterKeys {
     if ((await this.issued.count()) >= this.options.maxKeys) throw new HttpException("TEST_CREDITS_USED_UP", HttpStatus.SERVICE_UNAVAILABLE);
     const day = utcDay(this.now());
     const ipKey = limitKey("tester-key-ip", ip);
-    if ((await this.daily.get(ipKey, day)) >= this.options.perIpPerDay) throw new HttpException("DAILY_LIMIT", HttpStatus.TOO_MANY_REQUESTS);
+    if ((await this.daily.get(ipKey, day)) >= this.options.perIpPerDay) throw new HttpException("IP_DAILY_LIMIT", HttpStatus.TOO_MANY_REQUESTS);
 
     let made: { id: string; key: string };
     try {
