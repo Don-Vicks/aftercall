@@ -12,6 +12,9 @@ import { StatsController } from "./stats/stats.controller";
 import { StatsService, rpcChainStats } from "./stats/stats.service";
 import { MemoryCounters, PgCounters, type Counters } from "./stats/counters";
 import { MemoryDailyCounts, PgDailyCounts, type DailyCounts } from "./limits";
+import { cloudApiAdmin } from "./nearai/admin";
+import { MemoryIssuedKeys, PgIssuedKeys, TesterKeys } from "./nearai/testerKeys";
+import { TesterKeysController } from "./nearai/testerKeys.controller";
 import { nearEnv } from "./network";
 import { Pool } from "pg";
 
@@ -29,8 +32,17 @@ function jwtSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
+/** Aftercall's NEAR AI account for test credits, or null when it isn't set up (the app then asks for your own key). */
+function nearAiAdmin() {
+  const { NEARAI_ADMIN_ACCOUNT: accountId, NEARAI_ADMIN_KEY: secretKey, NEARAI_WORKSPACE_ID: workspaceId } = process.env;
+  if (!accountId || !secretKey || !workspaceId) return null;
+  return cloudApiAdmin({ baseUrl: process.env.NEARAI_CLOUD_URL ?? "https://cloud-api.near.ai", accountId, secretKey, workspaceId });
+}
+
+const number = (value: string | undefined, fallback: number) => (value && Number.isFinite(Number(value)) ? Number(value) : fallback);
+
 @Module({
-  controllers: [HealthController, AuthController, EmailController, ClaimsController, StatsController],
+  controllers: [HealthController, AuthController, EmailController, ClaimsController, StatsController, TesterKeysController],
   providers: [
     { provide: NEAR_ENV, useFactory: () => nearEnv() },
     {
@@ -65,6 +77,23 @@ function jwtSecret(): string {
         const daily = new PgDailyCounts(pool);
         await daily.migrate();
         return daily;
+      },
+    },
+    {
+      provide: TesterKeys,
+      inject: [PG_POOL, COUNTERS, DAILY_COUNTS],
+      useFactory: async (pool: Pool | null, counters: Counters, daily: DailyCounts) => {
+        let issued: MemoryIssuedKeys | PgIssuedKeys = new MemoryIssuedKeys();
+        if (pool) {
+          issued = new PgIssuedKeys(pool);
+          await issued.migrate();
+        }
+        const options = {
+          spendLimitUsd: number(process.env.TESTER_KEY_LIMIT_USD, 0.25),
+          maxKeys: number(process.env.TESTER_KEYS_MAX, 30),
+          perIpPerDay: number(process.env.TESTER_KEYS_PER_IP_PER_DAY, 3),
+        };
+        return new TesterKeys(nearAiAdmin(), issued, daily, options, Date.now, counters);
       },
     },
     {
