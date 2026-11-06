@@ -31,7 +31,11 @@ function friendly(code: string): string {
       KEY_NOT_ON_ACCOUNT: "The backend couldn't confirm this Mac's key on your account. Check Settings → NEAR.",
       DAILY_LIMIT: "You've reached today's limit of 50 emails sent through Aftercall.",
       BAD_ADDRESS: "That email address doesn't look right.",
-    }[code] ?? code
+      ALREADY_ISSUED: "This Mac already got Aftercall's test credits. Paste your own NEAR AI key instead.",
+      TEST_CREDITS_USED_UP: "Aftercall's test credits are used up for now. Paste your own NEAR AI key instead.",
+      TEST_CREDITS_OFF: "Test credits aren't set up on this backend. Paste your own NEAR AI key instead.",
+      IP_DAILY_LIMIT: "Too many test keys from this network today. Try tomorrow, or paste your own NEAR AI key.",
+    }[code] ?? (code.startsWith("NEAR_AI_FAILED") ? "NEAR AI didn't make the test key. Try again in a minute, or paste your own key." : code)
   );
 }
 
@@ -61,4 +65,25 @@ export const backend = {
     call<{ id: string; token: string; expiresAt: number }>("/claims", { method: "POST", body: JSON.stringify(c) }),
   claims: () => call<ClaimInfo[]>("/claims"),
   cancelClaim: (id: string) => call<{ ok: true }>(`/claims/${id}`, { method: "DELETE" }),
+};
+
+/** A random id for this install, made once; the backend gives one test key per install. */
+function installId(): string {
+  const KEY = "aftercall.installId";
+  let id = localStorage.getItem(KEY);
+  if (!id) {
+    id = `mac-${crypto.randomUUID()}`;
+    localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+/**
+ * Aftercall's test credits: a NEAR AI key with a small spend limit, from Aftercall's own
+ * NEAR AI workspace, for people without a NEAR AI account. No sign-in: the backend limits
+ * it to one key per install, a few per network a day and a fixed number in all.
+ */
+export const testCredits = {
+  status: () => call<{ available: boolean; spendLimitUsd: number }>("/nearai/test-credits", {}, false),
+  key: () => call<{ key: string; spendLimitUsd: number }>("/nearai/test-key", { method: "POST", body: JSON.stringify({ installId: installId() }) }, false),
 };

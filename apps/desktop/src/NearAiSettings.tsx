@@ -87,7 +87,7 @@ function StakingCard({ spend, sample }: { spend?: Spend | null; sample?: boolean
         <li>The rewards become NEAR AI Cloud credits, 1 credit for $1 of use. They're spent before any credits you buy.</li>
         <li>Unstake any time to get your NEAR back. The credits stop when you do.</li>
         <li>Mainnet only: it takes real NEAR, not testnet NEAR.</li>
-        <li>Your key, your organization, your stake. Aftercall never holds NEAR or a NEAR AI sign-in; it only uses the API key you paste above.</li>
+        <li>Your key, your organization, your stake. Aftercall never holds your NEAR or your NEAR AI sign-in; it only uses the API key in your Keychain.</li>
         <li>
           A 30-minute meeting costs {formatCost(typical.usd ?? 0)} at NEAR AI's prices on {pricesDay(typical.pricesAsOf)}. {yours}
         </li>

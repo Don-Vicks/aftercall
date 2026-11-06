@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { NEAR_AI_KEY_MESSAGE, plainNearAiError } from "@aftercall/core";
+import { NEAR_AI_KEY_MESSAGE, plainNearAiError, typicalMeetingCost } from "@aftercall/core";
+import { HAS_BACKEND, testCredits } from "./backend";
 import { nearAiKey } from "./nearai";
 import { isDesktop } from "./recorder";
 import { CheckCircle } from "./primitives/Check";
@@ -30,9 +31,34 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
     setHint(h);
     onChange?.(Boolean(h));
   };
+  /** Each test key's spend limit when Aftercall's test credits are on; null when they're off or unknown. */
+  const [credits, setCredits] = useState<number | null>(null);
   useEffect(() => {
     refresh();
+    if (HAS_BACKEND && isDesktop)
+      testCredits
+        .status()
+        .then((s) => setCredits(s.available ? s.spendLimitUsd : null))
+        .catch(() => setCredits(null));
   }, []);
+
+  const useCredits = async () => {
+    setError(null);
+    setState("saving");
+    try {
+      const { key: made } = await testCredits.key();
+      // A new NEAR AI key can take a few seconds to work, so it's saved unchecked; notes check it.
+      await nearAiKey.set(made);
+      setVerdict("unknown");
+      setReplacing(false);
+      await refresh();
+      onConnected?.();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setState("idle");
+    }
+  };
 
   const save = async () => {
     setError(null);
@@ -169,6 +195,21 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
         </div>
       </Field>
       {!isDesktop && <p className="m-0 text-[13px] leading-[19px] text-ink-2">Connecting works in the Mac app, not the browser preview.</p>}
+      {credits !== null && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md bg-raised px-4 py-3 shadow-[inset_0_0_0_1px_var(--hairline)]">
+          <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-px">
+            <span className="t-section text-ink">No NEAR AI account?</span>
+            <span className="text-[13px] leading-[18px] text-ink-2">
+              Use Aftercall's test credits: a key with up to ${credits.toFixed(2)} on Aftercall's NEAR AI account, about{" "}
+              {Math.floor(credits / (typicalMeetingCost(30).usd ?? credits))} half-hour meetings. Notes are still made inside NEAR AI's secure hardware, and the key stays in your
+              Keychain.
+            </span>
+          </span>
+          <Button variant="secondary" loading={state === "saving"} disabled={busy} onClick={useCredits}>
+            Use test credits
+          </Button>
+        </div>
+      )}
       <button
         type="button"
         onClick={() => openUrl("https://cloud.near.ai").catch(() => window.open("https://cloud.near.ai", "_blank"))}
