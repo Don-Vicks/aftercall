@@ -130,3 +130,32 @@ export function costLine(cost: CostEstimate): string {
   if (cost.usd === null) return "Estimated cost unknown: NEAR AI didn't report how many tokens the reply used";
   return `Estimated cost: ${formatCost(cost.usd)} (NEAR AI prices as of ${cost.pricesAsOf})`;
 }
+
+/**
+ * Rough sizes of one meeting's notes call, for a figure before any run, never for a bill.
+ * Speech runs near 150 words, about 300 tokens a minute once the transcript is numbered
+ * and labelled; the prompt and schema add a fixed 3,000; notes come back in about 3,000
+ * tokens with thinking off. Real runs report their own usage.
+ */
+export const TYPICAL_MEETING = {
+  model: "Qwen/Qwen3.8-27B",
+  promptTokensPerMinute: 300,
+  promptTokensFixed: 3_000,
+  completionTokens: 3_000,
+};
+
+/** What a meeting this long probably costs: Whisper for the audio plus one notes call, at the sizes above. */
+export function typicalMeetingCost(minutes = 30): CostEstimate {
+  const m = Math.max(0, minutes);
+  const t = TYPICAL_MEETING;
+  return estimateCost({
+    whisperSeconds: m * 60,
+    chat: { model: t.model, usage: { prompt_tokens: t.promptTokensFixed + Math.ceil(m * t.promptTokensPerMinute), completion_tokens: t.completionTokens } },
+  });
+}
+
+/** "A 30-minute meeting costs about $0.0045 (NEAR AI prices as of 2026-11-01)". */
+export function typicalMeetingLine(minutes = 30): string {
+  const cost = typicalMeetingCost(minutes);
+  return `A ${minutes}-minute meeting costs ${formatCost(cost.usd ?? 0)} (NEAR AI prices as of ${cost.pricesAsOf})`;
+}

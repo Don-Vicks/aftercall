@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PRICES_AS_OF, chatCost, costLine, estimateCost, formatCost, sumCosts, whisperCost } from "./cost.ts";
+import { PRICES_AS_OF, TYPICAL_MEETING, chatCost, costLine, estimateCost, formatCost, sumCosts, typicalMeetingCost, typicalMeetingLine, whisperCost } from "./cost.ts";
 
 const close = (a: number | null | undefined, b: number) => assert.ok(a !== null && a !== undefined && Math.abs(a - b) < 1e-12, `${a} ≈ ${b}`);
 
@@ -76,4 +76,21 @@ test("formatCost: enough figures to be non-zero, never $0.00 for a real charge",
   assert.equal(formatCost(0.0001), "about $0.0001");
   assert.equal(formatCost(0.001), "about $0.001");
   assert.equal(costLine(estimateCost({ chat: { model: "Qwen/Qwen3.8-27B", usage: { prompt_tokens: 20_000, completion_tokens: 2_500 } } })), "Estimated cost: about $0.0042 (NEAR AI prices as of 2026-11-01)");
+});
+
+test("a typical meeting: Whisper for the audio plus one notes call at rough sizes", () => {
+  // 30 minutes: 3,000 + 30 × 300 = 12,000 prompt tokens, 3,000 out, 1,800 s of audio.
+  const c = typicalMeetingCost(30);
+  assert.equal(c.whisperSeconds, 1_800);
+  assert.deepEqual([c.chat?.model, c.chat?.promptTokens, c.chat?.completionTokens], [TYPICAL_MEETING.model, 12_000, 3_000]);
+  close(c.usd, 0.00048 + 0.00405 + 0.000018);
+  assert.equal(c.pricesAsOf, PRICES_AS_OF);
+  assert.equal(typicalMeetingLine(), "A 30-minute meeting costs about $0.0045 (NEAR AI prices as of 2026-11-01)");
+});
+
+test("a typical meeting: longer costs more, and no audio still pays for the notes call", () => {
+  assert.ok(typicalMeetingCost(60).usd! > typicalMeetingCost(30).usd!);
+  const none = typicalMeetingCost(-5);
+  assert.equal(none.whisperSeconds, 0);
+  assert.equal(none.chat?.promptTokens, TYPICAL_MEETING.promptTokensFixed);
 });
