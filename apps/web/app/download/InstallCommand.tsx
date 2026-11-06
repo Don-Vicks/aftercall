@@ -6,7 +6,8 @@ import d from "./download.module.css";
 
 /** The test build's one-line install (public/install.sh): no "could not verify" warning, since curl doesn't mark the file as downloaded. */
 const INSTALL_URL = "https://getaftercall.vercel.app/install.sh";
-const command = (ref?: string) => `curl -fsSL ${INSTALL_URL}${ref ? `?ref=${ref}` : ""} | sh`;
+// With a ref the URL is quoted: zsh, the Mac's default shell, reads an unquoted ? as a file pattern and stops.
+const command = (ref?: string) => `curl -fsSL ${ref ? `"${INSTALL_URL}?ref=${ref}"` : INSTALL_URL} | sh`;
 
 /**
  * The visitor's channel, from ?ref= on this page or the ac_ref cookie proxy.ts keeps, so the
