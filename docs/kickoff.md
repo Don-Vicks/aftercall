@@ -1,5 +1,7 @@
 # Kickoff prompt
 
+History: the prompt that started the build on 26 Oct 2026, kept as it was. The paths it names outside this repo are on Victor's Mac.
+
 Paste this into a fresh Claude Code session started in this folder:
 
 > We're building Aftercall for NEAR HACKATHON. Read `CLAUDE.md` and `README.md` first, then `docs/HACKATHON.md` for the rules.
