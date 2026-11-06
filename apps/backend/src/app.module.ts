@@ -11,12 +11,14 @@ import { MemoryClaimsStore, PgClaimsStore } from "./claims/claims.store";
 import { StatsController } from "./stats/stats.controller";
 import { StatsService, rpcChainStats } from "./stats/stats.service";
 import { MemoryCounters, PgCounters, type Counters } from "./stats/counters";
+import { MemoryDailyCounts, PgDailyCounts, type DailyCounts } from "./limits";
 import { nearEnv } from "./network";
 import { Pool } from "pg";
 
 const PG_POOL = "PG_POOL";
 const NEAR_ENV = "NEAR_ENV";
 const COUNTERS = "COUNTERS";
+const DAILY_COUNTS = "DAILY_COUNTS";
 
 function jwtSecret(): string {
   const secret = process.env.AUTH_JWT_SECRET;
@@ -56,14 +58,25 @@ function jwtSecret(): string {
       },
     },
     {
+      provide: DAILY_COUNTS,
+      inject: [PG_POOL],
+      useFactory: async (pool: Pool | null): Promise<DailyCounts> => {
+        if (!pool) return new MemoryDailyCounts();
+        const daily = new PgDailyCounts(pool);
+        await daily.migrate();
+        return daily;
+      },
+    },
+    {
       provide: EmailService,
-      inject: [COUNTERS],
-      useFactory: (counters: Counters) =>
+      inject: [COUNTERS, DAILY_COUNTS],
+      useFactory: (counters: Counters, daily: DailyCounts) =>
         new EmailService(
           process.env.RESEND_API_KEY ? resendMailer(process.env.RESEND_API_KEY) : null,
           process.env.EMAIL_FROM ?? "notes@aftercall.app",
           Date.now,
           counters,
+          daily,
         ),
     },
     {

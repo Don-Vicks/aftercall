@@ -9,6 +9,7 @@ import { EmailService, RECAP_FOOTER_MARK, resendMailer, type Mailer } from "./em
 import { EmailController } from "./email.controller";
 import { AuthService, isAccepted } from "../auth/auth.service";
 import { PgCounters } from "../stats/counters";
+import { PgDailyCounts, limitKey, utcDay } from "../limits";
 
 // The footer as packages/core recapFooter() writes it for a verified, end-to-end encrypted meeting.
 const consent = [
@@ -135,7 +136,8 @@ async function captureLogs(fn: () => Promise<void>): Promise<string> {
 async function recapApp(resend: ReturnType<typeof spyResend>) {
   const db = spyPool();
   const counters = new PgCounters(db.pool as unknown as Pool);
-  const service = new EmailService(resendMailer("re_test_key", resend.fetchImpl), "notes@aftercall.app", Date.now, counters);
+  const daily = new PgDailyCounts(db.pool as unknown as Pool);
+  const service = new EmailService(resendMailer("re_test_key", resend.fetchImpl), "notes@aftercall.app", Date.now, counters, daily);
   const moduleRef = await Test.createTestingModule({
     controllers: [EmailController],
     providers: [
@@ -167,14 +169,19 @@ test("a sent recap leaves only counts behind: no body, subject or address in the
   assert.equal(resend.requests.length, 1);
   assert.ok(resend.requests[0].includes("secret-body-3F"), "the recap did reach Resend");
   assert.deepEqual(leaks(logs), [], "nothing about the recap was logged");
-  assert.equal(db.queries.length, 1, "one database write: the counter");
-  assert.match(db.queries[0].sql, /^INSERT INTO counters/);
-  assert.deepEqual(db.queries[0].params, ["emails_sent"]);
+  // The daily limit reads and adds to today's count, then the global counter: numbers, a day and a hashed key.
+  assert.deepEqual(
+    db.queries.map((q) => q.sql.split(" ").slice(0, 3).join(" ")),
+    ["SELECT n FROM", "INSERT INTO daily_counts", "DELETE FROM daily_counts", "INSERT INTO counters"],
+  );
+  const key = limitKey("recap", "victor.testnet");
+  assert.deepEqual(db.queries[1].params, [key, utcDay(Date.now())]);
+  assert.deepEqual(db.queries[3].params, ["emails_sent"]);
   assert.deepEqual(leaks(JSON.stringify(db.queries)), []);
-  // What the service still holds after the request: today's count for the account, nothing else.
+  assert.ok(!JSON.stringify(db.queries).includes("victor.testnet"), "the account is stored only hashed");
+  // What the service still holds after the request: nothing about the recap.
   const held = JSON.stringify(Object.entries(service).map(([k, v]) => [k, v instanceof Map ? [...v] : typeof v === "function" ? "fn" : v]));
   assert.deepEqual(leaks(held), []);
-  assert.deepEqual([...(service as unknown as { sentTodayCount: Map<string, [number, number]> }).sentTodayCount.values()].map(([, n]) => n), [1]);
 });
 
 test("a failed send says so without echoing the address, and keeps nothing either", async () => {
@@ -194,5 +201,6 @@ test("a failed send says so without echoing the address, and keeps nothing eithe
   assert.match(body, /SEND_FAILED \(Resend 422\)/);
   assert.deepEqual(leaks(body), [], "the error doesn't carry the address back");
   assert.deepEqual(leaks(logs), [], "nor into the logs");
-  assert.equal(db.queries.length, 0, "a failed send isn't even counted");
+  assert.deepEqual(db.queries.map((q) => q.sql.split(" ")[0]), ["SELECT"], "a failed send isn't counted: today's count was only read");
+  assert.deepEqual(leaks(JSON.stringify(db.queries)), []);
 });

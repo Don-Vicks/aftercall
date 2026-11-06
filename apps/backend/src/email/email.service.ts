@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import type { Counters } from "../stats/counters";
+import { MemoryDailyCounts, limitKey, utcDay, type DailyCounts } from "../limits";
 
 /*
  * Recap email: NOTHING IS KEPT.
@@ -8,8 +9,8 @@ import type { Counters } from "../stats/counters";
  * memory, for the length of one request: it is checked, handed to Resend and
  * dropped when the request returns. It is never written to the database, never
  * logged and never put in an error message. What stays is two numbers: how many
- * recaps this account sent today (in memory, for the 50-a-day limit) and the
- * global "emails_sent" counter for /stats. Resend, which delivers the email,
+ * recaps this account sent today (under a hashed key, for the 50-a-day limit;
+ * see limits.ts) and the global "emails_sent" counter for /stats. Resend, which delivers the email,
  * keeps sent mail under its own retention policy; see docs/privacy.md.
  * email.test.ts checks all of this with a spy Resend client, a spy database and
  * captured logs.
@@ -54,15 +55,14 @@ const DAILY_LIMIT = 50;
 
 @Injectable()
 export class EmailService {
-  /** account -> [day, recaps sent that day]. Only a count: no addresses, subjects or bodies. In memory. */
-  private readonly sentTodayCount = new Map<string, [number, number]>();
-
   constructor(
     private readonly mailer: Mailer | null,
     private readonly fromAddress: string,
     private readonly now: () => number = Date.now,
     /** Running total of emails sent, for the public stats. */
     private readonly counters?: Counters,
+    /** Recaps each account sent today. Only a count under a hashed key: no addresses, subjects or bodies. */
+    private readonly sentToday: DailyCounts = new MemoryDailyCounts(),
   ) {}
 
   get configured(): boolean {
@@ -76,10 +76,9 @@ export class EmailService {
     if (!req.subject?.trim() || req.subject.length > 200 || !req.text?.trim() || req.text.length > 20_000) throw new HttpException("BAD_MESSAGE", HttpStatus.BAD_REQUEST);
     if (!req.text.includes(RECAP_FOOTER_MARK)) throw new HttpException("MISSING_FOOTER", HttpStatus.BAD_REQUEST);
 
-    const day = Math.floor(this.now() / 86_400_000);
-    const [d, count] = this.sentTodayCount.get(accountId) ?? [day, 0];
-    const today = d === day ? count : 0;
-    if (today >= DAILY_LIMIT) throw new HttpException("DAILY_LIMIT", HttpStatus.TOO_MANY_REQUESTS);
+    const day = utcDay(this.now());
+    const key = limitKey("recap", accountId);
+    if ((await this.sentToday.get(key, day)) >= DAILY_LIMIT) throw new HttpException("DAILY_LIMIT", HttpStatus.TOO_MANY_REQUESTS);
 
     const name = (req.senderName ?? accountId).replace(/[<>"\r\n]/g, "").slice(0, 60);
     let result: { id: string };
@@ -90,8 +89,8 @@ export class EmailService {
       const status = e instanceof Error ? (/^Resend \d+/.exec(e.message)?.[0] ?? "") : "";
       throw new HttpException(status ? `SEND_FAILED (${status})` : "SEND_FAILED", HttpStatus.BAD_GATEWAY);
     }
-    this.sentTodayCount.set(accountId, [day, today + 1]);
     // The email went out; a counter that can't be written must not turn that into an error.
+    await this.sentToday.increment(key, day).catch(() => {});
     await this.counters?.increment("emails_sent").catch(() => {});
     return result;
   }
