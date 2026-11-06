@@ -25,7 +25,7 @@ import {
   type WalletLimits,
 } from "@aftercall/core";
 import { useChanged } from "./primitives/Check";
-import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, deferred, ease, enter, exit, springs, toast, useDeferred } from "./ui";
+import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, deferred, ease, enter, exit, springs, toast, useConfirm, useDeferred } from "./ui";
 import { parseUsdcInput } from "./WalletScreen";
 import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
@@ -329,6 +329,17 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
       run: () => h.onApprove(f.id),
     });
 
+  const confirm = useConfirm();
+  /** A sent recap again, as it reads now: edits made since are in it, marked. Same undo window as the first send. */
+  const sendAgain = async () => {
+    const ok = await confirm({
+      title: `Send this recap to ${f.to} again?`,
+      body: "It goes out as it reads now, so action items you've changed since are in it, marked as edited.",
+      confirmLabel: "Send again",
+    });
+    if (ok) send();
+  };
+
   const state = pending
     ? "countdown"
     : f.status === "sending"
@@ -356,9 +367,21 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
   return (
     <Card pad="none" className={cx("lift px-5", state === "sent" || state === "drafted" ? "py-3.5" : "py-4")}>
       <Head name={name} title={`Recap to ${name}`} sub={sub} clip>
-        {state === "sent" && <DonePill play={sentNow} upper>
-            Sent {f.doneAt}
-          </DonePill>}
+        {state === "sent" && (
+          <>
+            <Button variant="quiet" size="sm" onClick={() => h.onDraft(f.id)}>
+              Draft in Mail
+            </Button>
+            {HAS_BACKEND && f.to && (
+              <Button variant="quiet" size="sm" onClick={sendAgain}>
+                Send again
+              </Button>
+            )}
+            <DonePill play={sentNow} upper>
+              Sent {f.doneAt}
+            </DonePill>
+          </>
+        )}
         {state === "drafted" && (
           <>
             <Button variant="quiet" size="sm" onClick={() => h.onDraft(f.id)}>
@@ -380,6 +403,11 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
         {state === "sending" && (
           <Body key="sending" className="flex-row items-center gap-2.5 text-ink-2">
             <Spinner size={14} /> Sending through Aftercall…
+          </Body>
+        )}
+        {state === "sent" && f.error && (
+          <Body key="sent-error">
+            <p className="selectable m-0 text-record">Sending it again didn't work: {f.error}</p>
           </Body>
         )}
         {state === "autopilot" && f.autopilotAt && (

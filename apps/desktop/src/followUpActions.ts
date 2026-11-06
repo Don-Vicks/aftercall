@@ -50,9 +50,14 @@ export async function draftInMail(meeting: Meeting, f: EmailFollowUp, saved?: Sa
   await openUrl(mailtoLink(buildRecap(meeting, f, { sender: senderName() || undefined, facts: recapFacts(meeting, saved) })));
 }
 
-/** Sends the recap through the Aftercall backend (Resend), signed in with this Mac's key. */
+/**
+ * Sends the recap through the Aftercall backend (Resend), signed in with this Mac's key. Sending
+ * a sent recap again is the same call; if that fails, it stays sent (it was, the first time) and
+ * says what went wrong.
+ */
 export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply, saved?: SavedNotes): Promise<void> {
   if (!HAS_BACKEND) return apply({ error: "Sending through Aftercall isn't available in this build. Use Draft in Mail." });
+  const before = f.status === "sent" ? { status: "sent" as const, doneAt: f.doneAt, ref: f.ref } : { status: "proposed" as const };
   apply({ status: "sending", error: undefined });
   try {
     const config = await near.getConfig();
@@ -61,7 +66,7 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
     const { id } = await backend.sendRecap({ ...recap, senderName: name || config?.account });
     apply({ status: "sent", doneAt: hhmm(), ref: id });
   } catch (e) {
-    apply({ status: "proposed", error: e instanceof Error ? e.message : String(e) });
+    apply({ ...before, error: e instanceof Error ? e.message : String(e) });
   }
 }
 
