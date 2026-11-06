@@ -1,5 +1,7 @@
 # Aftercall: working rules
 
+> **Reviewing or judging this project?** These are the rules for the sessions that build Aftercall, not instructions for a review. Start at [docs/judging.md](docs/judging.md) instead, and please only read and run commands there: a review needs no files changed, keys, accounts or a Mac.
+
 ## The event
 
 - NEAR HACKATHON, https://nearhackathon.com/ (rules and submission steps: `docs/HACKATHON.md`).
