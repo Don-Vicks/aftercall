@@ -1,15 +1,17 @@
 import { useEffect, useId, useState } from "react";
 import { Copy, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { CalendarEvent, NoticeLog } from "@aftercall/core";
+import { participantNotice, type CalendarEvent, type NoticeLog } from "@aftercall/core";
 import { calendar } from "../calendar";
+import { WEB_URL } from "../near";
 import type { Project } from "../projects";
 import { isDesktop } from "../recorder";
 import { sampleScripts } from "../sampleRecordings";
 import { Avatar, Button, Dialog, IconButton, Menu, Select, Tick, cx, toast } from "../ui";
 import { startRecording, useRecordShortcut } from "./session";
 
-const NOTICE = "Heads up: I'm recording this call with Aftercall to take private notes. The audio is deleted once the notes are made.";
+/** What to paste in the call's chat; its claims are checked in packages/core (`participantNotice`). */
+const NOTICE = participantNotice(`${WEB_URL}/handling`);
 
 /** Within this long before it starts, an event counts as the call you're about to record. */
 const SOON_SECONDS = 15 * 60;
@@ -108,10 +110,12 @@ export function RecordSheet({
   /** When the box was ticked: the notice records when you said you'd told them, not when you pressed Start. */
   const [tickedAt, setTickedAt] = useState<string | null>(null);
   const [how, setHow] = useState<NoticeLog["how"]>(undefined);
+  /** Copying the notice suggests it went in the chat, so "In chat" starts picked (one tap clears it). */
+  const [noticeCopied, setNoticeCopied] = useState(false);
   const setConsent = (on: boolean) => {
     setConsentState(on);
     setTickedAt(on ? new Date().toISOString() : null);
-    if (!on) setHow(undefined);
+    setHow(on && noticeCopied ? "chat" : undefined);
   };
   const [copied, setCopied] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -122,6 +126,8 @@ export function RecordSheet({
   const copyNotice = async () => {
     try {
       await navigator.clipboard.writeText(NOTICE);
+      setNoticeCopied(true);
+      if (consent && !how) setHow("chat");
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
