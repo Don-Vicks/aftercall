@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RECAP_FOOTER_MARK, buildRecap, mailtoLink, recapFactsFrom, recapFooter, type RecapFacts } from "./recap.ts";
+import { RECAP_FOOTER_MARK, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
 import type { EmailFollowUp, Meeting } from "../meeting.ts";
 import type { ProofBundleV1, ProofBundleV2 } from "../notes/pipeline.ts";
 
@@ -99,5 +99,43 @@ test("mailto links keep the address readable and encode the rest", () => {
 test("a recap never includes your notes", () => {
   const r = buildRecap({ ...meeting, yourNotes: "Ada seemed unsure about the price. Push back on Friday." }, f, { sender: "Victor", facts });
   assert.doesNotMatch(r.text, /unsure|Push back/);
+  assert.doesNotMatch(r.html, /unsure|Push back/);
   assert.doesNotMatch(mailtoLink(r), /unsure/);
+});
+
+test("the subject says it's a recap, once", () => {
+  assert.equal(recapSubject("New staging endpoints"), "Recap: New staging endpoints");
+  assert.equal(recapSubject("Recap: API fix"), "Recap: API fix");
+  assert.equal(recapSubject("recap of Monday"), "recap of Monday");
+  assert.equal(buildRecap(meeting, { ...f, subject: "New staging endpoints" }, { facts }).subject, "Recap: New staging endpoints");
+});
+
+test("'You' in the notes becomes the sender for the reader, and unowned items show no owner", () => {
+  assert.equal(recapOwner("You", "Victor"), "Victor");
+  assert.equal(recapOwner("you", undefined), "me");
+  assert.equal(recapOwner("Unassigned", "Victor"), null);
+  assert.equal(recapOwner("Ada", "Victor"), "Ada");
+  const items = [
+    { id: "b1", text: "Send the staging DNS", owner: "You", done: false },
+    { id: "b2", text: "Align the design", owner: "Unassigned", done: false },
+  ];
+  const r = buildRecap({ ...meeting, actionItems: items }, f, { sender: "Victor", facts });
+  assert.match(r.text, /- Send the staging DNS · Victor\n/);
+  assert.match(r.text, /- Align the design\n/);
+  assert.doesNotMatch(r.text, /· You|Unassigned/);
+  assert.match(r.text, /Send the staging DNS/, "the item's own words are kept as the notes have them");
+});
+
+test("the HTML version has the same words, the footer mark, and the proof link behind a label", () => {
+  const r = buildRecap({ ...meeting, summary: "Price <b>& terms</b> agreed." }, f, { sender: "Victor", facts });
+  assert.ok(r.html.includes(RECAP_FOOTER_MARK), "the backend's footer check holds for the HTML too");
+  assert.ok(r.html.includes(`<a href="https://aftercall.app/verify#x"`));
+  assert.ok(r.html.includes(">open the proof</a>"));
+  assert.ok(r.html.includes("Price &lt;b&gt;&amp; terms&lt;/b&gt; agreed."), "meeting text is escaped");
+  assert.ok(!r.html.includes("<b>&"));
+  assert.match(r.html, /<ol[^>]*><li[^>]*>Ship the API fix before Friday's demo\.<\/li><\/ol>/);
+  assert.match(r.html, /Ship the API fix<br><span[^>]*>Victor · by Friday<\/span>/);
+  for (const line of recapFooter(facts).split("\n").slice(0, -1)) assert.ok(r.html.includes(line), `footer line kept: ${line}`);
+  const noProof = buildRecap(meeting, f, { facts: { ...facts, verifyUrl: undefined } });
+  assert.ok(noProof.html.includes(`<a href="${HANDLING}"`) && noProof.html.includes("how Aftercall handles a call"));
 });

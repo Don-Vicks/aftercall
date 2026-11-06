@@ -5,6 +5,8 @@ export interface Recap {
   to: string;
   subject: string;
   text: string;
+  /** The same recap laid out for mail apps that show HTML; `text` is the plain version sent with it. */
+  html: string;
 }
 
 /** What the recap footer may say about a meeting: only what the app knows. */
@@ -67,27 +69,92 @@ export function recapFactsFrom(meeting: Meeting, proof: ProofBundle | undefined,
   };
 }
 
-/** Plain-text recap of a meeting for one follow-up, as in the design. */
+/** A recap's subject says it's a recap, so it reads as one in the inbox. */
+export function recapSubject(subject: string): string {
+  const s = subject.trim();
+  return /^recap\b/i.test(s) ? s : `Recap: ${s}`;
+}
+
+/**
+ * Who an action item is for, as the person reading the recap should see it. The notes say
+ * "You" for whoever recorded the call, which a recipient would read as themselves, so it
+ * becomes the sender's name ("me" without one). An item nobody owns shows no owner.
+ */
+export function recapOwner(owner: string, sender?: string): string | null {
+  const o = owner.trim();
+  if (!o || /^(unassigned|unknown|none|tbd)$/i.test(o)) return null;
+  if (/^you$/i.test(o)) return sender?.trim() || "me";
+  return o;
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Recap of a meeting for one follow-up, as plain text and as HTML with the same words. */
 export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: string; facts: RecapFacts }): Recap {
-  const lines: string[] = [];
-  lines.push(`Hi ${f.toName || "there"}, thanks for the call. Here's what we agreed.`, "");
-  lines.push(meeting.summary, "");
+  const greeting = `Hi ${f.toName || "there"}, thanks for the call. Here's what we agreed.`;
+  const open = meeting.actionItems.filter((a) => !a.done);
+  const items = open.map((a) => {
+    const owner = recapOwner(a.owner, opts.sender);
+    // Items you changed after the notes were made say so, here and in the footer.
+    return { text: a.text, meta: [owner, a.due].filter(Boolean).join(" · "), edited: Boolean(a.edited) };
+  });
+  const editedItems = items.filter((a) => a.edited).length;
+  const facts = editedItems ? { ...opts.facts, editedItems } : opts.facts;
+
+  const lines: string[] = [greeting, "", meeting.summary, ""];
   if (meeting.decisions.length) {
     lines.push("DECISIONS");
     meeting.decisions.forEach((d, i) => lines.push(`${i + 1}. ${d}`));
     lines.push("");
   }
-  const open = meeting.actionItems.filter((a) => !a.done);
-  if (open.length) {
+  if (items.length) {
     lines.push("ACTION ITEMS");
-    // Items you changed after the notes were made say so, here and in the footer.
-    open.forEach((a) => lines.push(`- ${a.text} · ${a.owner}${a.due ? ` · ${a.due}` : ""}${a.edited ? ` ${RECAP_EDITED_MARK}` : ""}`));
+    items.forEach((a) => lines.push(`- ${a.text}${a.meta ? ` · ${a.meta}` : ""}${a.edited ? ` ${RECAP_EDITED_MARK}` : ""}`));
     lines.push("");
   }
   if (opts.sender) lines.push(opts.sender, "");
-  const editedItems = open.filter((a) => a.edited).length;
-  lines.push("--", recapFooter(editedItems ? { ...opts.facts, editedItems } : opts.facts));
-  return { to: f.to, subject: f.subject, text: lines.join("\n") };
+  lines.push("--", recapFooter(facts));
+
+  return { to: f.to, subject: recapSubject(f.subject), text: lines.join("\n"), html: recapHtml(greeting, meeting, items, opts.sender, facts) };
+}
+
+/**
+ * The HTML layout: headings, a numbered list of decisions, action items with who and when,
+ * and the footer in small type with its long proof link behind a short label. Every
+ * word comes from the same places as the plain text; nothing is added.
+ */
+function recapHtml(greeting: string, meeting: Meeting, items: { text: string; meta: string; edited: boolean }[], sender: string | undefined, facts: RecapFacts): string {
+  const p = (s: string) => `<p style="margin:0 0 16px">${escapeHtml(s)}</p>`;
+  const h = (s: string) => `<p style="margin:24px 0 8px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6b6b6b">${s}</p>`;
+  const body: string[] = [p(greeting), p(meeting.summary)];
+  if (meeting.decisions.length) {
+    body.push(h("Decisions"), `<ol style="margin:0 0 16px;padding-left:22px">${meeting.decisions.map((d) => `<li style="margin:0 0 6px">${escapeHtml(d)}</li>`).join("")}</ol>`);
+  }
+  if (items.length) {
+    const li = (a: (typeof items)[number]) =>
+      `<li style="margin:0 0 8px">${escapeHtml(a.text)}${a.meta ? `<br><span style="color:#6b6b6b;font-size:13px">${escapeHtml(a.meta)}</span>` : ""}${a.edited ? ` <span style="color:#6b6b6b;font-size:13px">${escapeHtml(RECAP_EDITED_MARK)}</span>` : ""}</li>`;
+    body.push(h("Action items"), `<ul style="margin:0 0 16px;padding-left:22px">${items.map(li).join("")}</ul>`);
+  }
+  if (sender) body.push(p(sender));
+
+  // The footer's lines as recapFooter() writes them; its last line keeps the mark, with the link behind a label.
+  const footer = recapFooter(facts).split("\n");
+  const url = facts.verifyUrl ?? facts.handlingUrl;
+  const label = facts.verifyUrl ? "open the proof" : "how Aftercall handles a call";
+  const footerHtml = footer
+    .map((line) =>
+      line.startsWith(RECAP_FOOTER_MARK)
+        ? `${escapeHtml(RECAP_FOOTER_MARK)} <a href="${escapeHtml(url)}" style="color:#2f7d6d">${label}</a>`
+        : escapeHtml(line),
+    )
+    .join("<br>");
+
+  return [
+    `<div style="max-width:600px;font:15px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1d1d1f">`,
+    ...body,
+    `<div style="margin-top:28px;padding-top:14px;border-top:1px solid #e3e3e3;font-size:12px;line-height:1.6;color:#6b6b6b">${footerHtml}</div>`,
+    `</div>`,
+  ].join("");
 }
 
 /** A mailto: link that opens the recap as a draft in the person's own mail app. */
