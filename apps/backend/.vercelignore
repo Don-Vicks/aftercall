@@ -1,0 +1,5 @@
+# `vercel deploy` from apps/backend uploads this folder; Vercel builds src/main.ts itself.
+node_modules
+dist
+.env*
+src/**/*.test.ts
