@@ -21,6 +21,8 @@ export interface TransientRecap {
   to: string;
   subject: string;
   text: string;
+  /** The same recap laid out in HTML (core's buildRecap), sent alongside the text. Optional. */
+  html?: string;
   /** The sender's own address, so replies go to them and not to Aftercall. */
   replyTo?: string;
   /** Shown as "<name> via Aftercall". */
@@ -28,14 +30,14 @@ export interface TransientRecap {
 }
 
 /** Sends one email. Resend in production; a fake in tests. */
-export type Mailer = (mail: { from: string; to: string; subject: string; text: string; replyTo?: string }) => Promise<{ id: string }>;
+export type Mailer = (mail: { from: string; to: string; subject: string; text: string; html?: string; replyTo?: string }) => Promise<{ id: string }>;
 
 export function resendMailer(apiKey: string, fetchImpl: typeof fetch = fetch): Mailer {
   return async (mail) => {
     const res = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ from: mail.from, to: [mail.to], subject: mail.subject, text: mail.text, reply_to: mail.replyTo }),
+      body: JSON.stringify({ from: mail.from, to: [mail.to], subject: mail.subject, text: mail.text, html: mail.html, reply_to: mail.replyTo }),
     });
     const body = (await res.json().catch(() => ({}))) as { id?: string; name?: string };
     // Resend's error message can quote the address; only its status and error name go further.
@@ -75,6 +77,11 @@ export class EmailService {
     if (!EMAIL.test(req.to) || (req.replyTo && !EMAIL.test(req.replyTo))) throw new HttpException("BAD_ADDRESS", HttpStatus.BAD_REQUEST);
     if (!req.subject?.trim() || req.subject.length > 200 || !req.text?.trim() || req.text.length > 20_000) throw new HttpException("BAD_MESSAGE", HttpStatus.BAD_REQUEST);
     if (!req.text.includes(RECAP_FOOTER_MARK)) throw new HttpException("MISSING_FOOTER", HttpStatus.BAD_REQUEST);
+    if (req.html !== undefined) {
+      // The HTML version carries the same footer, and no script, frame or form: it's a recap, not a page.
+      if (typeof req.html !== "string" || req.html.length > 60_000 || /<\s*(script|iframe|object|embed|form)\b|javascript:|\son\w+\s*=/i.test(req.html)) throw new HttpException("BAD_MESSAGE", HttpStatus.BAD_REQUEST);
+      if (!req.html.includes(RECAP_FOOTER_MARK)) throw new HttpException("MISSING_FOOTER", HttpStatus.BAD_REQUEST);
+    }
 
     const day = utcDay(this.now());
     const key = limitKey("recap", accountId);
@@ -83,7 +90,7 @@ export class EmailService {
     const name = (req.senderName ?? accountId).replace(/[<>"\r\n]/g, "").slice(0, 60);
     let result: { id: string };
     try {
-      result = await this.mailer({ from: `${name} via Aftercall <${this.fromAddress}>`, to: req.to, subject: req.subject, text: req.text, replyTo: req.replyTo });
+      result = await this.mailer({ from: `${name} via Aftercall <${this.fromAddress}>`, to: req.to, subject: req.subject, text: req.text, ...(req.html ? { html: req.html } : {}), replyTo: req.replyTo });
     } catch (e) {
       // A plain code back to the app, and nothing logged: the underlying error could carry the address.
       const status = e instanceof Error ? (/^Resend \d+/.exec(e.message)?.[0] ?? "") : "";

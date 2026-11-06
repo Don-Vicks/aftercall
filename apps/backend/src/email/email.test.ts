@@ -72,11 +72,25 @@ test("a recap built by the app is accepted: the backend checks core's footer mar
     { verified: false, e2ee: null, handlingUrl: "https://aftercall.app/handling" },
   ]) {
     const recap = buildRecap(meeting, f, { facts });
-    await email.send("v", { to: recap.to, subject: recap.subject, text: recap.text });
+    await email.send("v", { to: recap.to, subject: recap.subject, text: recap.text, html: recap.html });
     assert.ok(recap.text.endsWith(recapFooter(facts)));
   }
   assert.equal(sent.length, 2);
+  assert.ok(sent.every((m) => m.html?.includes(RECAP_FOOTER_MARK)), "the HTML version goes out with the text");
   assert.ok(consent.endsWith(recapFooter({ verified: true, e2ee: true, verifyUrl: "https://aftercall.app/verify#x", handlingUrl: "h" })), "the fixture above is a real footer");
+});
+
+test("an HTML version needs the footer too, and can't carry script, frames, forms or handlers", async () => {
+  const { mailer, sent } = fakeMailer();
+  const email = new EmailService(mailer, "notes@aftercall.app");
+  const ok = `<p>Hi</p><div>${RECAP_FOOTER_MARK} <a href="https://x">open the proof</a></div>`;
+  const send = (html: string) => email.send("v", { to: "ada@example.com", subject: "x", text: consent, html });
+  await assert.rejects(send("<p>Hi, no footer</p>"), /MISSING_FOOTER/);
+  for (const bad of ["<script>x()</script>", "<iframe src=x>", "<form>", '<a href="javascript:x">', '<img src=x onerror="x()">']) {
+    await assert.rejects(send(ok + bad), /BAD_MESSAGE/, bad);
+  }
+  await send(ok);
+  assert.equal(sent.at(-1)?.html, ok);
 });
 
 test("without Resend configured, sending says so instead of failing silently", async () => {
