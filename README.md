@@ -6,15 +6,15 @@ Private meeting notes that do the follow-ups. Built for NEAR HACKATHON (1–14 N
 
 Aftercall records a call on your Mac, transcribes and summarises it inside NEAR AI Cloud's secure hardware (TEEs), and records a proof of that on NEAR that anyone can check. Then it does what the meeting decided: the recap email goes out and the agreed payment is made in USDC on NEAR, after one approval or under autopilot rules you set; a payment over your caps waits for your own NEAR wallet. A NEAR contract caps what the app can ever pay, so even a hijacked app or a tricked AI can't overspend.
 
-> **Status:** in development for NEAR HACKATHON (tracks: privacy, security, agents). Building started on 26 Oct 2026, after the event was announced on 19 Oct; the official FAQ counts code from the announcement onward ([HACKATHON.md](https://nearhackathon.com/HACKATHON.md), Q-001), so the whole history is hackathon work. The commit history shows the real timeline. What runs against live NEAR AI and NEAR testnet, and what is so far proven only locally, is listed under [What is proven](#what-is-proven).
+> **Status:** in development for NEAR HACKATHON (tracks: privacy, security, agents, business, realworld). Building started on 26 Oct 2026, after the event was announced on 19 Oct; the official FAQ counts code from the announcement onward ([HACKATHON.md](https://nearhackathon.com/HACKATHON.md), Q-001), so the whole history is hackathon work. The commit history shows the real timeline. What runs against live NEAR AI and NEAR testnet, and what is so far proven only locally, is listed under [What is proven](#what-is-proven).
 
 ## Check it in five minutes
 
 | Do | See |
 | --- | --- |
-| `pnpm install && pnpm verify --quick` | Typecheck of every package, 353 core, 28 backend and 20 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs; the MCP tests build the one-file server first and run it with plain `node`), the web build, the NEAR signer, the desktop Rust tests (recorder with the mic-silent, mic-stopped and "Call ended?" watches, the ⌘⇧R press gate, encryption at rest, agents read-only by default and their activity list, action item edits, TDX quote verification, recovery, the audio sweep) and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (19 more tests, about 6 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). |
+| `pnpm install && pnpm verify --quick` | Typecheck of every package, 356 core, 28 backend and 20 MCP server tests (more with `DATABASE_URL` set, adding the Postgres runs; the MCP tests build the one-file server first and run it with plain `node`), the web build, the NEAR signer, the desktop Rust tests (recorder with the mic-silent, mic-stopped and "Call ended?" watches, the ⌘⇧R press gate, encryption at rest, agents read-only by default and their activity list, action item edits, TDX quote verification, recovery, the audio sweep) and the contract's unit tests, with a pass/fail summary. `pnpm verify` adds the contract running on a local NEAR node (20 more tests, about 8 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). Needs Node 24, pnpm 10 and stable Rust. The desktop Rust tests build only on macOS (Core Audio, WebKit); on Linux, verify builds the desktop web app and MCP bundle and lists the Rust tests as skipped. |
 | `pnpm dev:ui`, open http://localhost:1420 | The Mac app's interface in a browser on a sample meeting: Today, the ⌘K palette, the meeting with your notes, ticks and approve-with-undo, the transcript as a conversation, People, Ask your meetings (⌘J), Action items (the pencil on a row edits its text, owner or due date; an edited item shows "edited" and offers Restore original), the $5,000 payment the contract blocks, Coding agents with sample activity. Recording is simulated in the browser: New recording shows the live page, the floating pill, your notes (⌘⇧R) and processing in run order; `/live.html` shows the floating recorder, and `?simulate=silent`, `?simulate=mic-silent`, `?simulate=mic-stopped` and `?simulate=call-ended` show the call and mic warnings and the "Call ended?" prompt 3 s into a recording. |
-| `pnpm --filter @aftercall/web dev`, open http://localhost:3000 | The landing page, How it works (the journey of one meeting and every check) and Install (`/download`: no signed build is published yet, so it says how to build the app from source), plus `/verify`, which re-runs a proof link's checks in your browser, and `/handling`, How a call is handled: each step a call goes through, what each line of the recap footer means, what isn't proven, and the open NEAR AI issues Aftercall's checks don't close. |
+| `pnpm --filter @aftercall/web dev`, open http://localhost:3000 | The landing page, How it works (the journey of one meeting and every check) and Install (`/download`: the unsigned test build for NEAR testnet, its one-line Terminal install and the Gatekeeper steps; live at https://getaftercall.vercel.app/download, with the browser demo at https://getaftercall.vercel.app/demo), plus `/verify`, which re-runs a proof link's checks in your browser, and `/handling`, How a call is handled: each step a call goes through, what each line of the recap footer means, what isn't proven, and the open NEAR AI issues Aftercall's checks don't close. |
 | `pnpm sample:notes` (needs `NEAR_AI_API_KEY` in `.env`) | One of the two fictional sample calls in [`samples/`](samples) goes through the real pipeline on NEAR AI Cloud: every attestation check below, Whisper on both stems, the transcript end-to-end encrypted to the attested Qwen TEE, the strict-schema summary and the signature check. It prints the notes (including a 40 USDC deposit to the designer, with its quote), ✓/✗ for every check, grouped Gateway / Whisper TEE / Qwen TEE / Response, and the estimated cost: typically well under a cent per sample at NEAR AI's prices on 1 Nov 2026, with the summary capped at 12,288 output tokens. `pnpm sample:notes all` runs both and adds a total. It exits 0 when every sample came back verified and 1 otherwise. Without a key it stops before sending anything. |
 | In the Mac app: Home → "Open a sample recording", then Make notes | The same sample becomes an ordinary recording labelled Sample, processed with your NEAR AI key; the Verify sheet lists every check. In `pnpm dev:ui` it opens with its script. |
 | `pnpm --filter @aftercall/web dev`, open http://localhost:3000/verify | The public Verify page. With a proof link (`/verify#…`, copied from the app's Verify sheet) it reads the proof from NEAR and re-runs every check in your browser. |
@@ -217,6 +217,8 @@ Disclosed per the hackathon FAQ (Q-005).
 
 ## Plan
 
+A ticked box means built, with its tests in `pnpm verify`. What has also run live (in the Mac app, on NEAR AI, on testnet) is in each item's note and under [What is proven](#what-is-proven); "not yet run" in a note means exactly that.
+
 ### M1 · Day 1 (2026-11-01): Foundations
 - [x] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
 - [x] Desktop interface from the design on sample data: meeting page, follow-ups with "check before you approve", transcript with evidence links, recording panel with the consent tick, processing stages, light and dark
@@ -250,7 +252,7 @@ Disclosed per the hackathon FAQ (Q-005).
 - [x] Claim link: single-use link (7 days), stored in Postgres with only a hash of the token, phone claim page, owner confirms the payee in their wallet. Tested end to end against the backend; emailing the link waits on Resend
 - [x] Autopilot rules (team-domain recaps, listed payees within the per-payment cap and today's allowance; with no per-payment cap set, autopilot pays nothing), with a 60-second undo. If Aftercall closes during the undo window, the item doesn't run on the next launch: it waits for your approval and says why
 - [ ] Gate 2: the full demo works end to end on testnet. The $5,000 block needs no 5,000 test USDC: a payment over a cap is parked whatever the balance, and the balance is checked when your wallet approves it
-- [ ] 5 Nov: public rough build and a video reply in the teaser thread to Illia
+- [x] 5 Nov: public rough build and a video reply in the teaser thread to Illia. The unsigned test build went live on 4 Nov (universal, Apple silicon and Intel, from 5 Nov), with the launch video
 
 ### M5 · Day 10 (2026-11-10): Real users and trust
 - [x] Onboarding v0: welcome, a real 5-second audio check (triggers the macOS prompts), NEAR AI key, first recording; wallet later in Settings
@@ -274,7 +276,7 @@ Disclosed per the hackathon FAQ (Q-005).
 ### M7 · Day 14 (2026-11-14): Ship
 - [ ] Record the 90-second demo video (13 Nov)
 - [ ] X post in the teaser thread, saying it was built at NEAR HACKATHON, with the video and live numbers (Victor posts it)
-- [ ] Make the repo public and check no secrets are in history (`gitleaks`)
+- [ ] Make the repo public and check no secrets are in history (`gitleaks`). The history scan is clean (6 Nov, `gitleaks git -c .gitleaks.toml`; the five hits checked by hand are pinned in `.gitleaksignore`); the repo isn't public yet
 - [ ] Victor submits the form by hand before 2026-11-14 23:59 UTC (tracks: privacy, security, agents, business, realworld)
 
 ## Submission checklist
@@ -283,6 +285,6 @@ Disclosed per the hackathon FAQ (Q-005).
 - [ ] Demo video, 90 seconds, following the demo script in the build doc
 - [ ] Public X post saying the project was built at NEAR HACKATHON, with the video or screenshots
 - [ ] Mainnet NEAR payout account ready (created by Victor)
-- [ ] Form at https://nearhackathon.com/#apply filled in by Victor; one submission, can't be edited
-- [ ] Contract tests and the verify script pass from a clean checkout
-- [ ] No secrets in the repo; `.env.example` only
+- [ ] Form at https://nearhackathon.com/#apply filled in by Victor; one submission per project, corrected only through https://nearhackathon.com/request-changes
+- [x] Contract tests and the verify script pass from a clean checkout (fresh clone on macOS, 6 Nov: all 8 steps, including 20 sandbox tests)
+- [x] No secrets in the repo; `.env.example` only (root and `apps/backend`)
