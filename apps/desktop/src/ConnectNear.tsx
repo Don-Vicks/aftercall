@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import { Check, ChevronRight, ShieldCheck, Wallet } from "lucide-react";
 import { AutopilotSettings } from "./AutopilotSettings";
+import { RecapSettings } from "./RecapSettings";
 import { CalendarSettings } from "./CalendarSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import type { CalendarStatus } from "./calendar";
@@ -36,6 +37,7 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
     { id: "settings-account", label: "NEAR account", done: n.connected, pill: toSign ? "To sign" : undefined },
     { id: "settings-calendar", label: "Calendar", done: calendar === "granted" },
     { id: "settings-shortcut", label: "Shortcut" },
+    { id: "settings-recaps", label: "Recaps" },
     { id: "settings-autopilot", label: "Autopilot" },
   ];
 
@@ -111,6 +113,10 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
 
           <div id="settings-shortcut" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(7)}>
             <ShortcutSettings />
+          </div>
+
+          <div id="settings-recaps" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>
+            <RecapSettings />
           </div>
 
           <div id="settings-autopilot" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>

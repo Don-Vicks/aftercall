@@ -59,7 +59,7 @@ export interface ClaimInfo {
 }
 
 export const backend = {
-  sendRecap: (mail: { to: string; subject: string; text: string; replyTo?: string; senderName?: string }) =>
+  sendRecap: (mail: { to: string; subject: string; text: string; html?: string; replyTo?: string; senderName?: string }) =>
     call<{ id: string }>("/email/recap", { method: "POST", body: JSON.stringify(mail) }),
   createClaim: (c: { amount: string }) =>
     call<{ id: string; token: string; expiresAt: number }>("/claims", { method: "POST", body: JSON.stringify(c) }),
