@@ -1,0 +1,15 @@
+# gitleaks config: the default rules, minus test material that is meant to be public.
+# Run: gitleaks git --redact -v   (scans the whole history)
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Throwaway keys used only by tests"
+paths = [
+  # Self-signed CA and leaf certificates for the pinned-TLS transport tests.
+  '''apps/desktop/src-tauri/tests/fixtures/tls/''',
+  # NEAR key test vectors (signing, NEP-413, 1Click deposit actions).
+  '''apps/backend/src/auth/nep413-vector\.test\.ts''',
+  '''packages/core/src/intents/oneclick\.test\.ts''',
+  '''packages/core/src/wallet/actions\.test\.ts''',
+]

@@ -1,0 +1,11 @@
+# Findings checked by hand: none is a credential. Fingerprints, so anything new still fails the scan.
+# sample proof: public data (model E2EE public key, NVIDIA attestation token)
+ba969e522d0507b08bae5475a5c49d902f6a1497:apps/desktop/src/sampleProof.json:generic-api-key:31
+# sample proof: public data (model E2EE public key, NVIDIA attestation token)
+ba969e522d0507b08bae5475a5c49d902f6a1497:apps/desktop/src/sampleProof.json:jwt:291
+# one-time token of a local MCP demo run, redacted since; the socket it opened is gone
+cbd84a750f1ef2ae68a37551625d4f0e40548c92:docs/agents-demo.md:generic-api-key:20
+# test string
+34ddaa5508d6a76ab2aed777af050b473a5442ef:apps/backend/src/email/email.test.ts:generic-api-key:64
+# fake key in a test
+9452eca7fe04c3cfe725fb64492b21c958c2d12f:apps/desktop/src-tauri/tests/nearai_transport.rs:generic-api-key:45
