@@ -12,7 +12,7 @@
 set -eu
 
 DMG_URL="https://getaftercall.vercel.app/releases/Aftercall-0.1.0-testnet.dmg"
-DMG_SHA256="598c7c08de2936ad29349a150b796c4e61cf5c7897143f7dd5ad1e1593569faf"
+DMG_SHA256="a9ba2faa4054985c471b7d574b8f690d634192a718c268921e8be02253204c34"
 BUNDLE_ID="dev.aftercall.app"
 
 say() { printf '%s\n' "$*"; }
