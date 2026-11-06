@@ -36,6 +36,8 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 - **In a browser:** https://getaftercall.vercel.app/demo, the app's interface on sample meetings.
 - **From source:** [docs/development.md](docs/development.md).
 
+**Judging?** The full guide, for people and coding agents: [docs/judging.md](docs/judging.md). The short version follows.
+
 ## For judges
 
 **What it is:** a Mac app that records a call, has NEAR AI Cloud's secure hardware (TEEs) write the notes, and records a proof of that on NEAR that anyone can check in a browser. Then it does what the meeting decided: it sends the recap and pays the agreed USDC from a NEAR contract that caps what the app can spend.
@@ -133,6 +135,7 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 
 | | |
 | --- | --- |
+| [docs/judging.md](docs/judging.md) | The guide for judges: checks to run, claims with their code and tests, track fit, known limits |
 | [docs/proven.md](docs/proven.md) | Every claim with the tests that check it, and what has run live |
 | [docs/how-it-works.md](docs/how-it-works.md) | Architecture, the checks on every run, privacy in detail |
 | [docs/privacy.md](docs/privacy.md) | What leaves the Mac, and who keeps what |
