@@ -25,7 +25,13 @@ step "Unit tests (core, backend, MCP server incl. a stdio tools/list run)" pnpm 
 step "Web build (Verify, sign, claim pages)" pnpm --filter @aftercall/web build
 step "NEAR signer (crates/near-tx)" cargo test --quiet --manifest-path crates/near-tx/Cargo.toml
 # The desktop build makes the MCP server bundle first; the app ships it as a resource.
-step "Desktop app (MCP server bundle, recorder, agents, NEAR AI transport)" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && test -f apps/mcp/dist/aftercall-mcp.mjs && cargo test --quiet --manifest-path apps/desktop/src-tauri/Cargo.toml"
+# The Tauri crate links Core Audio and WebKit, so its tests only build on macOS (CI runs them on macos-15).
+if [ "$(uname -s)" = "Darwin" ]; then
+  step "Desktop app (MCP server bundle, recorder, agents, NEAR AI transport)" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && test -f apps/mcp/dist/aftercall-mcp.mjs && cargo test --quiet --manifest-path apps/desktop/src-tauri/Cargo.toml"
+else
+  step "Desktop web build and MCP server bundle (the Rust tests need macOS)" bash -c "pnpm --filter @aftercall/desktop build >/dev/null && test -f apps/mcp/dist/aftercall-mcp.mjs"
+  results+=("– Desktop Rust tests skipped: macOS only")
+fi
 step "Agent-wallet contract (unit)" cargo test --quiet --manifest-path contracts/Cargo.toml -p agent-wallet --lib
 if [ "$QUICK" = 0 ]; then
   step "Agent-wallet contract on a local NEAR node (sandbox)" cargo test --quiet --manifest-path contracts/Cargo.toml -p agent-wallet --test sandbox -- --test-threads=1
