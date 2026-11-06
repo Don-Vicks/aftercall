@@ -720,6 +720,7 @@ export default function App() {
                 meeting={meeting}
                 sample={meeting.id === syncWithAda.id ? "made-up" : recordings.some((r) => r.id === meeting.id && r.label === "Sample") ? "fictional" : undefined}
                 onNear={!!saved[meeting.id]?.onChain}
+                saved={saved[meeting.id]}
                 proofError={saved[meeting.id]?.onChain ? undefined : proofErrors[meeting.id]}
                 dropped={saved[meeting.id]?.dropped ?? (meeting.id === syncWithAda.id ? syncWithAdaDropped : undefined)}
                 me={account ? [account] : []}

@@ -11,6 +11,8 @@ import { AllDone, BackPill, QuoteReveal, flashLine, useAllDone, useQuoteReveal, 
 import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { grow } from "./SettingsParts";
 import { freshKey, useFresh } from "./freshItems";
+import { MeetingTrail } from "./MeetingTrail";
+import type { SavedNotes } from "./nearai";
 // For the transcript's model-inferred speaker names.
 import { likelySpeakerAt } from "@aftercall/core";
 import { Tooltip } from "./ui";
@@ -50,12 +52,15 @@ export function MeetingScreen({
   sample,
   onNear,
   proofError,
+  saved,
 }: {
   meeting: Meeting;
   /** Which kind of sample this is, so an export says so. */
   sample?: ExportOptions["sample"];
   /** The meeting's proof is recorded on NEAR, so an export can say anyone can check it. */
   onNear?: boolean;
+  /** notes.json, for "Where this meeting went"; absent for the made-up sample. */
+  saved?: SavedNotes;
   /** Why recording the proof on NEAR failed when the notes were made ("Couldn't record the proof on NEAR: …"). */
   proofError?: string;
   /** What the model proposed that the app dropped for lack of an exact quote (notes.json). */
@@ -200,6 +205,8 @@ export function MeetingScreen({
               <Transcript meeting={meeting} others={others} target={target} onOpenFollowUp={openFollowUp} />
             )}
           </TabPanel>
+
+          {tab === "notes" && <MeetingTrail meeting={meeting} saved={saved} sample={sample === "made-up"} />}
 
           {onDelete && (
             <div className="border-t border-hairline pt-4">
