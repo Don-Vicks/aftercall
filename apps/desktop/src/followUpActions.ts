@@ -8,6 +8,7 @@ import {
   encodePublicProof,
   formatUsdc,
   mailtoLink,
+  PAY_MEMO,
   previewOf,
   waitForSettlement,
   type CrossChainPayout,
@@ -75,9 +76,6 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
  * decides: paid within the caps, blocked for the owner's wallet, or failed and
  * refunded if the transfer bounced.
  */
-/** The on-chain memo is public forever, so it names the app and nothing about the meeting. */
-const PAY_MEMO = "Aftercall payment";
-
 export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): Promise<void> {
   if (f.amount === null || !f.payeeListed) return;
   apply({ status: "sending", error: undefined });

@@ -378,6 +378,7 @@ function Notes({
       <div style={r(5)}>
         <FollowUps
           meetingId={meeting.id}
+          meeting={meeting}
           followUps={meeting.followUps}
           limits={limits}
           invited={meeting.invited}

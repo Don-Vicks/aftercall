@@ -11,18 +11,22 @@ import {
   amountProblem as whyNoAmount,
   capsCrossed,
   currencyIn,
+  emailWhatLeaves,
   formatClock,
   formatUsdc,
+  paymentWhatLeaves,
   routeLabel,
   type AmountProblemKind,
   type Attendee,
   type EmailFollowUp,
   type FollowUp,
   type FollowUpStatus,
+  type Meeting,
   type PayeeDestination,
   type PaymentFollowUp,
   type PayoutPreview,
   type WalletLimits,
+  type WhatLeaves,
 } from "@aftercall/core";
 import { useChanged } from "./primitives/Check";
 import { Avatar, Button, Card, Input, LayoutMotion, SectionTitle, Spinner, cx, deferred, ease, enter, exit, springs, toast, useConfirm, useDeferred } from "./ui";
@@ -72,6 +76,7 @@ const shortAddress = (a: string) => `${a.slice(0, 4)}…${a.slice(-4)}`;
 /** The meeting's follow-ups as cards that animate between their states. */
 export function FollowUps({
   meetingId,
+  meeting,
   followUps,
   limits,
   invited = [],
@@ -80,6 +85,8 @@ export function FollowUps({
   ...h
 }: {
   meetingId: string;
+  /** What a recap is made of, so each card can say what leaves. */
+  meeting: Pick<Meeting, "decisions" | "actionItems">;
   followUps: FollowUp[];
   /** The agent wallet's per-payment cap and what it can still pay today, when connected. */
   limits: WalletLimits | null;
@@ -104,7 +111,7 @@ export function FollowUps({
       undo: () => h.onRestore(f.id, before),
     });
   };
-  const ctx: RowContext = { meetingId, h, limits, invited, network, dismiss };
+  const ctx: RowContext = { meetingId, meeting, h, limits, invited, network, dismiss };
 
   return (
     <section aria-labelledby="followups" className="flex flex-col gap-3">
@@ -145,6 +152,7 @@ export function FollowUps({
 
 interface RowContext {
   meetingId: string;
+  meeting: Pick<Meeting, "decisions" | "actionItems">;
   h: FollowUpHandlers;
   limits: WalletLimits | null;
   invited: Attendee[];
@@ -264,6 +272,24 @@ function AutopilotLine({ at, verb, why, onUndo }: { at: number; verb: string; wh
       </div>
       <Bar startedAt={at - UNDO_SECONDS * 1000} total={UNDO_SECONDS * 1000} />
     </div>
+  );
+}
+
+/** What a follow-up shares and who says yes, behind a short line, before you approve it. */
+function WhatLeavesNote({ w }: { w: WhatLeaves }) {
+  return (
+    <details className="text-[13px] text-ink-2">
+      <summary className="cursor-pointer">
+        {w.summary} <span className="font-semibold hover:text-ink">What leaves?</span>
+      </summary>
+      <div className="mt-1.5 flex max-w-[440px] flex-col gap-1">
+        {w.details.map((d) => (
+          <p key={d} className="m-0">
+            {d}
+          </p>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -456,15 +482,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             )}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <details className="text-[13px] text-ink-2">
-                <summary className="cursor-pointer">
-                  Draft in Mail keeps it on this Mac. <span className="font-semibold hover:text-ink">Why?</span>
-                </summary>
-                <p className="m-0 mt-1.5 max-w-[440px]">
-                  Draft in Mail opens the recap in your own mail app; Aftercall's servers never see it.
-                  {HAS_BACKEND && " Send through Aftercall passes it through Aftercall's server (in memory only, not kept) and Resend, who keep sent mail under their own policy."}
-                </p>
-              </details>
+              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
                 <Button variant="quiet" onClick={() => c.dismiss(f)}>
                   Dismiss
@@ -751,27 +769,30 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
               </div>
             )}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="quiet" onClick={() => c.dismiss(f)}>
-                Dismiss
-              </Button>
-              {!shared && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
-              {f.payeeListed ? (
-                <Button variant="primary" onClick={pay} disabled={f.amount === null}>
-                  Approve payment
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <WhatLeavesNote w={paymentWhatLeaves(f, { route, claimLinks: HAS_BACKEND })} />
+              <span className="ml-auto flex flex-wrap justify-end gap-2">
+                <Button variant="quiet" onClick={() => c.dismiss(f)}>
+                  Dismiss
                 </Button>
-              ) : shared ? (
-                <Button variant="primary" onClick={confirmClaim}>
-                  Confirm in wallet
-                </Button>
-              ) : (
-                !f.claim &&
-                HAS_BACKEND && (
-                  <Button onClick={() => h.onClaimLink(f.id)} disabled={f.amount === null} icon={<Link2 size={13} aria-hidden="true" />}>
-                    Send claim link
+                {!shared && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
+                {f.payeeListed ? (
+                  <Button variant="primary" onClick={pay} disabled={f.amount === null}>
+                    Approve payment
                   </Button>
-                )
-              )}
+                ) : shared ? (
+                  <Button variant="primary" onClick={confirmClaim}>
+                    Confirm in wallet
+                  </Button>
+                ) : (
+                  !f.claim &&
+                  HAS_BACKEND && (
+                    <Button onClick={() => h.onClaimLink(f.id)} disabled={f.amount === null} icon={<Link2 size={13} aria-hidden="true" />}>
+                      Send claim link
+                    </Button>
+                  )
+                )}
+              </span>
             </div>
           </Body>
         )}
