@@ -97,6 +97,23 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 
 The full diagram, every check and what each part does with your data: [docs/how-it-works.md](docs/how-it-works.md). Who sees and keeps what: [docs/privacy.md](docs/privacy.md).
 
+## Follow-ups: what leaves, who approves, what's kept
+
+The notes are made inside secure hardware, but a follow-up has to leave it to do anything. This is what each one shares, who can say yes, and what record it leaves.
+
+| Follow-up | What leaves, and to whom | Who approves | What's kept, and where |
+| --- | --- | --- | --- |
+| Recap, **Draft in Mail** (the default) | The summary, decisions and open action items, to your own mail app. Nothing goes to Aftercall's servers | You, when you send it from Mail | Your mail provider. On the Mac: when you drafted it |
+| Recap, **Send through Aftercall** | The same recap, to Aftercall's backend (in memory for one request), then Resend, then the recipient | You tap Send, with a 5-second undo. Autopilot sends only to team domains you list, with a 60-second undo | Resend keeps sent mail under its own policy; the backend keeps a count. On the Mac: the time sent and Resend's email id |
+| **Payment within your caps** | The payee's NEAR account and the amount, to NEAR, with a fixed memo ("Aftercall payment") and an id made of the recording's start time and the follow-up's number. No meeting title or text | You tap Approve. Autopilot pays only listed payees within your per-payment cap and today's allowance, with a 60-second undo. The contract checks the payee list and both caps either way | On NEAR, publicly and for good. On the Mac: the transaction hash |
+| **Payment over a cap** | The same, parked on the contract instead of paid | Only your own NEAR wallet, on the `/sign` page, can approve or decline it. The app's key can't | On NEAR: the parked payment and your decision |
+| **Payment on Solana or Base** (NEAR Intents 1Click) | The amount, the payee's address and your refund account, to the 1Click API; then the payment, to NEAR | As above, and only for payees you opted in, under a cross-chain cap that is 0 (off) until your wallet sets it. Over that cap it's refused, not parked | 1Click's own policy; NEAR as above |
+| **Claim link** for a new payee | A token hash and the amount, to Aftercall's backend. The payee's name and the meeting title stay in the link itself | The payee chooses where to be paid; you confirm them as a payee in your own wallet | Backend: the token hash, owner, amount, expiry, status and the account the payee shared |
+| **Changing your caps, payees or pause** | A transaction from your wallet, to NEAR | Only your wallet. Each change needs 1 yoctoNEAR attached, which the app's limited key can't attach | On NEAR |
+| **Coding agents** (Claude Code, Codex) | Nothing leaves the Mac: agents read meetings over a socket only the running app opens | You. Agents are off by default; claiming and completing action items is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim and refusal (the newest 200), never meeting content |
+
+Every meeting also leaves a proof on NEAR, for good: the recording's start time, a hash and the model name, never the meeting itself. The proof link you share carries the checks, hashes and counts, your logged notice and your NEAR account, never the notes or the transcript. Everything else, the field-by-field list with file and line pointers: [docs/privacy.md](docs/privacy.md).
+
 ## NEAR pieces used
 
 | Piece | Where |

@@ -2,6 +2,8 @@
 
 Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Cloud's secure hardware, and Aftercall's own servers keep nothing about a meeting after a response returns. This page lists every place data goes, what each place keeps and for how long, and the code that enforces it. Line numbers are for this commit.
 
+For the follow-ups in one table (what each sends, who approves it, and what record it leaves), see [Follow-ups: what leaves, who approves, what's kept](../README.md#follow-ups-what-leaves-who-approves-whats-kept) in the README.
+
 ## Summary
 
 | Data | Goes to | Kept there |
