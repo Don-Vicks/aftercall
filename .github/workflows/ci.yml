@@ -29,6 +29,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Web build (Verify, sign, claim pages)
+        run: pnpm --filter @aftercall/web build
 
   contract:
     name: Agent-wallet contract (unit and sandbox tests)
