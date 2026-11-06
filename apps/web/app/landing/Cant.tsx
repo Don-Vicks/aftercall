@@ -158,7 +158,7 @@ export function Cant() {
           {REPO_PUBLIC ? (
             <>
               {" "}
-              <a href={`${REPO_URL}#what-is-proven`} className={l.textLink}>
+              <a href={`${REPO_URL}/blob/main/docs/proven.md`} className={l.textLink}>
                 What is proven
                 <span aria-hidden="true"> ↗</span>
               </a>

@@ -192,7 +192,7 @@ export default function HowItWorks() {
                   </span>
                   <Icon name="arrowRight" size={16} stroke={2.2} />
                 </a>
-                <a href={`${REPO_URL}#what-is-proven`} className={h.linkRow}>
+                <a href={`${REPO_URL}/blob/main/docs/proven.md`} className={h.linkRow}>
                   <span>
                     <strong>“What is proven” in the README</strong>
                     <span className="ink-2">each claim and its test</span>

@@ -108,11 +108,11 @@ export default function Download() {
                   </>
                 ) : (
                   <>
-                    <a href={`${REPO_URL}#run-it`} className="btn btn-primary btn-xl press">
+                    <a href={`${REPO_URL}/blob/main/docs/development.md#run-it`} className="btn btn-primary btn-xl press">
                       <Icon name="laptop" size={19} />
                       Build it on your Mac
                     </a>
-                    <a href={`${REPO_URL}#check-it-in-five-minutes`} className="arrow-link">
+                    <a href={`${REPO_URL}#for-judges`} className="arrow-link">
                       Check it in five minutes
                       <Icon name="external" size={12} />
                     </a>
@@ -255,7 +255,7 @@ export default function Download() {
                     </span>{" "}
                     it makes.
                   </p>
-                  <a href={`${REPO_URL}#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
+                  <a href={`${REPO_URL}/blob/main/docs/development.md#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
                     Run it, in the README
                     <Icon name="external" size={12} />
                   </a>
