@@ -333,10 +333,15 @@ export function tapState(p: Pick<PhonePairing, "sent" | "snapshot">, i: Pick<Pen
 
 /**
  * Whether a tap still decides the card, so it offers nothing else: sent and not answered
- * yet, or approved or dismissed on the Mac. A refused tap, or a countdown stopped, leaves
- * the item to act on again.
+ * yet, or approved or dismissed on the Mac while the item still shows as it was tapped.
+ * A refused tap, a countdown stopped, or an item that moved on since (a send that failed,
+ * a payment held for the wallet) leaves the item's own state to say what's next.
  */
-export const tapHolds = (t: TapState | null): boolean => !!t && !(t.result?.outcome === "refused" || (t.result?.outcome === "accepted" && t.sent.kind === "undo-autopilot"));
+export const tapHolds = (t: TapState | null, item: Pick<PendingItem, "status">): boolean => {
+  if (!t) return false;
+  if (!t.result) return true;
+  return t.result.outcome === "accepted" && t.sent.kind !== "undo-autopilot" && item.status === "proposed";
+};
 
 /** What the card says about a tap: "Sent to your Mac", then the Mac's outcome. */
 export function tapText(t: TapState, macOffline: boolean): string {

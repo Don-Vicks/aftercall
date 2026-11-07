@@ -616,7 +616,7 @@ function StatusLine({ item, pairing, hold, tapError, offline, relayNow, now, onU
     );
   }
   if (tapError) return <span className={p.caution}>{tapError}</span>;
-  if (tap && tapHolds(tap)) return <span className="ink-2">{tapText(tap, offline)}</span>;
+  if (tap && tapHolds(tap, item)) return <span className="ink-2">{tapText(tap, offline)}</span>;
   if (choices.undoAutopilot && item.autopilotAt) {
     const left = item.autopilotAt - relayNow;
     const verb = item.kind === "email" ? "sends" : "pays";
@@ -635,7 +635,10 @@ function StatusLine({ item, pairing, hold, tapError, offline, relayNow, now, onU
   }
   return (
     <>
-      {tap?.result && <span className={tap.result.outcome === "refused" ? p.caution : "ink-2"}>{tapText(tap, offline)}</span>}
+      {/* An approve or dismiss the Mac ran says nothing here: the item's own state (failed, held) has moved on since. */}
+      {tap?.result && (tap.result.outcome === "refused" || tap.sent.kind === "undo-autopilot") && (
+        <span className={tap.result.outcome === "refused" ? p.caution : "ink-2"}>{tapText(tap, offline)}</span>
+      )}
       {item.error && <span className={p.record}>{item.error}</span>}
       {choices.wallet ? (
         <span className={p.caution}>{detail ? choices.why : "Held for your wallet"}</span>
@@ -685,7 +688,7 @@ function Detail(props: CardProps & { snapshot: Snapshot; onHold: (kind: "approve
   const choices = phoneChoices(item);
   const tap = tapState(pairing, item);
   const amount = itemAmount(item);
-  const canTap = !hold && !tapHolds(tap);
+  const canTap = !hold && !tapHolds(tap, item);
 
   return (
     <article className={p.detail} aria-labelledby="dt">
