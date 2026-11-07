@@ -5,6 +5,7 @@ import { decryptPieces, parseChatStream, type StreamProgress } from "./stream.ts
 import { mergeTranscript, numberedTranscript, type TranscribedChunk, type WhisperResult } from "./transcript.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import type { E2eeRecord, ProofBundleV2, ProofBundleV3 } from "./bundle.ts";
+import { lineTreeOf } from "./lines.ts";
 import { attestGateway, attestModel, attestedKeys, failedLabels, gatewayChecks, gatewayTlsPin, loadNvidiaKeys, modelChecks, tlsPinMismatch, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
 import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse, type TeeCheck } from "../tee/checks.ts";
 import { encryptMessages, newClientKeys } from "../tee/e2ee.ts";
@@ -343,6 +344,12 @@ export interface ProcessResult {
    * in notes.json (encrypted on the Mac), never in the proof or its public link.
    */
   yourNotesSalt?: string;
+  /**
+   * The random key each transcript line's salt comes from (`lineSalt`), behind
+   * `proof.lineTree`. Saved only in notes.json (encrypted on the Mac); a shared line
+   * carries that one line's salt, never the key.
+   */
+  lineKey: string;
   /** What this run probably cost in NEAR AI credit. Not in the proof. */
   cost: CostEstimate;
 }
@@ -773,6 +780,7 @@ export async function processRecording(
     yourNotes,
   });
   const yourNotesSalt = yourNotes ? t.randomHex() : undefined;
+  const lineKey = t.randomHex();
   const notice = cleanNotice(input.notice);
   const count = (kind: Dropped["kind"]) => dropped.filter((d) => d.kind === kind).length;
 
@@ -793,6 +801,7 @@ export async function processRecording(
     ...(yourNotes && yourNotesSalt ? { yourNotesHash: yourNotesHash(yourNotesSalt, yourNotes) } : {}),
     dropped: { decisions: count("decision"), actionItems: count("action item"), followUps: count("follow-up") },
     ...(notice ? { notice } : {}),
+    lineTree: lineTreeOf(transcript, lineKey),
   };
   const proof: ProofBundleV2 | ProofBundleV3 = split
     ? {
@@ -814,6 +823,7 @@ export async function processRecording(
     dropped,
     checks,
     ...(yourNotesSalt ? { yourNotesSalt } : {}),
+    lineKey,
     cost: estimateCost({ whisperSeconds, chat: { model: SUMMARY_MODEL, usage: sumUsage(calls.map((c) => c.usage)) } }),
     proof,
   };

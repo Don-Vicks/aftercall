@@ -1,6 +1,7 @@
 import type { SignatureResponse, TeeCheck } from "../tee/checks.ts";
 import type { TeeEvidence } from "../tee/attest.ts";
 import type { NoticeLog } from "../meeting.ts";
+import type { LineTree } from "./lines.ts";
 
 /**
  * What a meeting's proof bundle holds, by version. The proof on NEAR is the sha256 of
@@ -68,6 +69,13 @@ export interface ProofBundleV2 extends Omit<ProofBundleV1, "version"> {
   dropped?: DroppedCounts;
   /** The notice you logged before recording, when you did. Absent otherwise, so older bundles hash as before. */
   notice?: NoticeLog;
+  /**
+   * The Merkle root over the transcript's lines (lines.ts), so one line can be shared
+   * with a proof that it is part of this transcript. Each line's salt comes from a key
+   * kept only in notes.json (`lineKey`). Bundles made before it lack the key and hash
+   * exactly as before; their lines can't be shared.
+   */
+  lineTree?: LineTree;
 }
 
 export interface DroppedCounts {
