@@ -19,6 +19,16 @@
 //! cannot check that a deposit address really routes to the payee's address: that
 //! promise comes from the 1Click quote, which the app fetched. The cross-chain cap
 //! bounds what a stolen app key could send that way. See docs/near-intents-1click.md.
+//!
+//! Handshake (escrow): the app's key may also open an escrow for a listed payee, under
+//! the same caps and pause (over a cap it is parked for the owner's wallet, like a
+//! payment), and release it once the payee has confirmed the terms from their own
+//! NEAR account. Each escrow keeps the meeting's proof hash and a hash of the terms.
+//! See docs/handshake.md for the rules.
+//!
+//! Upgrades: the contract's root state (`AgentWallet`) never gains a field. Newer
+//! records live in maps built on the fly from their own storage prefixes, so a plain
+//! redeploy keeps every existing wallet, proof and payment readable.
 
 use near_sdk::json_types::{U128, U64};
 use near_sdk::store::{LookupMap, LookupSet};
@@ -66,6 +76,9 @@ enum StorageKey {
     // the contract state, so the state layout of a deployed contract is unchanged.
     Destinations,
     CrossChainPayments,
+    // Handshake, appended for the same reason.
+    Escrows,
+    PaymentProofs,
 }
 
 #[near(serializers = [borsh, json])]
@@ -180,6 +193,67 @@ pub struct PayResult {
     pub cross_chain_left_today: Option<U128>,
 }
 
+/// A payment's or an escrow's link to the meeting it came from: the proof `record_proof` stored.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, PartialEq, Debug)]
+pub struct ProofLink {
+    /// The id the proof was recorded under (the recording's start time).
+    pub meeting_id: String,
+    /// The proof hash as recorded, copied from the proof itself.
+    pub proof_hash: String,
+}
+
+/// Where an escrow is. Every move between them is in docs/handshake.md.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum EscrowState {
+    /// Over a cap: waits for the owner's wallet (`approve_escrow`). No money set aside yet.
+    Parked,
+    /// The money is set aside; waiting for the payee to confirm.
+    Open,
+    /// The payee confirmed the terms; waiting for the owner to release it.
+    Confirmed,
+    /// Paid to the payee.
+    Released,
+    /// The owner took it back: before the payee confirmed, or after the timeout.
+    Cancelled,
+    /// The payee gave it back to the owner.
+    Returned,
+}
+
+/// A deal agreed on a call, held until it is released. Every field is fixed in size once
+/// written, so a state change never needs more storage.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct Escrow {
+    pub payee: AccountId,
+    pub amount: U128,
+    /// The meeting's proof, as `record_proof` stored it when the escrow opened.
+    pub proof: ProofLink,
+    /// sha256 (64 lowercase hex) of the terms the app showed: the amount, the condition and
+    /// the exact quotes, with a random salt (packages/core `dealTermsHash`). Only the hash is on chain.
+    pub terms_hash: String,
+    /// Whether the terms have a condition. Without one, the payee's confirmation releases it.
+    pub has_condition: bool,
+    pub state: EscrowState,
+    /// UTC day its amount was counted in today's spending (set when the money is set aside).
+    pub day: u64,
+    /// Block timestamps in nanoseconds, as strings in JSON. `confirmed_at` is 0 until the payee confirms.
+    pub opened_at: U64,
+    pub confirmed_at: U64,
+}
+
+#[near(serializers = [json])]
+pub struct EscrowResult {
+    /// "open" (set aside, waiting for the payee) or "parked" (over a cap, waiting for the owner's wallet).
+    pub state: EscrowState,
+    /// "OVER_PAYMENT_CAP" or "OVER_CAP" when parked.
+    pub reason: Option<String>,
+    /// What is left of today's daily cap.
+    pub left_today: U128,
+}
+
 #[ext_contract(ext_ft)]
 #[allow(dead_code)]
 trait FungibleToken {
@@ -196,6 +270,20 @@ fn destinations() -> LookupMap<(AccountId, AccountId), Destination> {
 fn cross_chain_payments() -> LookupMap<(AccountId, String), CrossChainPayment> {
     LookupMap::new(StorageKey::CrossChainPayments)
 }
+
+/// Owner and escrow id -> the escrow. Not a field of the state, so older deployments upgrade in place.
+fn escrows() -> LookupMap<(AccountId, String), Escrow> {
+    LookupMap::new(StorageKey::Escrows)
+}
+
+/// Owner and follow-up id -> the proof of the meeting the payment came from.
+fn payment_proofs() -> LookupMap<(AccountId, String), ProofLink> {
+    LookupMap::new(StorageKey::PaymentProofs)
+}
+
+/// After the payee confirms, the owner's wallet can take an unreleased escrow back only once
+/// this has passed: 30 days.
+const ESCROW_RECLAIM_AFTER: u64 = 30 * NANOS_PER_DAY;
 
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
@@ -449,6 +537,57 @@ impl AgentWallet {
         assert_one_yocto();
         let owner = env::predecessor_account_id();
         self.take_pending(&owner, &followup_id);
+        // Nothing was paid, so the payment has no meeting to point to.
+        self.with_storage(&owner, |_| {
+            let mut links = payment_proofs();
+            links.remove(&(owner.clone(), followup_id));
+            links.flush();
+        });
+    }
+
+    /// Sets a parked escrow's money aside once the owner's wallet approves it. It counts
+    /// towards today's spending, like an approved payment, and then waits for the payee.
+    #[payable]
+    pub fn approve_escrow(&mut self, escrow_id: String) {
+        assert_one_yocto();
+        let owner = env::predecessor_account_id();
+        let key = (owner.clone(), escrow_id);
+        let mut e = escrows().get(&key).cloned().unwrap_or_else(|| env::panic_str("NO_SUCH_ESCROW"));
+        require!(e.state == EscrowState::Parked, "NOT_PARKED");
+        require!(self.is_listed(&owner, &e.payee), "UNKNOWN_PAYEE");
+        let w = self.wallet_mut(&owner);
+        require!(!w.paused, "PAUSED");
+        require!(w.balance.0 >= e.amount.0, "LOW_BALANCE");
+        roll_day(w);
+        w.balance = U128(w.balance.0 - e.amount.0);
+        w.spent_today = U128(w.spent_today.0 + e.amount.0);
+        w.pending_count -= 1;
+        e.day = w.day;
+        e.state = EscrowState::Open;
+        put_escrow(key, e);
+    }
+
+    /// The owner takes an escrow back: a parked one at any time (nothing was set aside), an
+    /// open one before the payee confirms, and a confirmed one only once 30 days have passed
+    /// since the payee confirmed without it being released. The money goes back on the
+    /// balance, and off today's spending if it is still the day it was counted in.
+    #[payable]
+    pub fn cancel_escrow(&mut self, escrow_id: String) {
+        assert_one_yocto();
+        let owner = env::predecessor_account_id();
+        let key = (owner.clone(), escrow_id);
+        let mut e = escrows().get(&key).cloned().unwrap_or_else(|| env::panic_str("NO_SUCH_ESCROW"));
+        match e.state {
+            EscrowState::Parked => self.wallet_mut(&owner).pending_count -= 1,
+            EscrowState::Open => self.give_back(&owner, &e),
+            EscrowState::Confirmed => {
+                require!(env::block_timestamp() >= e.confirmed_at.0.saturating_add(ESCROW_RECLAIM_AFTER), "PAYEE_CONFIRMED");
+                self.give_back(&owner, &e);
+            }
+            _ => env::panic_str("ESCROW_CLOSED"),
+        }
+        e.state = EscrowState::Cancelled;
+        put_escrow(key, e);
     }
 
     // ---------- limited key: pay and record_proof ----------
@@ -466,14 +605,17 @@ impl AgentWallet {
         memo: Option<String>,
         followup_id: String,
         cross_chain: Option<CrossChainRoute>,
+        meeting_id: Option<String>,
     ) -> PayResult {
         require!(env::prepaid_gas() >= MIN_GAS_FOR_PAY, "NEEDS_50_TGAS");
         require!(amount.0 > 0, "ZERO_AMOUNT");
         require!(memo.as_ref().map_or(true, |m| m.len() <= MAX_MEMO), "MEMO_TOO_LONG");
         let owner = env::predecessor_account_id();
         self.check_payable(&owner, &payee, &followup_id);
+        // With the meeting's id, the payment records which proof it came from; the proof must exist.
+        let link = meeting_id.map(|m| self.proof_link(&owner, m));
         if let Some(route) = cross_chain {
-            return self.pay_cross_chain(owner, payee, amount, memo, followup_id, route);
+            return self.pay_cross_chain(owner, payee, amount, memo, followup_id, route, link);
         }
 
         let w = self.wallet_mut(&owner);
@@ -488,6 +630,11 @@ impl AgentWallet {
             let key = (owner.clone(), followup_id);
             require!(self.pending.get(&key).is_none(), "ALREADY_PENDING");
             self.with_storage(&owner, |this| {
+                if let Some(link) = link {
+                    let mut links = payment_proofs();
+                    links.insert(key.clone(), link);
+                    links.flush();
+                }
                 this.pending.insert(key, Payment { payee, amount, memo });
                 this.pending.flush();
             });
@@ -501,9 +648,136 @@ impl AgentWallet {
         let left = U128(w.daily_cap.0 - w.spent_today.0);
         let day = w.day;
         self.mark_paid(&owner, &followup_id);
+        self.store_link(&owner, &followup_id, link);
         bump(|s| s.payments += 1);
         self.transfer(owner, payee, amount, memo, followup_id, day);
         PayResult { status: "sending".into(), reason: None, left_today: left, cross_chain_left_today: None }
+    }
+
+    /// Opens an escrow for a listed payee: a deal agreed on a call, which the payee confirms
+    /// from their own NEAR account before it is released. Same checks and caps as `pay`, and
+    /// counted once, here: within the caps the money is set aside from the balance now; over
+    /// a cap the escrow is parked for the owner's wallet (`approve_escrow`), like a payment.
+    /// `escrow_id` shares the follow-up ids' space, so a follow-up is paid or held, never both.
+    /// The meeting's proof must already be on the contract; the escrow keeps its hash.
+    pub fn open_escrow(
+        &mut self,
+        escrow_id: String,
+        payee: AccountId,
+        amount: U128,
+        meeting_id: String,
+        terms_hash: String,
+        has_condition: bool,
+    ) -> EscrowResult {
+        require!(amount.0 > 0, "ZERO_AMOUNT");
+        require!(!escrow_id.is_empty(), "BAD_ESCROW_ID");
+        require!(is_sha256_hex(&terms_hash), "BAD_TERMS_HASH");
+        let owner = env::predecessor_account_id();
+        self.check_payable(&owner, &payee, &escrow_id);
+        let key = (owner.clone(), escrow_id.clone());
+        require!(self.pending.get(&key).is_none(), "ALREADY_PENDING");
+        let proof = self.proof_link(&owner, meeting_id);
+
+        let w = self.wallet_mut(&owner);
+        roll_day(w);
+        let over_payment_cap = w.per_payment_cap.0 > 0 && amount.0 > w.per_payment_cap.0;
+        let over_daily_cap = w.spent_today.0 + amount.0 > w.daily_cap.0;
+        let (state, reason) = if over_payment_cap || over_daily_cap {
+            require!(w.pending_count < MAX_PENDING, "TOO_MANY_PENDING");
+            w.pending_count += 1;
+            (EscrowState::Parked, Some(if over_payment_cap { "OVER_PAYMENT_CAP" } else { "OVER_CAP" }.to_string()))
+        } else {
+            require!(w.balance.0 >= amount.0, "LOW_BALANCE");
+            w.balance = U128(w.balance.0 - amount.0);
+            w.spent_today = U128(w.spent_today.0 + amount.0);
+            (EscrowState::Open, None)
+        };
+        let left = U128(w.daily_cap.0.saturating_sub(w.spent_today.0));
+        let day = if state == EscrowState::Open { w.day } else { 0 };
+        let escrow = Escrow {
+            payee,
+            amount,
+            proof,
+            terms_hash,
+            has_condition,
+            state,
+            day,
+            opened_at: U64(env::block_timestamp()),
+            confirmed_at: U64(0),
+        };
+        self.with_storage(&owner, |_| put_escrow(key, escrow));
+        if state == EscrowState::Parked {
+            bump(|s| s.parked += 1);
+        }
+        env::log_str(&format!("ESCROW_OPENED owner={owner} escrow_id={escrow_id}"));
+        EscrowResult { state, reason, left_today: left }
+    }
+
+    /// Pays a confirmed escrow to its payee. The owner's account calls it: the app's key (no
+    /// deposit, so it is on the key's list) or the owner's wallet. Its amount was counted
+    /// against the caps when it was set aside, so it isn't counted again. Refused while paused,
+    /// or if the payee was taken off the list.
+    pub fn release_escrow(&mut self, escrow_id: String) {
+        require!(env::prepaid_gas() >= MIN_GAS_FOR_PAY, "NEEDS_50_TGAS");
+        let owner = env::predecessor_account_id();
+        let key = (owner.clone(), escrow_id);
+        let e = escrows().get(&key).cloned().unwrap_or_else(|| env::panic_str("NO_SUCH_ESCROW"));
+        match e.state {
+            EscrowState::Confirmed => {}
+            EscrowState::Parked | EscrowState::Open => env::panic_str("NOT_CONFIRMED"),
+            _ => env::panic_str("ESCROW_CLOSED"),
+        }
+        require!(!self.wallet_mut(&owner).paused, "PAUSED");
+        require!(self.is_listed(&owner, &e.payee), "UNKNOWN_PAYEE");
+        self.release(owner, key.1, e);
+    }
+
+    // ---------- the payee (their own NEAR account, 1 yocto) ----------
+
+    /// The payee confirms the terms they were shown, from their own NEAR account. `terms_hash`
+    /// must be the escrow's, so they confirm exactly what they read. Without a condition, this
+    /// also releases it (unless the owner paused payments or took the payee off the list; then
+    /// it waits for the owner). Returns the escrow's state after.
+    #[payable]
+    pub fn confirm_escrow(&mut self, owner: AccountId, escrow_id: String, terms_hash: String) -> EscrowState {
+        assert_one_yocto();
+        let key = (owner.clone(), escrow_id);
+        let mut e = escrows().get(&key).cloned().unwrap_or_else(|| env::panic_str("NO_SUCH_ESCROW"));
+        require!(env::predecessor_account_id() == e.payee, "NOT_THE_PAYEE");
+        match e.state {
+            EscrowState::Open => {}
+            EscrowState::Parked => env::panic_str("NOT_OPEN_YET"),
+            EscrowState::Confirmed => env::panic_str("ALREADY_CONFIRMED"),
+            _ => env::panic_str("ESCROW_CLOSED"),
+        }
+        require!(terms_hash == e.terms_hash, "TERMS_DIFFER");
+        if !e.has_condition {
+            require!(env::prepaid_gas() >= MIN_GAS_FOR_PAY, "NEEDS_50_TGAS");
+        }
+        e.state = EscrowState::Confirmed;
+        e.confirmed_at = U64(env::block_timestamp());
+        env::log_str(&format!("ESCROW_CONFIRMED owner={owner} escrow_id={}", key.1));
+        let release_now = !e.has_condition && self.wallets.get(&owner).is_some_and(|w| !w.paused) && self.is_listed(&owner, &e.payee);
+        if release_now {
+            self.release(owner, key.1, e);
+            return EscrowState::Released;
+        }
+        put_escrow(key, e);
+        EscrowState::Confirmed
+    }
+
+    /// The payee gives the money back to the owner, before or after confirming: how both sides
+    /// agree to call a deal off once the owner can no longer cancel it alone.
+    #[payable]
+    pub fn return_escrow(&mut self, owner: AccountId, escrow_id: String) {
+        assert_one_yocto();
+        let key = (owner.clone(), escrow_id);
+        let mut e = escrows().get(&key).cloned().unwrap_or_else(|| env::panic_str("NO_SUCH_ESCROW"));
+        require!(env::predecessor_account_id() == e.payee, "NOT_THE_PAYEE");
+        require!(matches!(e.state, EscrowState::Open | EscrowState::Confirmed), "ESCROW_CLOSED");
+        self.give_back(&owner, &e);
+        e.state = EscrowState::Returned;
+        put_escrow(key, e);
     }
 
     /// Records the hash of a meeting's proof bundle. A proof can never be overwritten.
@@ -574,6 +848,32 @@ impl AgentWallet {
                         .on_pay_complete(owner, followup_id, amount, day, true),
                 ),
         )
+    }
+
+    /// Runs after an escrow's `ft_transfer` to its payee. On failure the escrow is confirmed
+    /// again, with its money still set aside, so the owner can release it once the payee can
+    /// receive USDC (or the payee can return it).
+    #[private]
+    pub fn on_escrow_released(
+        &mut self,
+        owner: AccountId,
+        escrow_id: String,
+        #[callback_result] result: Result<(), PromiseError>,
+    ) -> bool {
+        if result.is_ok() {
+            return true;
+        }
+        let key = (owner.clone(), escrow_id.clone());
+        // Can't panic: an escrow is never removed, and only `release` sets Released.
+        if let Some(mut e) = escrows().get(&key).cloned() {
+            if e.state == EscrowState::Released {
+                e.state = EscrowState::Confirmed;
+                put_escrow(key, e);
+                bump(|s| s.payments = s.payments.saturating_sub(1));
+            }
+        }
+        env::log_str(&format!("ESCROW_RELEASE_FAILED owner={owner} escrow_id={escrow_id}"));
+        false
     }
 
     /// Runs after a withdrawal's `ft_transfer`. On failure, the USDC goes back on the balance.
@@ -648,6 +948,15 @@ impl AgentWallet {
     pub fn get_cross_chain_payment(&self, owner: AccountId, followup_id: String) -> Option<CrossChainPayment> {
         cross_chain_payments().get(&(owner, followup_id)).cloned()
     }
+
+    /// The proof of the meeting a payment came from, when the app gave its meeting id.
+    pub fn get_payment_proof(&self, owner: AccountId, followup_id: String) -> Option<ProofLink> {
+        payment_proofs().get(&(owner, followup_id)).cloned()
+    }
+
+    pub fn get_escrow(&self, owner: AccountId, escrow_id: String) -> Option<Escrow> {
+        escrows().get(&(owner, escrow_id)).cloned()
+    }
 }
 
 impl AgentWallet {
@@ -660,6 +969,7 @@ impl AgentWallet {
     }
 
     /// The cross-chain half of `pay`, after the usual checks passed.
+    #[allow(clippy::too_many_arguments)]
     fn pay_cross_chain(
         &mut self,
         owner: AccountId,
@@ -668,6 +978,7 @@ impl AgentWallet {
         memo: Option<String>,
         followup_id: String,
         route: CrossChainRoute,
+        link: Option<ProofLink>,
     ) -> PayResult {
         require!(env::prepaid_gas() >= MIN_GAS_FOR_CROSS_CHAIN, "NEEDS_70_TGAS");
         require!(is_deposit_address(&route.deposit_address), "BAD_DEPOSIT_ADDRESS");
@@ -720,6 +1031,11 @@ impl AgentWallet {
             let mut map = cross_chain_payments();
             map.insert(key.clone(), record);
             map.flush();
+            if let Some(link) = link {
+                let mut links = payment_proofs();
+                links.insert(key.clone(), link);
+                links.flush();
+            }
             this.paid.insert(key);
         });
         bump(|s| s.payments += 1);
@@ -740,6 +1056,7 @@ impl AgentWallet {
     fn check_payable(&mut self, owner: &AccountId, payee: &AccountId, followup_id: &str) {
         require!(followup_id.len() <= 64, "FOLLOWUP_ID_TOO_LONG");
         require!(!self.paid.contains(&(owner.clone(), followup_id.to_string())), "ALREADY_PAID");
+        require!(escrows().get(&(owner.clone(), followup_id.to_string())).is_none(), "ESCROW_EXISTS");
         require!(self.is_listed(owner, payee), "UNKNOWN_PAYEE");
         // The balance is checked where money moves (pay under the caps, approve_pending), so a
         // payment over a cap is parked for the owner even when the wallet can't cover it yet.
@@ -777,6 +1094,9 @@ impl AgentWallet {
         // Only frees bytes, so it credits the owner and never hits STORAGE_CREDIT_LOW.
         self.with_storage(owner, |this| {
             this.paid.remove(&key);
+            let mut links = payment_proofs();
+            links.remove(&key);
+            links.flush();
             if cross_chain {
                 let mut map = cross_chain_payments();
                 map.remove(&key);
@@ -784,6 +1104,53 @@ impl AgentWallet {
             }
         });
         env::log_str(&format!("PAYMENT_FAILED owner={owner} followup_id={followup_id} refunded={}", amount.0));
+    }
+
+    /// The owner's proof for `meeting_id`, as recorded. Panics with `PROOF_NOT_FOUND` if there is none.
+    fn proof_link(&self, owner: &AccountId, meeting_id: String) -> ProofLink {
+        let proof = self.proofs.get(&(owner.clone(), meeting_id.clone())).unwrap_or_else(|| env::panic_str("PROOF_NOT_FOUND"));
+        ProofLink { meeting_id, proof_hash: proof.proof_hash.clone() }
+    }
+
+    /// Keeps a sent payment's link to its meeting's proof, charged to the owner.
+    fn store_link(&mut self, owner: &AccountId, followup_id: &str, link: Option<ProofLink>) {
+        let Some(link) = link else { return };
+        let key = (owner.clone(), followup_id.to_string());
+        self.with_storage(owner, |_| {
+            let mut links = payment_proofs();
+            links.insert(key, link);
+            links.flush();
+        });
+    }
+
+    /// Puts an escrow's money back on the owner's balance, and takes it off today's spending
+    /// if it is still the UTC day it was counted in (as a refunded payment does).
+    fn give_back(&mut self, owner: &AccountId, e: &Escrow) {
+        let w = self.wallet_mut(owner);
+        w.balance = U128(w.balance.0 + e.amount.0);
+        if w.day == e.day {
+            w.spent_today = U128(w.spent_today.0.saturating_sub(e.amount.0));
+        }
+    }
+
+    /// Marks a confirmed escrow released and sends its money to the payee. The state changes
+    /// before the transfer, so nothing else can move it while the transfer runs; the callback
+    /// puts it back to confirmed if the transfer fails.
+    fn release(&mut self, owner: AccountId, escrow_id: String, mut e: Escrow) {
+        let (payee, amount) = (e.payee.clone(), e.amount);
+        e.state = EscrowState::Released;
+        put_escrow((owner.clone(), escrow_id.clone()), e);
+        bump(|s| s.payments += 1);
+        env::log_str(&format!("ESCROW_RELEASED owner={owner} escrow_id={escrow_id}"));
+        let _ = ext_ft::ext(self.usdc.clone())
+            .with_attached_deposit(NearToken::from_yoctonear(1))
+            .with_static_gas(GAS_FOR_FT_TRANSFER)
+            .ft_transfer(payee, amount, None)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(GAS_FOR_CALLBACK)
+                    .on_escrow_released(owner, escrow_id),
+            );
     }
 
     /// Removes a parked payment and returns its storage to the owner.
@@ -829,6 +1196,19 @@ impl AgentWallet {
                     .on_pay_complete(owner, followup_id, amount, day, false),
             );
     }
+}
+
+/// Writes an escrow. Only `open_escrow` adds one (charged to the owner); every later write
+/// changes fixed-size fields, so it never needs more storage.
+fn put_escrow(key: (AccountId, String), e: Escrow) {
+    let mut map = escrows();
+    map.insert(key, e);
+    map.flush();
+}
+
+/// A sha256 digest as 64 lowercase hex characters.
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn read_stats() -> Stats {
@@ -908,11 +1288,11 @@ mod tests {
     fn daily_cap_resets_next_day() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None).status, "sending");
-        assert_eq!(c.pay(payee.clone(), U128(100 * USDC), None, "b".into(), None).status, "blocked");
+        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None, None).status, "sending");
+        assert_eq!(c.pay(payee.clone(), U128(100 * USDC), None, "b".into(), None, None).status, "blocked");
 
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(100 * USDC), None, "c".into(), None).status, "sending");
+        assert_eq!(c.pay(payee, U128(100 * USDC), None, "c".into(), None, None).status, "sending");
         assert_eq!(c.get_wallet(owner).unwrap().spent_today.0, 100 * USDC);
     }
 
@@ -920,8 +1300,8 @@ mod tests {
     fn approval_on_a_new_day_counts_towards_that_day() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None);
-        assert_eq!(c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None).status, "blocked");
+        c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None, None);
+        assert_eq!(c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None, None).status, "blocked");
 
         // Approved the next day: yesterday's 150 no longer counts, today's 500 does.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 11));
@@ -930,7 +1310,7 @@ mod tests {
 
         // So a small payment the same day is over the cap, not silently allowed.
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(10 * USDC), None, "c".into(), None).status, "blocked");
+        assert_eq!(c.pay(payee, U128(10 * USDC), None, "c".into(), None, None).status, "blocked");
     }
 
     #[test]
@@ -938,14 +1318,14 @@ mod tests {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         // 5,000 is over the 200 cap and more than the 1,000 held: parked for the owner, not refused.
-        let r = c.pay(payee.clone(), U128(5_000 * USDC), None, "big".into(), None);
+        let r = c.pay(payee.clone(), U128(5_000 * USDC), None, "big".into(), None, None);
         assert_eq!((r.status.as_str(), r.reason.as_deref()), ("blocked", Some("OVER_CAP")));
         assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 1_000 * USDC);
         // Under the caps, the balance still decides.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
         c.set_cap(U128(10_000 * USDC));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        let low = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.pay(payee.clone(), U128(1_001 * USDC), None, "low".into(), None)));
+        let low = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.pay(payee.clone(), U128(1_001 * USDC), None, "low".into(), None, None)));
         let Err(why) = low else { panic!("paid more than the balance") };
         let why = why.downcast_ref::<String>().cloned().or_else(|| why.downcast_ref::<&str>().map(|x| x.to_string())).unwrap_or_default();
         assert!(why.contains("LOW_BALANCE"), "{why}");
@@ -956,7 +1336,7 @@ mod tests {
     fn approving_a_parked_payment_needs_the_balance() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(5_000 * USDC), None, "big".into(), None);
+        c.pay(payee, U128(5_000 * USDC), None, "big".into(), None, None);
         testing_env!(ctx(owner, NearToken::from_yoctonear(1), 10));
         c.approve_pending("big".into());
     }
@@ -966,7 +1346,7 @@ mod tests {
         let (mut c, owner, payee) = funded(10);
         let credit_before = c.get_wallet(owner.clone()).unwrap().storage_credit.0;
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(500 * USDC), None, "big".into(), None);
+        c.pay(payee, U128(500 * USDC), None, "big".into(), None, None);
         assert!(c.get_wallet(owner.clone()).unwrap().storage_credit.0 < credit_before);
 
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
@@ -1019,7 +1399,7 @@ mod tests {
         let (mut c, owner, payee) = funded_cross_chain(10);
         let credit_before = c.get_wallet(owner.clone()).unwrap().storage_credit.0;
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        let r = c.pay(payee.clone(), U128(150 * USDC), None, "x-1".into(), route());
+        let r = c.pay(payee.clone(), U128(150 * USDC), None, "x-1".into(), route(), None);
         assert_eq!(r.status, "sending");
         assert_eq!(r.left_today.0, 50 * USDC);
         let w = c.get_wallet(owner.clone()).unwrap();
@@ -1032,7 +1412,7 @@ mod tests {
         assert!(c.is_paid(owner.clone(), "x-1".into()));
 
         // Over what is left today: refused, nothing parked, nothing moved.
-        let blocked = c.pay(payee, U128(60 * USDC), None, "x-2".into(), route());
+        let blocked = c.pay(payee, U128(60 * USDC), None, "x-2".into(), route(), None);
         assert_eq!((blocked.status.as_str(), blocked.reason.as_deref()), ("blocked", Some("OVER_CAP")));
         assert!(c.get_pending(owner.clone(), "x-2".into()).is_none());
         assert_eq!(c.get_wallet(owner.clone()).unwrap().pending_count, 0);
@@ -1045,7 +1425,7 @@ mod tests {
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
         c.set_payment_cap(U128(20 * USDC));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        let r = c.pay(payee, U128(21 * USDC), None, "x".into(), route());
+        let r = c.pay(payee, U128(21 * USDC), None, "x".into(), route(), None);
         assert_eq!(r.reason.as_deref(), Some("OVER_PAYMENT_CAP"));
         assert_eq!(c.get_wallet(owner).unwrap().balance.0, 1_000 * USDC);
     }
@@ -1055,7 +1435,7 @@ mod tests {
     fn cross_chain_needs_the_owner_opt_in() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(USDC), None, "x".into(), route());
+        c.pay(payee, U128(USDC), None, "x".into(), route(), None);
     }
 
     #[test]
@@ -1063,7 +1443,7 @@ mod tests {
     fn cross_chain_refuses_unlisted_payees() {
         let (mut c, owner, _) = funded_cross_chain(10);
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
-        c.pay(accounts(4), U128(USDC), None, "x".into(), route());
+        c.pay(accounts(4), U128(USDC), None, "x".into(), route(), None);
     }
 
     #[test]
@@ -1073,7 +1453,7 @@ mod tests {
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
         c.set_paused(true);
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(USDC), None, "x".into(), route());
+        c.pay(payee, U128(USDC), None, "x".into(), route(), None);
     }
 
     #[test]
@@ -1081,7 +1461,7 @@ mod tests {
     fn cross_chain_only_sends_to_implicit_deposit_addresses() {
         let (mut c, owner, payee) = funded_cross_chain(10);
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(USDC), None, "x".into(), Some(CrossChainRoute { deposit_address: "attacker.near".parse().unwrap(), quote_id: "q".into() }));
+        c.pay(payee, U128(USDC), None, "x".into(), Some(CrossChainRoute { deposit_address: "attacker.near".parse().unwrap(), quote_id: "q".into() }), None);
     }
 
     #[test]
@@ -1113,8 +1493,8 @@ mod tests {
         let (mut c, owner, payee) = funded(10);
         assert_eq!(c.get_stats(), Stats { wallets: 1, ..Stats::default() });
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(50 * USDC), None, "a".into(), None);
-        c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None);
+        c.pay(payee.clone(), U128(50 * USDC), None, "a".into(), None, None);
+        c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None, None);
         c.record_proof("m-1".into(), "ab".repeat(32), "Qwen/Qwen3.8-27B".into());
         assert_eq!(c.get_stats(), Stats { wallets: 1, proofs: 1, payments: 1, parked: 1 });
 
@@ -1138,7 +1518,7 @@ mod tests {
     fn cancel_needs_the_owner_wallet() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(500 * USDC), None, "big".into(), None);
+        c.pay(payee, U128(500 * USDC), None, "big".into(), None, None);
         c.cancel_pending("big".into());
     }
 
@@ -1183,7 +1563,7 @@ mod tests {
         assert_eq!(c.get_wallet(owner.clone()).unwrap().cross_chain_daily_cap.0, 0);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         let attacker = || Some(CrossChainRoute { deposit_address: "a".repeat(64).parse().unwrap(), quote_id: "x".into() });
-        let r = c.pay(payee.clone(), U128(200 * USDC), None, "steal".into(), attacker());
+        let r = c.pay(payee.clone(), U128(200 * USDC), None, "steal".into(), attacker(), None);
         assert_eq!((r.status.as_str(), r.reason.as_deref()), ("blocked", Some("OVER_CROSS_CHAIN_CAP")));
         assert_eq!(r.cross_chain_left_today.unwrap().0, 0);
         assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 1_000 * USDC);
@@ -1194,16 +1574,16 @@ mod tests {
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
         c.set_cross_chain_cap(U128(20 * USDC));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        let r = c.pay(payee.clone(), U128(20 * USDC), None, "x-1".into(), attacker());
+        let r = c.pay(payee.clone(), U128(20 * USDC), None, "x-1".into(), attacker(), None);
         assert_eq!((r.status.as_str(), r.left_today.0, r.cross_chain_left_today.unwrap().0), ("sending", 180 * USDC, 0));
         // A fresh context per call: the mocked chain counts the gas the promises reserve.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        let r = c.pay(payee.clone(), U128(1), None, "x-2".into(), attacker());
+        let r = c.pay(payee.clone(), U128(1), None, "x-2".into(), attacker(), None);
         assert_eq!(r.reason.as_deref(), Some("OVER_CROSS_CHAIN_CAP"));
         let w = c.get_wallet(owner.clone()).unwrap();
         assert_eq!((w.balance.0, w.spent_today.0, w.cross_chain_spent_today.0), (980 * USDC, 20 * USDC, 20 * USDC));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        assert_eq!(c.pay(payee, U128(180 * USDC), None, "n-1".into(), None).status, "sending");
+        assert_eq!(c.pay(payee, U128(180 * USDC), None, "n-1".into(), None, None).status, "sending");
     }
 
     #[test]
@@ -1213,10 +1593,10 @@ mod tests {
         c.set_cross_chain_cap(U128(500 * USDC));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         // Under the cross-chain cap but over the 200 daily cap.
-        assert_eq!(c.pay(payee.clone(), U128(250 * USDC), None, "x-1".into(), route()).reason.as_deref(), Some("OVER_CAP"));
-        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "x-2".into(), route()).status, "sending");
+        assert_eq!(c.pay(payee.clone(), U128(250 * USDC), None, "x-1".into(), route(), None).reason.as_deref(), Some("OVER_CAP"));
+        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "x-2".into(), route(), None).status, "sending");
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(200 * USDC), None, "x-3".into(), route()).status, "sending");
+        assert_eq!(c.pay(payee, U128(200 * USDC), None, "x-3".into(), route(), None).status, "sending");
         assert_eq!(c.get_wallet(owner).unwrap().cross_chain_spent_today.0, 200 * USDC);
     }
 
@@ -1236,7 +1616,7 @@ mod tests {
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         let before = credit(&c, &owner);
         let id = "f".repeat(64);
-        c.pay(payee, U128(1), None, id.clone(), None);
+        c.pay(payee, U128(1), None, id.clone(), None, None);
         // (owner, 64-character id) in the paid set: 116 bytes with a 3-character owner, as the audit measured.
         let charged = before - credit(&c, &owner);
         assert_eq!(charged, 116 * byte_cost());
@@ -1287,7 +1667,7 @@ mod tests {
         // Out of credit: a proof, a parked payment and a paid mark all need storage.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         assert!(panic_text(|| c.record_proof("m-1".into(), "a".repeat(128), "m".repeat(64))).contains("STORAGE_CREDIT_LOW"));
-        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), Some("x".repeat(200)), "big".into(), None); }).contains("STORAGE_CREDIT_LOW"));
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), Some("x".repeat(200)), "big".into(), None, None); }).contains("STORAGE_CREDIT_LOW"));
 
         // Topped up from the owner's wallet (a function-call key can't attach NEAR): it works again.
         testing_env!(ctx(owner.clone(), NearToken::from_millinear(10), 10));
@@ -1325,25 +1705,25 @@ mod tests {
     fn a_refund_after_midnight_lowers_only_its_own_day() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None).status, "sending");
+        assert_eq!(c.pay(payee.clone(), U128(150 * USDC), None, "a".into(), None, None).status, "sending");
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee.clone(), U128(200 * USDC), None, "b".into(), None).status, "sending");
+        assert_eq!(c.pay(payee.clone(), U128(200 * USDC), None, "b".into(), None, None).status, "sending");
         // The day-10 payment's failure lands on day 11.
         cb_with(11, PromiseResult::Failed);
         assert!(!c.on_pay_complete(owner.clone(), "a".into(), U128(150 * USDC), 10, false, Err(PromiseError::Failed)));
         let w = c.get_wallet(owner.clone()).unwrap();
         assert_eq!((w.spent_today.0, w.balance.0), (200 * USDC, 800 * USDC), "the money is back, day 11 is still fully spent");
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        assert_eq!(c.pay(payee, U128(150 * USDC), None, "c".into(), None).status, "blocked");
+        assert_eq!(c.pay(payee, U128(150 * USDC), None, "c".into(), None, None).status, "blocked");
     }
 
     #[test]
     fn a_cross_chain_refund_after_midnight_lowers_only_its_own_day() {
         let (mut c, owner, payee) = funded_cross_chain(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(150 * USDC), None, "x-1".into(), route());
+        c.pay(payee.clone(), U128(150 * USDC), None, "x-1".into(), route(), None);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 11));
-        c.pay(payee.clone(), U128(200 * USDC), None, "x-2".into(), route());
+        c.pay(payee.clone(), U128(200 * USDC), None, "x-2".into(), route(), None);
         cb_with(11, PromiseResult::Failed);
         c.on_pay_complete(owner.clone(), "x-1".into(), U128(150 * USDC), 10, true, Err(PromiseError::Failed));
         let w = c.get_wallet(owner.clone()).unwrap();
@@ -1363,7 +1743,7 @@ mod tests {
         let mut cx = ctx(owner.clone(), NearToken::from_yoctonear(0), 10);
         cx.block_index = 777;
         testing_env!(cx.clone());
-        c.pay(payee.clone(), U128(10 * USDC), None, "withdraw-777".into(), None);
+        c.pay(payee.clone(), U128(10 * USDC), None, "withdraw-777".into(), None, None);
         cx.attached_deposit = NearToken::from_yoctonear(1);
         testing_env!(cx);
         c.withdraw(U128(5 * USDC));
@@ -1373,7 +1753,7 @@ mod tests {
         assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 990 * USDC, "the withdrawal came back");
         assert!(c.is_paid(owner.clone(), "withdraw-777".into()), "the payment is still marked paid");
         testing_env!(ctx(owner, NearToken::from_yoctonear(0), 10));
-        assert!(panic_text(|| { c.pay(payee, U128(10 * USDC), None, "withdraw-777".into(), None); }).contains("ALREADY_PAID"));
+        assert!(panic_text(|| { c.pay(payee, U128(10 * USDC), None, "withdraw-777".into(), None, None); }).contains("ALREADY_PAID"));
     }
 
     /// L-3 (PoC `poc_cross_chain_fee_not_restored_on_failure`): when the deposit address couldn't
@@ -1386,7 +1766,7 @@ mod tests {
         let fee = DEPOSIT_ADDRESS_REGISTRATION.as_yoctonear();
 
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee.clone(), U128(USDC), None, "x".into(), route());
+        c.pay(payee.clone(), U128(USDC), None, "x".into(), route(), None);
         cb_with(10, PromiseResult::Failed);
         let out = c.on_deposit_address_registered(owner.clone(), "x".into(), U128(USDC), 10, DEPOSIT.parse().unwrap(), None);
         assert!(matches!(out, PromiseOrValue::Value(false)));
@@ -1396,7 +1776,7 @@ mod tests {
 
         // Registered (the token's reply isn't parsed, so any value works): the USDC goes out.
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(USDC), None, "y".into(), route());
+        c.pay(payee, U128(USDC), None, "y".into(), route(), None);
         cb_with(10, PromiseResult::Successful(b"{\"total\":\"1\",\"available\":\"0\"}".to_vec()));
         let out = c.on_deposit_address_registered(owner.clone(), "y".into(), U128(USDC), 10, DEPOSIT.parse().unwrap(), None);
         assert!(matches!(out, PromiseOrValue::Promise(_)));
@@ -1424,7 +1804,7 @@ mod tests {
         let (mut c, owner, payee) = funded_cross_chain(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         c.record_proof("m-1".into(), "ab".repeat(32), "Qwen/Qwen3.8-27B".into());
-        c.pay(payee, U128(USDC), None, "x".into(), route());
+        c.pay(payee, U128(USDC), None, "x".into(), route(), None);
         let ts = (10 * NANOS_PER_DAY + 1).to_string();
         let proof = near_sdk::serde_json::to_value(c.get_proof(owner.clone(), "m-1".into()).unwrap()).unwrap();
         assert_eq!(proof["recorded_at"], ts.as_str());
@@ -1437,8 +1817,303 @@ mod tests {
     fn memos_are_capped_at_256_bytes() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), Some("x".repeat(257)), "big".into(), None); }).contains("MEMO_TOO_LONG"));
-        assert_eq!(c.pay(payee, U128(500 * USDC), Some("x".repeat(256)), "big".into(), None).status, "blocked");
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), Some("x".repeat(257)), "big".into(), None, None); }).contains("MEMO_TOO_LONG"));
+        assert_eq!(c.pay(payee, U128(500 * USDC), Some("x".repeat(256)), "big".into(), None, None).status, "blocked");
+    }
+
+    // ---------- Handshake: escrow ----------
+
+    const TERMS: &str = "5f7c1d0e9a3b2c4d6e8f00112233445566778899aabbccddeeff001122334455";
+
+    /// `funded`, with the meeting's proof recorded under "m-1".
+    fn with_proof(day: u64) -> (AgentWallet, AccountId, AccountId) {
+        let (mut c, owner, payee) = funded(day);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), day));
+        c.record_proof("m-1".into(), "ab".repeat(32), "Qwen/Qwen3.8-27B".into());
+        (c, owner, payee)
+    }
+
+    fn open(c: &mut AgentWallet, owner: &AccountId, payee: &AccountId, usdc: u128, id: &str, condition: bool, day: u64) -> EscrowResult {
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), day));
+        c.open_escrow(id.into(), payee.clone(), U128(usdc * USDC), "m-1".into(), TERMS.into(), condition)
+    }
+
+    fn confirm(c: &mut AgentWallet, who: &AccountId, owner: &AccountId, id: &str, day: u64) -> EscrowState {
+        testing_env!(ctx(who.clone(), NearToken::from_yoctonear(1), day));
+        c.confirm_escrow(owner.clone(), id.into(), TERMS.into())
+    }
+
+    fn state(c: &AgentWallet, owner: &AccountId, id: &str) -> EscrowState {
+        c.get_escrow(owner.clone(), id.into()).unwrap().state
+    }
+
+    /// Function calls the last call scheduled, with their receivers.
+    fn calls() -> Vec<(String, String)> {
+        get_created_receipts()
+            .into_iter()
+            .flat_map(|r| {
+                let to = r.receiver_id.to_string();
+                r.actions.into_iter().filter_map(move |a| match a {
+                    MockAction::FunctionCallWeight { method_name, .. } => Some((to.clone(), String::from_utf8(method_name).unwrap())),
+                    _ => None,
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn escrow_within_the_caps_is_set_aside_then_released_and_counted_once() {
+        let (mut c, owner, payee) = with_proof(10);
+        let r = open(&mut c, &owner, &payee, 150, "m-1-f2", true, 10);
+        assert_eq!((r.state, r.reason, r.left_today.0), (EscrowState::Open, None, 50 * USDC));
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.spent_today.0), (850 * USDC, 150 * USDC));
+
+        assert_eq!(confirm(&mut c, &payee, &owner, "m-1-f2", 10), EscrowState::Confirmed, "a condition waits for the owner");
+        // The owner's account releases it with no deposit: the app's key can.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.release_escrow("m-1-f2".into());
+        // USDC (accounts(0)) pays the payee, then the contract's own callback runs.
+        assert_eq!(calls(), [(accounts(0).to_string(), "ft_transfer".to_string()), (env::current_account_id().to_string(), "on_escrow_released".to_string())]);
+        assert_eq!(state(&c, &owner, "m-1-f2"), EscrowState::Released);
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.spent_today.0), (850 * USDC, 150 * USDC), "released, not counted again");
+        assert_eq!(c.get_stats().payments, 1);
+        // So 50 is all that's left today, escrow or payment.
+        assert_eq!(open(&mut c, &owner, &payee, 51, "m-1-f3", true, 10).state, EscrowState::Parked);
+    }
+
+    #[test]
+    fn escrow_over_a_cap_is_parked_until_the_owners_wallet_approves() {
+        let (mut c, owner, payee) = with_proof(10);
+        let r = open(&mut c, &owner, &payee, 500, "big", true, 10);
+        assert_eq!((r.state, r.reason.as_deref()), (EscrowState::Parked, Some("OVER_CAP")));
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.spent_today.0, w.pending_count), (1_000 * USDC, 0, 1));
+        assert_eq!(c.get_stats().parked, 1);
+        // Nothing is set aside yet, so the payee can't confirm it.
+        testing_env!(ctx(payee.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| { c.confirm_escrow(owner.clone(), "big".into(), TERMS.into()); }).contains("NOT_OPEN_YET"));
+        // The app's key can't approve it (no deposit).
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.approve_escrow("big".into())).contains("exactly 1 yoctoNEAR"));
+        // The owner's wallet approves the next day: it counts towards that day, once.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 11));
+        c.approve_escrow("big".into());
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.spent_today.0, w.pending_count), (500 * USDC, 500 * USDC, 0));
+        assert_eq!(state(&c, &owner, "big"), EscrowState::Open);
+        assert_eq!(c.get_escrow(owner.clone(), "big".into()).unwrap().day, 11);
+        assert!(panic_text(|| c.approve_escrow("big".into())).contains("NOT_PARKED"));
+    }
+
+    #[test]
+    fn a_parked_escrow_approved_needs_the_balance_and_can_be_declined() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 5_000, "huge", true, 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| c.approve_escrow("huge".into())).contains("LOW_BALANCE"));
+        c.cancel_escrow("huge".into());
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.pending_count), (1_000 * USDC, 0));
+        assert_eq!(state(&c, &owner, "huge"), EscrowState::Cancelled);
+    }
+
+    #[test]
+    fn only_the_payee_confirms_and_only_the_terms_they_were_shown() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 50, "d", true, 10);
+        let stranger = accounts(4);
+        assert!(panic_text(|| { confirm(&mut c, &stranger, &owner, "d", 10); }).contains("NOT_THE_PAYEE"));
+        // The owner (or the app's key) can't confirm for the payee either.
+        assert!(panic_text(|| { confirm(&mut c, &owner, &owner, "d", 10); }).contains("NOT_THE_PAYEE"));
+        testing_env!(ctx(payee.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| { c.confirm_escrow(owner.clone(), "d".into(), "00".repeat(32)); }).contains("TERMS_DIFFER"));
+        // A function-call key on the payee's account can't attach the 1 yoctoNEAR.
+        testing_env!(ctx(payee.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.confirm_escrow(owner.clone(), "d".into(), TERMS.into()); }).contains("exactly 1 yoctoNEAR"));
+        assert_eq!(state(&c, &owner, "d"), EscrowState::Open);
+        assert_eq!(confirm(&mut c, &payee, &owner, "d", 10), EscrowState::Confirmed);
+        let e = c.get_escrow(owner.clone(), "d".into()).unwrap();
+        assert_eq!(e.confirmed_at.0, 10 * NANOS_PER_DAY + 1);
+        assert!(panic_text(|| { confirm(&mut c, &payee, &owner, "d", 10); }).contains("ALREADY_CONFIRMED"));
+    }
+
+    #[test]
+    fn release_waits_for_the_payee_and_happens_once() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 50, "d", true, 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.release_escrow("d".into())).contains("NOT_CONFIRMED"));
+        confirm(&mut c, &payee, &owner, "d", 10);
+        // Paused: nothing moves, from the app's key or the owner's wallet.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_paused(true);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.release_escrow("d".into())).contains("PAUSED"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_paused(false);
+        let mut low = ctx(owner.clone(), NearToken::from_yoctonear(0), 10);
+        low.prepaid_gas = Gas::from_tgas(30);
+        testing_env!(low);
+        assert!(panic_text(|| c.release_escrow("d".into())).contains("NEEDS_50_TGAS"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.release_escrow("d".into());
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.release_escrow("d".into())).contains("ESCROW_CLOSED"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| c.cancel_escrow("d".into())).contains("ESCROW_CLOSED"));
+        testing_env!(ctx(payee.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| c.return_escrow(owner.clone(), "d".into())).contains("ESCROW_CLOSED"));
+        // Someone else's release names only their own escrows.
+        testing_env!(ctx(accounts(4), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.release_escrow("d".into())).contains("NO_SUCH_ESCROW"));
+    }
+
+    #[test]
+    fn without_a_condition_the_payees_confirmation_releases_it() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 50, "now", false, 10);
+        assert_eq!(confirm(&mut c, &payee, &owner, "now", 10), EscrowState::Released);
+        assert_eq!(calls().iter().map(|(_, m)| m.as_str()).collect::<Vec<_>>(), ["ft_transfer", "on_escrow_released"]);
+        assert_eq!(state(&c, &owner, "now"), EscrowState::Released);
+        // Paused, it is confirmed and waits for the owner instead.
+        open(&mut c, &owner, &payee, 50, "later", false, 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_paused(true);
+        assert_eq!(confirm(&mut c, &payee, &owner, "later", 10), EscrowState::Confirmed);
+        assert!(calls().is_empty());
+    }
+
+    #[test]
+    fn the_owner_cancels_before_the_payee_confirms_and_after_only_once_30_days_pass() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 100, "a", true, 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| c.cancel_escrow("a".into())).contains("exactly 1 yoctoNEAR"), "the app's key can't cancel");
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.cancel_escrow("a".into());
+        let w = c.get_wallet(owner.clone()).unwrap();
+        assert_eq!((w.balance.0, w.spent_today.0), (1_000 * USDC, 0), "back on the balance and off today's spending");
+        assert_eq!(state(&c, &owner, "a"), EscrowState::Cancelled);
+
+        open(&mut c, &owner, &payee, 100, "b", true, 10);
+        confirm(&mut c, &payee, &owner, "b", 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 39));
+        assert!(panic_text(|| c.cancel_escrow("b".into())).contains("PAYEE_CONFIRMED"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 40));
+        c.cancel_escrow("b".into());
+        let w = c.get_wallet(owner.clone()).unwrap();
+        // Day 10's spending isn't day 40's: only the balance comes back.
+        assert_eq!(w.balance.0, 1_000 * USDC);
+        assert_eq!(state(&c, &owner, "b"), EscrowState::Cancelled);
+    }
+
+    #[test]
+    fn the_payee_can_give_it_back_before_or_after_confirming() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 100, "a", true, 10);
+        confirm(&mut c, &payee, &owner, "a", 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        assert!(panic_text(|| c.return_escrow(owner.clone(), "a".into())).contains("NOT_THE_PAYEE"));
+        testing_env!(ctx(payee.clone(), NearToken::from_yoctonear(1), 10));
+        c.return_escrow(owner.clone(), "a".into());
+        assert_eq!(state(&c, &owner, "a"), EscrowState::Returned);
+        assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 1_000 * USDC);
+    }
+
+    #[test]
+    fn a_failed_release_leaves_the_escrow_confirmed_with_its_money_set_aside() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 100, "a", true, 10);
+        confirm(&mut c, &payee, &owner, "a", 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.release_escrow("a".into());
+        cb_with(10, PromiseResult::Failed);
+        assert!(!c.on_escrow_released(owner.clone(), "a".into(), Err(PromiseError::Failed)));
+        assert_eq!(state(&c, &owner, "a"), EscrowState::Confirmed);
+        assert_eq!(c.get_stats().payments, 0);
+        assert_eq!(c.get_wallet(owner.clone()).unwrap().balance.0, 900 * USDC, "still set aside, not back on the balance");
+        // Released again once the payee can receive it.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.release_escrow("a".into());
+        cb_with(10, PromiseResult::Successful(vec![]));
+        assert!(c.on_escrow_released(owner.clone(), "a".into(), Ok(())));
+        assert_eq!(state(&c, &owner, "a"), EscrowState::Released);
+    }
+
+    #[test]
+    fn escrows_and_payments_keep_the_meetings_proof_hash() {
+        let (mut c, owner, payee) = with_proof(10);
+        let e = {
+            open(&mut c, &owner, &payee, 10, "e", true, 10);
+            c.get_escrow(owner.clone(), "e".into()).unwrap()
+        };
+        assert_eq!(e.proof, ProofLink { meeting_id: "m-1".into(), proof_hash: "ab".repeat(32) });
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.open_escrow("x".into(), payee.clone(), U128(USDC), "m-2".into(), TERMS.into(), true); }).contains("PROOF_NOT_FOUND"));
+        assert!(panic_text(|| { c.open_escrow("x".into(), payee.clone(), U128(USDC), "m-1".into(), "AB".repeat(32), true); }).contains("BAD_TERMS_HASH"));
+
+        // A payment with its meeting's id keeps the link; one without keeps none.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(USDC), None, "p".into(), None, Some("m-1".into()));
+        assert_eq!(c.get_payment_proof(owner.clone(), "p".into()).unwrap().proof_hash, "ab".repeat(32));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(USDC), None, "q".into(), None, None);
+        assert!(c.get_payment_proof(owner.clone(), "q".into()).is_none());
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(USDC), None, "r".into(), None, Some("m-9".into())); }).contains("PROOF_NOT_FOUND"));
+        // A parked payment keeps it too; declining it frees it, and a refund drops it with the paid mark.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(500 * USDC), None, "big".into(), None, Some("m-1".into()));
+        assert!(c.get_payment_proof(owner.clone(), "big".into()).is_some());
+        let before = credit(&c, &owner);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.cancel_pending("big".into());
+        assert!(c.get_payment_proof(owner.clone(), "big".into()).is_none());
+        assert!(credit(&c, &owner) > before, "the link's storage came back");
+        cb_with(10, PromiseResult::Failed);
+        c.on_pay_complete(owner.clone(), "p".into(), U128(USDC), 10, false, Err(PromiseError::Failed));
+        assert!(c.get_payment_proof(owner, "p".into()).is_none());
+    }
+
+    #[test]
+    fn a_follow_up_is_paid_or_held_never_both() {
+        let (mut c, owner, payee) = with_proof(10);
+        open(&mut c, &owner, &payee, 10, "f1", true, 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(USDC), None, "f1".into(), None, None); }).contains("ESCROW_EXISTS"));
+        assert!(panic_text(|| { c.open_escrow("f1".into(), payee.clone(), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("ESCROW_EXISTS"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(USDC), None, "f2".into(), None, None);
+        assert!(panic_text(|| { c.open_escrow("f2".into(), payee.clone(), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("ALREADY_PAID"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.pay(payee.clone(), U128(500 * USDC), None, "f3".into(), None, None);
+        assert!(panic_text(|| { c.open_escrow("f3".into(), payee.clone(), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("ALREADY_PENDING"));
+        // Unlisted payees and a paused wallet are refused, as for pay.
+        assert!(panic_text(|| { c.open_escrow("f4".into(), accounts(4), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("UNKNOWN_PAYEE"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_paused(true);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.open_escrow("f5".into(), payee.clone(), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("PAUSED"));
+    }
+
+    #[test]
+    fn an_escrow_is_charged_to_the_owner_once_and_reads_in_plain_json() {
+        let (mut c, owner, payee) = with_proof(10);
+        let before = credit(&c, &owner);
+        open(&mut c, &owner, &payee, 10, "m-1-f2", true, 10);
+        let opened = credit(&c, &owner);
+        assert!(opened < before);
+        confirm(&mut c, &payee, &owner, "m-1-f2", 10);
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        c.release_escrow("m-1-f2".into());
+        assert_eq!(credit(&c, &owner), opened, "confirming and releasing need no more storage");
+        let json = near_sdk::serde_json::to_value(c.get_escrow(owner, "m-1-f2".into()).unwrap()).unwrap();
+        assert_eq!(json["state"], "released");
+        assert_eq!(json["confirmed_at"], (10 * NANOS_PER_DAY + 1).to_string());
+        assert_eq!(json["proof"]["meeting_id"], "m-1");
+        assert_eq!(json["has_condition"], true);
     }
 
     /// Info I-5: withdraw and approve_pending refuse too little gas up front, like pay.
@@ -1446,7 +2121,7 @@ mod tests {
     fn withdraw_and_approve_need_50_tgas() {
         let (mut c, owner, payee) = funded(10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
-        c.pay(payee, U128(500 * USDC), None, "big".into(), None);
+        c.pay(payee, U128(500 * USDC), None, "big".into(), None, None);
         let mut low = ctx(owner.clone(), NearToken::from_yoctonear(1), 10);
         low.prepaid_gas = Gas::from_tgas(30);
         testing_env!(low);
