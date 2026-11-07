@@ -2,7 +2,7 @@
  * Test doubles for the phone relay: an in-memory relay that answers the routes in
  * docs/design/phone-protocol.md (section 4) as `fetch` would, and a Mac that pairs and
  * posts snapshots through it with the real cryptography. Used by the tests and by the
- * phone page's local development script (apps/web/scripts/phone-dev.ts); the real relay
+ * phone page's local development script (packages/core/scripts/phone-dev.ts, `pnpm dev:phone`); the real relay
  * is apps/backend/src/relay.
  */
 import { RELAY_BOX_LIMITS, deriveSession, newPairing, openHello, pairingIdText, pairingUrl, relayTokenHash, type RelaySession } from "./crypto.ts";

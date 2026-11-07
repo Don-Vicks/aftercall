@@ -4,13 +4,14 @@
  * that pairs with the page, posts sealed snapshots of a few follow-ups, and does what
  * the phone taps. It confirms the code on its own, as if you pressed They match.
  *
- *   pnpm dev:phone                          # then open the printed link on the phone or in a browser
+ *   pnpm dev:phone                          # then open the printed link in a browser on this machine
  *   pnpm dev:web                            # the web app on :3000, in another terminal
  *   pnpm dev:phone -- --confirm-after 20    # the code stays on screen 20 s before the Mac confirms it
  *   pnpm dev:phone -- --offline-after 20    # the Mac stops calling after 20 s: the page says it's offline
  *   pnpm dev:phone -- --port 3211 --web http://localhost:3210   # other ports
  *
- * Nothing leaves this machine. The real relay is apps/backend/src/relay.
+ * Nothing leaves this machine: the relay listens on 127.0.0.1 only, so a real phone can't
+ * reach it (use a phone-sized browser window). The real relay is apps/backend/src/relay.
  */
 import { createServer } from "node:http";
 import type { EmailFollowUp, FollowUp, Meeting, PaymentFollowUp } from "../src/meeting.ts";
@@ -92,7 +93,7 @@ const snapshot = (): Snapshot =>
 
 const hhmm = () => new Date().toTimeString().slice(0, 5);
 const mac = await fakeMac(relay.fetch, BACKEND, `${WEB}/phone`);
-console.log(`\nOpen this on your phone or in a browser:\n\n  ${mac.url}\n`);
+console.log(`\nOpen this in a browser on this machine (the relay is on 127.0.0.1, out of a phone's reach):\n\n  ${mac.url}\n`);
 
 let pairedAt = 0;
 let helloAt = 0;
