@@ -14,6 +14,11 @@
 //! is made when the user turns agents on and dropped when they turn them off, so
 //! turning them back on needs the new setup command. With agents off there is no socket.
 //!
+//! The user can also keep agents to chosen projects (Settings → Coding agents): then
+//! meetings in other projects aren't listed or searched, and a request for one is refused
+//! with `PROJECT_OFF`, which doesn't name the project. Settings saved before this choice
+//! existed read as every project.
+//!
 //! What a request can do is fixed here: read processed meetings and projects, and,
 //! only while the user has turned on "Let agents claim and complete action items",
 //! claim or complete one action item, completing it with a note and a link to the work,
@@ -55,6 +60,11 @@ const NOTE_MAX: usize = 500;
 /// The longest link to the work kept on a completed item (`WORK_LINK_MAX` in core).
 const LINK_MAX: usize = 300;
 
+/// What an agent is told when it asks for a meeting in a project the user keeps from agents.
+/// It doesn't name the project: that is the user's to keep, too.
+pub const PROJECT_OFF: &str =
+    "Aftercall doesn't let agents reach this meeting's project. The user can allow it under Coding agents in Aftercall's sidebar.";
+
 /// What an agent is told when it tries to claim or complete while agents may only read.
 pub const WRITES_OFF: &str =
     "Aftercall lets agents read only. To let them claim and complete action items, turn that on under Coding agents in Aftercall's sidebar.";
@@ -88,6 +98,21 @@ pub struct Settings {
     /// Kept when agents are turned off, so the screen can ask to reconnect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code: Option<String>,
+    /// The ids of the projects agents may read, or None for every project (and in an
+    /// agents.json from before this choice). Kept when agents are turned off and on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projects: Option<Vec<String>>,
+}
+
+/// The most projects the choice can name, and the longest id (as projects.rs allows).
+const SCOPE_MAX: usize = 200;
+
+/// Checks a choice of projects: None (every project), or ids as projects.json has them.
+pub fn check_scope(projects: &Option<Vec<String>>) -> Result<(), String> {
+    match projects {
+        Some(ids) if ids.len() > SCOPE_MAX || ids.iter().any(|id| id.is_empty() || id.len() > 64) => Err("Choose at most 200 projects".into()),
+        _ => Ok(()),
+    }
 }
 
 impl Settings {
@@ -242,11 +267,15 @@ pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> St
     if matches!(op, "claim" | "complete" | "draft") && !writes {
         return Err(WRITES_OFF.into());
     }
+    let scope = Scope::of(data_dir);
+    if matches!(op, "claim" | "complete" | "draft") {
+        scope.check(data_dir, &str_arg("meetingId"))?;
+    }
     match op {
-        "projects" => Ok(projects(data_dir)),
-        "meetings" => Ok(Value::Array(meetings(data_dir))),
-        "notes" => notes(data_dir, &str_arg("id")),
-        "access" => Ok(json!({ "allowWrites": writes })),
+        "projects" => Ok(projects(data_dir, &scope)),
+        "meetings" => Ok(Value::Array(meetings(data_dir, &scope))),
+        "notes" => notes(data_dir, &str_arg("id"), &scope),
+        "access" => Ok(json!({ "allowWrites": writes, "allProjects": matches!(scope, Scope::All) })),
         "claim" => claim(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), now),
         "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), req["link"].as_str(), now),
         "draft" => draft(data_dir, req, now),
@@ -254,9 +283,45 @@ pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> St
     }
 }
 
+/// The projects whose meetings agents may reach: every one, or those the user chose, by name
+/// (meetings keep their project's name). Read from the settings on each request.
+enum Scope {
+    All,
+    Only(Vec<String>),
+}
+
+impl Scope {
+    fn of(data_dir: &Path) -> Self {
+        let Some(ids) = load_settings(data_dir).projects else { return Scope::All };
+        let entries = crate::projects::load_entries(data_dir).unwrap_or_default();
+        Scope::Only(entries.into_iter().filter(|e| ids.contains(&e.project.id)).map(|e| e.project.name).collect())
+    }
+
+    fn allows(&self, project: &str) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Only(names) => names.iter().any(|n| n == project),
+        }
+    }
+
+    /// Refuses a meeting outside the scope with `PROJECT_OFF`; an unknown id is left to the request's own error.
+    fn check(&self, data_dir: &Path, meeting_id: &str) -> Result<(), String> {
+        if matches!(self, Scope::All) {
+            return Ok(());
+        }
+        let Ok(file) = notes_path(data_dir, meeting_id) else { return Ok(()) };
+        let notes = notes_file::read(&file).unwrap_or_default();
+        if self.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) { Ok(()) } else { Err(PROJECT_OFF.into()) }
+    }
+}
+
 /// Ids and names: a project's brief is the user's private context, so agents never get it.
-fn projects(data_dir: &Path) -> Value {
-    crate::projects::public_list(data_dir)
+/// Only the projects agents may reach are listed.
+fn projects(data_dir: &Path, scope: &Scope) -> Value {
+    match crate::projects::public_list(data_dir) {
+        Value::Array(list) => Value::Array(list.into_iter().filter(|p| scope.allows(p["name"].as_str().unwrap_or_default())).collect()),
+        other => other,
+    }
 }
 
 fn valid_id(id: &str) -> bool {
@@ -272,14 +337,17 @@ fn notes_path(data_dir: &Path, id: &str) -> Result<PathBuf, String> {
     if file.exists() { Ok(file) } else { Err(missing()) }
 }
 
-/// Every processed meeting as `{ id, notes }`, newest first.
-fn meetings(data_dir: &Path) -> Vec<Value> {
+/// Every processed meeting agents may reach as `{ id, notes }`, newest first.
+fn meetings(data_dir: &Path, scope: &Scope) -> Vec<Value> {
     let Ok(entries) = std::fs::read_dir(data_dir.join("recordings")) else { return vec![] };
     let mut out: Vec<(u64, Value)> = entries
         .flatten()
         .filter_map(|e| {
             let id = e.file_name().into_string().ok().filter(|id| valid_id(id))?;
             let notes = at_rest::read_json(&e.path().join("notes.json")).filter(|n| n["meeting"].is_object())?;
+            if !scope.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) {
+                return None;
+            }
             Some((id.parse().ok()?, json!({ "id": id, "notes": for_agents(notes) })))
         })
         .collect();
@@ -287,11 +355,13 @@ fn meetings(data_dir: &Path) -> Vec<Value> {
     out.into_iter().map(|(_, v)| v).collect()
 }
 
-fn notes(data_dir: &Path, id: &str) -> Result<Value, String> {
+fn notes(data_dir: &Path, id: &str, scope: &Scope) -> Result<Value, String> {
     let file = notes_path(data_dir, id)?;
-    notes_file::read(&file)
-        .map(for_agents)
-        .map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))
+    let notes = notes_file::read(&file).map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))?;
+    if !scope.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) {
+        return Err(PROJECT_OFF.into());
+    }
+    Ok(for_agents(notes))
 }
 
 /// notes.json without your notes and the salt behind their hash: those stay in the app.
@@ -557,9 +627,9 @@ pub struct Activity {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
     pub allowed: bool,
-    /// Why it was refused: "token", "read-only", "unknown" (a request Aftercall doesn't
-    /// know), or "rules" (anything else: an unknown id, done, claimed by another agent, no
-    /// agent name, or the notes couldn't be read).
+    /// Why it was refused: "token", "read-only", "project" (a project the user keeps from
+    /// agents), "unknown" (a request Aftercall doesn't know), or "rules" (anything else: an
+    /// unknown id, done, claimed by another agent, no agent name, or the notes couldn't be read).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
 }
@@ -580,6 +650,7 @@ impl Activity {
         let refused = result.as_ref().err().map(|e| match e.as_str() {
             TOKEN_REFUSED => "token",
             WRITES_OFF => "read-only",
+            PROJECT_OFF => "project",
             _ if op == "other" => "unknown",
             _ => "rules",
         });
@@ -1441,14 +1512,70 @@ mod tests {
         let before = read_notes(&dir);
         assert!(dispatch(&dir, &json!({ "op": "meetings" }), false, &now).is_ok());
         assert!(dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), false, &now).is_ok());
-        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), false, &now).unwrap(), json!({ "allowWrites": false }));
-        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), true, &now).unwrap(), json!({ "allowWrites": true }));
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), false, &now).unwrap(), json!({ "allowWrites": false, "allProjects": true }));
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), true, &now).unwrap(), json!({ "allowWrites": true, "allProjects": true }));
         for op in ["claim", "complete"] {
             let err = dispatch(&dir, &json!({ "op": op, "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), false, &now).unwrap_err();
             assert_eq!(err, WRITES_OFF);
             assert!(err.contains("Coding agents in Aftercall's sidebar"));
         }
         assert_eq!(read_notes(&dir), before, "nothing changed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agents_reach_only_the_projects_the_user_chose() {
+        let dir = data_dir("scope");
+        // A second project, with a meeting of its own.
+        at_rest::write_json(&dir.join("projects.json"), &json!([{ "id": "general", "name": "General" }, { "id": "moonbeam-x1y", "name": "Moonbeam client" }])).unwrap();
+        let rec = dir.join("recordings/1761100000");
+        std::fs::create_dir_all(&rec).unwrap();
+        at_rest::write_json(&rec.join("notes.json"), &json!({ "meeting": { "title": "Moonbeam kickoff", "project": "Moonbeam client", "actionItems": [{ "id": "a1", "text": "Send the quote", "owner": "You", "done": false }], "followUps": [] } })).unwrap();
+        let now = at("t");
+        let ids = |v: Value| v.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+
+        // Settings from before the choice: every project, as today.
+        save_settings(&dir, &Settings { enabled: true, token: Some("k".into()), allow_writes: Some(true), ..Default::default() }).unwrap();
+        assert!(load_settings(&dir).projects.is_none());
+        assert_eq!(ids(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap()), ["1761100000", "1761000000"]);
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "access" }), &now).unwrap()["allProjects"], true);
+
+        // Only General.
+        let mut s = load_settings(&dir);
+        s.projects = Some(vec!["general".into()]);
+        save_settings(&dir, &s).unwrap();
+        assert_eq!(ids(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap()), ["1761000000"]);
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "projects" }), &now).unwrap(), json!([{ "id": "general", "name": "General" }]));
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "access" }), &now).unwrap(), json!({ "allowWrites": true, "allProjects": false }));
+        let refused = [
+            json!({ "op": "notes", "id": "1761100000" }),
+            json!({ "op": "claim", "meetingId": "1761100000", "itemId": "a1", "agent": "Codex" }),
+            json!({ "op": "complete", "meetingId": "1761100000", "itemId": "a1", "agent": "Codex", "link": "https://example.com/x" }),
+            json!({ "op": "draft", "meetingId": "1761100000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "x" }),
+        ];
+        for req in &refused {
+            let err = dispatch_rw(&dir, req, &now).unwrap_err();
+            assert_eq!(err, PROJECT_OFF, "{req}");
+            assert!(!err.contains("Moonbeam"), "the refusal doesn't name the project");
+        }
+        let item = &notes_file::read(&rec.join("notes.json")).unwrap()["meeting"]["actionItems"][0];
+        assert!(item.get("claimed").is_none() && item["done"] == false, "nothing changed");
+        // Meetings in chosen projects work as before, and the write switch still comes first.
+        assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "1761000000" }), &now).is_ok());
+        assert_eq!(dispatch(&dir, &refused[1], false, &now).unwrap_err(), WRITES_OFF);
+        // The refusal is in the activity list as "project", with no project name.
+        let _ = answer(&dir, "k", true, &json!({ "token": "k", "op": "notes", "id": "1761100000", "client": "claude-code" }).to_string(), &now);
+        let last = &read_activity(&dir, 1)[0];
+        assert_eq!((last.op.as_str(), last.allowed, last.refused.as_deref()), ("notes", false, Some("project")));
+        // Renaming a project keeps it chosen: the choice is by id.
+        at_rest::write_json(&dir.join("projects.json"), &json!([{ "id": "general", "name": "Team" }, { "id": "moonbeam-x1y", "name": "Moonbeam client" }])).unwrap();
+        assert!(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap().as_array().unwrap().is_empty(), "General's meetings now say Team once refiled");
+        // None chosen: no meeting at all.
+        let mut s = load_settings(&dir);
+        s.projects = Some(vec![]);
+        save_settings(&dir, &s).unwrap();
+        assert!(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap().as_array().unwrap().is_empty());
+        assert!(check_scope(&Some(vec!["x".repeat(65)])).is_err() && check_scope(&None).is_ok());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
