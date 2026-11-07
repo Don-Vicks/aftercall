@@ -120,6 +120,17 @@ export function startPhonePairing(fragment: string, device: string, now: number,
   };
 }
 
+/**
+ * What a pairing link does to the record already kept. "same": the same code opened
+ * again, so carry on with the keys made for it. "start": nothing kept, or a pairing still
+ * in progress, which the new code replaces. "ask": this phone is paired with a Mac, so
+ * the page asks before it unpairs it: a link anyone sends you must not do that alone.
+ */
+export function pairingLinkStep(stored: Pick<PhonePairing, "id" | "state"> | null, fresh: Pick<PhonePairing, "id">): "same" | "start" | "ask" {
+  if (stored?.id === fresh.id) return "same";
+  return stored?.state === "paired" ? "ask" : "start";
+}
+
 /** Whether a stored value is a pairing this version of the page can use. */
 export function isPhonePairing(x: unknown): x is PhonePairing {
   const p = x as PhonePairing | null;

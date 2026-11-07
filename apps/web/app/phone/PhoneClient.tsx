@@ -17,6 +17,7 @@ import {
   itemTitle,
   macOfflineSince,
   meetingLabel,
+  pairingLinkStep,
   phoneAction,
   phoneChoices,
   phoneRelay,
@@ -46,7 +47,7 @@ import p from "./phone.module.css";
  */
 
 type Problem = "bad-link" | "taken" | "cancelled" | "unpaired" | "first-unreadable";
-type Screen = { kind: "loading" } | { kind: "none"; problem?: Problem } | { kind: "pairing" } | { kind: "code" } | { kind: "inbox" };
+type Screen = { kind: "loading" } | { kind: "none"; problem?: Problem } | { kind: "replace"; fresh: PhonePairing } | { kind: "pairing" } | { kind: "code" } | { kind: "inbox" };
 type Hold = { kind: "approve" | "dismiss"; until: number; item: PendingItem };
 
 interface Net {
@@ -99,6 +100,18 @@ export function PhoneClient() {
     setScreen({ kind: "none", problem });
   }, []);
 
+  /** One Mac per phone: a new code replaces the old pairing, on the relay too. */
+  const replaceWith = useCallback(
+    async (fresh: PhonePairing) => {
+      const stored = pairingRef.current;
+      if (stored?.state === "paired") void phoneRelay(stored).unpair().catch(() => {});
+      await forget();
+      await persist(fresh);
+      setScreen({ kind: "pairing" });
+    },
+    [persist, forget],
+  );
+
   /**
    * Starts from a pairing link in the fragment, else from what's stored. Runs when the
    * page opens and when a link opens in it while it's already open (a home-screen app).
@@ -123,17 +136,15 @@ export function PhoneClient() {
       setNotice("That pairing code didn't work. This phone is still paired with your Mac.");
       return setScreen(screenFor(stored));
     }
-    if (stored?.id === fresh.id) {
-      // The same code opened again: carry on with the keys already made for it.
+    const step = pairingLinkStep(stored, fresh);
+    if (stored && step !== "start") {
+      // The same code opened again carries on with the keys already made for it. A new code
+      // while paired waits for your tap: a link alone never unpairs your Mac.
       await persist(stored);
-      return setScreen(screenFor(stored));
+      return setScreen(step === "ask" ? { kind: "replace", fresh } : screenFor(stored));
     }
-    // One Mac per phone: a new code replaces the old pairing.
-    if (stored?.state === "paired") void phoneRelay(stored).unpair().catch(() => {});
-    await forget();
-    await persist(fresh);
-    setScreen({ kind: "pairing" });
-  }, [persist, forget]);
+    await replaceWith(fresh);
+  }, [persist, replaceWith]);
   // One start at a time, so a second one sees what the first did (and the fragment gone).
   const begin = useCallback(() => (starting.current = starting.current.then(startOnce).catch(() => {})), [startOnce]);
 
@@ -325,6 +336,27 @@ export function PhoneClient() {
           </li>
         </ol>
         <Privacy />
+      </Shell>
+    );
+  }
+
+  if (screen.kind === "replace") {
+    return (
+      <Shell>
+        <section className={`${p.hero} enter`} aria-labelledby="rh">
+          <h1 id="rh" className="t-heading">
+            Pair with a different Mac?
+          </h1>
+          <p className="ink-2">This phone is paired with your Mac now. Pairing with this new code unpairs it. Go on only if you just made this code on your own Mac.</p>
+        </section>
+        <div className={p.actions}>
+          <button type="button" className="btn btn-secondary btn-lg press" onClick={() => pairing && setScreen(screenFor(pairing))}>
+            Keep this pairing
+          </button>
+          <button type="button" className="btn btn-primary btn-lg press" onClick={() => void replaceWith(screen.fresh)}>
+            Pair again
+          </button>
+        </div>
       </Shell>
     );
   }

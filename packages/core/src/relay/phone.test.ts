@@ -16,6 +16,7 @@ import {
   itemAmount,
   itemTitle,
   macOfflineSince,
+  pairingLinkStep,
   phoneAction,
   phoneChoices,
   phoneRelay,
@@ -110,6 +111,17 @@ test("a damaged or foreign pairing link is refused before anything is sent", () 
   assert.throws(() => startPhonePairing(enc({ ...raw, v: 2 }), "x", NOW), (e: RelayError) => e.code === "BAD_VERSION");
   assert.throws(() => startPhonePairing(enc({ ...raw, api: "http://evil.example" }), "x", NOW), (e: RelayError) => e.code === "BAD_PAIRING");
   assert.throws(() => startPhonePairing(enc({ ...raw, mac: "short" }), "x", NOW), (e: RelayError) => e.code === "BAD_KEY");
+});
+
+test("a new pairing link asks before it replaces a Mac this phone is paired with", () => {
+  const link = (backend: string) => startPhonePairing(`#pair=${encodePairing(newPairing(backend).pairing)}`, "x", NOW);
+  const fresh = link("https://api.example.com");
+  assert.equal(pairingLinkStep(null, fresh), "start");
+  assert.equal(pairingLinkStep(fresh, fresh), "same", "the same code again carries on with its keys");
+  const pairing = link("https://api.example.com");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh), "start", "a pairing not finished yet gives way to the new code");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh), "start");
+  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh), "ask", "a paired Mac is never dropped by a link alone");
 });
 
 test("someone else's hello first: the phone says so; a retry of its own lost hello goes on to the code", async () => {
