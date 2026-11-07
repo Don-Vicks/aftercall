@@ -286,6 +286,7 @@ export function RecordingScreen({
   onProcessed,
   onOpenNotes,
   onDelete,
+  onOpenSampleMeeting,
 }: {
   recording: SavedRecording;
   payees: Payee[];
@@ -295,6 +296,8 @@ export function RecordingScreen({
   onProcessed: OnProcessed;
   onOpenNotes: OnOpenNotes;
   onDelete: () => void;
+  /** Browser preview only: opens the sample meeting that already has notes. */
+  onOpenSampleMeeting?: () => void;
 }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const run = useRun(recording.id);
@@ -390,6 +393,13 @@ export function RecordingScreen({
                 with a NEAR AI key, or run <span className="t-mono">pnpm sample:notes</span> in the repo with <span className="t-mono">NEAR_AI_API_KEY</span> in
                 .env.
               </p>
+            )}
+            {!isDesktop && onOpenSampleMeeting && (
+              <div>
+                <Button variant="primary" onClick={onOpenSampleMeeting}>
+                  See a sample meeting with notes: Sync with Ada
+                </Button>
+              </div>
             )}
             {isDesktop && hasKey === false && (
               <KeyForm

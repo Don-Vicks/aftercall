@@ -15,6 +15,7 @@ import { warnAway } from "./recording/notify";
 import { sampleDestinations, syncWithAda, syncWithAdaCost, syncWithAdaDropped, syncWithAdaSigned } from "./sample";
 import { spendOf } from "./costs";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
+import { IS_DEMO } from "./demo";
 import { RecordingScreen } from "./RecordingScreen";
 import { parseNotes, serializeNotes, type SavedNotes } from "./nearai";
 import { ConnectNear } from "./ConnectNear";
@@ -84,7 +85,8 @@ function useSystemTheme() {
 export default function App() {
   useSystemTheme();
   const [meetings, setMeetings] = useState<Record<string, Meeting>>({ [syncWithAda.id]: syncWithAda });
-  const [view, setView] = useState<View>({ name: "home" });
+  // The browser demo opens on the sample meeting's notes: it has no audio to make notes from.
+  const [view, setView] = useState<View>(IS_DEMO ? { name: "meeting", id: syncWithAda.id } : { name: "home" });
   /**
    * Opens the library screens. The sidebar's onOpenPeople, onOpenAsk, onOpenMeetings and
    * onOpenActions call go.people, go.ask, go.meetings and go.actions.
@@ -845,6 +847,7 @@ export default function App() {
                 onDelete={() => removeRecording(openRecording.id)}
                 onProcessed={(id, notes, proofError) => onProcessedRef.current(id, notes, proofError)}
                 onOpenNotes={(id) => setView((v) => (v.name === "recording" && v.id === id ? { name: "meeting", id } : v))}
+                onOpenSampleMeeting={isDesktop ? undefined : () => setView({ name: "meeting", id: syncWithAda.id })}
               />
             )}
             {view.name === "home" && (
