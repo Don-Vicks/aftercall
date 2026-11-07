@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { amountNote, buildMeeting, checkedAmount } from "./build.ts";
 import { autopilotDecision } from "../followups/autopilot.ts";
-import { notesSchema, type Notes } from "./schema.ts";
+import { NOTES_SYSTEM_PROMPT, notesJsonSchema, notesSchema, type Notes } from "./schema.ts";
 import type { PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 
 const transcript: TranscriptLine[] = [
@@ -264,4 +264,37 @@ test("Hindi, French and Spanish meetings keep quotes with their own spelling", (
       ["pagar al diseñador quinientos dólares mañana", null, "unclear"],
     ],
   );
+});
+
+test("a payment's condition is kept only with its own quote from the transcript", () => {
+  const lines: TranscriptLine[] = [{ at: 40, speaker: "you", text: "I'll pay Kemi five hundred dollars once the icons are delivered on Friday." }];
+  const pay = (extra: Record<string, unknown>) =>
+    notesSchema.parse({ ...notes, decisions: [], action_items: [], followups: [{ type: "payment", payee_name: "Kemi", amount_words: "five hundred dollars", memo: null, evidence: "I'll pay Kemi five hundred dollars", ...extra }] });
+  const build = (n: Notes) => buildMeeting({ ...base, transcript: lines, notes: n, payees: [{ name: "Kemi", account: "kemi.testnet" }] }).meeting.followUps[0] as PaymentFollowUp;
+
+  const kept = build(pay({ condition: "when the icons are delivered", condition_evidence: "once the icons are delivered on Friday" }));
+  assert.deepEqual(kept.condition, { text: "when the icons are delivered", evidence: { quote: "once the icons are delivered on Friday", at: 40 } });
+  assert.equal(kept.conditionDropped, undefined);
+  assert.equal(kept.amount, 500_000_000n, "the amount is checked as before");
+
+  // A condition whose words aren't in the transcript is dropped, and the payment says so.
+  const invented = build(pay({ condition: "after the invoice", condition_evidence: "after you send the invoice" }));
+  assert.equal(invented.condition, undefined);
+  assert.equal(invented.conditionDropped, true);
+  const unquoted = build(pay({ condition: "after the invoice", condition_evidence: null }));
+  assert.equal(unquoted.conditionDropped, true);
+
+  // No condition: neither field, as for notes made before conditions were read.
+  for (const extra of [{ condition: null, condition_evidence: null }, {}]) {
+    const plain = build(pay(extra));
+    assert.equal(plain.condition, undefined);
+    assert.equal(plain.conditionDropped, undefined);
+  }
+});
+
+test("the model is asked for a condition and its quote on every payment", () => {
+  const paymentSchema = notesJsonSchema.properties.followups.items.anyOf[1];
+  assert.deepEqual(paymentSchema.required.slice(-2), ["condition", "condition_evidence"]);
+  assert.match(NOTES_SYSTEM_PROMPT, /copy the exact words where it was said into condition_evidence/);
+  assert.match(NOTES_SYSTEM_PROMPT, /Never invent a condition/);
 });

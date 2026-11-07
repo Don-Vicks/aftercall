@@ -152,6 +152,17 @@ export interface PaymentFollowUp extends FollowUpBase {
    * became of it. Absent on payments held before it was kept.
    */
   heldOn?: NearPlace;
+  /**
+   * What the call said must happen before paying ("when the icons are delivered"), with the
+   * exact words behind it. Only from the transcript: no quote, no condition. Absent on
+   * meetings made before conditions were read, and on payments without one.
+   */
+  condition?: { text: string; evidence: Evidence };
+  /**
+   * The model gave a condition whose words aren't in the transcript, so it was dropped. The
+   * payment still never runs on autopilot or from the phone: it waits for you on the Mac.
+   */
+  conditionDropped?: boolean;
 }
 
 /** A NEAR network, agent-wallet contract and owner account, as the app's NEAR settings name them. */
