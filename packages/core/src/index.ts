@@ -16,6 +16,8 @@ export * from "./notes/transcript.ts";
 export * from "./notes/verify.ts";
 export * from "./notes/proof.ts";
 export * from "./notes/lines.ts";
+export * from "./notes/disclosure.ts";
+export * from "./notes/proofLink.ts";
 export * from "./notes/edits.ts";
 export * from "./notes/yourNotesDrafts.ts";
 export * from "./tee/checks.ts";
