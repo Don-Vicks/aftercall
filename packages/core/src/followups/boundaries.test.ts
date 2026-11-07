@@ -31,6 +31,15 @@ test("a recap's what-leaves counts what buildRecap puts in, and names the addres
   assert.equal(emailWhatLeaves(meeting, { to: "" }, { backend: false }).details[0].endsWith("It goes to the address you add."), true);
 });
 
+test("a recap that says what agents finished counts those items too, as the recap does", () => {
+  const done = { agent: "Claude Code", at: "2026-11-02T10:00:00.000Z", link: "https://github.com/acme/api/pull/42" };
+  const m = { ...meeting, actionItems: [...meeting.actionItems, { id: "a4", text: "Fix the login bug", owner: "You", done: true, completed: done }] };
+  assert.match(emailWhatLeaves(m, email, { backend: false, agentWork: true }).details[0], /2 open action items, 1 item a coding agent marked done, with its link and a footer/);
+  assert.doesNotMatch(emailWhatLeaves(m, email, { backend: false }).details[0], /coding agent/, "off unless the recap includes them");
+  const facts: RecapFacts = { verified: true, e2ee: true, handlingUrl: "https://x/handling" };
+  assert.equal((buildRecap(m, email, { facts, agentWork: true }).text.match(/^- /gm) ?? []).length, 3);
+});
+
 test("Draft in Mail stays off Aftercall's servers; Send through Aftercall names the backend and Resend only when the build has it", () => {
   const withBackend = emailWhatLeaves(meeting, email, { backend: true }).details.join(" ");
   assert.match(withBackend, /Draft in Mail opens it in your own mail app; Aftercall's servers never see it\./);

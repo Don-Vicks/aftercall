@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RECAP_FOOTER_MARK, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
+import { RECAP_AGENT_HEADING, RECAP_FOOTER_MARK, agentWorkItems, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
 import type { EmailFollowUp, Meeting } from "../meeting.ts";
 import type { ProofBundleV1, ProofBundleV2 } from "../notes/pipeline.ts";
 
@@ -50,7 +50,7 @@ test("action items the sender edited are marked, and the footer says the app did
 });
 
 test("the footer claims only what the app can check", () => {
-  for (const fx of [facts, { ...facts, notice }, { ...facts, verified: false }, { ...facts, e2ee: null }]) {
+  for (const fx of [facts, { ...facts, notice }, { ...facts, verified: false }, { ...facts, e2ee: null }, { ...facts, agentItems: 2 }]) {
     const text = recapFooter(fx);
     assert.doesNotMatch(text, /recorded with notice to everyone/i, "the app can't know everyone was told");
     assert.doesNotMatch(text, /train/i, "the app can't check what NEAR AI trains on");
@@ -138,4 +138,46 @@ test("the HTML version has the same words, the footer mark, and the proof link b
   for (const line of recapFooter(facts).split("\n").slice(0, -1)) assert.ok(r.html.includes(line), `footer line kept: ${line}`);
   const noProof = buildRecap(meeting, f, { facts: { ...facts, verifyUrl: undefined } });
   assert.ok(noProof.html.includes(`<a href="${HANDLING}"`) && noProof.html.includes("how Aftercall handles a call"));
+});
+
+const withAgents: Meeting = {
+  ...meeting,
+  actionItems: [
+    ...meeting.actionItems,
+    { id: "a3", text: "Fix the login bug", owner: "You", done: true, completed: { agent: "Claude Code", at: "2026-11-02T10:00:00.000Z", note: "Fixed", link: "https://github.com/acme/api/pull/42" } },
+    { id: "a4", text: "Write the docs", owner: "Sam", done: true, completed: { agent: "Codex", at: "2026-11-02T11:00:00.000Z", link: "javascript:alert(1)" } },
+    // Reopened by you: not done, so not in the list, whatever the agent said.
+    { id: "a5", text: "Reopened", owner: "You", done: false, completed: { agent: "Codex", at: "2026-11-02T12:00:00.000Z", link: "https://example.com/x" } },
+  ],
+};
+
+test("without agentWork the recap is as before, whatever agents did", () => {
+  const r = buildRecap(withAgents, f, { sender: "Victor", facts });
+  assert.equal(r.text, buildRecap({ ...withAgents, actionItems: withAgents.actionItems.map(({ completed: _c, ...a }) => a) }, f, { sender: "Victor", facts }).text);
+  assert.doesNotMatch(r.text + r.html, /coding agent|github\.com|Fix the login bug/i);
+});
+
+test("with agentWork, items agents finished are listed as the agents' statement, with their links", () => {
+  const r = buildRecap(withAgents, f, { sender: "Victor", facts, agentWork: true });
+  assert.match(r.text, /\nDONE BY CODING AGENTS\n- Fix the login bug · done by Claude Code · https:\/\/github\.com\/acme\/api\/pull\/42\n- Write the docs · done by Codex\n/);
+  assert.doesNotMatch(r.text, /javascript:/, "a link that isn't http or https is left out");
+  assert.match(r.text, /\n- Reopened · Victor\n/, "an item you reopened is open again, not the agent's");
+  assert.doesNotMatch(r.text, /Reopened · done by/);
+  assert.doesNotMatch(r.text, /- Fix the login bug · Victor/, "a done item isn't listed as open");
+  assert.match(r.text, /Done by coding agents is what coding agents reported, with their own words and links\. Aftercall didn't check the work or what the links point to\./);
+  assert.ok(r.text.endsWith(recapFooter({ ...facts, agentItems: 2 })));
+  assert.ok(r.text.includes(`${RECAP_FOOTER_MARK} https://aftercall.app/verify#x`));
+  // HTML: the link behind a short label, escaped; never the bad one.
+  assert.ok(r.html.includes(`>${RECAP_AGENT_HEADING}</p>`));
+  assert.match(r.html, /Fix the login bug<br><span[^>]*>done by Claude Code · <a href="https:\/\/github\.com\/acme\/api\/pull\/42"[^>]*>PR #42<\/a><\/span>/);
+  assert.doesNotMatch(r.html, /javascript:/);
+  assert.match(recapFooter({ ...facts, agentItems: 1 }), /is what a coding agent reported, with its own words and links/);
+});
+
+test("agentWorkItems: done items an agent completed, with a valid link or none", () => {
+  assert.deepEqual(agentWorkItems(withAgents), [
+    { text: "Fix the login bug", agent: "Claude Code", link: "https://github.com/acme/api/pull/42" },
+    { text: "Write the docs", agent: "Codex" },
+  ]);
+  assert.deepEqual(agentWorkItems(meeting), []);
 });

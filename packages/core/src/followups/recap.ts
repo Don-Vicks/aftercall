@@ -1,5 +1,6 @@
 import type { EmailFollowUp, Meeting, NoticeLog } from "../meeting.ts";
 import { hasFullChecks, type ProofBundle } from "../notes/pipeline.ts";
+import { workLink, workLinkLabel } from "../agents/work.ts";
 
 export interface Recap {
   to: string;
@@ -23,7 +24,12 @@ export interface RecapFacts {
   handlingUrl: string;
   /** How many action items in the recap the sender edited after the notes were made (`buildRecap` counts them). */
   editedItems?: number;
+  /** How many items the recap lists as done by coding agents (`buildRecap` counts them, with `agentWork`). */
+  agentItems?: number;
 }
+
+/** The heading over items coding agents marked done, when the sender includes them. */
+export const RECAP_AGENT_HEADING = "Done by coding agents";
 
 /** The mark after an action item the sender edited after the notes were made. */
 export const RECAP_EDITED_MARK = "(edited by the sender)";
@@ -46,9 +52,13 @@ export function recapFooter(facts: RecapFacts): string {
   const edited = facts.editedItems
     ? `The sender changed ${facts.editedItems === 1 ? "1 action item" : `${facts.editedItems} action items`} after the notes were made, marked ${RECAP_EDITED_MARK}. Aftercall didn't check ${facts.editedItems === 1 ? "that change" : "those changes"}.`
     : "";
+  const agents = facts.agentItems
+    ? `${RECAP_AGENT_HEADING} is what ${facts.agentItems === 1 ? "a coding agent" : "coding agents"} reported, with ${facts.agentItems === 1 ? "its" : "their"} own words and links. Aftercall didn't check the work or what the links point to.`
+    : "";
   return [
     made,
     edited,
+    agents,
     "Aftercall deletes the call's audio once the notes are saved.",
     facts.notice ? "The sender confirmed telling everyone on the call before recording (Aftercall can't check this)." : "",
     `${RECAP_FOOTER_MARK} ${facts.verifyUrl ?? facts.handlingUrl}`,
@@ -89,8 +99,31 @@ export function recapOwner(owner: string, sender?: string): string | null {
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Recap of a meeting for one follow-up, as plain text and as HTML with the same words. */
-export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: string; facts: RecapFacts }): Recap {
+/** One item a coding agent marked done, as a recap lists it: the agent's name and its link, when it gave a valid one. */
+export interface AgentWorkItem {
+  text: string;
+  agent: string;
+  link?: string;
+}
+
+/**
+ * Items coding agents marked done that are still done, for a recap that includes them.
+ * A link that isn't a plain http or https URL is left out.
+ */
+export function agentWorkItems(meeting: Pick<Meeting, "actionItems">): AgentWorkItem[] {
+  return meeting.actionItems.flatMap((a) => {
+    if (!a.done || !a.completed) return [];
+    const link = workLink(a.completed.link);
+    return [{ text: a.text, agent: a.completed.agent, ...(link ? { link } : {}) }];
+  });
+}
+
+/**
+ * Recap of a meeting for one follow-up, as plain text and as HTML with the same words.
+ * With `agentWork`, it also lists the items coding agents marked done, as the agents'
+ * own statement, and the footer says Aftercall didn't check them.
+ */
+export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: string; facts: RecapFacts; agentWork?: boolean }): Recap {
   const greeting = `Hi ${f.toName || "there"}, thanks for the call. Here's what we agreed.`;
   const open = meeting.actionItems.filter((a) => !a.done);
   const items = open.map((a) => {
@@ -98,8 +131,9 @@ export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: 
     // Items you changed after the notes were made say so, here and in the footer.
     return { text: a.text, meta: [owner, a.due].filter(Boolean).join(" · "), edited: Boolean(a.edited) };
   });
+  const work = opts.agentWork ? agentWorkItems(meeting) : [];
   const editedItems = items.filter((a) => a.edited).length;
-  const facts = editedItems ? { ...opts.facts, editedItems } : opts.facts;
+  const facts = { ...opts.facts, ...(editedItems ? { editedItems } : {}), ...(work.length ? { agentItems: work.length } : {}) };
 
   const lines: string[] = [greeting, "", meeting.summary, ""];
   if (meeting.decisions.length) {
@@ -112,10 +146,15 @@ export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: 
     items.forEach((a) => lines.push(`- ${a.text}${a.meta ? ` · ${a.meta}` : ""}${a.edited ? ` ${RECAP_EDITED_MARK}` : ""}`));
     lines.push("");
   }
+  if (work.length) {
+    lines.push(RECAP_AGENT_HEADING.toUpperCase());
+    work.forEach((w) => lines.push(`- ${w.text} · done by ${w.agent}${w.link ? ` · ${w.link}` : ""}`));
+    lines.push("");
+  }
   if (opts.sender) lines.push(opts.sender, "");
   lines.push("--", recapFooter(facts));
 
-  return { to: f.to, subject: recapSubject(f.subject), text: lines.join("\n"), html: recapHtml(greeting, meeting, items, opts.sender, facts) };
+  return { to: f.to, subject: recapSubject(f.subject), text: lines.join("\n"), html: recapHtml(greeting, meeting, items, work, opts.sender, facts) };
 }
 
 /**
@@ -123,7 +162,14 @@ export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: 
  * and the footer in small type with its long proof link behind a short label. Every
  * word comes from the same places as the plain text; nothing is added.
  */
-function recapHtml(greeting: string, meeting: Meeting, items: { text: string; meta: string; edited: boolean }[], sender: string | undefined, facts: RecapFacts): string {
+function recapHtml(
+  greeting: string,
+  meeting: Meeting,
+  items: { text: string; meta: string; edited: boolean }[],
+  work: AgentWorkItem[],
+  sender: string | undefined,
+  facts: RecapFacts,
+): string {
   const p = (s: string) => `<p style="margin:0 0 16px">${escapeHtml(s)}</p>`;
   const h = (s: string) => `<p style="margin:24px 0 8px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#6b6b6b">${s}</p>`;
   const body: string[] = [p(greeting), p(meeting.summary)];
@@ -134,6 +180,14 @@ function recapHtml(greeting: string, meeting: Meeting, items: { text: string; me
     const li = (a: (typeof items)[number]) =>
       `<li style="margin:0 0 8px">${escapeHtml(a.text)}${a.meta ? `<br><span style="color:#6b6b6b;font-size:13px">${escapeHtml(a.meta)}</span>` : ""}${a.edited ? ` <span style="color:#6b6b6b;font-size:13px">${escapeHtml(RECAP_EDITED_MARK)}</span>` : ""}</li>`;
     body.push(h("Action items"), `<ul style="margin:0 0 16px;padding-left:22px">${items.map(li).join("")}</ul>`);
+  }
+  if (work.length) {
+    // The agent's link, behind a short label; it is one the agent gave, never checked.
+    const li = (w: AgentWorkItem) =>
+      `<li style="margin:0 0 8px">${escapeHtml(w.text)}<br><span style="color:#6b6b6b;font-size:13px">done by ${escapeHtml(w.agent)}${
+        w.link ? ` · <a href="${escapeHtml(w.link)}" style="color:#2f7d6d">${escapeHtml(workLinkLabel(w.link))}</a>` : ""
+      }</span></li>`;
+    body.push(h(RECAP_AGENT_HEADING), `<ul style="margin:0 0 16px;padding-left:22px">${work.map(li).join("")}</ul>`);
   }
   if (sender) body.push(p(sender));
 

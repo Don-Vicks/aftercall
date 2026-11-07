@@ -39,3 +39,4 @@ export * from "./notes/briefDraft.ts";
 export * from "./relay/crypto.ts";
 export * from "./relay/messages.ts";
 export * from "./agents/handoff.ts";
+export * from "./agents/work.ts";

@@ -37,7 +37,7 @@ export interface ActionItem {
   /** Set when a connected agent (through the local MCP server) took the item on. */
   claimed?: AgentMark;
   /** Set when a connected agent marked the item done. */
-  completed?: AgentMark & { note?: string };
+  completed?: AgentCompletion;
   /**
    * Set when you changed the item after the notes were signed: when, and which fields
    * differ from the model's signed item (notes.action_items). Absent once it matches again.
@@ -51,6 +51,16 @@ export interface ItemEdit {
   /** ISO 8601 time of the last edit. */
   at: string;
   fields: EditedField[];
+}
+
+/**
+ * An agent's completion: who, when, and what it says it did. `link` is the work it points
+ * to (a pull request, commit or document; `workLink` rules). Both are the agent's
+ * statement: Aftercall shows them as such and never checks what's behind the link.
+ */
+export interface AgentCompletion extends AgentMark {
+  note?: string;
+  link?: string;
 }
 
 /** Who did something to an action item through the MCP server, and when. */
