@@ -2,70 +2,39 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  NETWORK_CONFIG,
+  LINE_NOT_PROVEN,
   NOT_PROVEN,
   WHISPER_NOTE,
-  decodePublicProof,
+  allChecksPassed,
+  decodeVerifyLink,
   droppedLine,
   explorerAccountUrl,
   groupChecks,
   hasFullChecks,
   hasStatements,
-  isNetwork,
+  lineOffsetWords,
+  lineSpeakerWords,
   noticeLine,
   proofHash,
   recordedAtMs,
-  verifyProof,
-  verifyProofGpu,
+  recordingStartMs,
+  runLinkChecks,
   type Check,
   type CheckGroup,
-  type Jwks,
+  type LineProof,
   type OnChainProof,
   type ProofBundleV2,
   type ProofBundleV3,
   type PublicProof,
   type TeeCheck,
+  type VerifyLink,
 } from "@aftercall/core";
 import { CopyButton } from "../client";
 import { Icon, Pill, Seal, SiteFooter, SiteHeader, Tick, vars } from "../ui";
 import v from "./verify.module.css";
 
-/** NVIDIA publishes its NRAS keys to browsers (CORS allows any origin). */
-async function nvidiaKeys(): Promise<Jwks | null> {
-  try {
-    const res = await fetch("https://nras.attestation.nvidia.com/.well-known/jwks.json");
-    return res.ok ? ((await res.json()) as Jwks) : null;
-  } catch {
-    return null;
-  }
-}
-
-
-/** Reads the proof straight from the agent-wallet contract, at final finality. */
-async function readProof(p: PublicProof): Promise<OnChainProof | null> {
-  const args = btoa(JSON.stringify({ owner: p.owner, meeting_id: p.bundle.meetingId }));
-  const res = await fetch(NETWORK_CONFIG[p.network].rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "verify",
-      method: "query",
-      params: { request_type: "call_function", finality: "final", account_id: p.contract, method_name: "get_proof", args_base64: args },
-    }),
-  });
-  const body = await res.json();
-  const err = body.error ?? body.result?.error;
-  if (err) {
-    const cause = err.cause?.name ?? "";
-    if (cause === "UNKNOWN_ACCOUNT") throw new Error(`the contract ${p.contract} doesn't exist on ${p.network}`);
-    throw new Error(typeof err === "string" ? err : err.data ?? err.message ?? "unknown error");
-  }
-  return JSON.parse(new TextDecoder().decode(Uint8Array.from(body.result.result as number[])));
-}
-
-type Done = { kind: "done"; proof: PublicProof; checks: Check[]; onChain: OnChainProof | null; rpcError?: string };
-type State = { kind: "loading" } | { kind: "missing" } | { kind: "bad-link" } | { kind: "checking"; proof: PublicProof } | Done;
+type Done = { kind: "done"; link: VerifyLink; checks: Check[]; onChain: OnChainProof | null; rpcError?: string };
+type State = { kind: "loading" } | { kind: "missing" } | { kind: "bad-link" } | { kind: "checking"; link: VerifyLink } | Done;
 
 /** Row timing: browser checks tick in 70ms apart, then the recorded groups. */
 const rowAt = (i: number) => 140 + i * 70;
@@ -77,27 +46,16 @@ export function VerifyClient() {
   const run = useCallback(async () => {
     const fragment = window.location.hash;
     if (!fragment || fragment.length < 2) return setState({ kind: "missing" });
-    let proof: PublicProof;
+    let link: VerifyLink;
     try {
-      proof = decodePublicProof(fragment);
-      if (!proof.bundle || !isNetwork(proof.network)) throw new Error("bad");
+      link = decodeVerifyLink(fragment);
     } catch {
       return setState({ kind: "bad-link" });
     }
     const id = ++latest.current;
-    setState({ kind: "checking", proof });
-    const gpu = verifyProofGpu(proof.bundle, await nvidiaKeys());
-    const withGpu = async (checks: Check[]) => {
-      const g = await gpu;
-      return g ? [...checks, g] : checks;
-    };
-    let done: Done;
-    try {
-      const onChain = await readProof(proof);
-      done = { kind: "done", proof, onChain, checks: await withGpu(verifyProof(proof.bundle, onChain)) };
-    } catch (e) {
-      done = { kind: "done", proof, onChain: null, checks: await withGpu(verifyProof(proof.bundle, null)), rpcError: String(e) };
-    }
+    setState({ kind: "checking", link });
+    // The same checks as the receipts package: NEAR's proof hash, NVIDIA's keys, then every check.
+    const done: Done = { kind: "done", link, ...(await runLinkChecks(link)) };
     // A newer run (the link changed, or "Run the checks again") wins.
     if (id === latest.current) setState(done);
   }, []);
@@ -108,7 +66,7 @@ export function VerifyClient() {
     return () => window.removeEventListener("hashchange", run);
   }, [run]);
 
-  const proof = state.kind === "checking" || state.kind === "done" ? state.proof : null;
+  const link = state.kind === "checking" || state.kind === "done" ? state.link : null;
 
   return (
     <>
@@ -123,7 +81,7 @@ export function VerifyClient() {
           {state.kind === "missing" && (
             <Message
               title="Open a proof link"
-              body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the models, the checks the app ran, the summary's signature and the NEAR account it belongs to, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can."
+              body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the models, the checks the app ran, the summary's signature and the NEAR account it belongs to, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can. A line link, from Share this line, also holds one line of the transcript and checks that it is part of that proof."
             >
               <span className={v.messageLinks}>
                 <a href="/how-it-works" className="arrow-link">
@@ -138,7 +96,7 @@ export function VerifyClient() {
             </Message>
           )}
           {state.kind === "bad-link" && <Message title="This link is damaged" body="The proof in the link can't be read. Ask the person who shared it to copy it again from Aftercall." />}
-          {proof && <Result proof={proof} done={state.kind === "done" ? state : null} onRerun={run} />}
+          {link && <Result proof={link.proof} line={link.kind === "line" ? link.line : null} done={state.kind === "done" ? state : null} onRerun={run} />}
         </div>
       </main>
       <SiteFooter />
@@ -146,12 +104,12 @@ export function VerifyClient() {
   );
 }
 
-function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | null; onRerun: () => void }) {
+function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: LineProof | null; done: Done | null; onRerun: () => void }) {
   const checks = done?.checks ?? [];
   const passed = checks.filter((c) => c.ok).length;
   const recorded: TeeCheck[] | null = hasFullChecks(proof.bundle) ? proof.bundle.checks : null;
   // E2EE has its own line; "processed privately" rests on attestation and signatures.
-  const allOk = !!done && passed === checks.length && (recorded ?? []).every((c) => c.ok || c.id === "response-e2ee");
+  const allOk = !!done && allChecksPassed(proof.bundle, checks);
   const dateOpts = { day: "numeric", month: "short", year: "numeric" } as const;
   const when = done?.onChain
     ? new Date(recordedAtMs(done.onChain)).toLocaleDateString([], dateOpts)
@@ -162,26 +120,42 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
   const sealAt = rowAt(checks.length) + 60;
 
   const download = () => {
-    const blob = new Blob([JSON.stringify(proof, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(line ? { ...proof, ...line } : proof, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `aftercall-proof-${proof.bundle.meetingId}.json`;
+    a.download = `aftercall-${line ? "line" : "proof"}-${proof.bundle.meetingId}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
+
+  const title = line
+    ? !done
+      ? "Checking this line"
+      : allOk
+        ? "This line is in the meeting's proof on NEAR"
+        : "This line doesn't fully check out"
+    : !done
+      ? "Checking this meeting proof"
+      : allOk
+        ? "This meeting was processed in secure hardware"
+        : "This proof doesn't fully check out";
 
   return (
     <>
       <section aria-labelledby="vh" className={`${v.hero} enter`}>
         <div className={v.heroText}>
           <span className="t-eyebrow">
-            Meeting proof{when ? ` · ${when}` : ""} · recorded by {proof.owner}
+            {line ? "Shared line" : "Meeting proof"}
+            {when ? ` · ${when}` : ""} · recorded by {proof.owner}
           </span>
           <h1 id="vh" className={v.h1}>
-            {!done ? "Checking this meeting proof" : allOk ? "This meeting was processed in secure hardware" : "This proof doesn't fully check out"}
+            {title}
           </h1>
           <span className="ink-2">
-            {done && !allOk ? "Some checks failed; the lists below say which, and why. " : ""}This page holds the evidence only, never what was said.
+            {done && !allOk ? "Some checks failed; the lists below say which, and why. " : ""}
+            {line
+              ? "The link holds this one line and the meeting's proof. No other line, no notes and no title."
+              : "This page holds the evidence only, never what was said."}
           </span>
           <div className={v.pills} aria-live="polite">
             {done ? (
@@ -208,6 +182,8 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
           </div>
         )}
       </section>
+
+      {line && <SharedLine meetingId={proof.bundle.meetingId} line={line} />}
 
       <section aria-labelledby="vb" className={v.block}>
         <div className={v.blockHead}>
@@ -281,6 +257,7 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
         </h2>
         <ul className={v.notProven}>
           {[
+            ...(line ? LINE_NOT_PROVEN : []),
             ...NOT_PROVEN,
             recorded
               ? "That the Intel quotes were genuine: the app verified them with Intel when the meeting was processed; this page trusts that record and re-checks what it can."
@@ -317,6 +294,30 @@ function Result({ proof, done, onRerun }: { proof: PublicProof; done: Done | nul
         </a>
       </div>
     </>
+  );
+}
+
+/** The shared line: its words, which side said it, and when. Only what the link holds. */
+function SharedLine({ meetingId, line: { line } }: { meetingId: string; line: LineProof }) {
+  const start = recordingStartMs(meetingId);
+  const said = start !== null && Number.isFinite(line.at) ? new Date(start + line.at * 1000) : null;
+  return (
+    <figure aria-label="The shared line" className={`${v.sharedLine} enter`} style={vars({ d: "60ms" })}>
+      <blockquote className={v.sharedText}>“{line.text}”</blockquote>
+      <figcaption className={v.sharedMeta}>
+        <span>{lineSpeakerWords(line.speaker)}</span>
+        <span className="muted">·</span>
+        <span className="mono">{lineOffsetWords(line.at)}</span>
+        {said && (
+          <>
+            <span className="muted">·</span>
+            <span>
+              said about {said.toLocaleString([], { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </>
+        )}
+      </figcaption>
+    </figure>
   );
 }
 
