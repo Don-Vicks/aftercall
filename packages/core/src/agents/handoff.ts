@@ -47,6 +47,7 @@ export function handoffPrompt(meeting: Pick<Meeting, "id" | "title">, item: Pick
     ...(item.due?.trim() ? [`Due: ${quoted(item.due, LIMITS.due)}`] : []),
   ];
   return [
+    // Open in Claude Code renames the server in this opening when it passes its own config (`for_task_server`, agents.rs).
     `Using the aftercall MCP server, claim action item ${itemId} in meeting ${meetingId} as "${agent}" with claim_action_item, then do the work it describes.`,
     `When it's done, call complete_action_item as "${agent}" with a one-line note and a link to the work (a pull request, commit or document). If there's nothing to link, say why in the note.`,
     "",

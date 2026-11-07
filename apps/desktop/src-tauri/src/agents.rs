@@ -926,8 +926,9 @@ pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), S
 // into a variable, which the shell hands to claude as one argument without reading it as
 // code. The script holds only paths Aftercall chose, each single-quoted. When Claude Code
 // isn't connected with the current token, the script also passes `--mcp-config` with the
-// same server "Connect Claude Code" adds; that file holds the token, so it sits in the same
-// private folder, which the script deletes when claude exits (or the next Open does).
+// same server "Connect Claude Code" adds, under its own name (`TASK_SERVER`); that file holds
+// the token, so it sits in the same private folder, which the script deletes when claude
+// exits (or the next Open does).
 
 /// The longest prompt passed to Claude Code, in bytes.
 const PROMPT_MAX: usize = 8 * 1024;
@@ -961,13 +962,31 @@ pub fn check_prompt(prompt: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file.
+/// What Open in Claude Code names Aftercall's server in its `--mcp-config` file. Claude Code
+/// may still have a user-scope "aftercall" with an older token, and with two servers of one
+/// name, which one the session gets is left to chance; under its own name, the server with
+/// the current token is always there.
+pub const TASK_SERVER: &str = "aftercall-task";
+/// How the hand-off prompt starts (`handoffPrompt` in core).
+const PROMPT_LEAD: &str = "Using the aftercall MCP server";
+
+/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file,
+/// named `TASK_SERVER`.
 pub fn mcp_config(token: &str, node: &Path, server: &Path, data_dir: &Path) -> Value {
-    json!({ "mcpServers": { "aftercall": {
+    json!({ "mcpServers": { TASK_SERVER: {
         "command": node.display().to_string(),
         "args": [server.display().to_string(), "--data-dir", data_dir.display().to_string()],
         "env": { "AFTERCALL_TOKEN": token },
     } } })
+}
+
+/// The hand-off prompt for a session given `mcp_config`: it names `TASK_SERVER`, so the agent
+/// doesn't use an "aftercall" holding an older token. Any other prompt is left as it is.
+pub fn for_task_server(prompt: &str) -> String {
+    match prompt.strip_prefix(PROMPT_LEAD) {
+        Some(rest) => format!("Using the {TASK_SERVER} MCP server{rest}"),
+        None => prompt.to_string(),
+    }
 }
 
 /// The script Terminal runs. Everything in it is a path Aftercall chose, single-quoted;
@@ -1106,7 +1125,8 @@ pub fn open_in_claude_code(
         let config = mcp_config(&token, &node, server, data_dir);
         (Some(node), Some(config))
     };
-    let prepared = match prepare_launch(data_dir, &folder, prompt, claude, node.as_deref(), mcp.as_ref()) {
+    let prompt = if mcp.is_some() { for_task_server(prompt) } else { prompt.to_string() };
+    let prepared = match prepare_launch(data_dir, &folder, &prompt, claude, node.as_deref(), mcp.as_ref()) {
         Ok(p) => p,
         Err(message) => return OpenOutcome { ok: false, missing: None, message },
     };
@@ -1841,8 +1861,10 @@ pwd >> {out}"#
         let text = std::fs::read_to_string(&script_path).unwrap();
         assert!(!text.contains("Ship it") && !text.contains("meeting-data") && !text.contains("t0k3n"), "{text}");
         let config: Value = serde_json::from_str(&std::fs::read_to_string(private.join("mcp.json")).unwrap()).unwrap();
-        assert_eq!(config["mcpServers"]["aftercall"]["env"]["AFTERCALL_TOKEN"], "t0k3n");
-        assert_eq!(config["mcpServers"]["aftercall"]["args"][0], server.display().to_string());
+        // Its own name, so a user-scope "aftercall" with an older token can't stand in for it.
+        assert_eq!(config["mcpServers"].as_object().unwrap().keys().collect::<Vec<_>>(), [TASK_SERVER]);
+        assert_eq!(config["mcpServers"][TASK_SERVER]["env"]["AFTERCALL_TOKEN"], "t0k3n");
+        assert_eq!(config["mcpServers"][TASK_SERVER]["args"][0], server.display().to_string());
 
         // Run the script as Terminal would, against the stand-in claude.
         let run_script = |script_path: &Path| {
@@ -1855,7 +1877,9 @@ pwd >> {out}"#
         };
         // The prompt comes after `--`, so `--mcp-config`, which takes several files, never reads it as one.
         let received = run_script(&script_path);
-        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), "--", prompt.trim_end_matches('\n')]);
+        // The prompt names the server by that name too.
+        let named = prompt.replacen("Using the aftercall MCP server", "Using the aftercall-task MCP server", 1);
+        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), "--", named.trim_end_matches('\n')]);
         for planted in ["pwned", "pwned2"] {
             assert!(!folder.join(planted).exists() && !dir.join(planted).exists(), "{planted} was run");
         }
@@ -1880,7 +1904,8 @@ pwd >> {out}"#
         })
         .ok);
         let connected = PathBuf::from(&opened.borrow()[0][2]);
-        assert_eq!(run_script(&connected), ["--", prompt.trim_end_matches('\n')]);
+        assert_eq!(run_script(&connected), ["--", prompt.trim_end_matches('\n')], "Connect's \"aftercall\", as the prompt says");
+        assert_eq!(for_task_server("Claim a1"), "Claim a1", "another prompt is left as it is");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
