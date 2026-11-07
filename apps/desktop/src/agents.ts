@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ItemFields, Meeting } from "@aftercall/core";
+import type { AgentWalletSnapshot, ItemFields, Meeting } from "@aftercall/core";
 
 /** Coding agents (MCP) state and paths, from the Mac app (`agents_info`, apps/desktop/src-tauri/src/agents.rs). */
 export interface AgentsInfo {
@@ -61,9 +61,10 @@ export const agentsApi = {
   openClaude: (project: string, prompt: string) => invoke<OpenOutcome>("agents_open_claude", { project, prompt }),
   /**
    * The payee list and caps as just read from the contract (USDC base units), so agents
-   * can propose payments only to listed payees within the caps. Kept in memory only.
+   * can propose payments only to listed payees within the caps; null clears them, when
+   * there's no account or wallet any more. Kept in memory only.
    */
-  setWallet: (wallet: { payees: { name: string; account: string }[]; perPaymentCap: string; leftToday: string }) => invoke<void>("agents_set_wallet", { wallet }),
+  setWallet: (wallet: AgentWalletSnapshot | null) => invoke<void>("agents_set_wallet", { wallet }),
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */

@@ -24,8 +24,9 @@ import { Button, Card, Pill, SectionTitle, Spinner, cx } from "./ui";
  * (recovery phrase), where NEAR stands (changed only in Set up payments), then extras.
  * The index at the top ticks what's done and says what still needs a signature.
  * `onOpenPrivacy` shows the "Privacy and your data" row; without it the row is hidden.
+ * `onWalletChanged` runs when Set up payments closes: the account, payees or caps may be different now.
  */
-export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPrivacy?: () => void; spend?: Spend | null; spendIsSample?: boolean } = {}) {
+export function ConnectNear({ onOpenPrivacy, onWalletChanged, spend, spendIsSample }: { onOpenPrivacy?: () => void; onWalletChanged?: () => void; spend?: Spend | null; spendIsSample?: boolean } = {}) {
   const n = useNearSetup();
   const phone = usePhone();
   const [nearAi, setNearAi] = useState(false);
@@ -151,7 +152,17 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
       </div>
 
       <AnimatePresence>
-        {setup && <SetupPayments key="setup" near={n} start={setup === "auto" ? undefined : setup} onClose={() => setSetup(null)} />}
+        {setup && (
+          <SetupPayments
+            key="setup"
+            near={n}
+            start={setup === "auto" ? undefined : setup}
+            onClose={() => {
+              setSetup(null);
+              onWalletChanged?.();
+            }}
+          />
+        )}
       </AnimatePresence>
     </main>
   );

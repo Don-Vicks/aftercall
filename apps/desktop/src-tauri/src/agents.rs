@@ -476,6 +476,9 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
 const REASON_MAX: usize = 300;
 /// Proposals from agents waiting in one meeting at once.
 const PROPOSALS_MAX: usize = 5;
+/// Proposals from agents one meeting keeps in all. Dismissed ones stay in notes.json, so
+/// without this an agent could keep adding them for as long as the user keeps dismissing.
+const PROPOSALS_TOTAL_MAX: usize = 20;
 
 /// A payee on the owner's list, as the app read it from the contract.
 #[derive(Deserialize, Clone, Debug)]
@@ -498,10 +501,15 @@ pub struct WalletSnapshot {
 /// The snapshot for each data folder (one in the app; one per test).
 static WALLETS: Mutex<Option<HashMap<PathBuf, WalletSnapshot>>> = Mutex::new(None);
 
-/// Keeps the payee list and caps the app just read, for agents' payment proposals.
-pub fn set_wallet(data_dir: &Path, wallet: WalletSnapshot) {
+/// Keeps the payee list and caps the app just read, for agents' payment proposals. None
+/// forgets them (no NEAR account or wallet any more), so agents propose no payments.
+pub fn set_wallet(data_dir: &Path, wallet: Option<WalletSnapshot>) {
     if let Ok(mut all) = WALLETS.lock() {
-        all.get_or_insert_with(HashMap::new).insert(data_dir.to_path_buf(), wallet);
+        let all = all.get_or_insert_with(HashMap::new);
+        match wallet {
+            Some(w) => all.insert(data_dir.to_path_buf(), w),
+            None => all.remove(data_dir),
+        };
     }
 }
 
@@ -590,7 +598,11 @@ fn draft(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value
     notes_file::try_update(&file, |notes| {
         let title = notes["meeting"]["title"].as_str().unwrap_or("Meeting").to_string();
         let list = notes["meeting"]["followUps"].as_array_mut().ok_or("This meeting's notes have no follow-ups list")?;
-        let waiting = list.iter().filter(|f| f.get("proposedBy").is_some() && f["status"] == "proposed").count();
+        let proposed = list.iter().filter(|f| f.get("proposedBy").is_some());
+        if proposed.clone().count() >= PROPOSALS_TOTAL_MAX {
+            return Err(format!("Agents have proposed {PROPOSALS_TOTAL_MAX} follow-ups in this meeting, the most one meeting keeps. Tell the user what you'd propose instead."));
+        }
+        let waiting = proposed.filter(|f| f["status"] == "proposed").count();
         if waiting >= PROPOSALS_MAX {
             return Err(format!("{PROPOSALS_MAX} proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first."));
         }
@@ -926,12 +938,14 @@ pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), S
 // into a variable, which the shell hands to claude as one argument without reading it as
 // code. The script holds only paths Aftercall chose, each single-quoted. When Claude Code
 // isn't connected with the current token, the script also passes `--mcp-config` with the
-// same server "Connect Claude Code" adds; that file holds the token, so it sits in the same
-// private folder, which the script deletes when claude exits (or the next Open does).
+// same server "Connect Claude Code" adds, under its own name (`TASK_SERVER`); that file holds
+// the token, so it sits in the same private folder, which the script deletes when claude
+// exits. If Terminal is closed first, the next Open deletes it, once the script has stopped:
+// while claude runs it may read the file again to reconnect to the server.
 
 /// The longest prompt passed to Claude Code, in bytes.
 const PROMPT_MAX: usize = 8 * 1024;
-/// A private folder older than this is left from an earlier Open whose claude has long read its files.
+/// A private folder older than this, whose script has stopped, is left from an earlier Open.
 const HANDOFF_STALE: Duration = Duration::from_secs(120);
 
 /// Where the private folders for Open in Claude Code go.
@@ -961,13 +975,31 @@ pub fn check_prompt(prompt: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file.
+/// What Open in Claude Code names Aftercall's server in its `--mcp-config` file. Claude Code
+/// may still have a user-scope "aftercall" with an older token, and with two servers of one
+/// name, which one the session gets is left to chance; under its own name, the server with
+/// the current token is always there.
+pub const TASK_SERVER: &str = "aftercall-task";
+/// How the hand-off prompt starts (`handoffPrompt` in core).
+const PROMPT_LEAD: &str = "Using the aftercall MCP server";
+
+/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file,
+/// named `TASK_SERVER`.
 pub fn mcp_config(token: &str, node: &Path, server: &Path, data_dir: &Path) -> Value {
-    json!({ "mcpServers": { "aftercall": {
+    json!({ "mcpServers": { TASK_SERVER: {
         "command": node.display().to_string(),
         "args": [server.display().to_string(), "--data-dir", data_dir.display().to_string()],
         "env": { "AFTERCALL_TOKEN": token },
     } } })
+}
+
+/// The hand-off prompt for a session given `mcp_config`: it names `TASK_SERVER`, so the agent
+/// doesn't use an "aftercall" holding an older token. Any other prompt is left as it is.
+pub fn for_task_server(prompt: &str) -> String {
+    match prompt.strip_prefix(PROMPT_LEAD) {
+        Some(rest) => format!("Using the {TASK_SERVER} MCP server{rest}"),
+        None => prompt.to_string(),
+    }
 }
 
 /// The script Terminal runs. Everything in it is a path Aftercall chose, single-quoted;
@@ -980,10 +1012,14 @@ pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt
         lines.push(format!("PATH={}:\"$PATH\"; export PATH", path_dirs.iter().map(|d| q(d)).collect::<Vec<_>>().join(":")));
     }
     lines.push(format!("cd {} || exit 1", q(folder)));
+    // So the next Open leaves this folder, and the config in it, while this script runs.
+    lines.push(format!("echo $$ > {}", q(&private_dir.join("pid"))));
     lines.push(format!("prompt=$(cat {}) || exit 1", q(prompt_file)));
     lines.push(format!("rm -f {}", q(prompt_file)));
+    // `--mcp-config` takes several files and would read the prompt as one more; after `--`
+    // the prompt is always the one message, never a file or an option.
     let config = mcp.map(|c| format!(" --mcp-config {}", q(c))).unwrap_or_default();
-    lines.push(format!("{}{config} \"$prompt\"", q(claude)));
+    lines.push(format!("{}{config} -- \"$prompt\"", q(claude)));
     lines.push("status=$?".into());
     lines.push(format!("rm -rf {}", q(private_dir)));
     lines.push("exit $status".into());
@@ -1006,6 +1042,24 @@ fn write_private(path: &Path, text: &str, exec: bool) -> Result<(), String> {
     f.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
+/// Whether a process with this id is running, through `kill -0`, which sends it nothing.
+fn running(pid: u32) -> bool {
+    Command::new("/bin/kill").args(["-0", &pid.to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+}
+
+/// Deletes the folders earlier Opens left: older than `stale`, and not one whose script is
+/// still running, by the process id it wrote there (Terminal closed, its claude gone).
+fn clear_handoffs(root: &Path, stale: Duration, running: &dyn Fn(u32) -> bool) -> Result<(), String> {
+    for e in std::fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > stale);
+        let pid = std::fs::read_to_string(e.path().join("pid")).ok().and_then(|s| s.trim().parse::<u32>().ok()).filter(|&p| p > 1);
+        if old && !pid.is_some_and(running) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    Ok(())
+}
+
 /// The private folder for one Open: the prompt, the MCP config when one is needed, and the script.
 pub struct Prepared {
     pub dir: PathBuf,
@@ -1021,12 +1075,7 @@ pub fn prepare_launch(data_dir: &Path, folder: &Path, prompt: &str, claude: &Pat
     for dir in [socket_dir(data_dir), root.clone()] {
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
     }
-    for e in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
-        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > HANDOFF_STALE);
-        if old {
-            let _ = std::fs::remove_dir_all(e.path());
-        }
-    }
+    clear_handoffs(&root, HANDOFF_STALE, &running)?;
     let dir = root.join(&new_token()?[..16]);
     std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(|e| e.to_string())?;
     let prompt_file = dir.join("prompt.txt");
@@ -1079,14 +1128,15 @@ pub fn open_in_claude_code(
     let Some(folder) = crate::projects::code_folder(data_dir, project) else {
         return OpenOutcome::missing("folder", format!("{project} has no code folder. Choose one on its project page."));
     };
+    // A project the user keeps from agents: the prompt carries the item's words, so nothing
+    // starts, and nothing is copied either, even with agents off.
+    if !Scope::of(data_dir).allows(project) {
+        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
+    }
     let settings = load_settings(data_dir);
     let Some(token) = settings.token.clone().filter(|_| settings.enabled) else {
         return OpenOutcome::missing("agents", "Turn on \u{201c}Let agents read your meetings\u{201d} in Coding agents first, so Claude Code can reach this meeting.".into());
     };
-    // A project the user keeps from agents: the prompt carries the item's words, so nothing starts.
-    if !Scope::of(data_dir).allows(project) {
-        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
-    }
     let Some(claude) = claude else {
         return OpenOutcome::missing("claude", "Aftercall couldn't find the claude command on this Mac, so it copied the prompt instead.".into());
     };
@@ -1104,7 +1154,8 @@ pub fn open_in_claude_code(
         let config = mcp_config(&token, &node, server, data_dir);
         (Some(node), Some(config))
     };
-    let prepared = match prepare_launch(data_dir, &folder, prompt, claude, node.as_deref(), mcp.as_ref()) {
+    let prompt = if mcp.is_some() { for_task_server(prompt) } else { prompt.to_string() };
+    let prepared = match prepare_launch(data_dir, &folder, &prompt, claude, node.as_deref(), mcp.as_ref()) {
         Ok(p) => p,
         Err(message) => return OpenOutcome { ok: false, missing: None, message },
     };
@@ -1228,7 +1279,7 @@ mod tests {
     fn wallet_for(dir: &Path) {
         set_wallet(
             dir,
-            WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() },
+            Some(WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() }),
         );
     }
 
@@ -1273,6 +1324,38 @@ mod tests {
     }
 
     #[test]
+    fn a_meeting_keeps_at_most_20_proposals_dismissed_ones_included() {
+        let dir = data_dir("draft-cap");
+        let file = dir.join("recordings/1761000000/notes.json");
+        let req = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Ada asked" });
+        let dismiss_all = || {
+            notes_file::update(&file, |n| {
+                for f in n["meeting"]["followUps"].as_array_mut().unwrap() {
+                    if f["status"] == "proposed" {
+                        f["status"] = "dismissed".into();
+                    }
+                }
+            })
+            .unwrap()
+        };
+        // Five wait at once; dismissing makes room again, until 20 in all.
+        for round in 1..=4 {
+            for _ in 0..PROPOSALS_MAX {
+                dispatch_rw(&dir, &req, &at("t")).unwrap();
+            }
+            let err = dispatch_rw(&dir, &req, &at("t")).unwrap_err();
+            assert!(err.contains(if round < 4 { "already wait" } else { "proposed 20 follow-ups in this meeting" }), "{err}");
+            dismiss_all();
+        }
+        // All 20 dismissed, none waiting: still refused.
+        let err = dispatch_rw(&dir, &req, &at("t")).unwrap_err();
+        assert!(err.contains("proposed 20 follow-ups in this meeting") && err.contains("Tell the user"), "{err}");
+        let list = read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().clone();
+        assert_eq!(list.iter().filter(|f| f.get("proposedBy").is_some()).count(), PROPOSALS_TOTAL_MAX, "nothing more is kept");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn agents_propose_payments_only_to_listed_payees_within_the_caps() {
         let dir = data_dir("draft-pay");
         let pay = |payee: &str, amount: &str| dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Claude Code", "kind": "payment", "payee": payee, "amount": amount, "reason": "The deposit agreed in the call" }), &at("t"));
@@ -1291,8 +1374,12 @@ mod tests {
                 "id": "agent-1", "status": "proposed", "proposedBy": { "agent": "Claude Code", "at": "t", "reason": "The deposit agreed in the call" } })
         );
         // A per-payment cap of 0 means none set: nothing is proposed.
-        set_wallet(&dir, WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() });
+        set_wallet(&dir, Some(WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() }));
         assert!(pay("Designer", "1").unwrap_err().contains("hasn't set a per-payment cap"));
+        // The wallet disconnected (no account, or another one): the snapshot goes, and so do payment proposals.
+        wallet_for(&dir);
+        set_wallet(&dir, None);
+        assert!(pay("Designer", "1").unwrap_err().contains("hasn't read your payee list"));
         assert_eq!(usdc_units("12.50"), Some(12_500_000));
         assert_eq!(usdc_units("7"), Some(7_000_000));
         std::fs::remove_dir_all(dir).unwrap();
@@ -1773,10 +1860,33 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    /// A stand-in `claude` that writes each argument it gets on its own line, as `\0`-ended records.
+    /// A stand-in `claude` that writes each argument it gets as a `\0`-ended record, then the
+    /// folder it ran in. It reads `--mcp-config` the way the real one does: every argument
+    /// after it, up to the next option or `--`, is one more config file, and one that isn't a
+    /// file stops it with the real one's error.
     fn fake_claude(dir: &Path, out: &Path) -> PathBuf {
         let claude = dir.join("bin/claude");
-        script(&claude, &format!("for a in \"$@\"; do printf '%s\\0' \"$a\"; done > {}\npwd >> {}", sh_quote(&out.display().to_string()), sh_quote(&out.display().to_string())));
+        let out = sh_quote(&out.display().to_string());
+        script(
+            &claude,
+            &format!(
+                r#"for a in "$@"; do printf '%s\0' "$a"; done > {out}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) break ;;
+    --mcp-config)
+      shift
+      while [ $# -gt 0 ]; do
+        case "$1" in -*) break ;; esac
+        [ -f "$1" ] || {{ echo "MCP config file not found: $1" >&2; exit 1; }}
+        shift
+      done ;;
+    *) shift ;;
+  esac
+done
+pwd >> {out}"#
+            ),
+        );
         claude
     }
 
@@ -1816,21 +1926,97 @@ mod tests {
         let text = std::fs::read_to_string(&script_path).unwrap();
         assert!(!text.contains("Ship it") && !text.contains("meeting-data") && !text.contains("t0k3n"), "{text}");
         let config: Value = serde_json::from_str(&std::fs::read_to_string(private.join("mcp.json")).unwrap()).unwrap();
-        assert_eq!(config["mcpServers"]["aftercall"]["env"]["AFTERCALL_TOKEN"], "t0k3n");
-        assert_eq!(config["mcpServers"]["aftercall"]["args"][0], server.display().to_string());
+        // Its own name, so a user-scope "aftercall" with an older token can't stand in for it.
+        assert_eq!(config["mcpServers"].as_object().unwrap().keys().collect::<Vec<_>>(), [TASK_SERVER]);
+        assert_eq!(config["mcpServers"][TASK_SERVER]["env"]["AFTERCALL_TOKEN"], "t0k3n");
+        assert_eq!(config["mcpServers"][TASK_SERVER]["args"][0], server.display().to_string());
 
         // Run the script as Terminal would, against the stand-in claude.
-        let run = Command::new("/bin/sh").arg(&script_path).env("HOME", &dir).output().unwrap();
-        assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
-        let got = std::fs::read_to_string(&out).unwrap();
-        let (records, cwd) = got.rsplit_once('\0').unwrap();
-        let received: Vec<&str> = records.split('\0').collect();
-        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), prompt.trim_end_matches('\n')]);
-        assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+        let run_script = |script_path: &Path| {
+            let run = Command::new("/bin/sh").arg(script_path).env("HOME", &dir).output().unwrap();
+            assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+            let got = std::fs::read_to_string(&out).unwrap();
+            let (records, cwd) = got.rsplit_once('\0').unwrap();
+            assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+            records.split('\0').map(String::from).collect::<Vec<_>>()
+        };
+        // The prompt comes after `--`, so `--mcp-config`, which takes several files, never reads it as one.
+        let received = run_script(&script_path);
+        // The prompt names the server by that name too.
+        let named = prompt.replacen("Using the aftercall MCP server", "Using the aftercall-task MCP server", 1);
+        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), "--", named.trim_end_matches('\n')]);
         for planted in ["pwned", "pwned2"] {
             assert!(!folder.join(planted).exists() && !dir.join(planted).exists(), "{planted} was run");
         }
         assert!(!private.exists(), "the private folder goes when claude exits");
+
+        // Without the config file (the old line), the stand-in fails as the real claude did.
+        let old_line = launch_script(&folder, &claude, &[], &dir.join("p"), Some(&dir.join("mcp.json")), &dir.join("x")).replace(" -- \"$prompt\"", " \"$prompt\"");
+        std::fs::write(dir.join("mcp.json"), "{}").unwrap();
+        std::fs::write(dir.join("p"), "Claim a1").unwrap();
+        std::fs::write(dir.join("old.command"), old_line).unwrap();
+        let old = Command::new("/bin/sh").arg(dir.join("old.command")).output().unwrap();
+        assert!(!old.status.success() && String::from_utf8_lossy(&old.stderr).contains("MCP config file not found: Claim a1"));
+
+        // Connected with this token: no config, and the prompt still after `--`.
+        let mut s = load_settings(&dir);
+        s.claude_code = Some(fingerprint("t0k3n"));
+        save_settings(&dir, &s).unwrap();
+        opened.borrow_mut().clear();
+        assert!(open_in_claude_code(&dir, "General", prompt, &server, Some(&claude), Ok(node.clone()), &|args| {
+            opened.borrow_mut().push(args.to_vec());
+            Ok(())
+        })
+        .ok);
+        let connected = PathBuf::from(&opened.borrow()[0][2]);
+        assert_eq!(run_script(&connected), ["--", prompt.trim_end_matches('\n')], "Connect's \"aftercall\", as the prompt says");
+        assert_eq!(for_task_server("Claim a1"), "Claim a1", "another prompt is left as it is");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_later_open_keeps_the_folder_of_a_claude_still_running_and_clears_it_once_stopped() {
+        let dir = data_dir("launch-keep");
+        let folder = dir.join("code");
+        std::fs::create_dir_all(&folder).unwrap();
+        // A stand-in claude that runs until it is told to stop, or for 30 seconds at most, so a
+        // failing check below can't leave it running and keep cargo waiting on its output.
+        let go = dir.join("go");
+        let claude = dir.join("bin/claude");
+        script(&claude, &format!("i=0; while [ ! -f {} ] && [ $i -lt 600 ]; do sleep 0.05; i=$((i+1)); done", sh_quote(&go.display().to_string())));
+        let config = json!({ "mcpServers": {} });
+        let prepared = prepare_launch(&dir, &folder, "Claim a1", &claude, None, Some(&config)).unwrap();
+        let mut sh = Command::new("/bin/sh").arg(&prepared.script).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+        let pid = prepared.dir.join("pid");
+        let until = Instant::now() + Duration::from_secs(10);
+        while !pid.exists() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(std::fs::read_to_string(&pid).unwrap().trim(), sh.id().to_string());
+
+        // However old it is, the running session's folder and its config stay.
+        let root = handoff_root(&dir);
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(prepared.dir.join("mcp.json").exists(), "claude may read it again to reconnect");
+        // A folder with no script running, or none ever started: cleared once old, not before.
+        let left = root.join("left");
+        std::fs::create_dir_all(&left).unwrap();
+        // Above the highest process id macOS gives.
+        std::fs::write(left.join("pid"), "999999").unwrap();
+        let unstarted = root.join("unstarted");
+        std::fs::create_dir_all(&unstarted).unwrap();
+        clear_handoffs(&root, Duration::from_secs(3600), &running).unwrap();
+        assert!(left.exists() && unstarted.exists());
+        std::thread::sleep(Duration::from_millis(20));
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(!left.exists() && !unstarted.exists() && prepared.dir.exists());
+
+        // Terminal closed: the script is gone without deleting its folder, so the next Open does.
+        sh.kill().unwrap();
+        sh.wait().unwrap();
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(!prepared.dir.exists());
+        std::fs::write(&go, "").unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1855,6 +2041,9 @@ mod tests {
         let kept = go(Some(&claude), Ok(claude.clone()));
         assert_eq!(kept.missing, Some("project"), "{}", kept.message);
         assert!(!handoff_root(&dir).exists(), "no prompt written for a project kept from agents");
+        // With agents off too, it still says "project", so the menu doesn't copy the prompt instead.
+        save_settings(&dir, &Settings { projects: Some(vec![]), ..Default::default() }).unwrap();
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("project"));
         save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec!["general".into()]), ..Default::default() }).unwrap();
         assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"), "a chosen project goes on");
         save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();

@@ -47,6 +47,7 @@ export function handoffPrompt(meeting: Pick<Meeting, "id" | "title">, item: Pick
     ...(item.due?.trim() ? [`Due: ${quoted(item.due, LIMITS.due)}`] : []),
   ];
   return [
+    // Open in Claude Code renames the server in this opening when it passes its own config (`for_task_server`, agents.rs).
     `Using the aftercall MCP server, claim action item ${itemId} in meeting ${meetingId} as "${agent}" with claim_action_item, then do the work it describes.`,
     `When it's done, call complete_action_item as "${agent}" with a one-line note and a link to the work (a pull request, commit or document). If there's nothing to link, say why in the note.`,
     "",
@@ -72,12 +73,13 @@ export interface HandoffAccess {
 
 /**
  * Why a handed-over item would be refused, in plain words, for the button to show next
- * to the copied prompt. Empty when every switch the agent needs is on.
+ * to the copied prompt. Empty when every switch the agent needs is on. A project the user
+ * keeps from agents comes first and alone: the prompt carries the item's words, so the
+ * button offers no prompt there at all.
  */
 export function handoffBlockers(access: HandoffAccess, project: string): string[] {
+  if (!access.projectAllowed) return [`Agents can't reach meetings in ${project}, so there's no prompt to copy. Allow that project in Coding agents first.`];
   if (!access.enabled) return ["Coding agents is off, so no agent can reach this meeting. Turn it on in Coding agents."];
-  const out: string[] = [];
-  if (!access.projectAllowed) out.push(`Agents can't read meetings in ${project}. Allow that project in Coding agents.`);
-  if (!access.allowWrites) out.push("Agents can only read, so the claim will be refused. Turn on claiming in Coding agents.");
-  return out;
+  if (!access.allowWrites) return ["Agents can only read, so the claim will be refused. Turn on claiming in Coding agents."];
+  return [];
 }

@@ -40,5 +40,7 @@ export * from "./relay/crypto.ts";
 export * from "./relay/messages.ts";
 export * from "./agents/handoff.ts";
 export * from "./agents/work.ts";
+export * from "./agents/projects.ts";
+export * from "./agents/wallet.ts";
 export * from "./relay/phone.ts";
 export * from "./relay/mac.ts";

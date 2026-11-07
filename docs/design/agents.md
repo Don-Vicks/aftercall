@@ -39,7 +39,7 @@ This keeps the rule that the call is the only source of what Aftercall does on i
 
 Size: medium. Needs care: it's the first time an agent can put something in front of the Approve button.
 
-Built with the same switch as claiming, and at most five proposals waiting per meeting. Differences: a payment must also fit your per-payment cap and what's left today as the app last read them from the contract, and with no per-payment cap set agents propose no payments; a proposal never reaches the phone; Dismiss hides it but keeps it in `notes.json`, marked dismissed, and the five-waiting limit counts only the ones still waiting.
+Built with the same switch as claiming, at most five proposals waiting per meeting, and at most 20 from agents in a meeting in all. Differences: a payment must also fit your per-payment cap and what's left today as the app last read them from the contract (forgotten when the account or its wallet is gone, or another account is saved), and with no per-payment cap set agents propose no payments; a proposal never reaches the phone; Dismiss hides it but keeps it in `notes.json`, marked dismissed, and the five-waiting limit counts only the ones still waiting, while the limit of 20 counts dismissed ones too, so an agent can't keep adding them.
 
 ### 4. Agents only where you say (built)
 
@@ -47,7 +47,7 @@ Access per project: "Let agents read: General, Fundraise" in place of all meetin
 
 Size: medium (settings, the Rust checks, tests).
 
-Built as Coding agents → "Projects agents can reach": every project (the default) or the ones you tick. One difference: a request for a meeting in another project is refused without naming its project, so the refusal doesn't tell an agent what exists. Open in Claude Code starts nothing for such a meeting.
+Built as Coding agents → "Projects agents can reach": every project (the default) or the ones you tick. One difference: a request for a meeting in another project is refused without naming its project, so the refusal doesn't tell an agent what exists. Open in Claude Code starts nothing for such a meeting, and Hand to an agent offers no prompt for it. Deleting a project kept from agents moves its meetings only to a project kept from them, keeping General from agents when it has to take them.
 
 ### 5. Paid work for agents (later; not built)
 

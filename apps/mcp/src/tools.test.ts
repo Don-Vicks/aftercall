@@ -168,6 +168,21 @@ test("draft_follow_up: a payment only to a listed payee, within the caps", async
   assert.equal(r.followUp.status, "proposed", "it waits for the user; nothing is paid");
 });
 
+test("draft_follow_up: at most 5 wait in a meeting, and 20 in all, dismissed ones included", async () => {
+  const draft = () => draftFollowUp(app, { meetingId: "1761100000", agent: "Codex", kind: "email", to: "olamide@client.test", reason: "Olamide asked for the notes" });
+  for (let i = 0; i < 5; i++) await draft();
+  await assert.rejects(draft(), /5 proposals from agents already wait/);
+  // Dismissing makes room to wait, but a dismissed one still counts toward the 20.
+  for (let n = 1; n <= 15; n++) {
+    fake.dismiss("1761100000", `agent-${n}`);
+    await draft();
+  }
+  assert.equal(fake.notes("1761100000").meeting.followUps.length, 20);
+  fake.dismiss("1761100000", "agent-16");
+  await assert.rejects(draft(), /proposed 20 follow-ups in this meeting/);
+  assert.equal(fake.notes("1761100000").meeting.followUps.length, 20, "nothing more is kept");
+});
+
 test("read-only by default: reads work, claim and complete are refused by name, nothing changes", async () => {
   await fake.close();
   fake = await startFakeApp({ now: () => clock });

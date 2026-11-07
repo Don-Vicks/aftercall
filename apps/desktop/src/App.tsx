@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, agentWallet, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -147,19 +147,30 @@ export default function App() {
   const deleteProject = async (id: string) => {
     const p = projects.find((x) => x.id === id);
     if (!p) return;
-    if (projects.length === 1) {
+    // Which projects agents may reach, so the meetings never move to one they can reach when this one is kept from them.
+    const reach = isDesktop ? await agentsApi.info().then((i) => i.projects, () => undefined) : null;
+    if (reach === undefined) {
+      toast({ text: "Couldn't read which projects agents can reach, so nothing was deleted. Try again.", tone: "record" });
+      return;
+    }
+    const count = recordings.filter((r) => r.project === p.name).length;
+    const plan = projectDeletion(projects, id, reach, count);
+    if (!plan) {
       toast({ text: "Keep at least one project. Rename this one instead.", tone: "caution" });
       return;
     }
-    const target = projects.find((x) => x.id !== id && x.name === "General") ?? projects.find((x) => x.id !== id)!;
-    const count = recordings.filter((r) => r.project === p.name).length;
+    const { target } = plan;
     const ok = await confirm({
       title: `Delete “${p.name}”?`,
-      body: count ? `Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.` : undefined,
+      body: count
+        ? `Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.${plan.keepsTarget ? ` Agents can't reach ${p.name}, so from now on they can't reach ${target.name} either.` : ""}`
+        : undefined,
       confirmLabel: "Delete project",
       tone: "danger",
     });
     if (!ok) return;
+    // Before anything moves, so agents never reach the meetings in between.
+    if (plan.agentProjects) await agentsApi.setProjects(plan.agentProjects);
     const next = projects.filter((x) => x.id !== id);
     await projectsApi.save(next);
     if (count) await refile(p.name, target.name);
@@ -267,7 +278,11 @@ export default function App() {
   const refreshWallet = useCallback(async () => {
     const config = isDesktop ? await near.getConfig().catch(() => null) : null;
     setAccount(config?.account ?? null);
-    if (!config) return;
+    if (!config) {
+      // No account: agents lose the payees and caps they had, so they propose no payments.
+      if (isDesktop) agentsApi.setWallet(null).catch(() => {});
+      return;
+    }
     try {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
@@ -275,15 +290,12 @@ export default function App() {
       setPayees(listed);
       setPayeesRead(true);
       setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
-      if (v.wallet) {
-        const today = Math.floor(Date.now() / 86_400_000);
-        const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
-        const cap = BigInt(v.wallet.daily_cap);
-        const leftToday = cap > spent ? cap - spent : 0n;
-        setLimits({ leftToday, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
-        setDailyCap(cap);
-        // What agents may propose a payment to, and up to how much: the same list and caps.
-        agentsApi.setWallet({ payees: listed, perPaymentCap: v.wallet.per_payment_cap, leftToday: leftToday.toString() }).catch(() => {});
+      // What agents may propose a payment to, and up to how much: the same list and caps, or none without a wallet.
+      const forAgents = agentWallet(v.wallet, listed, Date.now());
+      agentsApi.setWallet(forAgents).catch(() => {});
+      if (v.wallet && forAgents) {
+        setLimits({ leftToday: BigInt(forAgents.leftToday), perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        setDailyCap(BigInt(v.wallet.daily_cap));
       }
     } catch {
       // Offline or not set up: keep what we have.
@@ -295,6 +307,10 @@ export default function App() {
   useEffect(() => {
     refreshWallet().finally(() => setWalletChecked(true));
   }, [refreshWallet]);
+  // Opening the wallet reads it again, for the app and for agents: after another account is saved they have none until then.
+  useEffect(() => {
+    if (view.name === "wallet") void refreshWallet();
+  }, [view.name, refreshWallet]);
 
   /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
   const queuedHere = useRef(new Set<string>());
@@ -878,6 +894,7 @@ export default function App() {
             {view.name === "settings" && (
               <ConnectNear
                 onOpenPrivacy={go.privacy}
+                onWalletChanged={refreshWallet}
                 // Real meetings on this Mac; the browser preview has none, so it shows the sample's figure, labelled.
                 spend={isDesktop ? spendOf(Object.entries(saved).filter(([id]) => !hidden[id]).map(([, s]) => s.cost)) : spendOf([syncWithAdaCost])}
                 spendIsSample={!isDesktop}
