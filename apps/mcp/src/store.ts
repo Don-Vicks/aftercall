@@ -129,7 +129,7 @@ export async function claimItem(app: AppChannel, args: { meetingId: string; item
   return ((await app("claim", args)) as { item: ActionItem }).item;
 }
 
-/** Completes one action item for `agent`, with an optional note; the app stamps the time. */
-export async function completeItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string }): Promise<ActionItem> {
+/** Completes one action item for `agent`, with an optional note and link to the work; the app stamps the time. */
+export async function completeItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string; link?: string }): Promise<ActionItem> {
   return ((await app("complete", args)) as { item: ActionItem }).item;
 }

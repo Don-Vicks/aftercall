@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { WORK_LINK_MAX, workLink } from "@aftercall/core";
 import type { AppChannel } from "./store.ts";
 import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 
@@ -113,12 +114,18 @@ export function createServer(channel: AppChannel): McpServer {
     "complete_action_item",
     {
       title: "Complete an action item",
-      description: `Marks one action item done, recording your agent name, the time and an optional note on what you did. Only the agent that claimed it can complete it. Changes only that item. ${WRITES} ${READ_ONLY}`,
+      description: `Marks one action item done, recording your agent name, the time, an optional note on what you did and an optional link to the work (a pull request, commit or document). The user sees the note and link as your statement; Aftercall doesn't open or check the link. Only the agent that claimed it can complete it. Changes only that item. ${WRITES} ${READ_ONLY}`,
       inputSchema: {
         meetingId: z.string().describe("Meeting id"),
         itemId: z.string().describe("Action item id"),
         agent: agentArg,
         note: z.string().max(500).optional().describe("One line on what was done, shown to the user"),
+        link: z
+          .string()
+          .max(WORK_LINK_MAX)
+          .refine((l) => workLink(l) !== null, "A plain http or https URL, with no user name or password")
+          .optional()
+          .describe(`A link to the work: a pull request, commit or document. http or https only, at most ${WORK_LINK_MAX} characters`),
       },
       annotations: { ...itemWrite, idempotentHint: false },
     },

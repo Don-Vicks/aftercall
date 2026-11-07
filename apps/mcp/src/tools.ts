@@ -137,6 +137,6 @@ export async function claimActionItem(app: AppChannel, args: { meetingId: string
   return { claimed: true, item: await claimItem(app, args) };
 }
 
-export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string }) {
+export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string; link?: string }) {
   return { completed: true, item: await completeItem(app, args) };
 }

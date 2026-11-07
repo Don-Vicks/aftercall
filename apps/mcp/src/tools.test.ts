@@ -121,6 +121,19 @@ test("claim then complete: the app records it, visible to the next read", async 
   assert.equal((await getMeeting(app, { id: "1761000000" })).actionItems[0].completed?.agent, "Claude Code");
 });
 
+test("complete with a link to the work: kept as given, and only a plain web link", async () => {
+  await claimActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" });
+  await assert.rejects(
+    completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code", link: "javascript:alert(1)" }),
+    /plain http or https URL/,
+  );
+  assert.equal(fake.notes("1761100000").meeting.actionItems[1].done, false, "a refused link completes nothing");
+  const r = await completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code", note: "Fixed the timeout", link: "https://github.com/acme/api/pull/42" });
+  assert.deepEqual(r.item.completed, { agent: "Claude Code", at: T0, note: "Fixed the timeout", link: "https://github.com/acme/api/pull/42" });
+  const seen = (await getMeeting(app, { id: "1761100000" })).actionItems[1].completed;
+  assert.equal(seen?.link, "https://github.com/acme/api/pull/42");
+});
+
 test("read-only by default: reads work, claim and complete are refused by name, nothing changes", async () => {
   await fake.close();
   fake = await startFakeApp({ now: () => clock });

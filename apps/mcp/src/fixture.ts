@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ActionItem, Meeting } from "@aftercall/core";
+import { workLink, type ActionItem, type Meeting } from "@aftercall/core";
 import type { NotesFile } from "./store.ts";
 
 /**
@@ -143,10 +143,13 @@ function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, n
       if (!allowWrites) throw new Error(WRITES_OFF);
       const { item, agent } = openItem(req, (by) => `Claimed by ${by}; only that agent can complete it`);
       const note = typeof req.note === "string" ? req.note.trim().slice(0, 500) : "";
+      const given = typeof req.link === "string" ? req.link.trim() : "";
+      const link = given ? workLink(given) : null;
+      if (given && !link) throw new Error("Give the link to your work as a plain http or https URL, at most 300 characters");
       const at = now();
       item.claimed ??= { agent, at };
       item.done = true;
-      item.completed = { agent, at, ...(note ? { note } : {}) };
+      item.completed = { agent, at, ...(note ? { note } : {}), ...(link ? { link } : {}) };
       return { completed: true, item };
     }
     default:

@@ -52,6 +52,14 @@ test("the server starts over stdio, lists its tools and answers a call through t
 
     const bad = await client.callTool({ name: "get_meeting", arguments: { id: "nope" } });
     assert.equal(bad.isError, true);
+
+    // A link that isn't a plain web link is refused before it reaches the app.
+    const badLink = await client.callTool({ name: "complete_action_item", arguments: { meetingId: "1761000000", itemId: "a1", agent: "Codex", link: "file:///etc/passwd" } });
+    assert.equal(badLink.isError, true);
+    assert.match(text(badLink), /plain http or https URL/);
+    assert.equal(seen.some((s) => s.op === "complete"), false);
+    const done = await client.callTool({ name: "complete_action_item", arguments: { meetingId: "1761000000", itemId: "a1", agent: "Codex", link: "https://github.com/acme/api/pull/42" } });
+    assert.equal(JSON.parse(text(done)).item.completed.link, "https://github.com/acme/api/pull/42");
   } catch (e) {
     await fake.close();
     throw e;
