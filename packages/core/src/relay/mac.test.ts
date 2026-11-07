@@ -70,6 +70,15 @@ test("each follow-up gets its own options: a held payment carries /sign links th
   assert.equal(decodeSignRequest(signUrls.decline.split("#")[1]).action.kind, "cancel");
 });
 
+test("an item the schema refuses is left out and counted, and the rest still go", () => {
+  const odd = meeting("1762440000", "2026-11-06T14:02:00Z", [email, { ...payment, id: "f2 with spaces" }]);
+  const s = buildSnapshot({ at: NOW, network: "testnet", meetings: [{ meeting: odd, options: opts }], results: [] });
+  assert.deepEqual(s.items.map((i) => i.followUpId), ["f1"]);
+  assert.equal(s.more, 1);
+  const { mac } = session();
+  assert.ok(sealSnapshot(mac.key, 1, s));
+});
+
 test("results keep the newest twenty", () => {
   const old: ActionResult[] = Array.from({ length: 20 }, (_, i) => ({ n: 20 - i, outcome: "accepted" }));
   const merged = mergeResults([{ n: 22, outcome: "refused", reason: "x" }, { n: 21, outcome: "accepted" }], old);

@@ -4,6 +4,7 @@ import { formatUsdc } from "../money.ts";
 import { meetingLabel } from "../when.ts";
 import { encodeSignRequest, type OwnerAction, type SignRequest } from "../wallet/actions.ts";
 import {
+  PendingItemSchema,
   checkPhoneAction,
   fitSnapshot,
   openAction,
@@ -81,19 +82,21 @@ const localDay = (ms: number) => new Date(ms).toDateString();
  */
 export function buildSnapshot(args: { at: number; network: Network; meetings: SnapshotMeeting[]; results: ActionResult[] }): Snapshot {
   const meetings = [...args.meetings].sort((a, b) => startOf(b.meeting) - startOf(a.meeting));
-  const items: PendingItem[] = meetings.flatMap(({ meeting, options }) =>
+  const pending: PendingItem[] = meetings.flatMap(({ meeting, options }) =>
     meeting.followUps.flatMap((f) => {
       const item = toPendingItem(meeting, f, options(f));
       return item ? [item] : [];
     }),
   );
+  // One item the schema refuses (an id it doesn't allow) is left out and counted, rather than stopping every snapshot.
+  const items = pending.filter((i) => PendingItemSchema.safeParse(i).success);
   const today = localDay(args.at);
   const done: DoneItem[] = meetings
     .filter(({ meeting }) => localDay(startOf(meeting)) === today)
     .flatMap(({ meeting }) => meeting.followUps.flatMap((f) => toDoneItem(meeting, f) ?? []))
     .sort((a, b) => b.doneAt.localeCompare(a.doneAt))
     .slice(0, 20);
-  return fitSnapshot({ t: "snapshot", at: args.at, network: args.network, items, more: 0, done, results: args.results.slice(0, MAX_RESULTS) });
+  return fitSnapshot({ t: "snapshot", at: args.at, network: args.network, items, more: pending.length - items.length, done, results: args.results.slice(0, MAX_RESULTS) });
 }
 
 /** What a snapshot says, without its time: when this changes, the phone needs a new one. */
