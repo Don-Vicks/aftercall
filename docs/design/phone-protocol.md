@@ -61,7 +61,7 @@ payload = base64url(JSON {"v":1,"mac":"<32-byte X25519 public key, base64url>","
 
 The pairing rides in the fragment, which browsers never send to a server, so the web app's host never sees it. `decodePairing` refuses another version, a key that isn't 32 bytes, a payload over 400 characters, and a backend that isn't `https://` (or `http://localhost`, `127.0.0.1`, `[::1]` for development) or has a path, query or credentials. The phone page removes the fragment with `history.replaceState` as soon as it has read it.
 
-The Mac shows the QR for 10 minutes at most (the relay forgets an unconfirmed pairing then), with Cancel. Cancel, or closing the sheet, deletes the pairing (`DELETE /relay/pairings/:id`).
+The Mac shows the QR for 10 minutes at most (the relay forgets an unconfirmed pairing then), with Cancel. Cancel, or closing the sheet, deletes the pairing (`DELETE /relay/pairings/:id`). While it waits for the hello, the Mac asks every 2 s; when the relay can't be reached or answers with a server error, it asks again at the next 2 s and the sheet says it can't reach the relay, until the hello comes, the 10 minutes run out or you cancel. Only the relay's own answer, such as the pairing gone, ends it early (`pollHello` in `mac.ts`).
 
 ### The hello
 

@@ -8,6 +8,7 @@ import {
   openHello,
   pairingIdText,
   pairingUrl,
+  pollHello,
   relayTokenHash,
   sealSnapshot,
   type ActionResult,
@@ -32,8 +33,6 @@ import { toast } from "./ui";
 
 /** The phone page the QR code opens (apps/web/app/phone). */
 export const PHONE_PAGE = `${WEB_URL}/phone`;
-/** The Mac asks the relay for the phone's hello this often while the QR code shows. */
-const HELLO_POLL_MS = 2_000;
 /** Pairing needs the backend's relay; a build without one hides "Your phone". */
 export const CAN_PAIR = isDesktop && HAS_BACKEND;
 
@@ -76,6 +75,9 @@ export function pairingProblem(e: unknown): string {
 
 /** The pairing is gone on the relay: unpaired from the phone, or expired. */
 const isGone = (e: unknown) => e instanceof RelayHttpError && (e.status === 401 || e.status === 404);
+
+/** No answer from the relay, or a server error: worth asking again. Anything else is the relay's answer. */
+const isTransient = (e: unknown) => e instanceof RelayHttpError && (e.status === 0 || e.status >= 500);
 
 async function relay<T>(backend: string, path: string, opts: { method?: string; token?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
@@ -212,36 +214,37 @@ export async function startPairing(): Promise<PendingPairing> {
 }
 
 /**
- * Waits for the phone's hello: asks every 2 s until it comes, the pairing expires (null)
- * or `signal` aborts (null). A hello that doesn't open is someone else's: the relay keeps
- * only the first, so this pairing can't be finished and the error says to start again.
+ * Waits for the phone's hello: asks every 2 s (`HELLO_POLL_MS`) until it comes, the pairing
+ * expires (null) or `signal` aborts (null). A lost connection or a server error is asked
+ * again at the next interval (`onReach` says when the relay can't be reached); the relay
+ * saying the pairing is gone ends it. A hello that doesn't open is someone else's: the
+ * relay keeps only the first, so this pairing can't be finished and the error says to
+ * start again.
  */
-export async function waitForHello(p: PendingPairing, signal: AbortSignal): Promise<PhoneHello | null> {
+export async function waitForHello(p: PendingPairing, signal: AbortSignal, onReach?: (reached: boolean) => void): Promise<PhoneHello | null> {
   const path = `/relay/pairings/${pairingIdText(p.pairing)}/hello`;
-  while (!signal.aborted && Date.now() < p.expiresAt) {
-    const { box } = await relay<{ box: string | null }>(p.pairing.backend, path, { token: p.macToken });
-    if (box) {
-      let hello: { phonePublicKey: Uint8Array; device: string };
-      try {
-        hello = openHello(p.pairing.pairingId, p.mac.secretKey, box);
-      } catch {
-        throw new Error("Something other than your phone answered this code. Cancel and pair again.");
-      }
-      const session = deriveSession({
-        pairingId: p.pairing.pairingId,
-        macPublicKey: p.pairing.macPublicKey,
-        phonePublicKey: hello.phonePublicKey,
-        ourSecretKey: p.mac.secretKey,
-        theirPublicKey: hello.phonePublicKey,
-      });
-      return { session, device: hello.device, phonePublicKey: hello.phonePublicKey };
-    }
-    await new Promise<void>((resolve) => {
-      const t = window.setTimeout(resolve, HELLO_POLL_MS);
-      signal.addEventListener("abort", () => (window.clearTimeout(t), resolve()), { once: true });
-    });
+  const box = await pollHello({
+    ask: () => relay<{ box: string | null }>(p.pairing.backend, path, { token: p.macToken }).then((r) => r.box),
+    until: p.expiresAt,
+    signal,
+    transient: isTransient,
+    onReach,
+  });
+  if (!box) return null;
+  let hello: { phonePublicKey: Uint8Array; device: string };
+  try {
+    hello = openHello(p.pairing.pairingId, p.mac.secretKey, box);
+  } catch {
+    throw new Error("Something other than your phone answered this code. Cancel and pair again.");
   }
-  return null;
+  const session = deriveSession({
+    pairingId: p.pairing.pairingId,
+    macPublicKey: p.pairing.macPublicKey,
+    phonePublicKey: hello.phonePublicKey,
+    ourSecretKey: p.mac.secretKey,
+    theirPublicKey: hello.phonePublicKey,
+  });
+  return { session, device: hello.device, phonePublicKey: hello.phonePublicKey };
 }
 
 /**

@@ -6,6 +6,7 @@ import { decodePairing, deriveSession, newPairing, newRelayKeys, openHello, pair
 import { itemDigest, openSnapshot, sealAction, sealSnapshot, signUrlsMatch, toPendingItem, type ActionResult, type PaymentItem, type PhoneAction } from "./messages.ts";
 import {
   AUTOPILOT_COUNTING,
+  HELLO_POLL_MS,
   MAX_RESULTS,
   buildSnapshot,
   contractFollowupId,
@@ -15,6 +16,7 @@ import {
   heldPaymentOutcome,
   heldPaymentSignUrls,
   mergeResults,
+  pollHello,
   snapshotKey,
   type ActionTarget,
   type SnapshotMeeting,
@@ -118,6 +120,61 @@ test("results keep the newest twenty", () => {
   const merged = mergeResults([{ n: 22, outcome: "refused", reason: "x" }, { n: 21, outcome: "accepted" }], old);
   assert.equal(merged.length, MAX_RESULTS);
   assert.deepEqual(merged.slice(0, 3).map((r) => r.n), [22, 21, 20]);
+});
+
+// ---------- waiting for the hello ----------
+
+/** A clock that moves only when the poll sleeps, and the relay's answers in order. */
+function helloPoll(answers: (string | null | Error)[], until = NOW + 10 * 60_000) {
+  let t = NOW;
+  const slept: number[] = [];
+  const reach: boolean[] = [];
+  const stop = new AbortController();
+  const asked = { n: 0 };
+  const run = () =>
+    pollHello({
+      ask: async () => {
+        const a = answers[Math.min(asked.n++, answers.length - 1)];
+        if (a instanceof Error) throw a;
+        return a;
+      },
+      until,
+      signal: stop.signal,
+      transient: (e) => e instanceof Error && e.message === "offline",
+      onReach: (r) => void reach.push(r),
+      now: () => t,
+      sleep: async (ms) => {
+        slept.push(ms);
+        t += ms;
+      },
+    });
+  return { run, slept, reach, stop, asked };
+}
+
+test("waiting for the hello rides out a lost connection at the usual interval, until the hello comes", async () => {
+  const offline = new Error("offline");
+  const p = helloPoll([null, offline, offline, null, "the hello box"]);
+  assert.equal(await p.run(), "the hello box");
+  assert.equal(p.asked.n, 5);
+  assert.deepEqual(p.slept, [HELLO_POLL_MS, HELLO_POLL_MS, HELLO_POLL_MS, HELLO_POLL_MS]);
+  assert.deepEqual(p.reach, [true, false, false, true, true]);
+});
+
+test("waiting for the hello ends at the pairing's own time or on Cancel, however often the relay can't be reached", async () => {
+  const expired = helloPoll([new Error("offline")], NOW + 10 * HELLO_POLL_MS);
+  assert.equal(await expired.run(), null);
+  assert.equal(expired.asked.n, 10, "asked until the code ran out, not stopped by the first failure");
+
+  const cancelled = helloPoll([new Error("offline")]);
+  cancelled.stop.abort();
+  assert.equal(await cancelled.run(), null);
+  assert.equal(cancelled.asked.n, 0);
+});
+
+test("the relay's definite answer ends the wait: a pairing gone or expired isn't asked again", async () => {
+  const gone = helloPoll([null, new Error("NO_PAIRING"), "never read"]);
+  await assert.rejects(gone.run(), /NO_PAIRING/);
+  assert.equal(gone.asked.n, 2);
 });
 
 // ---------- actions ----------

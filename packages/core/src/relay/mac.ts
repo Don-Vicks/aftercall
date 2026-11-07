@@ -32,6 +32,50 @@ export const SNAPSHOT_REFRESH_MS = 5 * 60_000;
 /** Results of the phone's actions a snapshot carries, newest first. */
 export const MAX_RESULTS = 20;
 
+/** The Mac asks the relay for the phone's hello this often while the QR code shows. */
+export const HELLO_POLL_MS = 2_000;
+
+/**
+ * Waits for the phone's sealed hello: `ask` every `HELLO_POLL_MS` until it returns a box,
+ * the pairing runs out at `until` (null) or `signal` aborts (null). An ask that fails in
+ * a way `transient` allows (the relay unreachable, a server error) is asked again at the
+ * next interval, and `onReach` says whether the last ask got through; any other failure
+ * is the relay's definite answer, such as the pairing gone or expired, and ends the wait.
+ */
+export async function pollHello(args: {
+  ask: () => Promise<string | null>;
+  until: number;
+  signal: AbortSignal;
+  transient: (e: unknown) => boolean;
+  onReach?: (reached: boolean) => void;
+  now?: () => number;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+}): Promise<string | null> {
+  const now = args.now ?? Date.now;
+  const sleep = args.sleep ?? pause;
+  while (!args.signal.aborted && now() < args.until) {
+    let box: string | null = null;
+    try {
+      box = await args.ask();
+      args.onReach?.(true);
+    } catch (e) {
+      if (!args.transient(e)) throw e;
+      args.onReach?.(false);
+    }
+    if (box) return box;
+    await sleep(HELLO_POLL_MS, args.signal);
+  }
+  return null;
+}
+
+/** Resolves after `ms`, or at once when `signal` aborts. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+  });
+}
+
 /** The follow-up's id on the agent-wallet contract: "<meeting>-<follow-up>". */
 export const contractFollowupId = (meetingId: string, followupId: string) => `${meetingId}-${followupId}`;
 
