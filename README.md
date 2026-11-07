@@ -133,7 +133,7 @@ Planned, not built: paying for Aftercall's own inference with **Staking for NEAR
 
 ## For judges
 
-The checks are under [How to test](#how-to-test). The full guide, for people and coding agents: [docs/judging.md](docs/judging.md).
+The checks are under [How to test](#how-to-test). The full guide, for people and coding agents: [docs/judging.md](docs/judging.md). The 90-second demo video isn't recorded yet (7 Nov); its script, with a source for every spoken line: [docs/demo-script.md](docs/demo-script.md).
 
 **Where each claim lives:**
 
@@ -162,6 +162,7 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | Recap email sent through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
 | A sample meeting's public proof link for judges | README | Not yet |
+| The 90-second demo video | README | Not yet recorded; [script](docs/demo-script.md) |
 | Test credits (a capped NEAR AI key per tester) | backend | Built and tested, off until Aftercall's NEAR AI account is set up |
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
 | Coding agents: Connect Claude Code, Hand to an agent, done with a link, agent-drafted follow-ups | Mac app, MCP server | Built and tested. Claude Code ran against the MCP server and a stand-in for the app on 1 Nov ([recorded](docs/agents-demo.md)), before most of these existed; not yet with the Mac app. Codex not yet run |
@@ -220,6 +221,7 @@ The newest are under [Built on NEAR's newest](#built-on-nears-newest). The rest:
 | [docs/how-it-works.md](docs/how-it-works.md) | Architecture, the checks on every run, privacy in detail |
 | [docs/privacy.md](docs/privacy.md) | What leaves the Mac, and who keeps what |
 | [docs/development.md](docs/development.md) | Running every part locally, and what each check shows |
+| [docs/demo-script.md](docs/demo-script.md) | The 90-second demo video's script and shot list, with a source for every spoken line |
 | [docs/plan.md](docs/plan.md) | The build plan by milestone, and the submission checklist |
 | [docs/agents-demo.md](docs/agents-demo.md) | Claude Code on Aftercall's MCP server: the recorded run, Connect Claude Code, and what agents can do since |
 | [docs/near-intents-1click.md](docs/near-intents-1click.md) | Paying a payee on Solana or Base through NEAR Intents 1Click |
