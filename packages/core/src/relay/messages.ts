@@ -29,6 +29,8 @@ export const MAC_OFFLINE_AFTER_MS = 60_000;
 export const PHONE_UNDO_MS = 5_000;
 /** The relay keeps an action this long at most; the Mac refuses an older one. */
 export const ACTION_TTL_MS = 24 * 3_600_000;
+/** The relay forgets a pairing not confirmed this long after the Mac made it; the Mac's QR lasts as long. */
+export const PAIRING_WAIT_MS = 10 * 60_000;
 /** Pending items in one snapshot; the rest are counted in `more`. */
 export const MAX_SNAPSHOT_ITEMS = 40;
 

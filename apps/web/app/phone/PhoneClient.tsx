@@ -136,10 +136,11 @@ export function PhoneClient() {
       setNotice("That pairing code didn't work. This phone is still paired with your Mac.");
       return setScreen(screenFor(stored));
     }
-    const step = pairingLinkStep(stored, fresh);
+    const step = pairingLinkStep(stored, fresh, Date.now());
     if (stored && step !== "start") {
       // The same code opened again carries on with the keys already made for it. A new code
-      // while paired waits for your tap: a link alone never unpairs your Mac.
+      // while paired, or partway through pairing, waits for your tap: a link alone never
+      // unpairs your Mac or drops the code it's showing.
       await persist(stored);
       return setScreen(step === "ask" ? { kind: "replace", fresh } : screenFor(stored));
     }
@@ -350,7 +351,12 @@ export function PhoneClient() {
           <h1 id="rh" className="t-heading">
             Pair with a different Mac?
           </h1>
-          <p className="ink-2">This phone is paired with your Mac now. Pairing with this new code unpairs it. Go on only if you just made this code on your own Mac.</p>
+          <p className="ink-2">
+            {pairing?.state === "paired"
+              ? "This phone is paired with your Mac now. Pairing with this new code unpairs it."
+              : "This phone is still pairing with a code from your Mac. Pairing with this new code stops that."}{" "}
+            Go on only if you just made this code on your own Mac.
+          </p>
         </section>
         <div className={p.actions}>
           <button type="button" className="btn btn-secondary btn-lg press" onClick={() => pairing && setScreen(screenFor(pairing))}>

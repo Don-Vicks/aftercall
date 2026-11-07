@@ -2,7 +2,7 @@ import { z } from "zod";
 import { formatUsdc } from "../money.ts";
 import { CHAIN_NAME } from "../intents/oneclick.ts";
 import { RelayError, base64UrlToBytes, bytesToBase64Url, decodePairing, deriveSession, newRelayKeys, pairingIdText, sealHello, type RelayErrorCode } from "./crypto.ts";
-import { ACTION_TTL_MS, MAC_OFFLINE_AFTER_MS, itemDigest, openSnapshot, sealAction, type ActionResult, type PendingItem, type PhoneAction, type Snapshot } from "./messages.ts";
+import { ACTION_TTL_MS, MAC_OFFLINE_AFTER_MS, PAIRING_WAIT_MS, itemDigest, openSnapshot, sealAction, type ActionResult, type PendingItem, type PhoneAction, type Snapshot } from "./messages.ts";
 
 /**
  * The phone page's side of the relay (docs/design/phone-protocol.md, section 6): the
@@ -122,13 +122,18 @@ export function startPhonePairing(fragment: string, device: string, now: number,
 
 /**
  * What a pairing link does to the record already kept. "same": the same code opened
- * again, so carry on with the keys made for it. "start": nothing kept, or a pairing still
- * in progress, which the new code replaces. "ask": this phone is paired with a Mac, so
- * the page asks before it unpairs it: a link anyone sends you must not do that alone.
+ * again, so carry on with the keys made for it. "start": nothing kept, or a pairing that
+ * never finished and is over 10 minutes old, so the relay has forgotten it and the Mac's
+ * code has run out. "ask": this phone is paired with a Mac, or partway through pairing
+ * with one, so the page asks before it drops it: a link anyone sends you must not do that
+ * alone, and an unfinished pairing may be the one your Mac is showing a code for now.
  */
-export function pairingLinkStep(stored: Pick<PhonePairing, "id" | "state"> | null, fresh: Pick<PhonePairing, "id">): "same" | "start" | "ask" {
-  if (stored?.id === fresh.id) return "same";
-  return stored?.state === "paired" ? "ask" : "start";
+export function pairingLinkStep(stored: Pick<PhonePairing, "id" | "state" | "createdAt"> | null, fresh: Pick<PhonePairing, "id">, now: number): "same" | "start" | "ask" {
+  if (!stored) return "start";
+  if (stored.id === fresh.id) return "same";
+  if (stored.state === "paired") return "ask";
+  // The phone opened the link after the Mac made it, so this is the latest the Mac's code could still work.
+  return now - stored.createdAt < PAIRING_WAIT_MS ? "ask" : "start";
 }
 
 /** Whether a stored value is a pairing this version of the page can use. */

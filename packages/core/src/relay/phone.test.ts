@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { EmailFollowUp, FollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 import { RelayError, base64UrlToBytes, bytesToBase64Url, encodePairing, newPairing, sealEnvelope } from "./crypto.ts";
-import { MAC_OFFLINE_AFTER_MS, checkPhoneAction, itemDigest, toPendingItem, type PaymentItem, type PendingItem, type Snapshot } from "./messages.ts";
+import { MAC_OFFLINE_AFTER_MS, PAIRING_WAIT_MS, checkPhoneAction, itemDigest, toPendingItem, type PaymentItem, type PendingItem, type Snapshot } from "./messages.ts";
 import {
   RelayHttpError,
   afterHello,
@@ -113,15 +113,18 @@ test("a damaged or foreign pairing link is refused before anything is sent", () 
   assert.throws(() => startPhonePairing(enc({ ...raw, mac: "short" }), "x", NOW), (e: RelayError) => e.code === "BAD_KEY");
 });
 
-test("a new pairing link asks before it replaces a Mac this phone is paired with", () => {
+test("a new pairing link asks before it replaces a Mac this phone is paired with, or one it's still pairing with", () => {
   const link = (backend: string) => startPhonePairing(`#pair=${encodePairing(newPairing(backend).pairing)}`, "x", NOW);
   const fresh = link("https://api.example.com");
-  assert.equal(pairingLinkStep(null, fresh), "start");
-  assert.equal(pairingLinkStep(fresh, fresh), "same", "the same code again carries on with its keys");
+  assert.equal(pairingLinkStep(null, fresh, NOW), "start");
+  assert.equal(pairingLinkStep(fresh, fresh, NOW), "same", "the same code again carries on with its keys");
   const pairing = link("https://api.example.com");
-  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh), "start", "a pairing not finished yet gives way to the new code");
-  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh), "start");
-  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh), "ask", "a paired Mac is never dropped by a link alone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh, NOW), "ask", "a paired Mac is never dropped by a link alone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh, NOW + 30 * 86_400_000), "ask", "however old the pairing");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + 60_000), "ask", "a pairing not finished yet may be the one on your Mac's screen");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS - 1), "ask");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS), "start", "after 10 minutes the relay has forgotten it, so the new code takes over");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + PAIRING_WAIT_MS), "start");
 });
 
 test("someone else's hello first: the phone says so; a retry of its own lost hello goes on to the code", async () => {
