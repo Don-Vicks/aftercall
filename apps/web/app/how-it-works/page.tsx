@@ -132,7 +132,7 @@ export default function HowItWorks() {
                   <span className="mono">NEAR AI key</span>
                   <span className="ink-2">Used from Rust, only to send its own recordings</span>
                   <span className="mono">app key</span>
-                  <span className="ink-2">Can only call pay and record_proof</span>
+                  <span className="ink-2">Can only call pay, record_proof, open_escrow and release_escrow</span>
                 </span>
               </div>
             </div>

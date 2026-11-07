@@ -40,8 +40,8 @@ const ROWS: Row[] = [
     title: "It can't overspend.",
     body: (
       <>
-        Payment rules live in a NEAR contract: listed payees, a daily cap and a per-payment cap. The key on your Mac can call only <code>pay</code> and <code>record_proof</code>; every rule change needs
-        your own wallet. Anything over a cap waits in the contract for your wallet.
+        Payment rules live in a NEAR contract: listed payees, a daily cap and a per-payment cap. The key on your Mac can call only <code>pay</code> and <code>record_proof</code>, and open and release a deal held in escrow
+        (built, not yet on testnet); every rule change needs your own wallet. Anything over a cap waits in the contract for your wallet.
       </>
     ),
     tests: [
@@ -55,7 +55,7 @@ const ROWS: Row[] = [
         <p className={l.vKeyHead}>This Mac&apos;s key</p>
         <p>
           <span className={l.vKeyLabel}>Can call</span>
-          <span className={l.vOk}>pay · record_proof</span>
+          <span className={l.vOk}>pay · record_proof · open_escrow · release_escrow</span>
         </p>
         <p>
           <span className={l.vKeyLabel}>Can&apos;t</span>
