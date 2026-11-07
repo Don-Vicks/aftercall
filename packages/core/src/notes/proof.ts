@@ -53,7 +53,7 @@ export const CONFIDENTIAL_MODELS = ["Qwen/Qwen3.8-27B"];
 const bound = (e: TeeEvidence) => bindsIdentity(e.reportData, e.signingAddress, e.nonce, e.tlsCertFingerprint, e.scope);
 
 export interface Check {
-  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes" | "line";
+  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes" | "line" | "contract";
   label: string;
   ok: boolean;
   detail: string;

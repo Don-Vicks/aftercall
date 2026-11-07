@@ -62,21 +62,41 @@ interface RpcError {
 }
 
 export interface LinkChecks {
-  /** The line check first (for a line link), then the proof's checks, then NVIDIA's token when the proof has one. */
+  /** The line check first (for a line link), the contract check when the link names another contract, then the proof's checks, then NVIDIA's token when the proof has one. */
   checks: Check[];
   onChain: OnChainProof | null;
   /** Why NEAR couldn't be read, when it couldn't; the NEAR checks then fail. */
   rpcError?: string;
 }
 
+/**
+ * A failing check when the link names a contract other than Aftercall's on its network.
+ * Aftercall's contract files a proof under the account that sent it, so "recorded by" is
+ * NEAR's word; any other contract answers `get_proof` however its deployer wrote it, so a
+ * link could name anyone as the owner. Null (no row) for Aftercall's own contract.
+ */
+export function contractCheck(p: Pick<PublicProof, "network" | "contract">): Check | null {
+  const ours = NETWORK_CONFIG[p.network].agentWallet;
+  if (p.contract === ours) return null;
+  return {
+    id: "contract",
+    label: "Proof read from Aftercall's contract",
+    ok: false,
+    detail: ours
+      ? `${p.contract} isn't Aftercall's contract on ${p.network} (${ours}): its deployer decides what it answers, so who recorded this proof isn't checked`
+      : `Aftercall has no contract on ${p.network} yet: ${p.contract}'s deployer decides what it answers, so who recorded this proof isn't checked`,
+  };
+}
+
 /** Every check /verify runs for a link, in the order it lists them. */
 export async function runLinkChecks(link: VerifyLink, fetchFn: ProofFetch = defaultFetch): Promise<LinkChecks> {
   const { bundle } = link.proof;
   const gpu = verifyProofGpu(bundle, await fetchNvidiaKeys(fetchFn));
+  const contract = contractCheck(link.proof);
   const line = link.kind === "line" ? [lineCheck(bundle, link.line)] : [];
   const withRest = async (checks: Check[]) => {
     const g = await gpu;
-    return [...line, ...checks, ...(g ? [g] : [])];
+    return [...line, ...(contract ? [contract] : []), ...checks, ...(g ? [g] : [])];
   };
   try {
     const onChain = await readOnChainProof({ ...link.proof, meetingId: bundle.meetingId }, fetchFn);

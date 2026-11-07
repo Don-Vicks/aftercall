@@ -166,6 +166,21 @@ test("a line link fails when NEAR holds another hash, has no proof, can't be rea
   assert.deepEqual((await fails(onChain(proofHash(bundle)), decodeVerifyLink(encodeLineDisclosure(forged)))).failed, ["matches"]);
 });
 
+test("a link naming another contract doesn't check out: that contract, not NEAR, would say who recorded it", async () => {
+  // Someone's own contract can answer get_proof with any hash for any owner, so a line can be put in anyone's name.
+  const elsewhere = { ...place, contract: "proofs.mallory.testnet", owner: "victor.testnet" };
+  const link = decodeVerifyLink(encodeLineDisclosure(makeLineDisclosure(elsewhere, bundle, transcript, KEY, 2)));
+  const r = await runLinkChecks(link, stub(onChain(proofHash(bundle))).fetch);
+  assert.deepEqual(r.checks.filter((c) => !c.ok).map((c) => c.id), ["contract"]);
+  assert.equal(allChecksPassed(bundle, r.checks), false);
+  assert.match(r.checks.find((c) => c.id === "contract")!.detail, /^proofs\.mallory\.testnet isn't Aftercall's contract on testnet \(wallet\.aftercall\.testnet\)/);
+  // Aftercall has no mainnet contract yet, so no mainnet link checks out.
+  const mainnet = decodeVerifyLink(encodePublicProof({ network: "mainnet", contract: "wallet.aftercall.near", owner: "victor.near", bundle }));
+  const m = await runLinkChecks(mainnet, stub(onChain(proofHash(bundle))).fetch);
+  assert.match(m.checks.find((c) => c.id === "contract")!.detail, /^Aftercall has no contract on mainnet yet/);
+  assert.equal(allChecksPassed(bundle, m.checks), false);
+});
+
 test("a proof whose NVIDIA token can't be checked says so, as /verify does", async () => {
   const r = await runLinkChecks(decodeVerifyLink(encodePublicProof({ ...place, bundle: sample.bundle })), stub(onChain(OLD_HASH)).fetch);
   const gpu = r.checks.find((c) => c.id === "gpu");

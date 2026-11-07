@@ -78,6 +78,13 @@ test("verifyLineLink: another hash on NEAR, no proof, or a changed line fails, a
   assert.deepEqual([r.ok, failed(r)], [false, ["line"]]);
 });
 
+test("a link naming a contract other than Aftercall's doesn't check out, whatever that contract answers", async () => {
+  const elsewhere = { ...place, contract: "proofs.mallory.testnet", owner: "victor.testnet" };
+  const link = `#${encodeLineDisclosure(makeLineDisclosure(elsewhere, bundle, transcript, KEY, 1))}`;
+  const r = await verifyLineLink(link, { fetch: near(proofHash(bundle)) });
+  assert.deepEqual([r.ok, r.checks.filter((c) => !c.ok).map((c) => c.id)], [false, ["contract"]]);
+});
+
 test("verifyProofLink checks a proof link, and a line link as its proof only", async () => {
   const proof = await verifyProofLink(`#${encodePublicProof({ ...place, bundle })}`, { fetch: near(proofHash(bundle)) });
   assert.equal(proof.ok, true);

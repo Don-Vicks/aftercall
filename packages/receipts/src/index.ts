@@ -43,7 +43,7 @@ export interface Receipt {
   proofHash: string;
   /** What `get_proof` returned, or null (none, or NEAR couldn't be read: see `rpcError`). */
   onChain: OnChainProof | null;
-  /** The checks run now, in /verify's order: the line (for a line link), NEAR, signature, attestation, model, NVIDIA. */
+  /** The checks run now, in /verify's order: the line (for a line link), the contract (only when it isn't Aftercall's), NEAR, signature, attestation, model, NVIDIA. */
   checks: Check[];
   /** The checks the Mac app ran when it made the notes, as the proof recorded them; null for version 1 proofs. */
   recorded: TeeCheck[] | null;
