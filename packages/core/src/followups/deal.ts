@@ -2,7 +2,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, randomBytes, utf8ToBytes } from "@noble/hashes/utils";
 import type { EscrowState, Meeting, PaymentFollowUp } from "../meeting.ts";
 import { formatUsdc } from "../money.ts";
-import { isNetwork, type Network } from "../network.ts";
+import { NETWORK_CONFIG, isNetwork, type Network } from "../network.ts";
 import { isAccountId, type WalletTransaction } from "../wallet/actions.ts";
 import { RECAP_FOOTER_MARK } from "./recap.ts";
 
@@ -182,14 +182,22 @@ export interface DealCheck {
 
 /**
  * The link's terms against the escrow and the proof on NEAR. Every line must pass before
- * the payee may confirm: the hash on chain must be the hash of exactly these terms, and the
+ * the payee may confirm: the contract must be Aftercall's own on that network (any other could
+ * claim to hold anything), the hash on chain must be the hash of exactly these terms, and the
  * amount, payee, condition and the meeting's proof must be the escrow's own.
  */
 export function checkDeal(t: DealTerms, escrow: EscrowView | null, proof: { proof_hash: string } | null): DealCheck[] {
-  if (!escrow) return [{ label: "Held on NEAR", ok: false, detail: `No escrow ${t.escrowId} for ${t.owner} on ${t.contract}` }];
+  // Any contract can answer get_escrow with whatever it likes: only Aftercall's own holds the money by its rules.
+  const ours = NETWORK_CONFIG[t.network].agentWallet;
+  const contract: DealCheck =
+    t.contract === ours
+      ? { label: "Aftercall's contract", ok: true, detail: `${t.contract} on ${t.network}` }
+      : { label: "Aftercall's contract", ok: false, detail: `${t.contract} isn't Aftercall's contract on ${t.network}, so what it says it holds can't be trusted` };
+  if (!escrow) return [contract, { label: "Held on NEAR", ok: false, detail: `No escrow ${t.escrowId} for ${t.owner} on ${t.contract}` }];
   const hash = dealTermsHash(t);
   const amount = BigInt(escrow.amount);
   return [
+    contract,
     { label: "Held on NEAR", ok: true, detail: `Escrow ${t.escrowId} on ${t.contract}` },
     { label: "These exact terms", ok: escrow.terms_hash === hash, detail: escrow.terms_hash === hash ? `sha256 ${hash.slice(0, 16)}… matches` : "The hash on NEAR is of different terms" },
     { label: "Amount", ok: escrow.amount === t.amount, detail: `${formatUsdc(amount)} USDC on NEAR` },

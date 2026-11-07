@@ -26,6 +26,7 @@ The salt keeps the hash from confirming a guess of the quotes. Browsers never se
 
 `checkDeal` in `packages/core/src/followups/deal.ts`, against `get_escrow` and `get_proof` read at final finality (`readDealOnChain`):
 
+- the contract is Aftercall's own on that network (`NETWORK_CONFIG`): any other contract could answer `get_escrow` with exactly the link's terms and hold nothing, so a link to one fails however well it matches (and no mainnet deal passes until a mainnet contract exists);
 - the escrow exists for that owner and id on that contract;
 - its `terms_hash` is the hash of exactly the terms in the link;
 - its amount and payee are the link's;

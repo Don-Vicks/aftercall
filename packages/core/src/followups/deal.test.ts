@@ -115,7 +115,7 @@ test("the page passes a link only when every term matches the escrow and the pro
   const proof = { proof_hash: terms.proofHash };
   const ok = checkDeal(terms, escrowFor(terms), proof);
   assert.ok(ok.every((c) => c.ok), JSON.stringify(ok));
-  assert.deepEqual(ok.map((c) => c.label), ["Held on NEAR", "These exact terms", "Amount", "Paid to", "Condition", "The meeting's proof"]);
+  assert.deepEqual(ok.map((c) => c.label), ["Aftercall's contract", "Held on NEAR", "These exact terms", "Amount", "Paid to", "Condition", "The meeting's proof"]);
 
   const failing = (t: DealTerms, e: EscrowView | null, p = proof) => checkDeal(t, e, p).filter((c) => !c.ok).map((c) => c.label);
   // Someone edits the link: a bigger amount, no condition, other words.
@@ -128,6 +128,16 @@ test("the page passes a link only when every term matches the escrow and the pro
   assert.deepEqual(failing(terms, escrowFor(terms), { proof_hash: "cd".repeat(32) }), ["The meeting's proof"]);
   assert.deepEqual(failing(terms, escrowFor(terms), null as unknown as typeof proof), ["The meeting's proof"]);
   assert.deepEqual(failing(terms, null), ["Held on NEAR"]);
+});
+
+test("a link to any other contract fails, however well its escrow matches: only Aftercall's own holds the money by its rules", () => {
+  const proof = { proof_hash: terms.proofHash };
+  const failing = (t: DealTerms) => checkDeal(t, escrowFor(t), proof).filter((c) => !c.ok).map((c) => c.label);
+  // A look-alike contract that answers get_escrow and get_proof with exactly the link's terms.
+  assert.deepEqual(failing({ ...terms, contract: "wallet-aftercall.testnet" }), ["Aftercall's contract"]);
+  // No agent-wallet contract on mainnet yet, so no mainnet deal passes.
+  assert.deepEqual(failing({ ...terms, network: "mainnet", contract: "wallet.aftercall.near" }), ["Aftercall's contract"]);
+  assert.deepEqual(checkDeal({ ...terms, contract: "x.testnet" }, null, proof).filter((c) => !c.ok).map((c) => c.label), ["Aftercall's contract", "Held on NEAR"]);
 });
 
 test("the payee confirms exactly these terms with 1 yoctoNEAR, and can give the money back", () => {

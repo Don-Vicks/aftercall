@@ -27,7 +27,7 @@ import {
   type PayoutPreview,
 } from "@aftercall/core";
 import { HAS_BACKEND, backend } from "./backend";
-import { contractFollowupId, near, oneClick, signInWallet, waitFor, DEAL_URL, VERIFY_URL, WEB_URL, type NearConfig } from "./near";
+import { builtInContract, contractFollowupId, near, oneClick, signInWallet, waitFor, DEAL_URL, VERIFY_URL, WEB_URL, type NearConfig } from "./near";
 import type { SavedNotes } from "./nearai";
 import { recapAgentWork, senderName } from "./RecapSettings";
 
@@ -285,6 +285,8 @@ export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: 
   try {
     const config = await near.getConfig();
     if (!config) throw new Error("Connect your NEAR account first.");
+    // /deal vouches only for Aftercall's own contract, so a deal elsewhere could never be confirmed there.
+    if (config.contract !== builtInContract(config.network)) throw new Error(`Deals held in escrow work only on Aftercall's own contract on ${config.network}; the payee's confirm page won't vouch for ${config.contract}.`);
     const proof = proofHere(saved, config);
     if (!proof) throw new Error("Record this meeting's proof on NEAR first (Verify), so the deal points to it.");
     const status = await near.status();
