@@ -5,9 +5,9 @@ export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? "http://localhost
 
 /**
  * Whether this build has a backend to talk to: one built with VITE_BACKEND_URL, or the dev
- * server (which runs it locally). A release built without one, like the testnet build for
- * testers, hides Send through Aftercall, claim links and autopilot recaps; Draft in Mail and
- * payments to listed payees need no backend.
+ * server (which runs it locally). The testnet build for testers has one (aftercall-api.vercel.app).
+ * A release built without one hides Send through Aftercall, claim links and autopilot recaps;
+ * Draft in Mail and payments to listed payees need no backend.
  */
 export const HAS_BACKEND = Boolean(import.meta.env.VITE_BACKEND_URL) || import.meta.env.DEV;
 
