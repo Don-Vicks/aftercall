@@ -253,6 +253,7 @@ export function PhoneClient() {
           const r = await phoneRelay(tap.pairing).action(tap.box);
           if (r.kind === "gone") await forget("unpaired");
           else if (r.kind === "full") await failed("Your Mac has 50 taps waiting. Open Aftercall on your Mac, then try again.");
+          else if (r.kind === "limit") await failed("This phone has sent all the taps the relay takes in a day. Do this on your Mac, or try again tomorrow.");
         } catch {
           await failed("Couldn't reach Aftercall's relay. Check your connection and try again.");
         }

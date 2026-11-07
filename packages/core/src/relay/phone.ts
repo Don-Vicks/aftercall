@@ -160,7 +160,7 @@ export type SnapshotReply = z.infer<typeof SnapshotReplySchema>;
 
 export type HelloAnswer = "ok" | "taken" | "gone";
 export type SnapshotPoll = { kind: "waiting" } | { kind: "gone" } | { kind: "reply"; reply: SnapshotReply };
-export type ActionAnswer = { kind: "ok"; seq: number } | { kind: "gone" } | { kind: "full" };
+export type ActionAnswer = { kind: "ok"; seq: number } | { kind: "gone" } | { kind: "full" } | { kind: "limit" };
 
 /** A request gives up after this long; the next poll tries again. */
 const TIMEOUT_MS = 15_000;
@@ -215,11 +215,11 @@ export function phoneRelay(p: Pick<PhonePairing, "backend" | "id" | "phoneToken"
       if (!parsed.success) throw new RelayHttpError(r.status, "BAD_REPLY");
       return { kind: "reply", reply: parsed.data };
     },
-    /** Posts one sealed action. "full": 50 actions already wait for the Mac. */
+    /** Posts one sealed action. "full": 50 actions already wait for the Mac. "limit": this pairing's taps for the day are used up. */
     async action(box: string): Promise<ActionAnswer> {
       const r = await call("/actions", { method: "POST", body: { box }, auth: true });
       if (gone(r)) return { kind: "gone" };
-      if (r.status === 429) return { kind: "full" };
+      if (r.status === 429) return codeOf(r) === "TOO_MANY_ACTIONS" ? { kind: "full" } : { kind: "limit" };
       if (r.status < 200 || r.status >= 300) return fail(r);
       return { kind: "ok", seq: typeof r.body?.seq === "number" ? r.body.seq : 0 };
     },

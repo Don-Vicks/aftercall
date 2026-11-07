@@ -255,7 +255,7 @@ test("taps reach the relay in counter order, or the Mac drops the earlier one as
   assert.equal(await queue(async () => "next"), "next", "a failed post doesn't stop the ones after it");
 });
 
-test("the relay's answers the page acts on: gone after unpairing, full at 50 waiting, errors otherwise", async () => {
+test("the relay's answers the page acts on: gone after unpairing, full at 50 waiting, the daily limit, errors otherwise", async () => {
   const { mac, api, phone } = await paired();
   await mac.post(snapshot([]));
   let p = phone;
@@ -265,6 +265,8 @@ test("the relay's answers the page acts on: gone after unpairing, full at 50 wai
     assert.equal((await api.action(t.box)).kind, "ok");
   }
   assert.deepEqual(await api.action(phoneAction(p, "dismiss", item(email), NOW).box), { kind: "full" });
+  const daily = phoneRelay(phone, async () => new Response(JSON.stringify({ statusCode: 429, message: "DAILY_LIMIT" }), { status: 429 }));
+  assert.deepEqual(await daily.action("AQ"), { kind: "limit" }, "the day's taps used up is not 50 waiting");
 
   await api.unpair();
   assert.deepEqual(await api.snapshot(0), { kind: "gone" });
