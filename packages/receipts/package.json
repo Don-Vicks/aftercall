@@ -1,0 +1,44 @@
+{
+  "name": "@aftercall/receipts",
+  "version": "0.1.0",
+  "description": "Check Aftercall meeting proofs and shared transcript lines against NEAR, in Node or a browser: what the /verify page runs, without the page.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/receipts/src/index.d.ts",
+      "import": "./dist/receipts/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "aftercall",
+    "near",
+    "merkle",
+    "proof",
+    "tee",
+    "attestation"
+  ],
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "~6.0.3"
+  }
+}

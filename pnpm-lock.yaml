@@ -230,6 +230,22 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
 
+  packages/receipts:
+    dependencies:
+      '@noble/curves':
+        specifier: ^1.9.7
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+      typescript:
+        specifier: ~6.0.3
+        version: 6.0.3
+
   packages/tokens: {}
 
 packages:
