@@ -459,3 +459,35 @@ export function decodeSignRequest(fragment: string): SignRequest {
   if (!describe(r)) throw new Error("BAD_ACTION");
   return r;
 }
+
+/**
+ * `update-key` deletes a key before adding it back, so a crafted link could name another key:
+ * the wallet's own full-access key, which would leave the owner locked out. Before signing,
+ * /sign reads the key from NEAR and passes it here: it must be this Mac's kind of key, a
+ * function-call key on this contract limited to the app's methods (the list from before
+ * escrows, or today's). Returns what's wrong in plain words, or null when it may be updated.
+ */
+export function updateKeyProblem(permission: unknown, contract: string): string | null {
+  if (permission === undefined || permission === null) return "That key isn't on your account, so there's nothing to update. Open the update again from the Aftercall app.";
+  const fc = typeof permission === "object" ? (permission as { FunctionCall?: { receiver_id?: unknown; method_names?: unknown } }).FunctionCall : undefined;
+  if (!fc) return "That key has full access to your account. Updating it would remove it, so Aftercall won't. Nothing was signed.";
+  if (fc.receiver_id !== contract) return `That key isn't limited to ${contract}, so it isn't this Mac's key. Nothing was signed.`;
+  const methods = Array.isArray(fc.method_names) ? fc.method_names.filter((m): m is string => typeof m === "string").sort() : [];
+  const same = (list: readonly string[]) => methods.length === list.length && [...list].sort().every((m, i) => methods[i] === m);
+  if (!same(OLD_APP_KEY_METHODS) && !same(APP_KEY_METHODS)) return "That key may call other methods than this Mac's key, so it isn't the one to update. Nothing was signed.";
+  return null;
+}
+
+/** A key's permission on an account, read from NEAR at final finality, or null when the key isn't there. `fetchImpl` is swapped in tests. */
+export async function readAccessKeyPermission(rpcUrl: string, account: string, publicKey: string, fetchImpl: typeof fetch = fetch): Promise<unknown | null> {
+  const res = await fetchImpl(rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "key", method: "query", params: { request_type: "view_access_key", finality: "final", account_id: account, public_key: publicKey } }),
+  });
+  const body = (await res.json()) as { error?: { cause?: { name?: string }; data?: unknown }; result?: { error?: string; permission?: unknown } };
+  const missing = body.error?.cause?.name === "UNKNOWN_ACCESS_KEY" || /does not exist/i.test(body.result?.error ?? "");
+  if (missing) return null;
+  if (body.error || body.result?.error) throw new Error(body.result?.error ?? JSON.stringify(body.error));
+  return body.result?.permission ?? null;
+}

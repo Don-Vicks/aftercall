@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { decodeSignRequest, describe, explorerTxUrl, plainNearError, toTransactions, type SignRequest } from "@aftercall/core";
+import { NETWORK_CONFIG, decodeSignRequest, describe, explorerTxUrl, plainNearError, readAccessKeyPermission, toTransactions, updateKeyProblem, type SignRequest } from "@aftercall/core";
 import { AppHeader, Avatar, Pill, Tick } from "../ui";
 import g from "./sign.module.css";
 import { OTHER, WalletButton, choices, ensureConnector, type Choice, type Connector, type Wallet } from "./wallets";
@@ -91,6 +91,11 @@ export function SignClient() {
       const account = accounts[0]?.accountId;
       if (!account) throw new Error(`${name === "your wallet" ? "The wallet" : name} didn't share an account.`);
       if (account !== request.owner) return setStep({ kind: "wrong-account", account });
+      // An update deletes the key first: only ever this Mac's limited key, never one with full access.
+      if (a.kind === "update-key") {
+        const problem = updateKeyProblem(await readAccessKeyPermission(NETWORK_CONFIG[request.network].rpcUrl, account, a.publicKey), request.contract);
+        if (problem) throw new Error(problem);
+      }
       setStep({ kind: "signing", account, via: choice?.id ?? OTHER });
       type Params = Parameters<Wallet["signAndSendTransactions"]>[0];
       const outcomes = (await wallet.signAndSendTransactions({

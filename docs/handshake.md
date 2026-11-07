@@ -61,7 +61,7 @@ Once `released`, `cancelled` or `returned`, an escrow is closed for good (`ESCRO
 
 ## The app's key
 
-The app's limited key may now call `pay`, `record_proof`, `open_escrow` and `release_escrow` (`APP_KEY_METHODS`, `packages/core/src/wallet/actions.ts`; checked in `apps/desktop/src-tauri/src/near.rs` `check_permission`). A key added before this still pays and records proofs; the app accepts it and says so in Agent wallet ("Update this Mac's key"), and Ask to confirm opens the update instead of failing. The update is one transaction on `/sign` from the owner's own wallet: delete the key and add the same key back with the four methods (`update-key`), so nothing else about the Mac changes. NEAR can't change a key's methods in place.
+The app's limited key may now call `pay`, `record_proof`, `open_escrow` and `release_escrow` (`APP_KEY_METHODS`, `packages/core/src/wallet/actions.ts`; checked in `apps/desktop/src-tauri/src/near.rs` `check_permission`). A key added before this still pays and records proofs; the app accepts it and says so in Agent wallet ("Update this Mac's key"), and Ask to confirm opens the update instead of failing. The update is one transaction on `/sign` from the owner's own wallet: delete the key and add the same key back with the four methods (`update-key`), so nothing else about the Mac changes. NEAR can't change a key's methods in place. Because the update deletes a key, `/sign` first reads that key from NEAR and refuses unless it is a function-call key on this contract limited to the app's methods (`updateKeyProblem`), so a crafted link can't have the wallet delete a full-access key and lock the owner out.
 
 ## Deploying it
 

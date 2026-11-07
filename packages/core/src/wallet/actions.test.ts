@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { APP_KEY_METHODS, decodeSignRequest, describe, encodeSignRequest, toTransactions, USDC_CONTRACT, type SignRequest } from "./actions.ts";
+import { APP_KEY_METHODS, decodeSignRequest, describe, encodeSignRequest, readAccessKeyPermission, toTransactions, updateKeyProblem, USDC_CONTRACT, type SignRequest } from "./actions.ts";
 
 const base = { network: "testnet" as const, contract: "wallet.victor.testnet", owner: "victor.testnet" };
 
@@ -204,4 +204,28 @@ test("setup links with nothing to sign, a bad key, a bad cap or missing flags ar
   bad({ kind: "setup", register: true, dailyCap: null, registerUsdc: false });
   bad({ kind: "setup", register: "yes", registerUsdc: false });
   bad({ kind: "setup", register: true });
+});
+
+test("an update only ever deletes this Mac's limited key, never a full-access or another key", async () => {
+  const fc = (receiver_id: string, method_names: string[]) => ({ FunctionCall: { allowance: "250000000000000000000000", receiver_id, method_names } });
+  assert.equal(updateKeyProblem(fc(base.contract, ["record_proof", "pay"]), base.contract), null, "a key from before escrows");
+  assert.equal(updateKeyProblem(fc(base.contract, ["release_escrow", "pay", "open_escrow", "record_proof"]), base.contract), null, "an updated key, again");
+  assert.match(updateKeyProblem("FullAccess", base.contract) ?? "", /full access/);
+  assert.match(updateKeyProblem(null, base.contract) ?? "", /isn't on your account/);
+  assert.match(updateKeyProblem(fc("other.testnet", ["pay", "record_proof"]), base.contract) ?? "", /isn't limited to/);
+  assert.match(updateKeyProblem(fc(base.contract, []), base.contract) ?? "", /other methods/, "an empty list means every method");
+  assert.match(updateKeyProblem(fc(base.contract, ["pay", "record_proof", "withdraw"]), base.contract) ?? "", /other methods/);
+  assert.match(updateKeyProblem(fc(base.contract, ["pay", "pay"]), base.contract) ?? "", /other methods/);
+
+  // Read from NEAR at final finality; a key that isn't there reads as null.
+  const publicKey = "ed25519:3w4RMJEvhWGNAjEWrrFgVNeXTqhiGrMvj4jHgYG67b6S";
+  let sent: { params: Record<string, string> } | undefined;
+  const answer = (body: unknown) => (async (_url: unknown, init?: { body?: unknown }) => {
+    sent = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify(body));
+  }) as typeof fetch;
+  assert.equal(await readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ result: { nonce: 1, permission: "FullAccess" } })), "FullAccess");
+  assert.deepEqual(sent?.params, { request_type: "view_access_key", finality: "final", account_id: base.owner, public_key: publicKey });
+  assert.equal(await readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCESS_KEY" } } })), null);
+  await assert.rejects(readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCOUNT" } } })));
 });
