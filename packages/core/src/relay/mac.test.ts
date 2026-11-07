@@ -381,4 +381,45 @@ test("if the app's own handler throws, the result says so and the counter still 
   });
   assert.equal(r.results[0].outcome, "refused");
   assert.equal(r.lastN, 1);
+  assert.deepEqual(h.saved, [1, 1], "saved once before it ran, then again as refused");
+});
+
+test("an action's counter is saved before it runs, so a failed save never lets it run twice", async () => {
+  const { mac, phone } = session();
+  const m = meeting("1762440000", "2026-11-06T14:02:00Z", [email]);
+  const box = sealAction(phone.key, 1, { t: "action", kind: "approve", meetingId: m.id, followUpId: "f1", digest: itemDigest(toPendingItem(m, email, opts())!), at: NOW });
+  // The follow-up still waits each time it's read, as it would if the Mac's send failed and put it back.
+  const target = (_m: string, fuId: string): ActionTarget => (fuId === "f1" ? { followUp: email, item: toPendingItem(m, email, opts()) } : { followUp: undefined, item: null });
+  const events: string[] = [];
+  let kept = 0;
+  const handle = (save: (n: number, result: ActionResult) => void) =>
+    handlePhoneActions({ key: mac.key, lastN: kept, actions: [{ seq: 1, box }], now: () => NOW, target, run: () => void events.push("run"), save });
+
+  // phone.json can't be written: nothing runs, and the box waits on the relay.
+  await assert.rejects(
+    handle(() => {
+      events.push("save failed");
+      throw new Error("disk full");
+    }),
+    /disk full/,
+  );
+  assert.deepEqual(events, ["save failed"]);
+
+  // Read again: saved first, then run, once.
+  const r = await handle((n) => {
+    events.push("saved");
+    kept = n;
+  });
+  assert.deepEqual(events, ["save failed", "saved", "run"]);
+  assert.equal(r.lastN, 1);
+
+  // And never again, whatever happens to its result after.
+  const again = await handle(() => void events.push("saved"));
+  assert.equal(again.skipped, 1);
+  assert.deepEqual(events, ["save failed", "saved", "run"]);
+});
+
+test("a result saved again for the same action replaces the first", () => {
+  const merged = mergeResults([{ n: 4, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." }], [{ n: 4, outcome: "accepted" }, { n: 3, outcome: "accepted" }]);
+  assert.deepEqual(merged.map((r) => [r.n, r.outcome]), [[4, "refused"], [3, "accepted"]]);
 });

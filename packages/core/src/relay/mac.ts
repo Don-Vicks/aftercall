@@ -178,8 +178,9 @@ export function buildSnapshot(args: { at: number; network: Network; meetings: Sn
 /** What a snapshot says, without its time: when this changes, the phone needs a new one. */
 export const snapshotKey = (s: Snapshot) => JSON.stringify({ ...s, at: 0 });
 
-/** New results first, then the older ones, at most `MAX_RESULTS`. */
-export const mergeResults = (newestFirst: ActionResult[], older: ActionResult[]): ActionResult[] => [...newestFirst, ...older].slice(0, MAX_RESULTS);
+/** New results first, then the older ones, at most `MAX_RESULTS`. A new result for the same counter replaces the older one. */
+export const mergeResults = (newestFirst: ActionResult[], older: ActionResult[]): ActionResult[] =>
+  [...newestFirst, ...older.filter((r) => !newestFirst.some((x) => x.n === r.n))].slice(0, MAX_RESULTS);
 
 /** Why an approval from the phone is refused while autopilot counts down on the follow-up. */
 export const AUTOPILOT_COUNTING = "Autopilot is counting down on it. Let it run, or undo autopilot first.";
@@ -215,8 +216,11 @@ export interface HandledActions {
  * a counter not above the last accepted one, is skipped and nothing runs. An action that
  * opens is checked against the follow-up as it is now (`checkPhoneAction`); only if it
  * passes does `run` do what the app's own button does. `save` keeps the new counter and
- * the result before the next action is read, so a restart never runs a box twice. A
- * follow-up gets at most one action per batch: the app's state catches up between batches.
+ * the result before `run` starts: if saving fails, nothing has run and the box is read
+ * again next time; once it's saved, the box can't open again (REPLAY), so a failed save
+ * or Aftercall stopping mid-run can never run it twice. If `run` then throws, the result
+ * is saved again as refused. A follow-up gets at most one action per batch: the app's
+ * state catches up between batches.
  */
 export async function handlePhoneActions(args: {
   key: Uint8Array;
@@ -252,21 +256,19 @@ export async function handlePhoneActions(args: {
           action.kind === "approve" && t.followUp?.autopilotAt
           ? { ok: false as const, reason: AUTOPILOT_COUNTING }
           : checkPhoneAction(action, t.followUp, t.item, args.now());
-    let result: ActionResult;
-    if (check.ok) {
-      acted.add(id);
-      try {
-        await args.run(action);
-        result = { n, outcome: "accepted" };
-      } catch {
-        result = { n, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." };
-      }
-    } else {
-      result = { n, outcome: "refused", reason: check.reason };
-    }
+    const result: ActionResult = check.ok ? { n, outcome: "accepted" } : { n, outcome: "refused", reason: check.reason };
+    // Consumed before it runs, never after: see above.
+    await args.save(n, result);
     lastN = n;
     results.unshift(result);
-    await args.save(lastN, result);
+    if (!check.ok) continue;
+    acted.add(id);
+    try {
+      await args.run(action);
+    } catch {
+      results[0] = { n, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." };
+      await args.save(n, results[0]);
+    }
   }
   return { lastN, ackSeq, results, skipped };
 }
