@@ -9,6 +9,7 @@ It isn't on npm yet. To try it, build it from this repo with `pnpm --filter @aft
 `verifyProofLink(link)` takes a proof link (Copy proof link in the Mac app's Verify sheet):
 
 - **On NEAR:** reads `get_proof(owner, meeting_id)` from the link's agent-wallet contract over NEAR's public RPC, and checks the proof's sha256 (the bundle in canonical JSON) matches it.
+- **Aftercall's contract:** a link naming any contract other than Aftercall's on its network (`wallet.aftercall.testnet`; none on mainnet yet) gets a failing check, because that contract's deployer, not NEAR, decides what `get_proof` answers and for which owner.
 - **Signed:** the summary's signature over the exact request and response hashes in the proof (secp256k1 or Ed25519), for every request of a long call.
 - **Attested:** the signing key is bound, next to the meeting's nonce, in a TEE quote's report data that the app recorded, and the signer's setup file matches its `mr_config`.
 - **End-to-end encrypted:** the key the transcript was encrypted to is bound in the summary TEE's recorded report data.
