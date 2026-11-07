@@ -965,3 +965,91 @@ async fn a_key_from_before_escrows_pays_and_is_updated_in_one_transaction() -> a
     assert_eq!(pay(&e, &updated, 10 * USDC, "f-2").await?.json::<serde_json::Value>()?["status"], "sending", "it still pays");
     Ok(())
 }
+
+/// The testnet contract already holds state. A plain redeploy of this code over the code on
+/// main before Handshake (tests/fixtures/agent_wallet_6184cac.wasm, built from commit 6184cac)
+/// keeps every wallet, payee, proof, payment and parked payment readable and usable, and the
+/// escrow methods work on top, with no migration call.
+#[tokio::test]
+async fn upgrade_from_the_code_before_handshake_keeps_state_and_adds_escrows() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let old_wasm = std::fs::read("tests/fixtures/agent_wallet_6184cac.wasm")?;
+    let new_wasm = near_workspaces::compile_project("./").await?;
+    let ft_wasm = near_workspaces::compile_project("../mock-ft").await?;
+    let root = worker.root_account()?;
+    let victor = root.create_subaccount("victor").initial_balance(NearToken::from_near(20)).transact().await?.into_result()?;
+    let designer = root.create_subaccount("designer").initial_balance(NearToken::from_near(5)).transact().await?.into_result()?;
+    let usdc = worker.dev_deploy(&ft_wasm).await?;
+    usdc.call("new").args_json(json!({ "owner_id": victor.id(), "total_supply": (1_000_000 * USDC).to_string() })).transact().await?.into_result()?;
+
+    // The old code, with a wallet that has used everything it offered.
+    let wallet = worker.dev_deploy(&old_wasm).await?;
+    wallet.call("new").args_json(json!({ "usdc": usdc.id() })).transact().await?.into_result()?;
+    for id in [wallet.id(), designer.id()] {
+        victor.call(usdc.id(), "storage_deposit").args_json(json!({ "account_id": id })).deposit(NearToken::from_millinear(125)).transact().await?.into_result()?;
+    }
+    victor.call(wallet.id(), "register").deposit(NearToken::from_millinear(100)).transact().await?.into_result()?;
+    victor.call(wallet.id(), "set_cap").args_json(json!({ "daily_cap": (200 * USDC).to_string() })).deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    victor.call(wallet.id(), "add_payee").args_json(json!({ "payee": designer.id(), "label": "Designer" })).deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    victor.call(usdc.id(), "ft_transfer_call").args_json(json!({ "receiver_id": wallet.id(), "amount": (500 * USDC).to_string(), "msg": "" }))
+        .deposit(NearToken::from_yoctonear(1)).max_gas().transact().await?.into_result()?;
+    let old_app = key_for(&worker, &victor, &wallet, &OLD_KEY_METHODS).await?;
+    old_app.call(wallet.id(), "record_proof").args_json(json!({ "meeting_id": "m-1", "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }))
+        .transact().await?.into_result()?;
+    for (amount, id) in [(50 * USDC, "f-1"), (250 * USDC, "f-big")] {
+        old_app.call(wallet.id(), "pay").args_json(json!({ "payee": designer.id(), "amount": amount.to_string(), "memo": "deposit", "followup_id": id }))
+            .gas(near_workspaces::types::Gas::from_tgas(100)).transact().await?.into_result()?;
+    }
+
+    let owner = json!({ "owner": victor.id() });
+    let views = || async {
+        let w = &wallet;
+        anyhow::Ok(json!({
+            "wallet": w.view("get_wallet").args_json(owner.clone()).await?.json::<serde_json::Value>()?,
+            "payees": w.view("get_payees").args_json(owner.clone()).await?.json::<serde_json::Value>()?,
+            "proof": w.view("get_proof").args_json(json!({ "owner": victor.id(), "meeting_id": "m-1" })).await?.json::<serde_json::Value>()?,
+            "paid": w.view("is_paid").args_json(json!({ "owner": victor.id(), "followup_id": "f-1" })).await?.json::<serde_json::Value>()?,
+            "pending": w.view("get_pending").args_json(json!({ "owner": victor.id(), "followup_id": "f-big" })).await?.json::<serde_json::Value>()?,
+            "stats": w.view("get_stats").await?.json::<serde_json::Value>()?,
+            "usdc": w.view("get_usdc").await?.json::<serde_json::Value>()?,
+        }))
+    };
+    let before = views().await?;
+    assert_eq!(before["pending"]["amount"], (250 * USDC).to_string());
+
+    // The upgrade: deploy the new code over the old, as `near contract deploy … without-init-call` does.
+    wallet.as_account().deploy(&new_wasm).await?.into_result()?;
+    assert_eq!(views().await?, before, "every old record reads the same after the upgrade");
+    let no_link: Option<serde_json::Value> = wallet.view("get_payment_proof").args_json(json!({ "owner": victor.id(), "followup_id": "f-1" })).await?.json()?;
+    assert!(no_link.is_none(), "a payment from before has no proof link, and reading it doesn't fail");
+
+    // The old key and the old parked payment still work (with room under a higher cap for what follows).
+    victor.call(wallet.id(), "set_cap").args_json(json!({ "daily_cap": (1_000 * USDC).to_string() })).deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    victor.call(wallet.id(), "approve_pending").args_json(json!({ "followup_id": "f-big" })).deposit(NearToken::from_yoctonear(1)).max_gas().transact().await?.into_result()?;
+    let designer_usdc = |amount: u128| {
+        let usdc = &usdc;
+        let designer = &designer;
+        async move { anyhow::Ok(usdc.view("ft_balance_of").args_json(json!({ "account_id": designer.id() })).await?.json::<String>()? == amount.to_string()) }
+    };
+    assert!(designer_usdc(300 * USDC).await?);
+    let old_pay = old_app.call(wallet.id(), "pay").args_json(json!({ "payee": designer.id(), "amount": USDC.to_string(), "followup_id": "f-2" }))
+        .gas(near_workspaces::types::Gas::from_tgas(100)).transact().await?;
+    assert_eq!(old_pay.json::<serde_json::Value>()?["status"], "sending");
+    assert!(designer_usdc(301 * USDC).await?);
+
+    // New methods on the old state: the owner adds a key with the escrow methods.
+    let app = key_for(&worker, &victor, &wallet, &APP_KEY_METHODS).await?;
+    let r = app.call(wallet.id(), "open_escrow")
+        .args_json(json!({ "escrow_id": "e-1", "payee": designer.id(), "amount": (20 * USDC).to_string(), "meeting_id": "m-1", "terms_hash": TERMS, "has_condition": true }))
+        .transact().await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    let e: serde_json::Value = wallet.view("get_escrow").args_json(json!({ "owner": victor.id(), "escrow_id": "e-1" })).await?.json()?;
+    assert_eq!(e["proof"]["proof_hash"], "ab".repeat(32), "the escrow links the proof recorded before the upgrade");
+    designer.call(wallet.id(), "confirm_escrow").args_json(json!({ "owner": victor.id(), "escrow_id": "e-1", "terms_hash": TERMS }))
+        .deposit(NearToken::from_yoctonear(1)).gas(near_workspaces::types::Gas::from_tgas(100)).transact().await?.into_result()?;
+    app.call(wallet.id(), "release_escrow").args_json(json!({ "escrow_id": "e-1" })).gas(near_workspaces::types::Gas::from_tgas(100)).transact().await?.into_result()?;
+    assert!(designer_usdc(321 * USDC).await?);
+    let stats: serde_json::Value = wallet.view("get_stats").await?.json()?;
+    assert_eq!(stats, json!({ "wallets": 1, "proofs": 1, "payments": 4, "parked": 1 }));
+    Ok(())
+}
