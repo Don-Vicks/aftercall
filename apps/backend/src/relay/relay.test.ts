@@ -473,6 +473,7 @@ test("the backend's copies of core's limits and hash match core", async () => {
   const m = await messages();
   assert.deepEqual(RELAY_BOX_LIMITS, c.RELAY_BOX_LIMITS);
   assert.equal(ACTION_TTL_MS, m.ACTION_TTL_MS);
+  assert.equal(PAIRING_WAIT_MS, m.PAIRING_WAIT_MS);
   const token = c.newPairing("https://api.example.com").macToken;
   assert.equal(relayHash(token), c.relayTokenHash(token));
 });
