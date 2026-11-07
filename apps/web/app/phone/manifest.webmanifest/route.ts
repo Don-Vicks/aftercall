@@ -18,7 +18,12 @@ const manifest: MetadataRoute.Manifest = {
   // The dark theme's --raised, the page's ground.
   background_color: "#1b1a17",
   theme_color: "#1b1a17",
-  icons: [{ src: "/landing/app-icon.png", sizes: "256x256", type: "image/png", purpose: "any" }],
+  // Drawn from the Mac app's icon by scripts/phone-icons.sh; 192 and 512 are the sizes Android asks for.
+  icons: [
+    { src: "/phone-icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+    { src: "/landing/app-icon.png", sizes: "256x256", type: "image/png", purpose: "any" },
+    { src: "/phone-icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+  ],
 };
 
 export function GET() {

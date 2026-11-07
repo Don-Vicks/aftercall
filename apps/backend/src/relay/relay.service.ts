@@ -19,7 +19,7 @@ import { MemoryRelayStore, relayHash, type RelayPairing, type RelayStore } from 
 export const RELAY_BOX_LIMITS = { hello: 780, action: 1_420, snapshot: 87_436 } as const;
 /** An action waits this long at most: ACTION_TTL_MS in packages/core/src/relay/messages.ts. */
 export const ACTION_TTL_MS = 24 * 3_600_000;
-/** An unconfirmed pairing is gone this long after it was made: the Mac's QR lasts as long. */
+/** An unconfirmed pairing is gone this long after it was made: the Mac's QR lasts as long. PAIRING_WAIT_MS in packages/core/src/relay/messages.ts. */
 export const PAIRING_WAIT_MS = 10 * 60_000;
 /** A confirmed pairing is gone this long after the Mac last called. */
 export const PAIRING_IDLE_MS = 30 * 86_400_000;

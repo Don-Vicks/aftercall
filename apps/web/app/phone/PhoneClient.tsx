@@ -5,6 +5,7 @@ import {
   PHONE_POLL_MS,
   PHONE_UNDO_MS,
   afterHello,
+  checkPairingLink,
   clockTime,
   countdownText,
   deviceLabel,
@@ -100,11 +101,15 @@ export function PhoneClient() {
     setScreen({ kind: "none", problem });
   }, []);
 
-  /** One Mac per phone: a new code replaces the old pairing, on the relay too. */
+  /**
+   * One Mac per phone: a new code replaces the old pairing, on the relay too. An unfinished
+   * one is unpaired as well, in case your Mac confirmed it while this page was closed; if it
+   * didn't, the relay refuses the phone's token and leaves it to run out.
+   */
   const replaceWith = useCallback(
     async (fresh: PhonePairing) => {
       const stored = pairingRef.current;
-      if (stored?.state === "paired") void phoneRelay(stored).unpair().catch(() => {});
+      if (stored) void phoneRelay(stored).unpair().catch(() => {});
       await forget();
       await persist(fresh);
       setScreen({ kind: "pairing" });
@@ -136,12 +141,15 @@ export function PhoneClient() {
       setNotice("That pairing code didn't work. This phone is still paired with your Mac.");
       return setScreen(screenFor(stored));
     }
-    const step = pairingLinkStep(stored, fresh);
+    const first = pairingLinkStep(stored, fresh, Date.now());
+    // An old unfinished pairing: only the relay knows whether your Mac confirmed it.
+    const step = first === "check" && stored ? await checkPairingLink(stored) : first;
     if (stored && step !== "start") {
       // The same code opened again carries on with the keys already made for it. A new code
-      // while paired waits for your tap: a link alone never unpairs your Mac.
+      // while paired, or partway through pairing, waits for your tap: a link alone never
+      // unpairs your Mac or drops the code it's showing.
       await persist(stored);
-      return setScreen(step === "ask" ? { kind: "replace", fresh } : screenFor(stored));
+      return setScreen(step === "same" ? screenFor(stored) : { kind: "replace", fresh });
     }
     await replaceWith(fresh);
   }, [persist, replaceWith]);
@@ -350,7 +358,12 @@ export function PhoneClient() {
           <h1 id="rh" className="t-heading">
             Pair with a different Mac?
           </h1>
-          <p className="ink-2">This phone is paired with your Mac now. Pairing with this new code unpairs it. Go on only if you just made this code on your own Mac.</p>
+          <p className="ink-2">
+            {pairing?.state === "paired"
+              ? "This phone is paired with your Mac now. Pairing with this new code unpairs it."
+              : "This phone is still pairing with a code from your Mac. Pairing with this new code stops that."}{" "}
+            Go on only if you just made this code on your own Mac.
+          </p>
         </section>
         <div className={p.actions}>
           <button type="button" className="btn btn-secondary btn-lg press" onClick={() => pairing && setScreen(screenFor(pairing))}>

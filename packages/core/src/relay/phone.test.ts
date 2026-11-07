@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { EmailFollowUp, FollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 import { RelayError, base64UrlToBytes, bytesToBase64Url, encodePairing, newPairing, sealEnvelope } from "./crypto.ts";
-import { MAC_OFFLINE_AFTER_MS, checkPhoneAction, itemDigest, toPendingItem, type PaymentItem, type PendingItem, type Snapshot } from "./messages.ts";
+import { MAC_OFFLINE_AFTER_MS, PAIRING_WAIT_MS, checkPhoneAction, itemDigest, toPendingItem, type PaymentItem, type PendingItem, type Snapshot } from "./messages.ts";
 import {
   RelayHttpError,
   afterHello,
+  checkPairingLink,
   forgetTap,
   helloAttempt,
   inOrder,
@@ -113,15 +114,30 @@ test("a damaged or foreign pairing link is refused before anything is sent", () 
   assert.throws(() => startPhonePairing(enc({ ...raw, mac: "short" }), "x", NOW), (e: RelayError) => e.code === "BAD_KEY");
 });
 
-test("a new pairing link asks before it replaces a Mac this phone is paired with", () => {
+test("a new pairing link asks before it replaces a Mac this phone is paired with, or one it's still pairing with", () => {
   const link = (backend: string) => startPhonePairing(`#pair=${encodePairing(newPairing(backend).pairing)}`, "x", NOW);
   const fresh = link("https://api.example.com");
-  assert.equal(pairingLinkStep(null, fresh), "start");
-  assert.equal(pairingLinkStep(fresh, fresh), "same", "the same code again carries on with its keys");
+  assert.equal(pairingLinkStep(null, fresh, NOW), "start");
+  assert.equal(pairingLinkStep(fresh, fresh, NOW), "same", "the same code again carries on with its keys");
   const pairing = link("https://api.example.com");
-  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh), "start", "a pairing not finished yet gives way to the new code");
-  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh), "start");
-  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh), "ask", "a paired Mac is never dropped by a link alone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh, NOW), "ask", "a paired Mac is never dropped by a link alone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh, NOW + 30 * 86_400_000), "ask", "however old the pairing");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + 60_000), "ask", "a pairing not finished yet may be the one on your Mac's screen");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS - 1), "ask");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS), "check", "after 10 minutes the code has run out; the relay says whether it's gone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + PAIRING_WAIT_MS), "check");
+});
+
+test("an unfinished pairing 10 minutes old gives way to a new link only once the relay has forgotten it", async () => {
+  const fresh = startPhonePairing(`#pair=${encodePairing(newPairing(BACKEND).pairing)}`, "x", NOW);
+  // Your Mac said They match, but the page closed before the first snapshot: "confirming" here, paired on the relay.
+  const { mac, relay, phone } = await paired();
+  assert.equal(phone.state, "confirming");
+  assert.equal(pairingLinkStep(phone, fresh, NOW + PAIRING_WAIT_MS), "check");
+  assert.equal(await checkPairingLink(phone, relay.fetch), "ask", "a pairing your Mac confirmed is never dropped by a link alone");
+  assert.equal(await checkPairingLink(phone, () => Promise.reject(new TypeError("offline"))), "ask", "nor when the relay can't be reached");
+  await mac.unpair();
+  assert.equal(await checkPairingLink(phone, relay.fetch), "start", "gone from the relay: the new code takes over");
 });
 
 test("someone else's hello first: the phone says so; a retry of its own lost hello goes on to the code", async () => {
@@ -281,6 +297,19 @@ test("the relay's answers the page acts on: gone after unpairing, full at 50 wai
     throw new TypeError("fetch failed");
   });
   await assert.rejects(down.snapshot(0), TypeError);
+});
+
+test("unpairing from the phone deletes a pairing your Mac confirmed, and leaves one it hasn't yet", async () => {
+  const relay = fakeRelay(() => NOW);
+  const mac = await fakeMac(relay.fetch, BACKEND);
+  const phone = startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW);
+  const api = phoneRelay(phone, relay.fetch);
+  assert.equal(await api.hello(phone.hello), "ok");
+  await api.unpair(); // the relay refuses the token: done, quietly
+  assert.equal(await mac.takeHello(), phone.code, "the code on your Mac still works");
+  await mac.confirm();
+  await api.unpair();
+  assert.deepEqual(await api.snapshot(0), { kind: "gone" });
 });
 
 test("a wrong phone token is treated as unpaired", async () => {

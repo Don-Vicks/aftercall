@@ -2,7 +2,7 @@ import { z } from "zod";
 import { formatUsdc } from "../money.ts";
 import { CHAIN_NAME } from "../intents/oneclick.ts";
 import { RelayError, base64UrlToBytes, bytesToBase64Url, decodePairing, deriveSession, newRelayKeys, pairingIdText, sealHello, type RelayErrorCode } from "./crypto.ts";
-import { ACTION_TTL_MS, MAC_OFFLINE_AFTER_MS, itemDigest, openSnapshot, sealAction, type ActionResult, type PendingItem, type PhoneAction, type Snapshot } from "./messages.ts";
+import { ACTION_TTL_MS, MAC_OFFLINE_AFTER_MS, PAIRING_WAIT_MS, itemDigest, openSnapshot, sealAction, type ActionResult, type PendingItem, type PhoneAction, type Snapshot } from "./messages.ts";
 
 /**
  * The phone page's side of the relay (docs/design/phone-protocol.md, section 6): the
@@ -122,13 +122,33 @@ export function startPhonePairing(fragment: string, device: string, now: number,
 
 /**
  * What a pairing link does to the record already kept. "same": the same code opened
- * again, so carry on with the keys made for it. "start": nothing kept, or a pairing still
- * in progress, which the new code replaces. "ask": this phone is paired with a Mac, so
- * the page asks before it unpairs it: a link anyone sends you must not do that alone.
+ * again, so carry on with the keys made for it. "start": nothing kept. "ask": this phone
+ * is paired with a Mac, or partway through pairing with one, so the page asks before it
+ * drops it: a link anyone sends you must not do that alone, and an unfinished pairing may
+ * be the one your Mac is showing a code for now. "check": a pairing that never finished
+ * here and is 10 minutes old or more, so its code has run out; `checkPairingLink` says
+ * whether the relay has forgotten it.
  */
-export function pairingLinkStep(stored: Pick<PhonePairing, "id" | "state"> | null, fresh: Pick<PhonePairing, "id">): "same" | "start" | "ask" {
-  if (stored?.id === fresh.id) return "same";
-  return stored?.state === "paired" ? "ask" : "start";
+export function pairingLinkStep(stored: Pick<PhonePairing, "id" | "state" | "createdAt"> | null, fresh: Pick<PhonePairing, "id">, now: number): "same" | "start" | "ask" | "check" {
+  if (!stored) return "start";
+  if (stored.id === fresh.id) return "same";
+  if (stored.state === "paired") return "ask";
+  // The phone opened the link after the Mac made it, so this is the latest the Mac's code could still work.
+  return now - stored.createdAt < PAIRING_WAIT_MS ? "ask" : "check";
+}
+
+/**
+ * For "check". The relay forgets a pairing that isn't confirmed in 10 minutes, but not one
+ * your Mac confirmed while this phone wasn't looking (closed before the first snapshot
+ * came), which is paired in all but name. "start" only once the relay says it's gone;
+ * "ask" if it's still there or the relay can't be reached.
+ */
+export async function checkPairingLink(stored: Pick<PhonePairing, "backend" | "id" | "phoneToken" | "version">, fetchFn?: FetchLike): Promise<"start" | "ask"> {
+  try {
+    return (await phoneRelay(stored, fetchFn).snapshot(stored.version)).kind === "gone" ? "start" : "ask";
+  } catch {
+    return "ask";
+  }
 }
 
 /** Whether a stored value is a pairing this version of the page can use. */
