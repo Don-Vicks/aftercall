@@ -75,8 +75,10 @@ pub fn read(file: &Path) -> Result<Value, String> {
 /// the notes being saved, so a save from the app's memory never undoes an agent's
 /// claim or a tick made since the app last read the file. Your edits (text, owner,
 /// due, edited) are copied too while both hold the same signed notes; new notes for
-/// the meeting start from what the model signed.
+/// the meeting start from what the model signed. A follow-up an agent proposed since
+/// the app last read the file is kept too; once the app has it, the app's copy wins.
 pub fn keep_item_state(incoming: &mut Value, disk: &Value) {
+    keep_proposals(incoming, disk);
     let same_notes = !disk["proof"]["notesHash"].is_null() && disk["proof"]["notesHash"] == incoming["proof"]["notesHash"];
     let Some(on_disk) = disk["meeting"]["actionItems"].as_array() else { return };
     let Some(items) = incoming["meeting"]["actionItems"].as_array_mut() else { return };
@@ -89,6 +91,17 @@ pub fn keep_item_state(incoming: &mut Value, disk: &Value) {
                 Some(v) => obj.insert((*key).into(), v.clone()),
                 None => obj.remove(*key),
             };
+        }
+    }
+}
+
+/// Adds the follow-ups agents proposed on disk (`proposedBy`) that the notes being saved don't have.
+fn keep_proposals(incoming: &mut Value, disk: &Value) {
+    let Some(on_disk) = disk["meeting"]["followUps"].as_array() else { return };
+    let Some(list) = incoming["meeting"]["followUps"].as_array_mut() else { return };
+    for f in on_disk.iter().filter(|f| f.get("proposedBy").is_some()) {
+        if !list.iter().any(|g| g["id"] == f["id"]) {
+            list.push(f.clone());
         }
     }
 }

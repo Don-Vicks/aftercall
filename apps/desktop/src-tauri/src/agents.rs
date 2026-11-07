@@ -6,7 +6,7 @@
 //! request per line:
 //!
 //! ```text
-//! → {"token":"…","op":"meetings"|"projects"|"notes"|"access"|"claim"|"complete", ...args}
+//! → {"token":"…","op":"meetings"|"projects"|"notes"|"access"|"claim"|"complete"|"draft", ...args}
 //! ← {"ok":true,"result":…}  or  {"ok":false,"error":"…"}
 //! ```
 //!
@@ -16,7 +16,10 @@
 //!
 //! What a request can do is fixed here: read processed meetings and projects, and,
 //! only while the user has turned on "Let agents claim and complete action items",
-//! claim or complete one action item, completing it with a note and a link to the work. That switch is off by default and goes back off
+//! claim or complete one action item, completing it with a note and a link to the work,
+//! and propose a follow-up ("draft"): a recap to an address, or a payment to a payee already
+//! on the owner's list within the caps. A proposal waits for the owner's tap like any
+//! other, marked as the agent's, and never runs on autopilot. That switch is off by default and goes back off
 //! when agents are turned off. Nothing else in notes.json can be changed. Your notes
 //! (what you typed during the call) and their salt are never sent.
 //!
@@ -36,6 +39,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::process::{Command, Output, Stdio};
@@ -235,7 +239,7 @@ const TOKEN_REFUSED: &str = "Aftercall refused the token. Reconnect Claude Code 
 pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> String) -> Result<Value, String> {
     let str_arg = |k: &str| req[k].as_str().unwrap_or_default().to_string();
     let op = req["op"].as_str().unwrap_or_default();
-    if matches!(op, "claim" | "complete") && !writes {
+    if matches!(op, "claim" | "complete" | "draft") && !writes {
         return Err(WRITES_OFF.into());
     }
     match op {
@@ -245,6 +249,7 @@ pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> St
         "access" => Ok(json!({ "allowWrites": writes })),
         "claim" => claim(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), now),
         "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), req["link"].as_str(), now),
+        "draft" => draft(data_dir, req, now),
         _ => Err("Unknown request".into()),
     }
 }
@@ -389,6 +394,147 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
     })
 }
 
+// ---------- follow-ups agents propose ----------
+//
+// An agent can propose a follow-up the meeting didn't produce: a recap to an address, or
+// a payment. It lands in the meeting's follow-ups as proposed by that agent, with its
+// reason in place of a quote from the call (`proposedBy`), and waits for the owner like
+// any other: autopilot refuses it (`autopilotDecision` in core). A payment can only go
+// to a payee already on the owner's list, within the per-payment cap and what's left
+// today, as the app last read them from the contract (`set_wallet`); the contract checks
+// both again when the owner approves. Nothing in a proposal can carry a link to work.
+
+/// The longest reason an agent can give, in characters.
+const REASON_MAX: usize = 300;
+/// Proposals from agents waiting in one meeting at once.
+const PROPOSALS_MAX: usize = 5;
+
+/// A payee on the owner's list, as the app read it from the contract.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Payee {
+    pub name: String,
+    pub account: String,
+}
+
+/// The owner's payee list and caps, as the app last read them from the contract. In
+/// memory only; until the app has read them, agents can't propose payments.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletSnapshot {
+    pub payees: Vec<Payee>,
+    /// USDC base units; 0 means no per-payment cap, so nothing is proposed.
+    pub per_payment_cap: String,
+    pub left_today: String,
+}
+
+/// The snapshot for each data folder (one in the app; one per test).
+static WALLETS: Mutex<Option<HashMap<PathBuf, WalletSnapshot>>> = Mutex::new(None);
+
+/// Keeps the payee list and caps the app just read, for agents' payment proposals.
+pub fn set_wallet(data_dir: &Path, wallet: WalletSnapshot) {
+    if let Ok(mut all) = WALLETS.lock() {
+        all.get_or_insert_with(HashMap::new).insert(data_dir.to_path_buf(), wallet);
+    }
+}
+
+fn wallet(data_dir: &Path) -> Option<WalletSnapshot> {
+    WALLETS.lock().ok()?.as_ref()?.get(data_dir).cloned()
+}
+
+/// "12.5" or "12.50" USDC as base units (6 decimals); None for anything else, zero included.
+pub fn usdc_units(amount: &str) -> Option<u128> {
+    let a = amount.trim();
+    let (whole, frac) = a.split_once('.').unwrap_or((a, ""));
+    if whole.is_empty() || whole.len() > 12 || frac.len() > 6 || !whole.bytes().all(|b| b.is_ascii_digit()) || !frac.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let units = whole.parse::<u128>().ok()? * 1_000_000 + format!("{frac:0<6}").parse::<u128>().ok()?;
+    (units > 0).then_some(units)
+}
+
+fn plain_text(s: &str, max: usize) -> Option<String> {
+    let t = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!t.is_empty() && t.chars().count() <= max && !t.chars().any(char::is_control)).then_some(t)
+}
+
+/// A plain email address: one @, a dot in the domain, printable ASCII, at most 254 characters.
+fn check_email(to: &str) -> Option<String> {
+    let to = to.trim();
+    let (local, domain) = to.split_once('@')?;
+    let ok = to.len() <= 254
+        && to.bytes().all(|b| b.is_ascii_graphic())
+        && !local.is_empty()
+        && !domain.contains('@')
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !to.contains(['<', '>', '"', ',', ';', '\\']);
+    ok.then(|| to.to_string())
+}
+
+/// A follow-up an agent proposes, checked and added to the meeting's follow-ups.
+fn draft(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value, String> {
+    let agent = check_agent(req["agent"].as_str().unwrap_or_default())?;
+    let reason = plain_text(req["reason"].as_str().unwrap_or_default(), REASON_MAX)
+        .ok_or_else(|| format!("Give your reason for this follow-up, one line of at most {REASON_MAX} characters; the user sees it in place of a quote"))?;
+    let meeting_id = req["meetingId"].as_str().unwrap_or_default();
+    let file = notes_path(data_dir, meeting_id)?;
+    let at = now();
+    let proposed_by = json!({ "agent": agent, "at": at, "reason": reason });
+    let mut follow_up = match req["kind"].as_str().unwrap_or_default() {
+        "email" => {
+            let to = check_email(req["to"].as_str().unwrap_or_default()).ok_or("Give the recap's address as a plain email address")?;
+            let to_name = match req["toName"].as_str().filter(|n| !n.trim().is_empty()) {
+                Some(n) => plain_text(n, 80).ok_or("Keep the name under 80 characters")?,
+                None => to.split('@').next().unwrap_or_default().to_string(),
+            };
+            let subject = match req["subject"].as_str().filter(|s| !s.trim().is_empty()) {
+                Some(s) => Some(plain_text(s, 200).ok_or("Keep the subject under 200 characters, on one line")?),
+                None => None,
+            };
+            json!({ "kind": "email", "to": to, "toName": to_name, "subject": subject })
+        }
+        "payment" => {
+            let units = usdc_units(req["amount"].as_str().unwrap_or_default()).ok_or("Give the amount in USDC, like \"12.50\"")?;
+            let wallet = wallet(data_dir).ok_or("Aftercall hasn't read your payee list from NEAR yet, so agents can't propose payments. Open the wallet in Aftercall, then try again.")?;
+            let wanted = req["payee"].as_str().unwrap_or_default().trim().to_lowercase();
+            let payee = wallet
+                .payees
+                .iter()
+                .find(|p| !wanted.is_empty() && (p.account.to_lowercase() == wanted || p.name.trim().to_lowercase() == wanted))
+                .ok_or("Agents can only propose payments to payees already on the user's list. Use the payee's name or NEAR account as listed.")?;
+            let cap: u128 = wallet.per_payment_cap.parse().unwrap_or(0);
+            let left: u128 = wallet.left_today.parse().unwrap_or(0);
+            if cap == 0 || units > cap {
+                return Err("That's over the user's per-payment cap, so agents can't propose it".into());
+            }
+            if units > left {
+                return Err("That's over what the user's agent wallet can still pay today, so agents can't propose it".into());
+            }
+            json!({ "kind": "payment", "payeeName": payee.name, "payeeAccount": payee.account, "amount": { "$bigint": units.to_string() }, "heard": "", "payeeListed": true })
+        }
+        _ => return Err("A follow-up is a recap (kind \"email\") or a payment (kind \"payment\")".into()),
+    };
+    notes_file::try_update(&file, |notes| {
+        let title = notes["meeting"]["title"].as_str().unwrap_or("Meeting").to_string();
+        let list = notes["meeting"]["followUps"].as_array_mut().ok_or("This meeting's notes have no follow-ups list")?;
+        let waiting = list.iter().filter(|f| f.get("proposedBy").is_some() && f["status"] == "proposed").count();
+        if waiting >= PROPOSALS_MAX {
+            return Err(format!("{PROPOSALS_MAX} proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first."));
+        }
+        let n = (1..).find(|n| !list.iter().any(|f| f["id"] == format!("agent-{n}"))).unwrap_or(1);
+        let fu = follow_up.as_object_mut().ok_or("Bad follow-up")?;
+        fu.insert("id".into(), format!("agent-{n}").into());
+        fu.insert("status".into(), "proposed".into());
+        fu.insert("proposedBy".into(), proposed_by.clone());
+        if fu.get("subject").is_some_and(Value::is_null) {
+            fu.insert("subject".into(), title.into());
+        }
+        list.push(follow_up.clone());
+        Ok(json!({ "drafted": true, "followUp": follow_up }))
+    })
+}
+
 // ---------- the activity list ----------
 
 const ACTIVITY_MAX: usize = 200;
@@ -403,8 +549,8 @@ pub struct Activity {
     /// What the agent calls itself: the name it gave a claim or completion, else its
     /// MCP client name (e.g. "claude-code"). Neither is checked.
     pub agent: String,
-    /// "meetings", "notes", "claim", "complete", "projects" or "access" (only when refused),
-    /// or "other" for a request Aftercall doesn't know.
+    /// "meetings", "notes", "claim", "complete", "draft", "projects" or "access" (only when
+    /// refused), or "other" for a request Aftercall doesn't know.
     pub op: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meeting_id: Option<String>,
@@ -425,7 +571,7 @@ impl Activity {
     fn of(req: &Value, result: &Result<Value, String>, now: &dyn Fn() -> String) -> Option<Self> {
         let op = match req["op"].as_str().unwrap_or_default() {
             "projects" | "access" if result.is_ok() => return None,
-            op @ ("meetings" | "notes" | "claim" | "complete" | "projects" | "access") => op,
+            op @ ("meetings" | "notes" | "claim" | "complete" | "draft" | "projects" | "access") => op,
             _ => "other",
         };
         let short = |v: &Value| v.as_str().map(|s| s.trim().chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>()).filter(|s| !s.is_empty());
@@ -998,6 +1144,101 @@ mod tests {
         assert_eq!(item["done"], true);
         assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "2026-10-26T12:05:00.000Z", "note": "Sent the plan as a doc" }));
         assert!(dispatch_rw(&dir, &claim_req("Claude Code"), &at("x")).unwrap_err().contains("already done"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn wallet_for(dir: &Path) {
+        set_wallet(
+            dir,
+            WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() },
+        );
+    }
+
+    #[test]
+    fn agents_propose_a_recap_marked_as_theirs_with_their_reason() {
+        let dir = data_dir("draft-mail");
+        let req = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "olamide@client.test", "reason": "  Olamide asked for the staging DNS\n once it was up ", "link": "https://example.com/x" });
+        assert_eq!(dispatch(&dir, &req, false, &at("t")).unwrap_err(), WRITES_OFF, "needs the write switch");
+        let out = dispatch_rw(&dir, &req, &at("2026-11-02T10:00:00.000Z")).unwrap();
+        let saved = read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().last().unwrap().clone();
+        assert_eq!(out["followUp"], saved);
+        assert_eq!(
+            saved,
+            json!({ "kind": "email", "to": "olamide@client.test", "toName": "olamide", "subject": "Sync with Ada", "id": "agent-1", "status": "proposed",
+                "proposedBy": { "agent": "Codex", "at": "2026-11-02T10:00:00.000Z", "reason": "Olamide asked for the staging DNS once it was up" } })
+        );
+        assert!(saved.get("evidence").is_none() && saved.get("link").is_none(), "no quote from the call, and no link");
+        // The next one gets the next id; bad input is refused by name.
+        let next = dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "toName": "Ada", "subject": "Pilot plan", "reason": "x" }), &at("t")).unwrap();
+        assert_eq!((next["followUp"]["id"].as_str(), next["followUp"]["subject"].as_str()), (Some("agent-2"), Some("Pilot plan")));
+        let r = |v: Value| dispatch_rw(&dir, &v, &at("t")).unwrap_err();
+        let base = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Because" });
+        let with = |k: &str, v: Value| {
+            let mut b = base.clone();
+            b[k] = v;
+            b
+        };
+        assert!(r(with("reason", json!(""))).contains("reason"));
+        assert!(r(with("reason", json!("x".repeat(REASON_MAX + 1)))).contains("reason"));
+        for bad in ["ada", "ada@example", "Ada <ada@example.com>", "a@b.com, eve@evil.test", "ada@exa mple.com"] {
+            assert!(r(with("to", json!(bad))).contains("email address"), "{bad}");
+        }
+        assert!(r(with("kind", json!("sms"))).contains("recap"));
+        assert!(r(with("meetingId", json!("1761200000"))).contains("No processed meeting"));
+        assert!(r(with("agent", json!(" "))).contains("agent name"));
+        // At most five waiting at once.
+        for _ in 0..3 {
+            dispatch_rw(&dir, &base, &at("t")).unwrap();
+        }
+        assert!(r(base.clone()).contains("already wait"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agents_propose_payments_only_to_listed_payees_within_the_caps() {
+        let dir = data_dir("draft-pay");
+        let pay = |payee: &str, amount: &str| dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Claude Code", "kind": "payment", "payee": payee, "amount": amount, "reason": "The deposit agreed in the call" }), &at("t"));
+        assert!(pay("Designer", "20").unwrap_err().contains("hasn't read your payee list"), "no list read yet: no payments");
+        wallet_for(&dir);
+        assert!(pay("eve.testnet", "1").unwrap_err().contains("payees already on the user's list"));
+        assert!(pay("Designer", "50.000001").unwrap_err().contains("per-payment cap"));
+        assert!(pay("Designer", "30.5").unwrap_err().contains("still pay today"));
+        for bad in ["0", "-5", "1e3", "12.3456789", "twelve", ""] {
+            assert!(pay("Designer", bad).unwrap_err().contains("amount in USDC"), "{bad}");
+        }
+        let out = pay("DESIGNER.testnet", "12.5").unwrap();
+        assert_eq!(
+            out["followUp"],
+            json!({ "kind": "payment", "payeeName": "Designer", "payeeAccount": "designer.testnet", "amount": { "$bigint": "12500000" }, "heard": "", "payeeListed": true,
+                "id": "agent-1", "status": "proposed", "proposedBy": { "agent": "Claude Code", "at": "t", "reason": "The deposit agreed in the call" } })
+        );
+        // A per-payment cap of 0 means none set: nothing is proposed.
+        set_wallet(&dir, WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() });
+        assert!(pay("Designer", "1").unwrap_err().contains("per-payment cap"));
+        assert_eq!(usdc_units("12.50"), Some(12_500_000));
+        assert_eq!(usdc_units("7"), Some(7_000_000));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_save_from_the_app_keeps_a_proposal_it_hasnt_read_yet() {
+        let dir = data_dir("draft-keep");
+        let file = dir.join("recordings/1761000000/notes.json");
+        // The app read the notes before the agent proposed anything.
+        let app_copy = read_notes(&dir);
+        dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Ada asked" }), &at("t")).unwrap();
+        let mut changed = app_copy.clone();
+        changed["meeting"]["followUps"][0]["status"] = "dismissed".into();
+        notes_file::save(&file, &changed.to_string()).unwrap();
+        let saved = read_notes(&dir)["meeting"]["followUps"].clone();
+        assert_eq!(saved[0]["status"], "dismissed", "the app's own change lands");
+        assert_eq!(saved[1]["proposedBy"]["agent"], "Codex", "the agent's proposal is kept");
+        // Once the app has it, the app's copy wins: dismissing it sticks.
+        let mut later = read_notes(&dir);
+        later["meeting"]["followUps"][1]["status"] = "dismissed".into();
+        notes_file::save(&file, &later.to_string()).unwrap();
+        assert_eq!(read_notes(&dir)["meeting"]["followUps"][1]["status"], "dismissed");
+        assert_eq!(read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().len(), 2);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

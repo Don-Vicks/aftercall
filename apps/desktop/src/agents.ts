@@ -55,6 +55,11 @@ export const agentsApi = {
    * Aftercall's MCP server. The prompt goes through a private file, never a shell string.
    */
   openClaude: (project: string, prompt: string) => invoke<OpenOutcome>("agents_open_claude", { project, prompt }),
+  /**
+   * The payee list and caps as just read from the contract (USDC base units), so agents
+   * can propose payments only to listed payees within the caps. Kept in memory only.
+   */
+  setWallet: (wallet: { payees: { name: string; account: string }[]; perPaymentCap: string; leftToday: string }) => invoke<void>("agents_set_wallet", { wallet }),
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */

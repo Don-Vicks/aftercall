@@ -789,6 +789,14 @@ async fn agents_claude(app: AppHandle, connect: bool) -> Result<agents::ClaudeOu
     Ok(outcome)
 }
 
+/// The payee list and caps the app just read from the contract, kept in memory for
+/// agents' payment proposals (see agents.rs).
+#[tauri::command]
+fn agents_set_wallet(app: AppHandle, wallet: agents::WalletSnapshot) -> Result<(), String> {
+    agents::set_wallet(&data_dir(&app)?, wallet);
+    Ok(())
+}
+
 /// "Open in Claude Code" on an action item: Terminal in the project's code folder, running
 /// claude with the hand-off prompt and Aftercall's MCP server (see agents.rs).
 #[tauri::command]
@@ -1234,6 +1242,7 @@ pub fn run() {
             agents_activity,
             agents_claude,
             agents_open_claude,
+            agents_set_wallet,
             delete_audio,
             nearai_set_key,
             nearai_has_key,

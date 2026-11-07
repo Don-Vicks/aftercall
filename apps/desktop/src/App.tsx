@@ -268,14 +268,18 @@ export default function App() {
     try {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
-      setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
+      const listed = v.payees.map((p) => ({ name: p.label, account: p.account }));
+      setPayees(listed);
       setPayeesRead(true);
       setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
       if (v.wallet) {
         const today = Math.floor(Date.now() / 86_400_000);
         const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
         const cap = BigInt(v.wallet.daily_cap);
-        setLimits({ leftToday: cap > spent ? cap - spent : 0n, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        const leftToday = cap > spent ? cap - spent : 0n;
+        setLimits({ leftToday, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        // What agents may propose a payment to, and up to how much: the same list and caps.
+        agentsApi.setWallet({ payees: listed, perPaymentCap: v.wallet.per_payment_cap, leftToday: leftToday.toString() }).catch(() => {});
       }
     } catch {
       // Offline or not set up: keep what we have.
