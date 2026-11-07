@@ -190,6 +190,16 @@ export default function App() {
     await projectsApi.save(next);
     setProjects(next);
   };
+  /** Saves or (undefined) clears one project's code folder, where "Open in Claude Code" starts. */
+  const saveCodeFolder = async (id: string, codeFolder: string | undefined) => {
+    const next = projects.map((p) => {
+      if (p.id !== id) return p;
+      const { codeFolder: _old, ...rest } = p;
+      return codeFolder ? { ...rest, codeFolder } : rest;
+    });
+    await projectsApi.save(next);
+    setProjects(next);
+  };
   /** Briefs by project name, for Ask and the notes of a recording in that project. */
   const briefs = Object.fromEntries(projects.map((p) => [p.name, p.brief]));
 
@@ -258,14 +268,18 @@ export default function App() {
     try {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
-      setPayees(v.payees.map((p) => ({ name: p.label, account: p.account })));
+      const listed = v.payees.map((p) => ({ name: p.label, account: p.account }));
+      setPayees(listed);
       setPayeesRead(true);
       setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
       if (v.wallet) {
         const today = Math.floor(Date.now() / 86_400_000);
         const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
         const cap = BigInt(v.wallet.daily_cap);
-        setLimits({ leftToday: cap > spent ? cap - spent : 0n, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        const leftToday = cap > spent ? cap - spent : 0n;
+        setLimits({ leftToday, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        // What agents may propose a payment to, and up to how much: the same list and caps.
+        agentsApi.setWallet({ payees: listed, perPaymentCap: v.wallet.per_payment_cap, leftToday: leftToday.toString() }).catch(() => {});
       }
     } catch {
       // Offline or not set up: keep what we have.
@@ -783,6 +797,7 @@ export default function App() {
                 }}
                 onRename={() => setRenaming(openProject)}
                 onSaveBrief={(brief, source) => saveBrief(openProject.id, brief, source)}
+                onSaveCodeFolder={(folder) => saveCodeFolder(openProject.id, folder)}
                 payees={payees.map((p) => p.name)}
               />
             )}

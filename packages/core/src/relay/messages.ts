@@ -170,6 +170,8 @@ export interface ItemOptions {
  */
 export function toPendingItem(meeting: Pick<Meeting, "id" | "title" | "startedAt" | "decisions" | "actionItems">, f: FollowUp, opts: ItemOptions): PendingItem | null {
   if (f.status !== "proposed" && f.status !== "sending" && f.status !== "blocked" && f.status !== "failed") return null;
+  // A coding agent's proposal has no words from the call to show; it waits for you on the Mac.
+  if (f.proposedBy || !f.evidence) return null;
   const base = {
     meetingId: meeting.id,
     followUpId: f.id,

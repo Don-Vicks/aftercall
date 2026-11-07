@@ -34,6 +34,7 @@ import { parseUsdcInput } from "./WalletScreen";
 import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
 import { HAS_BACKEND } from "./backend";
+import { recapAgentWork } from "./RecapSettings";
 import { TimeChip } from "./Quote";
 
 /** Everything a follow-up row can ask the app to do. */
@@ -230,6 +231,28 @@ function EvidenceQuote({ quote, at, returnId, onJumpTo }: { quote: string; at: n
   );
 }
 
+/** Where a follow-up came from: the exact words from the call, or a coding agent's reason, said to be the agent's. */
+function Origin({ f, onJumpTo }: { f: FollowUp; onJumpTo: FollowUpHandlers["onJumpTo"] }) {
+  if (f.evidence) return <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={onJumpTo} />;
+  return <AgentReason f={f} />;
+}
+
+/**
+ * A coding agent's proposal, in place of a quote: who proposed it and its reason, in its
+ * own words. Nothing from the call backs it, so it never runs on autopilot.
+ */
+export function AgentReason({ f }: { f: FollowUp }) {
+  const by = f.proposedBy?.agent ?? "an agent";
+  return (
+    <p className="m-0 flex flex-col gap-0.5">
+      <span className="t-quote selectable text-ink-2">“{f.proposedBy?.reason ?? ""}”</span>
+      <span className="text-[13px] leading-[19px] text-ink-2">
+        {by}'s reason, not words from the call. Aftercall didn't check it, and it waits for your tap: autopilot never runs what an agent proposes.
+      </span>
+    </p>
+  );
+}
+
 /** "Paying in 4… you can still take it back." with Undo and a bar that empties. */
 function Countdown({ verb, startedAt, endsAt, onUndo }: { verb: string; startedAt: number; endsAt: number; onUndo: () => void }) {
   const now = useNow();
@@ -421,7 +444,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             </DonePill>
           </>
         )}
-        {state === "open" && <span className="t-eyebrow shrink-0 text-muted">Proposed</span>}
+        {state === "open" && <span className="t-eyebrow shrink-0 text-muted">{f.proposedBy ? `Proposed by ${f.proposedBy.agent}` : "Proposed"}</span>}
       </Head>
       <AnimatePresence initial={false} mode="wait">
         {state === "countdown" && pending && (
@@ -456,7 +479,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This recap waits for you.</span>}
             {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
-            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={h.onJumpTo} />
+            <Origin f={f} onJumpTo={h.onJumpTo} />
             {!f.to && (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-2">
@@ -485,7 +508,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             )}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND })} />
+              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND, agentWork: recapAgentWork() })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
                 <Button variant="quiet" onClick={() => c.dismiss(f)}>
                   Dismiss
@@ -518,7 +541,7 @@ function missingAmount(f: PaymentFollowUp): string {
   const kind: AmountProblemKind = f.amountProblem ?? (p?.kind === "not-usdc" ? "not-usdc" : "unclear");
   if (kind === "not-in-quote") return "Amount not in the quote: enter it";
   if (kind === "not-usdc") {
-    const currency = p?.kind === "not-usdc" ? p.currency : currencyIn(f.evidence.quote);
+    const currency = p?.kind === "not-usdc" ? p.currency : f.evidence ? currencyIn(f.evidence.quote) : null;
     return currency ? `Not in USDC (${currency}): enter the USDC amount` : "Not in USDC: enter the USDC amount";
   }
   return "Amount unclear: enter it";
@@ -642,6 +665,8 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
   else if (!f.payeeListed) sub = <span className="text-caution">Not on your payee list yet. A claim link lets {first} tell you where to be paid.</span>;
   else if (route && !paid) sub = <span className="font-mono">{`To ${CHAIN_NAME[route.chain]} · ${shortAddress(route.address)}`}</span>;
   else sub = <span className="font-mono">{f.payeeAccount}</span>;
+  // An agent's proposal says so first, and still says where the money goes.
+  if (f.proposedBy && !paid) sub = <span className="text-ink-2">Proposed by {f.proposedBy.agent} · {sub}</span>;
 
   return (
     <Card pad="none" className={cx("lift px-5", paid ? "py-3.5" : "py-[18px]")}>
@@ -708,16 +733,26 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
           <Body key="open">
             {held && <span className="text-[13px] text-ink-2">Autopilot stopped. This payment waits for you.</span>}
             {!held && f.autopilotHeld && f.status === "proposed" && <HeldNote />}
-            <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={h.onJumpTo} />
+            <Origin f={f} onJumpTo={h.onJumpTo} />
             <dl className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-well px-3.5 py-3">
-              <div className="flex items-baseline gap-2.5">
-                <dt className="w-14 shrink-0 text-[12px] text-muted">Heard</dt>
-                <dd className="m-0">
-                  <span className="font-serif italic">“{f.heard}”</span> <span className="text-muted">→</span>{" "}
-                  {amount === null ? <span className="text-caution">{missingAmount(f)}</span> : <span className="t-mono">{amount} USDC</span>}
-                  {amount === null && amountNote(f) && <span className="mt-0.5 block text-[13px] leading-[19px] text-ink-2">{amountNote(f)}</span>}
-                </dd>
-              </div>
+              {f.proposedBy ? (
+                <div className="flex items-baseline gap-2.5">
+                  <dt className="w-14 shrink-0 text-[12px] text-muted">Amount</dt>
+                  <dd className="m-0">
+                    {amount === null ? <span className="text-caution">{missingAmount(f)}</span> : <span className="t-mono">{amount} USDC</span>}{" "}
+                    <span className="text-ink-2">as {f.proposedBy.agent} proposed it</span>
+                  </dd>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2.5">
+                  <dt className="w-14 shrink-0 text-[12px] text-muted">Heard</dt>
+                  <dd className="m-0">
+                    <span className="font-serif italic">“{f.heard}”</span> <span className="text-muted">→</span>{" "}
+                    {amount === null ? <span className="text-caution">{missingAmount(f)}</span> : <span className="t-mono">{amount} USDC</span>}
+                    {amount === null && amountNote(f) && <span className="mt-0.5 block text-[13px] leading-[19px] text-ink-2">{amountNote(f)}</span>}
+                  </dd>
+                </div>
+              )}
               <div className="flex items-baseline gap-2.5">
                 <dt className="w-14 shrink-0 text-[12px] text-muted">Payee</dt>
                 <dd className="m-0">

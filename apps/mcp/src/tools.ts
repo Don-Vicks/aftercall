@@ -1,11 +1,11 @@
 import { formatClock, formatUsdc, meetingIso, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
-import { claimItem, completeItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
+import { claimItem, completeItem, draftItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type DraftArgs, type StoredMeeting } from "./store.ts";
 
 /**
  * The tools behind the MCP server, as plain functions over the channel to the app
  * (store.ts), so they can be tested without an MCP transport. Everything here reads,
  * except claiming and completing an action item, which the app does on that one item,
- * and only when the user has allowed it.
+ * and proposing a follow-up, which waits for the user; both only when the user has allowed it.
  */
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -52,7 +52,16 @@ function usdc(value: unknown): string | null {
 }
 
 function followUpView(f: FollowUp) {
-  const base = { id: f.id, kind: f.kind, status: f.status, quote: f.evidence.quote, doneAt: f.doneAt, error: f.error };
+  const base = {
+    id: f.id,
+    kind: f.kind,
+    status: f.status,
+    /** The words from the call behind it; null for one an agent proposed. */
+    quote: f.evidence?.quote ?? null,
+    ...(f.proposedBy ? { proposedBy: f.proposedBy } : {}),
+    doneAt: f.doneAt,
+    error: f.error,
+  };
   return f.kind === "email"
     ? { ...base, toName: f.toName, subject: f.subject }
     : { ...base, payeeName: f.payeeName, amountUsdc: usdc(f.amount), heard: f.heard, payeeListed: f.payeeListed };
@@ -120,11 +129,12 @@ export async function listActionItems(
           .map((a) => itemView(id, notes.meeting, a))
       : [],
   );
-  const { allowWrites } = await readAccess(app);
+  const { allowWrites, allProjects } = await readAccess(app);
   return {
     items,
     total: items.length,
     canClaim: allowWrites,
+    ...(allProjects === false ? { someProjectsOnly: "The user lets agents reach only some projects; meetings in the others aren't listed here." } : {}),
     ...(allowWrites === true
       ? {}
       : allowWrites === false
@@ -137,6 +147,10 @@ export async function claimActionItem(app: AppChannel, args: { meetingId: string
   return { claimed: true, item: await claimItem(app, args) };
 }
 
-export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string }) {
+export async function draftFollowUp(app: AppChannel, args: DraftArgs) {
+  return { drafted: true, waitsForApproval: true, followUp: followUpView(await draftItem(app, args)) };
+}
+
+export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string; link?: string }) {
   return { completed: true, item: await completeItem(app, args) };
 }

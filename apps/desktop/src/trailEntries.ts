@@ -1,4 +1,4 @@
-import { clockTime, dayWord, formatUsdc, hasFullChecks, type FollowUp, type Meeting, type Network } from "@aftercall/core";
+import { clockTime, dayWord, formatUsdc, hasFullChecks, workLink, workLinkLabel, type FollowUp, type Meeting, type Network } from "@aftercall/core";
 import type { SavedNotes } from "./nearai";
 
 /**
@@ -22,6 +22,8 @@ export interface TrailEntry {
   kept: string;
   /** A NEAR transaction; `network` null when the app doesn't know it, so no explorer link. */
   tx?: { hash: string; network: Network | null };
+  /** The link an agent gave to its work, as it gave it: shown, never checked. */
+  link?: { url: string; label: string };
 }
 
 export interface TrailInput {
@@ -88,13 +90,19 @@ export function meetingTrail({ meeting, saved, network = null, now = Date.now() 
       [a.completed, "marked done"],
     ] as const) {
       if (!mark) continue;
+      // A completion's note and link are the agent's own words, said as such.
+      const done = verb === "marked done" ? a.completed : undefined;
+      const url = workLink(done?.link);
+      const said = [done?.note ? `“${done.note}”` : "", url ? `a link to the work: ${workLinkLabel(url)}` : ""].filter(Boolean).join(" and ");
       agents.push({
         id: `agent-${verb}-${a.id}`,
         t: Date.parse(mark.at) || 0,
         what: `${mark.agent} ${verb} "${a.text}"`,
+        ...(said ? { detail: `${mark.agent} says ${said}. Aftercall didn't check it` } : {}),
         when: at(mark.at),
         who: "You, by letting agents claim items",
         kept: "On this Mac, sealed, in the meeting's notes",
+        ...(url ? { link: { url, label: workLinkLabel(url) } } : {}),
       });
     }
   }
@@ -103,7 +111,7 @@ export function meetingTrail({ meeting, saved, network = null, now = Date.now() 
   return out;
 }
 
-const approver = (f: FollowUp) => (f.byAutopilot ? "Autopilot, under your rule" : "You");
+const approver = (f: FollowUp) => (f.byAutopilot ? "Autopilot, under your rule" : f.proposedBy ? `You, on ${f.proposedBy.agent}'s proposal` : "You");
 
 /** What one follow-up sent out, if anything. Proposed, sending and dismissed ones sent nothing. */
 function followUpEntries(f: FollowUp, network: Network | null): TrailEntry[] {

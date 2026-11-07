@@ -2,6 +2,7 @@ import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 import { formatUsdc } from "../money.ts";
 import { CHAIN_NAME } from "../intents/oneclick.ts";
 import type { PayeeDestination } from "../wallet/actions.ts";
+import { agentWorkItems } from "./recap.ts";
 
 /**
  * The on-chain memo of every payment. It is public forever, so it names the app and
@@ -19,14 +20,20 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 
 /**
  * What a recap shares before you send it. The counts are read the way `buildRecap` reads
- * them (every decision, the action items not done), so they match the recap that goes.
- * `backend` is whether this build offers Send through Aftercall.
+ * them (every decision, the action items not done, and with `agentWork` the items coding
+ * agents marked done), so they match the recap that goes. `backend` is whether this build
+ * offers Send through Aftercall.
  */
-export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItems">, f: Pick<EmailFollowUp, "to">, opts: { backend: boolean }): WhatLeaves {
+export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItems">, f: Pick<EmailFollowUp, "to">, opts: { backend: boolean; agentWork?: boolean }): WhatLeaves {
   const open = meeting.actionItems.filter((a) => !a.done).length;
+  const work = opts.agentWork ? agentWorkItems(meeting) : [];
   const to = f.to.trim() ? `to ${f.to.trim()}` : "to the address you add";
+  const links = work.filter((w) => w.link).length;
+  const agents = work.length
+    ? `, ${count(work.length, "item a coding agent marked done", "items coding agents marked done")}${links ? ` (${count(links, "link", "links")} to the work)` : ""}`
+    : "";
   const details = [
-    `The recap holds the summary, ${count(meeting.decisions.length, "decision", "decisions")}, ${count(open, "open action item", "open action items")} and a footer on what was checked. It goes ${to}.`,
+    `The recap holds the summary, ${count(meeting.decisions.length, "decision", "decisions")}, ${count(open, "open action item", "open action items")}${agents} and a footer on what was checked. It goes ${to}.`,
     "Draft in Mail opens it in your own mail app; Aftercall's servers never see it.",
   ];
   if (opts.backend) details.push("Send through Aftercall passes it through Aftercall's backend, in memory for this one request, then Resend, which keeps sent mail under its own policy.");

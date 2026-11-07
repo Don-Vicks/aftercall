@@ -177,7 +177,7 @@ export function pickExcerpts(meetings: Meeting[], question: string, opts: { me?:
     if (speakerNamed) matchedMeetings.add(m.id);
     // A question about a time ("this week") with no other words takes every line then.
     const everything = terms.length === 0;
-    const payQuotes = new Set(m.followUps.filter((f) => f.kind === "payment" && f.status !== "dismissed").map((f) => f.evidence.at));
+    const payQuotes = new Set(m.followUps.flatMap((f) => (f.kind === "payment" && f.status !== "dismissed" && f.evidence ? [f.evidence.at] : [])));
     for (const l of m.transcript) {
       const k = key(m.id, l.at, l.speaker);
       if (speakerNamed && l.speaker === "others") add(k, 1);

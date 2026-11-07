@@ -1,22 +1,28 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, X } from "lucide-react";
 import { initials, type Meeting } from "@aftercall/core";
 import { PREVIEW_INFO, agentLabel, agentsApi, codexConfig, describeActivity, lastHeard, type AgentActivity, type AgentsInfo, type ClaudeOutcome } from "./agents";
+import { projectsApi, type Project } from "./projects";
 import { ConnectedCard, StartSteps } from "./AgentsStart";
 import { isDesktop } from "./recorder";
 import { syncWithAda } from "./sample";
 import { Button, Card, Pill, SectionTitle, Toggle, enter, exit, springs } from "./ui";
 import { Snippet, Why, errorText, grow, rise } from "./SettingsParts";
 
-const CAN = ["Search and read your meetings", "Claim an action item, if you allow it", "Mark it done with a note, if you allow it"];
+const CAN = [
+  "Search and read your meetings",
+  "Claim an action item, if you allow it",
+  "Mark it done with a note and a link to the work, if you allow it",
+  "Propose a recap, or a payment to a listed payee within your caps, for you to approve, if you allow it",
+];
 const CANNOT = [
-  "Send email or recaps",
+  "Send email or recaps, or approve their own proposals",
   "Pay, or touch the agent wallet",
   "Record proofs on NEAR",
   "Change anything else in your notes, or delete them",
-  "Reach meetings while this is off",
+  "Reach meetings while this is off, or in projects you keep from them",
 ];
 
 /** The browser preview has no app to ask: a clearly fake token, so the commands read whole. */
@@ -56,6 +62,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [log, setLog] = useState<AgentActivity[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [claudeBusy, setClaudeBusy] = useState<"connect" | "disconnect" | null>(null);
   const [outcome, setOutcome] = useState<(ClaudeOutcome & { connect: boolean }) | null>(null);
   // "2 min ago" moves on while the screen is open: this re-renders it.
@@ -65,6 +72,13 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
   useEffect(() => {
     const timer = window.setInterval(() => setTick((t) => t + 1), 20_000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    projectsApi
+      .list()
+      .then(setProjects)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -129,6 +143,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
   };
   const toggleWrites = (allow: boolean) =>
     isDesktop ? change(() => agentsApi.setAllowWrites(allow)) : setInfo({ ...info, allowWrites: allow, readOnlySinceUpdate: false });
+  const chooseProjects = (ids: string[] | null) => (isDesktop ? change(() => agentsApi.setProjects(ids)) : setInfo({ ...info, projects: ids }));
 
   const sample = !isDesktop;
   // In the preview the app passes its sample meeting as you edited it; the signed one stands in only if it's gone.
@@ -198,8 +213,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                       <span className="font-semibold text-ink">Let agents claim and complete action items</span>
                       <span className="text-[13px] leading-[19px] text-ink-2">
                         {info.allowWrites
-                          ? "On. Agents can mark an item as theirs and as done. They still can't send, pay or change your rules."
-                          : "Off. Agents can only read. On, they can mark an item as theirs and as done; they still can't send, pay or change your rules."}
+                          ? "On. Agents can mark an item as theirs and as done, and propose a follow-up that waits for your tap. They still can't send, pay or change your rules."
+                          : "Off. Agents can only read. On, they can mark an item as theirs and as done, and propose a follow-up that waits for your tap; they still can't send, pay or change your rules."}
                       </span>
                       {info.readOnlySinceUpdate && (
                         <span className="mt-1 text-[13px] leading-[19px] text-ink">
@@ -234,6 +249,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
             )}
           </AnimatePresence>
 
+          <ProjectScope info={info} projects={projects} busy={busy} onChange={chooseProjects} style={rise(2)} />
+
           {isDesktop && !info.serverFound && (
             <p className="m-0 -mt-4 text-[13px] leading-[19px] text-caution">
               The server isn't at <span className="t-mono">{info.serverPath}</span>. It ships inside Aftercall; reinstall the app, or in a checkout run{" "}
@@ -252,8 +269,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                 Recent agent activity
               </SectionTitle>
               <p className="m-0 text-[13px] leading-[19px] text-ink-2">
-                Each read, claim and completion, and every refused request, newest first, under the name the agent gives itself. The list holds times,
-                names and ids, never meeting content.
+                Each read, claim, completion and proposal, and every refused request, newest first, under the name the agent gives itself. The list
+                holds times, names and ids, never meeting content.
               </p>
             </div>
             {log.length === 0 ? (
@@ -289,6 +306,60 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
   );
 }
 
+/**
+ * "Projects agents can reach": every project (the default, and how settings from before
+ * read), or only the ones ticked here. A meeting in another project isn't listed or
+ * searched, and an agent asking for one is refused without hearing its project's name.
+ */
+function ProjectScope({
+  info,
+  projects,
+  busy,
+  onChange,
+  style,
+}: {
+  info: AgentsInfo;
+  projects: Project[];
+  busy: boolean;
+  onChange: (ids: string[] | null) => void;
+  style?: CSSProperties;
+}) {
+  const all = info.projects === null;
+  const chosen = new Set(info.projects ?? []);
+  const flip = (id: string, on: boolean) => onChange(projects.map((p) => p.id).filter((x) => (x === id ? on : chosen.has(x))));
+  return (
+    <section aria-labelledby="h-scope" className="flex flex-col gap-2.5" style={style}>
+      <SectionTitle id="h-scope">Projects agents can reach</SectionTitle>
+      <Card pad="none" className="overflow-hidden">
+        <div className="flex items-center gap-4 px-5 py-4">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="font-semibold text-ink">Every project</span>
+            <span className="text-[13px] leading-[19px] text-ink-2">
+              {all
+                ? "Agents can reach meetings in every project, new ones included. Turn this off to choose."
+                : chosen.size === 0
+                  ? "Off, and no project is ticked: agents reach no meeting at all."
+                  : "Off. Agents reach only the projects ticked below. Others aren't listed, and an agent asking for one is refused without hearing its name."}
+            </span>
+          </span>
+          {/* Off starts from every project ticked, so nothing changes until you untick one. */}
+          <Toggle aria-label="Agents can reach every project" checked={all} disabled={busy} onChange={(on) => onChange(on ? null : projects.map((p) => p.id))} />
+        </div>
+        {!all && (
+          <ul className="m-0 flex list-none flex-col border-t border-hairline p-0">
+            {projects.map((p) => (
+              <li key={p.id} className="flex items-center gap-4 border-b border-hairline px-5 py-3 last:border-b-0">
+                <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
+                <Toggle aria-label={`Agents can reach ${p.name}`} checked={chosen.has(p.id)} disabled={busy} onChange={(on) => flip(p.id, on)} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </section>
+  );
+}
+
 /** One request: what it was, by whom, on which meeting, and whether Aftercall allowed it. Opens the meeting when there is one. */
 function ActivityRow({ entry, meetings, onOpenMeeting }: { entry: AgentActivity; meetings: Meeting[]; onOpenMeeting: (id: string) => void }) {
   const v = describeActivity(entry, meetings);
@@ -305,6 +376,8 @@ function ActivityRow({ entry, meetings, onOpenMeeting }: { entry: AgentActivity;
         </Pill>
       ) : v.status === "claimed" ? (
         <Pill tone="muted">Claimed</Pill>
+      ) : v.status === "proposed" ? (
+        <Pill tone="muted">Proposed</Pill>
       ) : v.status === "refused" ? (
         <Pill tone="caution">Refused</Pill>
       ) : (

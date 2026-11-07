@@ -218,7 +218,14 @@ export function PersonScreen({
                 <li key={`${pay.meetingId}-${pay.followUpId}`} className="flex items-center gap-3 border-b border-hairline py-3">
                   <span className="t-mono w-[120px] shrink-0 text-ink">{pay.amount === null ? "No amount" : `${formatUsdc(pay.amount)} USDC`}</span>
                   <span className="min-w-0 flex-1 truncate text-ink-2">
-                    heard “<span className="selectable text-ink">{pay.heard}</span>” · <MeetingLink onClick={() => onOpenMeeting(pay.meetingId)}>{meta(pay.meetingId)}</MeetingLink>
+                    {pay.proposedBy ? (
+                      <>proposed by {pay.proposedBy}, not heard on the call</>
+                    ) : (
+                      <>
+                        heard “<span className="selectable text-ink">{pay.heard}</span>”
+                      </>
+                    )}{" "}
+                    · <MeetingLink onClick={() => onOpenMeeting(pay.meetingId)}>{meta(pay.meetingId)}</MeetingLink>
                   </span>
                   <Pill tone={tone}>{pay.status === "paid" && pay.doneAt ? `${word} ${pay.doneAt}` : word}</Pill>
                 </li>

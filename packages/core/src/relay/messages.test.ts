@@ -66,6 +66,9 @@ test("a pending item holds what approving needs, and nothing of the summary, tra
 
 test("only follow-ups that wait on someone become items; sent and paid ones are done", () => {
   for (const status of ["sent", "paid", "dismissed"] as const) assert.equal(toPendingItem(meeting, { ...email, status }, opts), null);
+  // A coding agent's proposal stays on the Mac: the phone shows only what the call said.
+  const { evidence: _quote, ...unquoted } = payment;
+  assert.equal(toPendingItem(meeting, { ...unquoted, proposedBy: { agent: "Codex", at: "2026-11-02T10:00:00.000Z", reason: "Pay the designer" } }, opts), null);
   assert.equal(toPendingItem(meeting, { ...payment, status: "blocked" }, opts)?.status, "blocked");
   assert.equal(toDoneItem(meeting, email), null);
   assert.deepEqual(toDoneItem(meeting, { ...payment, status: "paid", doneAt: "14:06", byAutopilot: true }), { kind: "payment", meetingTitle: "Sync with Ada", label: "Paid Kemi 20.00 USDC", doneAt: "14:06", byAutopilot: true });

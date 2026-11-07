@@ -317,7 +317,7 @@ export function WalletScreen({
                           followupId: id,
                           payee: f.payeeAccount,
                           amount: String(f.amount ?? 0n),
-                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}` },
+                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}`, ...(f.proposedBy ? { proposedBy: `${f.proposedBy.agent}: “${f.proposedBy.reason}”` } : {}) },
                         },
                         async () => (await near.paymentState(id)).paid,
                         () => `Paid ${f.payeeName} ${amount} USDC`,
@@ -781,7 +781,10 @@ function RecentPayments({
                     {formatUsdc(f.amount)} <span className="text-[13px] text-muted">USDC</span>
                   </span>
                 </span>
-                <span className="t-quote text-[14px] text-ink-2">“{f.evidence.quote}”</span>
+                <span className="t-quote text-[14px] text-ink-2">
+                  “{f.evidence?.quote ?? f.proposedBy?.reason}”
+                  {!f.evidence && <span className="font-sans not-italic"> · {f.proposedBy?.agent ?? "An agent"}'s reason, not words from the call</span>}
+                </span>
                 <span className="flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted">
                   <span>
                     Paid{f.doneAt ? ` ${f.doneAt}` : ""}
@@ -791,12 +794,12 @@ function RecentPayments({
                   <span aria-hidden="true">·</span>
                   <button
                     type="button"
-                    onClick={() => onOpenMeeting(meeting.id, f.evidence.at)}
-                    aria-label={`Open ${meeting.title} at ${formatClock(f.evidence.at)}, where it was said`}
+                    onClick={() => onOpenMeeting(meeting.id, f.evidence?.at)}
+                    aria-label={f.evidence ? `Open ${meeting.title} at ${formatClock(f.evidence.at)}, where it was said` : `Open ${meeting.title}`}
                     className="inline-flex items-center gap-1.5 text-ink-2 hover:text-ink"
                   >
                     {meeting.title}
-                    <span className="rounded-[5px] bg-well px-1.5 font-mono text-[12px] leading-[18px] text-ink-2">{formatClock(f.evidence.at)}</span>
+                    {f.evidence && <span className="rounded-[5px] bg-well px-1.5 font-mono text-[12px] leading-[18px] text-ink-2">{formatClock(f.evidence.at)}</span>}
                   </button>
                   {f.ref && (
                     <>

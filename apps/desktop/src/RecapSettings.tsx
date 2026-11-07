@@ -1,7 +1,28 @@
 import { useState } from "react";
-import { Card, Field, Input, SectionTitle } from "./ui";
+import { Card, Field, Input, SectionTitle, Toggle } from "./ui";
 
 const KEY = "aftercall.senderName";
+const AGENT_WORK_KEY = "aftercall.recapAgentWork";
+
+/**
+ * Whether recaps list the action items coding agents marked done, with each agent's link,
+ * as the agents' own statement. On this Mac only; off until you turn it on.
+ */
+export function recapAgentWork(): boolean {
+  try {
+    return localStorage.getItem(AGENT_WORK_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+function saveRecapAgentWork(on: boolean): void {
+  try {
+    localStorage.setItem(AGENT_WORK_KEY, on ? "on" : "off");
+  } catch {
+    // Storage blocked: recaps leave agents' work out, as by default.
+  }
+}
 
 /** The name recaps go out under. On this Mac only; empty until you set it. */
 export function senderName(): string {
@@ -23,6 +44,7 @@ function saveSenderName(name: string): void {
 /** Recaps: the name they're sent under, signed with, and given to action items the notes say are yours. */
 export function RecapSettings() {
   const [name, setName] = useState(senderName);
+  const [agentWork, setAgentWork] = useState(recapAgentWork);
   return (
     <section aria-labelledby="h-recaps" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
@@ -50,6 +72,24 @@ export function RecapSettings() {
             }}
           />
         </Field>
+        <div className="mt-4 flex items-center gap-4 border-t border-hairline pt-4">
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="t-title">Say what coding agents finished</span>
+            <span className="text-[13px] leading-[19px] text-ink-2">
+              {agentWork
+                ? "On. Recaps list the action items an agent marked done, with its link, as the agent's word. The footer says Aftercall didn't check them."
+                : "Off. Recaps list open action items only."}
+            </span>
+          </span>
+          <Toggle
+            aria-label="Say what coding agents finished"
+            checked={agentWork}
+            onChange={(on) => {
+              setAgentWork(on);
+              saveRecapAgentWork(on);
+            }}
+          />
+        </div>
       </Card>
     </section>
   );

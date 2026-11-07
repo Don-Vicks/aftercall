@@ -374,7 +374,7 @@ function useReveal(text: string, on: boolean): number {
 
 function QuoteCard({ excerpt: e, quote, index, meeting, onOpen }: { excerpt: Excerpt; quote: string; index: number; meeting?: Meeting; onOpen: () => void }) {
   // A payment's own quote shows the amount and where the payment stands.
-  const pay = meeting?.followUps.find((f) => f.kind === "payment" && f.evidence.at === e.at && f.status !== "dismissed");
+  const pay = meeting?.followUps.find((f) => f.kind === "payment" && f.evidence?.at === e.at && f.status !== "dismissed");
   return (
     <div className="lift flex flex-col gap-1.5 rounded-md bg-elevated px-4 py-3 shadow-1" style={{ animation: `ac-in 280ms ${index * 90}ms var(--ease) both` }}>
       <div className="flex min-w-0 items-center gap-2 text-[13px] leading-[18px]">

@@ -649,6 +649,8 @@ struct AgentsInfo {
     /// "none", "connected" or "stale": whether "Connect Claude Code" gave Claude Code this token.
     claude_code: &'static str,
     socket_path: String,
+    /// The ids of the projects agents may reach; None for every project.
+    projects: Option<Vec<String>>,
 }
 
 /// Where the bundled MCP server sits among the app's resources (tauri.conf.json).
@@ -691,8 +693,25 @@ fn agents_snapshot(app: &AppHandle, state: &AgentsState) -> Result<AgentsInfo, S
         read_only_since_update: running && settings.allow_writes.is_none(),
         claude_code: agents::claude_link(&settings),
         token_since: if running { settings.token_since.clone() } else { None },
+        projects: settings.projects.clone(),
         token: if running { settings.token } else { None },
     })
+}
+
+/// "Agents can reach": every project (None) or the chosen ones, by id. Applies to the next
+/// request; kept when agents are turned off and on.
+#[tauri::command]
+fn agents_set_projects(app: AppHandle, state: State<AgentsState>, projects: Option<Vec<String>>) -> Result<AgentsInfo, String> {
+    agents::check_scope(&projects)?;
+    let dir = data_dir(&app)?;
+    {
+        // One settings write at a time with the switches.
+        let _held = state.0.lock().map_err(|e| e.to_string())?;
+        let mut settings = agents::load_settings(&dir);
+        settings.projects = projects;
+        agents::save_settings(&dir, &settings)?;
+    }
+    agents_snapshot(&app, &state)
 }
 
 /// What the Coding agents screen needs to show the switch and the exact setup commands.
@@ -730,9 +749,10 @@ fn agents_set_enabled(app: AppHandle, state: State<AgentsState>, enabled: bool) 
         agents_start(&dir, &state, false)?;
     } else {
         state.0.lock().map_err(|e| e.to_string())?.take();
-        // Claude Code keeps the old token, so the screen asks to reconnect next time.
-        let claude_code = agents::load_settings(&dir).claude_code;
-        agents::save_settings(&dir, &agents::Settings { allow_writes: Some(false), claude_code, ..Default::default() })?;
+        // Claude Code keeps the old token, so the screen asks to reconnect next time. The
+        // projects agents may reach stay as chosen: turning agents on again doesn't widen them.
+        let old = agents::load_settings(&dir);
+        agents::save_settings(&dir, &agents::Settings { allow_writes: Some(false), claude_code: old.claude_code, projects: old.projects, ..Default::default() })?;
     }
     agents_snapshot(&app, &state)
 }
@@ -787,6 +807,29 @@ async fn agents_claude(app: AppHandle, connect: bool) -> Result<agents::ClaudeOu
     let _held = state.0.lock().map_err(|e| e.to_string())?;
     agents::remember_claude(&dir, &outcome)?;
     Ok(outcome)
+}
+
+/// The payee list and caps the app just read from the contract, kept in memory for
+/// agents' payment proposals (see agents.rs).
+#[tauri::command]
+fn agents_set_wallet(app: AppHandle, wallet: agents::WalletSnapshot) -> Result<(), String> {
+    agents::set_wallet(&data_dir(&app)?, wallet);
+    Ok(())
+}
+
+/// "Open in Claude Code" on an action item: Terminal in the project's code folder, running
+/// claude with the hand-off prompt and Aftercall's MCP server (see agents.rs).
+#[tauri::command]
+async fn agents_open_claude(app: AppHandle, project: String, prompt: String) -> Result<agents::OpenOutcome, String> {
+    let dir = data_dir(&app)?;
+    let server = mcp_server_path(&app);
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (claude, node) = agents::find_claude_and_node(&home);
+        agents::open_in_claude_code(&dir, &project, &prompt, &server, claude.as_deref(), node, &agents::open_terminal)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// The cached transcription of one audio chunk, e.g. "mic-000".
@@ -1218,6 +1261,9 @@ pub fn run() {
             agents_set_allow_writes,
             agents_activity,
             agents_claude,
+            agents_open_claude,
+            agents_set_wallet,
+            agents_set_projects,
             delete_audio,
             nearai_set_key,
             nearai_has_key,

@@ -23,6 +23,8 @@ import { Avatar, Button, Menu, Strike, TabPanel, Tabs, Tick, cx, toast } from ".
 import { AllDone, QuoteReveal, useAllDone, useQuoteReveal } from "./Quote";
 import { EditItemButton, EditedMark, ItemEditor, editButtonId, focusEditButton, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
+import { HandToAgent } from "./HandToAgent";
+import { WorkLink } from "./WorkLink";
 import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { plural } from "./library";
 
@@ -502,7 +504,7 @@ function ItemRow({
     >
       <div className="flex items-center gap-3">
         <Tick checked={a.done} onChange={onToggle} aria-labelledby={textId} aria-describedby={a.evidence ? quoteId : undefined} />
-        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", !a.done ? "pr-14" : onEdit && "pr-7")}>
           <span className="max-w-full self-start text-[15px] leading-[21px] text-ink">
             <span id={textId} className="selectable">
               <Strike on={a.done}>{a.text}</Strike>
@@ -520,6 +522,12 @@ function ItemRow({
             {line && (tab === "agents" || tab === "mine") && (
               <>
                 <span className="font-medium text-verdigris">{line.lead}</span>
+                {a.done && a.completed?.link && (
+                  <>
+                    <span className="text-muted"> · </span>
+                    <WorkLink completion={a.completed} />
+                  </>
+                )}
                 <span className="text-muted">{line.rest}</span>
               </>
             )}
@@ -532,6 +540,7 @@ function ItemRow({
         </span>
         <span className={cx("w-24 shrink-0 text-right text-[13px] whitespace-nowrap", a.done ? "text-muted" : overdue ? "font-medium text-caution" : r.due === null ? "text-muted" : "text-ink-2")}>
           <span className="relative">
+            {!a.done && <HandToAgent meeting={r.meeting} item={a} />}
             {onEdit && <EditItemButton id={editButtonId(r.key)} text={a.text} onClick={onOpenEditor} />}
             {label}
           </span>

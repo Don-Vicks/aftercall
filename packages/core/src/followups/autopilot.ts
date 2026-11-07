@@ -30,6 +30,9 @@ export const AMOUNT_PROBLEM_REASONS: Record<AmountProblemKind, string> = {
   unclear: "Amount unclear",
 };
 
+/** Why a follow-up a coding agent proposed waits for a person: always. */
+export const agentProposalReason = (agent: string) => `Proposed by ${agent}: what an agent proposes always waits for you`;
+
 /** Seconds a person has to undo an autopilot follow-up before it runs. */
 export const UNDO_SECONDS = 60;
 
@@ -57,11 +60,14 @@ export function holdInterruptedAutopilot(m: Meeting, queuedHere: (followUpId: st
 
 /**
  * Whether a follow-up may run by itself. Every rule must pass; anything unclear
- * waits for a person. The contract enforces the money limits again on chain.
+ * waits for a person, and so does anything a coding agent proposed, whatever the
+ * rules say. The contract enforces the money limits again on chain.
  */
 export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: WalletLimits | null): Decision {
   const reasons: string[] = [];
   if (f.status !== "proposed") return { run: false, reasons: ["Not waiting"] };
+  // Only the call proposes what may run by itself; an agent's proposal needs your tap.
+  if (f.proposedBy || !f.evidence) return { run: false, reasons: [agentProposalReason(f.proposedBy?.agent ?? "an agent")] };
   if (f.autopilotHeld) return { run: false, reasons: [AUTOPILOT_HELD] };
   if (f.kind === "email") {
     const domain = f.to.split("@")[1]?.toLowerCase();

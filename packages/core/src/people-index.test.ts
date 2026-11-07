@@ -150,6 +150,16 @@ test("payments and decisions", () => {
   assert.deepEqual(index.byId["name:sam"].decisions, [], "only meetings they were invited to");
 });
 
+test("a payment a coding agent proposed says so, with nothing heard", () => {
+  const { evidence: _quote, ...paid } = sync.followUps[1];
+  const proposed = { ...paid, id: "agent-1", status: "proposed" as const, heard: "", proposedBy: { agent: "Codex", at: "2026-11-04T12:00:00.000Z", reason: "The deposit agreed" } };
+  const people = buildPeople([meeting({ id: idAt(11, 3), followUps: [sync.followUps[1], proposed] })], { now: NOW });
+  assert.deepEqual(
+    people.byId["near:designer.near"].payments.map((p) => [p.followUpId, p.heard, p.proposedBy]),
+    [["f2", "fifty dollar", undefined], ["agent-1", "", "Codex"]],
+  );
+});
+
 test("faces per meeting: everyone invited, else up to two people named; payees only never", () => {
   assert.deepEqual(index.byMeeting[sync.id], ["email:ada@example.com"]);
   assert.deepEqual(index.byMeeting[deck.id], ["email:ada@example.com", "email:ines@example.com"]);

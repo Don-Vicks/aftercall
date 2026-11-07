@@ -6,7 +6,7 @@
 //! request per line:
 //!
 //! ```text
-//! → {"token":"…","op":"meetings"|"projects"|"notes"|"access"|"claim"|"complete", ...args}
+//! → {"token":"…","op":"meetings"|"projects"|"notes"|"access"|"claim"|"complete"|"draft", ...args}
 //! ← {"ok":true,"result":…}  or  {"ok":false,"error":"…"}
 //! ```
 //!
@@ -14,9 +14,17 @@
 //! is made when the user turns agents on and dropped when they turn them off, so
 //! turning them back on needs the new setup command. With agents off there is no socket.
 //!
+//! The user can also keep agents to chosen projects (Settings → Coding agents): then
+//! meetings in other projects aren't listed or searched, and a request for one is refused
+//! with `PROJECT_OFF`, which doesn't name the project. Settings saved before this choice
+//! existed read as every project.
+//!
 //! What a request can do is fixed here: read processed meetings and projects, and,
 //! only while the user has turned on "Let agents claim and complete action items",
-//! claim or complete one action item. That switch is off by default and goes back off
+//! claim or complete one action item, completing it with a note and a link to the work,
+//! and propose a follow-up ("draft"): a recap to an address, or a payment to a payee already
+//! on the owner's list within the caps. A proposal waits for the owner's tap like any
+//! other, marked as the agent's, and never runs on autopilot. That switch is off by default and goes back off
 //! when agents are turned off. Nothing else in notes.json can be changed. Your notes
 //! (what you typed during the call) and their salt are never sent.
 //!
@@ -32,10 +40,11 @@
 //! only read files; it is not a wall against malware running as the user.
 
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::process::{Command, Output, Stdio};
@@ -48,6 +57,13 @@ use crate::{at_rest, notes_file};
 
 const MAX_REQUEST: u64 = 64 * 1024;
 const NOTE_MAX: usize = 500;
+/// The longest link to the work kept on a completed item (`WORK_LINK_MAX` in core).
+const LINK_MAX: usize = 300;
+
+/// What an agent is told when it asks for a meeting in a project the user keeps from agents.
+/// It doesn't name the project: that is the user's to keep, too.
+pub const PROJECT_OFF: &str =
+    "Aftercall doesn't let agents reach this meeting's project. The user can allow it under Coding agents in Aftercall's sidebar.";
 
 /// What an agent is told when it tries to claim or complete while agents may only read.
 pub const WRITES_OFF: &str =
@@ -82,6 +98,21 @@ pub struct Settings {
     /// Kept when agents are turned off, so the screen can ask to reconnect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_code: Option<String>,
+    /// The ids of the projects agents may read, or None for every project (and in an
+    /// agents.json from before this choice). Kept when agents are turned off and on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projects: Option<Vec<String>>,
+}
+
+/// The most projects the choice can name, and the longest id (as projects.rs allows).
+const SCOPE_MAX: usize = 200;
+
+/// Checks a choice of projects: None (every project), or ids as projects.json has them.
+pub fn check_scope(projects: &Option<Vec<String>>) -> Result<(), String> {
+    match projects {
+        Some(ids) if ids.len() > SCOPE_MAX || ids.iter().any(|id| id.is_empty() || id.len() > 64) => Err("Choose at most 200 projects".into()),
+        _ => Ok(()),
+    }
 }
 
 impl Settings {
@@ -233,23 +264,64 @@ const TOKEN_REFUSED: &str = "Aftercall refused the token. Reconnect Claude Code 
 pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> String) -> Result<Value, String> {
     let str_arg = |k: &str| req[k].as_str().unwrap_or_default().to_string();
     let op = req["op"].as_str().unwrap_or_default();
-    if matches!(op, "claim" | "complete") && !writes {
+    if matches!(op, "claim" | "complete" | "draft") && !writes {
         return Err(WRITES_OFF.into());
     }
+    let scope = Scope::of(data_dir);
+    if matches!(op, "claim" | "complete" | "draft") {
+        scope.check(data_dir, &str_arg("meetingId"))?;
+    }
     match op {
-        "projects" => Ok(projects(data_dir)),
-        "meetings" => Ok(Value::Array(meetings(data_dir))),
-        "notes" => notes(data_dir, &str_arg("id")),
-        "access" => Ok(json!({ "allowWrites": writes })),
+        "projects" => Ok(projects(data_dir, &scope)),
+        "meetings" => Ok(Value::Array(meetings(data_dir, &scope))),
+        "notes" => notes(data_dir, &str_arg("id"), &scope),
+        "access" => Ok(json!({ "allowWrites": writes, "allProjects": matches!(scope, Scope::All) })),
         "claim" => claim(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), now),
-        "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), now),
+        "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), req["link"].as_str(), now),
+        "draft" => draft(data_dir, req, now),
         _ => Err("Unknown request".into()),
     }
 }
 
+/// The projects whose meetings agents may reach: every one, or those the user chose, by name
+/// (meetings keep their project's name). Read from the settings on each request.
+enum Scope {
+    All,
+    Only(Vec<String>),
+}
+
+impl Scope {
+    fn of(data_dir: &Path) -> Self {
+        let Some(ids) = load_settings(data_dir).projects else { return Scope::All };
+        let entries = crate::projects::load_entries(data_dir).unwrap_or_default();
+        Scope::Only(entries.into_iter().filter(|e| ids.contains(&e.project.id)).map(|e| e.project.name).collect())
+    }
+
+    fn allows(&self, project: &str) -> bool {
+        match self {
+            Scope::All => true,
+            Scope::Only(names) => names.iter().any(|n| n == project),
+        }
+    }
+
+    /// Refuses a meeting outside the scope with `PROJECT_OFF`; an unknown id is left to the request's own error.
+    fn check(&self, data_dir: &Path, meeting_id: &str) -> Result<(), String> {
+        if matches!(self, Scope::All) {
+            return Ok(());
+        }
+        let Ok(file) = notes_path(data_dir, meeting_id) else { return Ok(()) };
+        let notes = notes_file::read(&file).unwrap_or_default();
+        if self.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) { Ok(()) } else { Err(PROJECT_OFF.into()) }
+    }
+}
+
 /// Ids and names: a project's brief is the user's private context, so agents never get it.
-fn projects(data_dir: &Path) -> Value {
-    crate::projects::public_list(data_dir)
+/// Only the projects agents may reach are listed.
+fn projects(data_dir: &Path, scope: &Scope) -> Value {
+    match crate::projects::public_list(data_dir) {
+        Value::Array(list) => Value::Array(list.into_iter().filter(|p| scope.allows(p["name"].as_str().unwrap_or_default())).collect()),
+        other => other,
+    }
 }
 
 fn valid_id(id: &str) -> bool {
@@ -265,14 +337,17 @@ fn notes_path(data_dir: &Path, id: &str) -> Result<PathBuf, String> {
     if file.exists() { Ok(file) } else { Err(missing()) }
 }
 
-/// Every processed meeting as `{ id, notes }`, newest first.
-fn meetings(data_dir: &Path) -> Vec<Value> {
+/// Every processed meeting agents may reach as `{ id, notes }`, newest first.
+fn meetings(data_dir: &Path, scope: &Scope) -> Vec<Value> {
     let Ok(entries) = std::fs::read_dir(data_dir.join("recordings")) else { return vec![] };
     let mut out: Vec<(u64, Value)> = entries
         .flatten()
         .filter_map(|e| {
             let id = e.file_name().into_string().ok().filter(|id| valid_id(id))?;
             let notes = at_rest::read_json(&e.path().join("notes.json")).filter(|n| n["meeting"].is_object())?;
+            if !scope.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) {
+                return None;
+            }
             Some((id.parse().ok()?, json!({ "id": id, "notes": for_agents(notes) })))
         })
         .collect();
@@ -280,11 +355,13 @@ fn meetings(data_dir: &Path) -> Vec<Value> {
     out.into_iter().map(|(_, v)| v).collect()
 }
 
-fn notes(data_dir: &Path, id: &str) -> Result<Value, String> {
+fn notes(data_dir: &Path, id: &str, scope: &Scope) -> Result<Value, String> {
     let file = notes_path(data_dir, id)?;
-    notes_file::read(&file)
-        .map(for_agents)
-        .map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))
+    let notes = notes_file::read(&file).map_err(|_| format!("No processed meeting with id \"{id}\". Use list_meetings to see ids."))?;
+    if !scope.allows(notes["meeting"]["project"].as_str().unwrap_or_default()) {
+        return Err(PROJECT_OFF.into());
+    }
+    Ok(for_agents(notes))
 }
 
 /// notes.json without your notes and the salt behind their hash: those stay in the app.
@@ -305,12 +382,10 @@ fn for_agents(mut notes: Value) -> Value {
     notes
 }
 
+/// The agent's name on one line: it shows in the app, the trail and, as "done by", in recaps,
+/// so a line break in it could pass for a line Aftercall wrote.
 fn check_agent(agent: &str) -> Result<String, String> {
-    let name = agent.trim();
-    if name.is_empty() || name.chars().count() > 60 {
-        return Err("Give your agent name, 1 to 60 characters (e.g. \"Claude Code\")".into());
-    }
-    Ok(name.to_string())
+    plain_text(agent, 60).ok_or_else(|| "Give your agent name, 1 to 60 characters (e.g. \"Claude Code\")".into())
 }
 
 /// Finds an action item, refusing ones that are done or claimed by another agent.
@@ -344,9 +419,29 @@ fn claim(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, now: &dy
     })
 }
 
-fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note: Option<&str>, now: &dyn Fn() -> String) -> Result<Value, String> {
+/// The link an agent gives to its work, when it is a plain http or https URL: one line of
+/// printable ASCII, a host and no user name or password, at most `LINK_MAX` characters
+/// (`workLink` in core). Empty is none. It is the agent's statement: the app shows it as
+/// such, never opens or checks it, and nothing that pays reads action items.
+pub fn check_link(link: Option<&str>) -> Result<Option<String>, String> {
+    let Some(link) = link.map(str::trim).filter(|l| !l.is_empty()) else { return Ok(None) };
+    let bad = || "Give the link to your work as a plain http or https URL, at most 300 characters".to_string();
+    if link.chars().count() > LINK_MAX || !link.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err(bad());
+    }
+    let lower = link.to_ascii_lowercase();
+    let rest = lower.strip_prefix("https://").or_else(|| lower.strip_prefix("http://")).ok_or_else(bad)?;
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if host.is_empty() || host.contains('@') {
+        return Err(bad());
+    }
+    Ok(Some(link.to_string()))
+}
+
+fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note: Option<&str>, link: Option<&str>, now: &dyn Fn() -> String) -> Result<Value, String> {
     let agent = check_agent(agent)?;
     let note: Option<String> = note.map(|n| n.trim().chars().take(NOTE_MAX).collect()).filter(|n: &String| !n.is_empty());
+    let link = check_link(link)?;
     let file = notes_path(data_dir, meeting_id)?;
     notes_file::try_update(&file, |notes| {
         let item = open_item(notes, item_id, &agent, |by, _| format!("Claimed by {by}; only that agent can complete it"))?;
@@ -359,8 +454,156 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
         if let Some(n) = note {
             completed["note"] = n.into();
         }
+        if let Some(l) = link {
+            completed["link"] = l.into();
+        }
         item.insert("completed".into(), completed);
         Ok(json!({ "completed": true, "item": item }))
+    })
+}
+
+// ---------- follow-ups agents propose ----------
+//
+// An agent can propose a follow-up the meeting didn't produce: a recap to an address, or
+// a payment. It lands in the meeting's follow-ups as proposed by that agent, with its
+// reason in place of a quote from the call (`proposedBy`), and waits for the owner like
+// any other: autopilot refuses it (`autopilotDecision` in core). A payment can only go
+// to a payee already on the owner's list, within the per-payment cap and what's left
+// today, as the app last read them from the contract (`set_wallet`); the contract checks
+// both again when the owner approves. Nothing in a proposal can carry a link to work.
+
+/// The longest reason an agent can give, in characters.
+const REASON_MAX: usize = 300;
+/// Proposals from agents waiting in one meeting at once.
+const PROPOSALS_MAX: usize = 5;
+
+/// A payee on the owner's list, as the app read it from the contract.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Payee {
+    pub name: String,
+    pub account: String,
+}
+
+/// The owner's payee list and caps, as the app last read them from the contract. In
+/// memory only; until the app has read them, agents can't propose payments.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WalletSnapshot {
+    pub payees: Vec<Payee>,
+    /// USDC base units; 0 means no per-payment cap, so nothing is proposed.
+    pub per_payment_cap: String,
+    pub left_today: String,
+}
+
+/// The snapshot for each data folder (one in the app; one per test).
+static WALLETS: Mutex<Option<HashMap<PathBuf, WalletSnapshot>>> = Mutex::new(None);
+
+/// Keeps the payee list and caps the app just read, for agents' payment proposals.
+pub fn set_wallet(data_dir: &Path, wallet: WalletSnapshot) {
+    if let Ok(mut all) = WALLETS.lock() {
+        all.get_or_insert_with(HashMap::new).insert(data_dir.to_path_buf(), wallet);
+    }
+}
+
+fn wallet(data_dir: &Path) -> Option<WalletSnapshot> {
+    WALLETS.lock().ok()?.as_ref()?.get(data_dir).cloned()
+}
+
+/// "12.5" or "12.50" USDC as base units (6 decimals); None for anything else, zero included.
+pub fn usdc_units(amount: &str) -> Option<u128> {
+    let a = amount.trim();
+    let (whole, frac) = a.split_once('.').unwrap_or((a, ""));
+    if whole.is_empty() || whole.len() > 12 || frac.len() > 6 || !whole.bytes().all(|b| b.is_ascii_digit()) || !frac.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let units = whole.parse::<u128>().ok()? * 1_000_000 + format!("{frac:0<6}").parse::<u128>().ok()?;
+    (units > 0).then_some(units)
+}
+
+fn plain_text(s: &str, max: usize) -> Option<String> {
+    let t = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!t.is_empty() && t.chars().count() <= max && !t.chars().any(char::is_control)).then_some(t)
+}
+
+/// A plain email address: one @, a dot in the domain, printable ASCII, at most 254 characters.
+fn check_email(to: &str) -> Option<String> {
+    let to = to.trim();
+    let (local, domain) = to.split_once('@')?;
+    let ok = to.len() <= 254
+        && to.bytes().all(|b| b.is_ascii_graphic())
+        && !local.is_empty()
+        && !domain.contains('@')
+        && domain.contains('.')
+        && !domain.starts_with('.')
+        && !domain.ends_with('.')
+        && !to.contains(['<', '>', '"', ',', ';', '\\']);
+    ok.then(|| to.to_string())
+}
+
+/// A follow-up an agent proposes, checked and added to the meeting's follow-ups.
+fn draft(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value, String> {
+    let agent = check_agent(req["agent"].as_str().unwrap_or_default())?;
+    let reason = plain_text(req["reason"].as_str().unwrap_or_default(), REASON_MAX)
+        .ok_or_else(|| format!("Give your reason for this follow-up, one line of at most {REASON_MAX} characters; the user sees it in place of a quote"))?;
+    let meeting_id = req["meetingId"].as_str().unwrap_or_default();
+    let file = notes_path(data_dir, meeting_id)?;
+    let at = now();
+    let proposed_by = json!({ "agent": agent, "at": at, "reason": reason });
+    let mut follow_up = match req["kind"].as_str().unwrap_or_default() {
+        "email" => {
+            let to = check_email(req["to"].as_str().unwrap_or_default()).ok_or("Give the recap's address as a plain email address")?;
+            let to_name = match req["toName"].as_str().filter(|n| !n.trim().is_empty()) {
+                Some(n) => plain_text(n, 80).ok_or("Keep the name under 80 characters")?,
+                None => to.split('@').next().unwrap_or_default().to_string(),
+            };
+            let subject = match req["subject"].as_str().filter(|s| !s.trim().is_empty()) {
+                Some(s) => Some(plain_text(s, 200).ok_or("Keep the subject under 200 characters, on one line")?),
+                None => None,
+            };
+            json!({ "kind": "email", "to": to, "toName": to_name, "subject": subject })
+        }
+        "payment" => {
+            let units = usdc_units(req["amount"].as_str().unwrap_or_default()).ok_or("Give the amount in USDC, like \"12.50\"")?;
+            let wallet = wallet(data_dir).ok_or("Aftercall hasn't read your payee list from NEAR yet, so agents can't propose payments. Open the wallet in Aftercall, then try again.")?;
+            let wanted = req["payee"].as_str().unwrap_or_default().trim().to_lowercase();
+            let payee = wallet
+                .payees
+                .iter()
+                .find(|p| !wanted.is_empty() && (p.account.to_lowercase() == wanted || p.name.trim().to_lowercase() == wanted))
+                .ok_or("Agents can only propose payments to payees already on the user's list. Use the payee's name or NEAR account as listed.")?;
+            let cap: u128 = wallet.per_payment_cap.parse().unwrap_or(0);
+            let left: u128 = wallet.left_today.parse().unwrap_or(0);
+            // 0 is no per-payment cap on the contract; agents then propose no payment at all.
+            if cap == 0 {
+                return Err("The user hasn't set a per-payment cap, so agents can't propose payments".into());
+            }
+            if units > cap {
+                return Err("That's over the user's per-payment cap, so agents can't propose it".into());
+            }
+            if units > left {
+                return Err("That's over what the user's agent wallet can still pay today, so agents can't propose it".into());
+            }
+            json!({ "kind": "payment", "payeeName": payee.name, "payeeAccount": payee.account, "amount": { "$bigint": units.to_string() }, "heard": "", "payeeListed": true })
+        }
+        _ => return Err("A follow-up is a recap (kind \"email\") or a payment (kind \"payment\")".into()),
+    };
+    notes_file::try_update(&file, |notes| {
+        let title = notes["meeting"]["title"].as_str().unwrap_or("Meeting").to_string();
+        let list = notes["meeting"]["followUps"].as_array_mut().ok_or("This meeting's notes have no follow-ups list")?;
+        let waiting = list.iter().filter(|f| f.get("proposedBy").is_some() && f["status"] == "proposed").count();
+        if waiting >= PROPOSALS_MAX {
+            return Err(format!("{PROPOSALS_MAX} proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first."));
+        }
+        let n = (1..).find(|n| !list.iter().any(|f| f["id"] == format!("agent-{n}"))).unwrap_or(1);
+        let fu = follow_up.as_object_mut().ok_or("Bad follow-up")?;
+        fu.insert("id".into(), format!("agent-{n}").into());
+        fu.insert("status".into(), "proposed".into());
+        fu.insert("proposedBy".into(), proposed_by.clone());
+        if fu.get("subject").is_some_and(Value::is_null) {
+            fu.insert("subject".into(), title.into());
+        }
+        list.push(follow_up.clone());
+        Ok(json!({ "drafted": true, "followUp": follow_up }))
     })
 }
 
@@ -378,17 +621,17 @@ pub struct Activity {
     /// What the agent calls itself: the name it gave a claim or completion, else its
     /// MCP client name (e.g. "claude-code"). Neither is checked.
     pub agent: String,
-    /// "meetings", "notes", "claim", "complete", "projects" or "access" (only when refused),
-    /// or "other" for a request Aftercall doesn't know.
+    /// "meetings", "notes", "claim", "complete", "draft", "projects" or "access" (only when
+    /// refused), or "other" for a request Aftercall doesn't know.
     pub op: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meeting_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
     pub allowed: bool,
-    /// Why it was refused: "token", "read-only", "unknown" (a request Aftercall doesn't
-    /// know), or "rules" (anything else: an unknown id, done, claimed by another agent, no
-    /// agent name, or the notes couldn't be read).
+    /// Why it was refused: "token", "read-only", "project" (a project the user keeps from
+    /// agents), "unknown" (a request Aftercall doesn't know), or "rules" (anything else: an
+    /// unknown id, done, claimed by another agent, no agent name, or the notes couldn't be read).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
 }
@@ -400,7 +643,7 @@ impl Activity {
     fn of(req: &Value, result: &Result<Value, String>, now: &dyn Fn() -> String) -> Option<Self> {
         let op = match req["op"].as_str().unwrap_or_default() {
             "projects" | "access" if result.is_ok() => return None,
-            op @ ("meetings" | "notes" | "claim" | "complete" | "projects" | "access") => op,
+            op @ ("meetings" | "notes" | "claim" | "complete" | "draft" | "projects" | "access") => op,
             _ => "other",
         };
         let short = |v: &Value| v.as_str().map(|s| s.trim().chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>()).filter(|s| !s.is_empty());
@@ -409,6 +652,7 @@ impl Activity {
         let refused = result.as_ref().err().map(|e| match e.as_str() {
             TOKEN_REFUSED => "token",
             WRITES_OFF => "read-only",
+            PROJECT_OFF => "project",
             _ if op == "other" => "unknown",
             _ => "rules",
         });
@@ -673,6 +917,212 @@ pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), S
     save_settings(data_dir, &s)
 }
 
+// ---------- Open in Claude Code ----------
+//
+// "Open in Claude Code" on an action item opens Terminal in the project's code folder and
+// starts `claude` with the hand-off prompt (`handoffPrompt` in core). The prompt carries
+// the meeting's words, so it never goes into a shell string: it is written to a private
+// file (0600, in a 0700 folder under `agents/`), and the script Terminal runs reads it
+// into a variable, which the shell hands to claude as one argument without reading it as
+// code. The script holds only paths Aftercall chose, each single-quoted. When Claude Code
+// isn't connected with the current token, the script also passes `--mcp-config` with the
+// same server "Connect Claude Code" adds; that file holds the token, so it sits in the same
+// private folder, which the script deletes when claude exits (or the next Open does).
+
+/// The longest prompt passed to Claude Code, in bytes.
+const PROMPT_MAX: usize = 8 * 1024;
+/// A private folder older than this is left from an earlier Open whose claude has long read its files.
+const HANDOFF_STALE: Duration = Duration::from_secs(120);
+
+/// Where the private folders for Open in Claude Code go.
+pub fn handoff_root(data_dir: &Path) -> PathBuf {
+    socket_dir(data_dir).join("handoff")
+}
+
+/// One word for /bin/sh: single-quoted, with each `'` closed, escaped and reopened.
+pub fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// The code folder as a real folder, or why it can't be used.
+pub fn check_folder(folder: &Path) -> Result<PathBuf, String> {
+    match std::fs::metadata(folder) {
+        Ok(m) if m.is_dir() => folder.canonicalize().map_err(|e| e.to_string()),
+        Ok(_) => Err(format!("{} isn't a folder. Choose the code folder again on the project page.", folder.display())),
+        Err(_) => Err(format!("The code folder {} isn't there. Choose it again on the project page.", folder.display())),
+    }
+}
+
+/// A prompt claude takes as its first message: not empty, not huge, and not read as an option.
+pub fn check_prompt(prompt: &str) -> Result<(), String> {
+    if prompt.trim().is_empty() || prompt.len() > PROMPT_MAX || prompt.starts_with('-') || prompt.contains('\0') {
+        return Err("That prompt can't be passed to Claude Code. Copy it instead.".into());
+    }
+    Ok(())
+}
+
+/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file.
+pub fn mcp_config(token: &str, node: &Path, server: &Path, data_dir: &Path) -> Value {
+    json!({ "mcpServers": { "aftercall": {
+        "command": node.display().to_string(),
+        "args": [server.display().to_string(), "--data-dir", data_dir.display().to_string()],
+        "env": { "AFTERCALL_TOKEN": token },
+    } } })
+}
+
+/// The script Terminal runs. Everything in it is a path Aftercall chose, single-quoted;
+/// the prompt is only ever in `prompt_file`.
+pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt_file: &Path, mcp: Option<&Path>, private_dir: &Path) -> String {
+    let q = |p: &Path| sh_quote(&p.display().to_string());
+    let mut lines = vec!["#!/bin/sh".to_string(), "# Written by Aftercall for Open in Claude Code. The prompt is read from a file; it is never part of this script.".to_string()];
+    if !path_dirs.is_empty() {
+        // claude installed by npm starts with `#!/usr/bin/env node`.
+        lines.push(format!("PATH={}:\"$PATH\"; export PATH", path_dirs.iter().map(|d| q(d)).collect::<Vec<_>>().join(":")));
+    }
+    lines.push(format!("cd {} || exit 1", q(folder)));
+    lines.push(format!("prompt=$(cat {}) || exit 1", q(prompt_file)));
+    lines.push(format!("rm -f {}", q(prompt_file)));
+    let config = mcp.map(|c| format!(" --mcp-config {}", q(c))).unwrap_or_default();
+    lines.push(format!("{}{config} \"$prompt\"", q(claude)));
+    lines.push("status=$?".into());
+    lines.push(format!("rm -rf {}", q(private_dir)));
+    lines.push("exit $status".into());
+    lines.join("\n") + "\n"
+}
+
+/// What `open` is given: Terminal, and the script.
+pub fn terminal_args(script: &Path) -> Vec<String> {
+    vec!["-a".into(), "Terminal".into(), script.display().to_string()]
+}
+
+/// A new file only the user can read (and, with `exec`, run).
+fn write_private(path: &Path, text: &str, exec: bool) -> Result<(), String> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(if exec { 0o700 } else { 0o600 })
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    f.write_all(text.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// The private folder for one Open: the prompt, the MCP config when one is needed, and the script.
+pub struct Prepared {
+    pub dir: PathBuf,
+    pub script: PathBuf,
+}
+
+/// Writes the private folder for one Open, after clearing folders earlier ones left.
+pub fn prepare_launch(data_dir: &Path, folder: &Path, prompt: &str, claude: &Path, node: Option<&Path>, mcp: Option<&Value>) -> Result<Prepared, String> {
+    check_prompt(prompt)?;
+    let folder = check_folder(folder)?;
+    let root = handoff_root(data_dir);
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&root).map_err(|e| e.to_string())?;
+    for dir in [socket_dir(data_dir), root.clone()] {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+    }
+    for e in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > HANDOFF_STALE);
+        if old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    let dir = root.join(&new_token()?[..16]);
+    std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(|e| e.to_string())?;
+    let prompt_file = dir.join("prompt.txt");
+    write_private(&prompt_file, prompt, false)?;
+    let config = match mcp {
+        Some(v) => {
+            let p = dir.join("mcp.json");
+            write_private(&p, &v.to_string(), false)?;
+            Some(p)
+        }
+        None => None,
+    };
+    let mut path_dirs: Vec<PathBuf> = [Some(claude), node].into_iter().flatten().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
+    path_dirs.dedup();
+    let script = dir.join("open-in-claude-code.command");
+    write_private(&script, &launch_script(&folder, claude, &path_dirs, &prompt_file, config.as_deref(), &dir), true)?;
+    Ok(Prepared { dir, script })
+}
+
+/// What Open in Claude Code did, as the action item's menu shows it.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenOutcome {
+    pub ok: bool,
+    /// What's missing, so the menu copies the prompt instead: "folder", "agents", "claude" or "node";
+    /// or "project", a project the user keeps from agents, when nothing is copied either.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<&'static str>,
+    pub message: String,
+}
+
+impl OpenOutcome {
+    fn missing(what: &'static str, message: String) -> Self {
+        Self { ok: false, missing: Some(what), message }
+    }
+}
+
+/// "Open in Claude Code" for a meeting in `project`: Terminal in the project's code folder,
+/// running claude with `prompt`, with Aftercall's MCP server. `open` starts Terminal with
+/// the given arguments (tests pass a stand-in).
+pub fn open_in_claude_code(
+    data_dir: &Path,
+    project: &str,
+    prompt: &str,
+    server: &Path,
+    claude: Option<&Path>,
+    node: Result<PathBuf, String>,
+    open: &dyn Fn(&[String]) -> Result<(), String>,
+) -> OpenOutcome {
+    let Some(folder) = crate::projects::code_folder(data_dir, project) else {
+        return OpenOutcome::missing("folder", format!("{project} has no code folder. Choose one on its project page."));
+    };
+    let settings = load_settings(data_dir);
+    let Some(token) = settings.token.clone().filter(|_| settings.enabled) else {
+        return OpenOutcome::missing("agents", "Turn on \u{201c}Let agents read your meetings\u{201d} in Coding agents first, so Claude Code can reach this meeting.".into());
+    };
+    // A project the user keeps from agents: the prompt carries the item's words, so nothing starts.
+    if !Scope::of(data_dir).allows(project) {
+        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
+    }
+    let Some(claude) = claude else {
+        return OpenOutcome::missing("claude", "Aftercall couldn't find the claude command on this Mac, so it copied the prompt instead.".into());
+    };
+    // Connected with this token: Claude Code already has the server, for every project.
+    let (node, mcp) = if claude_link(&settings) == "connected" {
+        (node.ok(), None)
+    } else {
+        let node = match node {
+            Ok(n) => n,
+            Err(message) => return OpenOutcome::missing("node", message),
+        };
+        if !server.exists() {
+            return OpenOutcome { ok: false, missing: None, message: format!("Aftercall's server isn't at {}. Reinstall Aftercall, then try again.", server.display()) };
+        }
+        let config = mcp_config(&token, &node, server, data_dir);
+        (Some(node), Some(config))
+    };
+    let prepared = match prepare_launch(data_dir, &folder, prompt, claude, node.as_deref(), mcp.as_ref()) {
+        Ok(p) => p,
+        Err(message) => return OpenOutcome { ok: false, missing: None, message },
+    };
+    match open(&terminal_args(&prepared.script)) {
+        Ok(()) => OpenOutcome { ok: true, missing: None, message: format!("Claude Code is starting in Terminal, in {}.", folder.display()) },
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&prepared.dir);
+            OpenOutcome { ok: false, missing: None, message: format!("Terminal didn't open: {e}") }
+        }
+    }
+}
+
+/// Starts Terminal with the script, through macOS's `open`.
+pub fn open_terminal(args: &[String]) -> Result<(), String> {
+    let out = run(Command::new("/usr/bin/open").args(args), Duration::from_secs(10))?;
+    if out.status.success() { Ok(()) } else { Err(said(&out, "")) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -772,6 +1222,132 @@ mod tests {
         assert_eq!(item["done"], true);
         assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "2026-10-26T12:05:00.000Z", "note": "Sent the plan as a doc" }));
         assert!(dispatch_rw(&dir, &claim_req("Claude Code"), &at("x")).unwrap_err().contains("already done"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn wallet_for(dir: &Path) {
+        set_wallet(
+            dir,
+            WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() },
+        );
+    }
+
+    #[test]
+    fn agents_propose_a_recap_marked_as_theirs_with_their_reason() {
+        let dir = data_dir("draft-mail");
+        let req = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "olamide@client.test", "reason": "  Olamide asked for the staging DNS\n once it was up ", "link": "https://example.com/x" });
+        assert_eq!(dispatch(&dir, &req, false, &at("t")).unwrap_err(), WRITES_OFF, "needs the write switch");
+        let out = dispatch_rw(&dir, &req, &at("2026-11-02T10:00:00.000Z")).unwrap();
+        let saved = read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().last().unwrap().clone();
+        assert_eq!(out["followUp"], saved);
+        assert_eq!(
+            saved,
+            json!({ "kind": "email", "to": "olamide@client.test", "toName": "olamide", "subject": "Sync with Ada", "id": "agent-1", "status": "proposed",
+                "proposedBy": { "agent": "Codex", "at": "2026-11-02T10:00:00.000Z", "reason": "Olamide asked for the staging DNS once it was up" } })
+        );
+        assert!(saved.get("evidence").is_none() && saved.get("link").is_none(), "no quote from the call, and no link");
+        // The next one gets the next id; bad input is refused by name.
+        let next = dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "toName": "Ada", "subject": "Pilot plan", "reason": "x" }), &at("t")).unwrap();
+        assert_eq!((next["followUp"]["id"].as_str(), next["followUp"]["subject"].as_str()), (Some("agent-2"), Some("Pilot plan")));
+        let r = |v: Value| dispatch_rw(&dir, &v, &at("t")).unwrap_err();
+        let base = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Because" });
+        let with = |k: &str, v: Value| {
+            let mut b = base.clone();
+            b[k] = v;
+            b
+        };
+        assert!(r(with("reason", json!(""))).contains("reason"));
+        assert!(r(with("reason", json!("x".repeat(REASON_MAX + 1)))).contains("reason"));
+        for bad in ["ada", "ada@example", "Ada <ada@example.com>", "a@b.com, eve@evil.test", "ada@exa mple.com"] {
+            assert!(r(with("to", json!(bad))).contains("email address"), "{bad}");
+        }
+        assert!(r(with("kind", json!("sms"))).contains("recap"));
+        assert!(r(with("meetingId", json!("1761200000"))).contains("No processed meeting"));
+        assert!(r(with("agent", json!(" "))).contains("agent name"));
+        // At most five waiting at once.
+        for _ in 0..3 {
+            dispatch_rw(&dir, &base, &at("t")).unwrap();
+        }
+        assert!(r(base.clone()).contains("already wait"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agents_propose_payments_only_to_listed_payees_within_the_caps() {
+        let dir = data_dir("draft-pay");
+        let pay = |payee: &str, amount: &str| dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Claude Code", "kind": "payment", "payee": payee, "amount": amount, "reason": "The deposit agreed in the call" }), &at("t"));
+        assert!(pay("Designer", "20").unwrap_err().contains("hasn't read your payee list"), "no list read yet: no payments");
+        wallet_for(&dir);
+        assert!(pay("eve.testnet", "1").unwrap_err().contains("payees already on the user's list"));
+        assert!(pay("Designer", "50.000001").unwrap_err().contains("per-payment cap"));
+        assert!(pay("Designer", "30.5").unwrap_err().contains("still pay today"));
+        for bad in ["0", "-5", "1e3", "12.3456789", "twelve", ""] {
+            assert!(pay("Designer", bad).unwrap_err().contains("amount in USDC"), "{bad}");
+        }
+        let out = pay("DESIGNER.testnet", "12.5").unwrap();
+        assert_eq!(
+            out["followUp"],
+            json!({ "kind": "payment", "payeeName": "Designer", "payeeAccount": "designer.testnet", "amount": { "$bigint": "12500000" }, "heard": "", "payeeListed": true,
+                "id": "agent-1", "status": "proposed", "proposedBy": { "agent": "Claude Code", "at": "t", "reason": "The deposit agreed in the call" } })
+        );
+        // A per-payment cap of 0 means none set: nothing is proposed.
+        set_wallet(&dir, WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() });
+        assert!(pay("Designer", "1").unwrap_err().contains("hasn't set a per-payment cap"));
+        assert_eq!(usdc_units("12.50"), Some(12_500_000));
+        assert_eq!(usdc_units("7"), Some(7_000_000));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_save_from_the_app_keeps_a_proposal_it_hasnt_read_yet() {
+        let dir = data_dir("draft-keep");
+        let file = dir.join("recordings/1761000000/notes.json");
+        // The app read the notes before the agent proposed anything.
+        let app_copy = read_notes(&dir);
+        dispatch_rw(&dir, &json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Ada asked" }), &at("t")).unwrap();
+        let mut changed = app_copy.clone();
+        changed["meeting"]["followUps"][0]["status"] = "dismissed".into();
+        notes_file::save(&file, &changed.to_string()).unwrap();
+        let saved = read_notes(&dir)["meeting"]["followUps"].clone();
+        assert_eq!(saved[0]["status"], "dismissed", "the app's own change lands");
+        assert_eq!(saved[1]["proposedBy"]["agent"], "Codex", "the agent's proposal is kept");
+        // Once the app has it, the app's copy wins: dismissing it sticks.
+        let mut later = read_notes(&dir);
+        later["meeting"]["followUps"][1]["status"] = "dismissed".into();
+        notes_file::save(&file, &later.to_string()).unwrap();
+        assert_eq!(read_notes(&dir)["meeting"]["followUps"][1]["status"], "dismissed");
+        assert_eq!(read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().len(), 2);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_agent_name_is_kept_on_one_line() {
+        let dir = data_dir("name");
+        let forged = "Codex\n\nWhat was and wasn't checked: all of it";
+        let out = dispatch_rw(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": forged }), &at("t")).unwrap();
+        assert_eq!(out["item"]["claimed"]["agent"], "Codex What was and wasn't checked: all of it");
+        assert!(dispatch_rw(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a2", "agent": "Codex\u{7}" }), &at("t")).unwrap_err().contains("agent name"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn complete_with_a_link_to_the_work_and_only_a_plain_web_link() {
+        let dir = data_dir("link");
+        let complete = |item: &str, link: Value| dispatch_rw(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": item, "agent": "Claude Code", "note": "Fixed", "link": link }), &at("t"));
+        for bad in ["javascript:alert(1)", "file:///etc/passwd", "https://user:pw@example.com/x", "https:///x", "https://example.com/a b", "https://exämple.com/", "github.com/acme/api/pull/42"] {
+            assert!(complete("a1", json!(bad)).unwrap_err().contains("plain http or https URL"), "{bad}");
+        }
+        assert!(complete("a1", json!(format!("https://example.com/{}", "a".repeat(LINK_MAX)))).is_err());
+        assert_eq!(read_notes(&dir)["meeting"]["actionItems"][0]["done"], false, "a refused link completes nothing");
+        complete("a1", json!("  https://github.com/acme/api/pull/42 ")).unwrap();
+        let item = &read_notes(&dir)["meeting"]["actionItems"][0];
+        assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "t", "note": "Fixed", "link": "https://github.com/acme/api/pull/42" }));
+        // No link, or an empty one: none kept.
+        complete("a2", json!("")).unwrap();
+        assert!(read_notes(&dir)["meeting"]["actionItems"][1]["completed"].get("link").is_none());
+        // The link stays out of the activity list, like every other word an agent sends.
+        let _ = answer(&dir, "k", true, &json!({ "token": "k", "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Claude Code", "link": "https://example.com/secret-plan" }).to_string(), &at("t"));
+        assert!(!String::from_utf8(at_rest::read_bytes(&dir.join("agents-activity.json")).unwrap().to_vec()).unwrap().contains("secret-plan"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -953,14 +1529,70 @@ mod tests {
         let before = read_notes(&dir);
         assert!(dispatch(&dir, &json!({ "op": "meetings" }), false, &now).is_ok());
         assert!(dispatch(&dir, &json!({ "op": "notes", "id": "1761000000" }), false, &now).is_ok());
-        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), false, &now).unwrap(), json!({ "allowWrites": false }));
-        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), true, &now).unwrap(), json!({ "allowWrites": true }));
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), false, &now).unwrap(), json!({ "allowWrites": false, "allProjects": true }));
+        assert_eq!(dispatch(&dir, &json!({ "op": "access" }), true, &now).unwrap(), json!({ "allowWrites": true, "allProjects": true }));
         for op in ["claim", "complete"] {
             let err = dispatch(&dir, &json!({ "op": op, "meetingId": "1761000000", "itemId": "a1", "agent": "Codex" }), false, &now).unwrap_err();
             assert_eq!(err, WRITES_OFF);
             assert!(err.contains("Coding agents in Aftercall's sidebar"));
         }
         assert_eq!(read_notes(&dir), before, "nothing changed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn agents_reach_only_the_projects_the_user_chose() {
+        let dir = data_dir("scope");
+        // A second project, with a meeting of its own.
+        at_rest::write_json(&dir.join("projects.json"), &json!([{ "id": "general", "name": "General" }, { "id": "moonbeam-x1y", "name": "Moonbeam client" }])).unwrap();
+        let rec = dir.join("recordings/1761100000");
+        std::fs::create_dir_all(&rec).unwrap();
+        at_rest::write_json(&rec.join("notes.json"), &json!({ "meeting": { "title": "Moonbeam kickoff", "project": "Moonbeam client", "actionItems": [{ "id": "a1", "text": "Send the quote", "owner": "You", "done": false }], "followUps": [] } })).unwrap();
+        let now = at("t");
+        let ids = |v: Value| v.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+
+        // Settings from before the choice: every project, as today.
+        save_settings(&dir, &Settings { enabled: true, token: Some("k".into()), allow_writes: Some(true), ..Default::default() }).unwrap();
+        assert!(load_settings(&dir).projects.is_none());
+        assert_eq!(ids(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap()), ["1761100000", "1761000000"]);
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "access" }), &now).unwrap()["allProjects"], true);
+
+        // Only General.
+        let mut s = load_settings(&dir);
+        s.projects = Some(vec!["general".into()]);
+        save_settings(&dir, &s).unwrap();
+        assert_eq!(ids(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap()), ["1761000000"]);
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "projects" }), &now).unwrap(), json!([{ "id": "general", "name": "General" }]));
+        assert_eq!(dispatch_rw(&dir, &json!({ "op": "access" }), &now).unwrap(), json!({ "allowWrites": true, "allProjects": false }));
+        let refused = [
+            json!({ "op": "notes", "id": "1761100000" }),
+            json!({ "op": "claim", "meetingId": "1761100000", "itemId": "a1", "agent": "Codex" }),
+            json!({ "op": "complete", "meetingId": "1761100000", "itemId": "a1", "agent": "Codex", "link": "https://example.com/x" }),
+            json!({ "op": "draft", "meetingId": "1761100000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "x" }),
+        ];
+        for req in &refused {
+            let err = dispatch_rw(&dir, req, &now).unwrap_err();
+            assert_eq!(err, PROJECT_OFF, "{req}");
+            assert!(!err.contains("Moonbeam"), "the refusal doesn't name the project");
+        }
+        let item = &notes_file::read(&rec.join("notes.json")).unwrap()["meeting"]["actionItems"][0];
+        assert!(item.get("claimed").is_none() && item["done"] == false, "nothing changed");
+        // Meetings in chosen projects work as before, and the write switch still comes first.
+        assert!(dispatch_rw(&dir, &json!({ "op": "notes", "id": "1761000000" }), &now).is_ok());
+        assert_eq!(dispatch(&dir, &refused[1], false, &now).unwrap_err(), WRITES_OFF);
+        // The refusal is in the activity list as "project", with no project name.
+        let _ = answer(&dir, "k", true, &json!({ "token": "k", "op": "notes", "id": "1761100000", "client": "claude-code" }).to_string(), &now);
+        let last = &read_activity(&dir, 1)[0];
+        assert_eq!((last.op.as_str(), last.allowed, last.refused.as_deref()), ("notes", false, Some("project")));
+        // Renaming a project keeps it chosen: the choice is by id.
+        at_rest::write_json(&dir.join("projects.json"), &json!([{ "id": "general", "name": "Team" }, { "id": "moonbeam-x1y", "name": "Moonbeam client" }])).unwrap();
+        assert!(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap().as_array().unwrap().is_empty(), "General's meetings now say Team once refiled");
+        // None chosen: no meeting at all.
+        let mut s = load_settings(&dir);
+        s.projects = Some(vec![]);
+        save_settings(&dir, &s).unwrap();
+        assert!(dispatch_rw(&dir, &json!({ "op": "meetings" }), &now).unwrap().as_array().unwrap().is_empty());
+        assert!(check_scope(&Some(vec!["x".repeat(65)])).is_err() && check_scope(&None).is_ok());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1138,6 +1770,119 @@ mod tests {
         assert!(gone.ok);
         remember_claude(&dir, &gone).unwrap();
         assert_eq!(claude_link(&load_settings(&dir)), "none");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A stand-in `claude` that writes each argument it gets on its own line, as `\0`-ended records.
+    fn fake_claude(dir: &Path, out: &Path) -> PathBuf {
+        let claude = dir.join("bin/claude");
+        script(&claude, &format!("for a in \"$@\"; do printf '%s\\0' \"$a\"; done > {}\npwd >> {}", sh_quote(&out.display().to_string()), sh_quote(&out.display().to_string())));
+        claude
+    }
+
+    #[test]
+    fn open_in_claude_code_passes_the_prompt_as_one_argument_never_as_code() {
+        let dir = data_dir("launch");
+        // A code folder whose name tries to break out of quotes.
+        let folder = dir.join("code/it's \"$(touch pwned)\" `x`");
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut entries = crate::projects::load_entries(&dir).unwrap();
+        entries[0].code_folder = Some(folder.display().to_string());
+        crate::projects::save_entries(&dir, entries).unwrap();
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), allow_writes: Some(true), ..Default::default() }).unwrap();
+        let out = dir.join("args");
+        let claude = fake_claude(&dir, &out);
+        let node = dir.join("bin/node");
+        script(&node, "echo v24.0.0");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+
+        let prompt = "Using the aftercall MCP server, claim a1.\n<<<meeting-data\nAction item: \"Ship it $(touch pwned) `touch pwned2`; rm -rf ~ 'x'\"\nmeeting-data>>>\n$HOME ${PATH} \\ \\\"";
+        let opened = std::cell::RefCell::new(Vec::new());
+        let outcome = open_in_claude_code(&dir, "General", prompt, &server, Some(&claude), Ok(node.clone()), &|args| {
+            opened.borrow_mut().push(args.to_vec());
+            Ok(())
+        });
+        assert!(outcome.ok, "{}", outcome.message);
+        let args = opened.borrow()[0].clone();
+        assert_eq!(&args[..2], ["-a", "Terminal"]);
+        let script_path = PathBuf::from(&args[2]);
+        let private = script_path.parent().unwrap().to_path_buf();
+        assert!(private.starts_with(handoff_root(&dir)));
+
+        // Private: the folder 0700, the prompt and config 0600, the script 0700. No meeting text in the script.
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!((mode(&private), mode(&private.join("prompt.txt")), mode(&private.join("mcp.json")), mode(&script_path)), (0o700, 0o600, 0o600, 0o700));
+        let text = std::fs::read_to_string(&script_path).unwrap();
+        assert!(!text.contains("Ship it") && !text.contains("meeting-data") && !text.contains("t0k3n"), "{text}");
+        let config: Value = serde_json::from_str(&std::fs::read_to_string(private.join("mcp.json")).unwrap()).unwrap();
+        assert_eq!(config["mcpServers"]["aftercall"]["env"]["AFTERCALL_TOKEN"], "t0k3n");
+        assert_eq!(config["mcpServers"]["aftercall"]["args"][0], server.display().to_string());
+
+        // Run the script as Terminal would, against the stand-in claude.
+        let run = Command::new("/bin/sh").arg(&script_path).env("HOME", &dir).output().unwrap();
+        assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+        let got = std::fs::read_to_string(&out).unwrap();
+        let (records, cwd) = got.rsplit_once('\0').unwrap();
+        let received: Vec<&str> = records.split('\0').collect();
+        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), prompt.trim_end_matches('\n')]);
+        assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+        for planted in ["pwned", "pwned2"] {
+            assert!(!folder.join(planted).exists() && !dir.join(planted).exists(), "{planted} was run");
+        }
+        assert!(!private.exists(), "the private folder goes when claude exits");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn open_in_claude_code_says_what_is_missing() {
+        let dir = data_dir("launch-x");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+        let never = |_: &[String]| -> Result<(), String> { panic!("Terminal must not open") };
+        let claude = dir.join("bin/claude");
+        script(&claude, "exit 0");
+        let go = |claude: Option<&Path>, node: Result<PathBuf, String>| open_in_claude_code(&dir, "General", "Using the aftercall MCP server", &server, claude, node, &never);
+
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("folder"));
+        let mut entries = crate::projects::load_entries(&dir).unwrap();
+        entries[0].code_folder = Some(dir.join("recordings/1761000000/notes.json").display().to_string());
+        crate::projects::save_entries(&dir, entries.clone()).unwrap();
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("agents"), "agents off");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
+        // A project kept from agents: nothing starts, whatever else is ready.
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec![]), ..Default::default() }).unwrap();
+        let kept = go(Some(&claude), Ok(claude.clone()));
+        assert_eq!(kept.missing, Some("project"), "{}", kept.message);
+        assert!(!handoff_root(&dir).exists(), "no prompt written for a project kept from agents");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec!["general".into()]), ..Default::default() }).unwrap();
+        assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"), "a chosen project goes on");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
+        assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"));
+        assert_eq!(go(Some(&claude), Err("no node".into())).message, "no node");
+        // A file, not a folder.
+        let file = go(Some(&claude), Ok(claude.clone()));
+        assert!(!file.ok && file.message.contains("isn't a folder"), "{}", file.message);
+        // Connected with this token: no node needed, and no config file with the token.
+        let mut s = load_settings(&dir);
+        s.claude_code = Some(fingerprint("t0k3n"));
+        save_settings(&dir, &s).unwrap();
+        entries[0].code_folder = Some(dir.display().to_string());
+        crate::projects::save_entries(&dir, entries).unwrap();
+        let seen = std::cell::RefCell::new(None);
+        let ok = open_in_claude_code(&dir, "General", "Using the aftercall MCP server", &server, Some(&claude), Err("no node".into()), &|a| {
+            *seen.borrow_mut() = Some(a[2].clone());
+            Ok(())
+        });
+        assert!(ok.ok, "{}", ok.message);
+        let script_path = PathBuf::from(seen.borrow().clone().unwrap());
+        assert!(!script_path.parent().unwrap().join("mcp.json").exists());
+        assert!(!std::fs::read_to_string(&script_path).unwrap().contains("--mcp-config"));
+        // A prompt that would read as an option, or none at all, is refused before anything is written.
+        for bad in ["--dangerously-skip-permissions", "  ", &"x".repeat(PROMPT_MAX + 1)] {
+            assert!(check_prompt(bad).is_err(), "{bad}");
+        }
+        assert_eq!(sh_quote("it's"), "'it'\\''s'");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

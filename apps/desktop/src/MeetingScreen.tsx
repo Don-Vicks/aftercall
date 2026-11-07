@@ -12,6 +12,8 @@ import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRo
 import { grow } from "./SettingsParts";
 import { freshKey, useFresh } from "./freshItems";
 import { MeetingTrail } from "./MeetingTrail";
+import { HandToAgent } from "./HandToAgent";
+import { WorkLink } from "./WorkLink";
 import type { SavedNotes } from "./nearai";
 // For the transcript's model-inferred speaker names.
 import { likelySpeakerAt } from "@aftercall/core";
@@ -365,6 +367,7 @@ function Notes({
               <ActionRow
                 key={item.id}
                 rowKey={`${meeting.id}:${item.id}`}
+                meeting={meeting}
                 item={item}
                 onToggle={() => onToggleItem(item.id)}
                 onEdit={onEditItem && ((fields) => onEditItem(item.id, fields))}
@@ -473,6 +476,7 @@ function when(iso: string): string {
 /** One action item: the tick, the words, who and when, and what an agent did with it. Editable in place. */
 function ActionRow({
   rowKey,
+  meeting,
   item,
   onToggle,
   onEdit,
@@ -482,6 +486,8 @@ function ActionRow({
   onJump,
 }: {
   rowKey: string;
+  /** The meeting the item is in, for "Hand to an agent". */
+  meeting: Pick<Meeting, "id" | "title" | "project">;
   item: ActionItem;
   onToggle: () => void;
   onEdit?: (fields: ItemFields | null) => void;
@@ -526,6 +532,12 @@ function ActionRow({
     sub = (
       <>
         <span className="font-medium text-verdigris">Done by {item.completed.agent}</span>
+        {item.completed.link && (
+          <>
+            <span className="text-muted"> · </span>
+            <WorkLink completion={item.completed} />
+          </>
+        )}
         {item.completed.note && <span className="text-ink-2"> · “{item.completed.note}”</span>}
       </>
     );
@@ -556,7 +568,7 @@ function ActionRow({
     >
       <div className="flex items-center gap-3">
         <Tick checked={item.done} onChange={onToggle} working={working} aria-labelledby={textId} aria-describedby={item.evidence ? quoteId : undefined} />
-        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", onEdit && "pr-7")}>
+        <span className={cx("flex min-w-0 flex-1 flex-col gap-0.5", !item.done ? "pr-14" : onEdit && "pr-7")}>
           <span className="self-start text-[15px] leading-[21px] text-ink">
             <span id={textId} className="selectable">
               <Strike on={item.done}>{item.text}</Strike>
@@ -566,6 +578,7 @@ function ActionRow({
           {sub && <span className="truncate text-[13px] leading-[18px]">{sub}</span>}
         </span>
         <span className="relative inline-flex shrink-0 items-center gap-1.5 text-[13px] text-muted">
+          {!item.done && <HandToAgent meeting={meeting} item={item} />}
           {onEdit && <EditItemButton id={edit.buttonId} text={item.text} onClick={edit.open} />}
           {owner && <Avatar name={owner} size={20} />}
           {item.due}
@@ -726,7 +739,7 @@ function Transcript({
                 )}
               </span>
               {turn.lines.map((line, i) => {
-                const evidence = live.filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
+                const evidence = live.filter(fromCall).filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
                 const isTarget = line.at === target?.at;
                 return (
                   <BubbleWithChips key={`${line.at}-${i}`} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
@@ -766,8 +779,11 @@ function OthersMark() {
   );
 }
 
+/** A follow-up the call proposed, with its words from the transcript (not one a coding agent proposed). */
+const fromCall = (f: FollowUp): f is FollowUp & { evidence: Evidence } => Boolean(f.evidence);
+
 /** A bubble, and under it a chip for each follow-up it is the evidence for. */
-function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence: FollowUp[]; you: boolean; onOpenFollowUp: (id: string) => void; children: ReactNode }) {
+function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence: (FollowUp & { evidence: Evidence })[]; you: boolean; onOpenFollowUp: (id: string) => void; children: ReactNode }) {
   if (evidence.length === 0) return <>{children}</>;
   return (
     <>

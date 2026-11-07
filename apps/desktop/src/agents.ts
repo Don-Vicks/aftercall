@@ -19,6 +19,16 @@ export interface AgentsInfo {
   /** Whether "Connect Claude Code" gave Claude Code this token: "stale" means an older one, so reconnect. */
   claudeCode: "none" | "connected" | "stale";
   socketPath: string;
+  /** The ids of the projects agents may reach; null for every project (and for settings from before the choice). */
+  projects: string[] | null;
+}
+
+/** What "Open in Claude Code" did (agents.rs, `OpenOutcome`). */
+export interface OpenOutcome {
+  ok: boolean;
+  /** Why it couldn't open, so the menu copies the prompt instead; "project" (kept from agents) copies nothing. */
+  missing?: "folder" | "agents" | "claude" | "node" | "project";
+  message: string;
 }
 
 /** What "Connect Claude Code" or "Disconnect Claude Code" did (agents.rs, `ClaudeOutcome`). */
@@ -35,6 +45,8 @@ export const agentsApi = {
   setEnabled: (enabled: boolean) => invoke<AgentsInfo>("agents_set_enabled", { enabled }),
   /** A new token; agents set up with the old one stop working. */
   newToken: () => invoke<AgentsInfo>("agents_new_token"),
+  /** The projects agents may reach, by id, or null for every project. Applies to the next request. */
+  setProjects: (projects: string[] | null) => invoke<AgentsInfo>("agents_set_projects", { projects }),
   /** "Let agents claim and complete action items". Applies to the next request. */
   setAllowWrites: (allow: boolean) => invoke<AgentsInfo>("agents_set_allow_writes", { allow }),
   /**
@@ -42,6 +54,16 @@ export const agentsApi = {
    * entry; disconnect (false) runs `claude mcp remove`. Agents must be on to connect.
    */
   claude: (connect: boolean) => invoke<ClaudeOutcome>("agents_claude", { connect }),
+  /**
+   * Opens Terminal in the project's code folder and starts claude with `prompt`, with
+   * Aftercall's MCP server. The prompt goes through a private file, never a shell string.
+   */
+  openClaude: (project: string, prompt: string) => invoke<OpenOutcome>("agents_open_claude", { project, prompt }),
+  /**
+   * The payee list and caps as just read from the contract (USDC base units), so agents
+   * can propose payments only to listed payees within the caps. Kept in memory only.
+   */
+  setWallet: (wallet: { payees: { name: string; account: string }[]; perPaymentCap: string; leftToday: string }) => invoke<void>("agents_set_wallet", { wallet }),
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */
@@ -63,7 +85,11 @@ export const PREVIEW_INFO: AgentsInfo = {
   tokenSince: null,
   claudeCode: "none",
   socketPath: "~/Library/Application Support/dev.aftercall.app/agents/aftercall.sock",
+  projects: null,
 };
+
+/** Whether agents may reach a meeting in the project with this id (`info.projects` null: every project). */
+export const reachesProject = (info: Pick<AgentsInfo, "projects">, projectId: string | undefined) => info.projects === null || (!!projectId && info.projects.includes(projectId));
 
 const TOKEN_PLACEHOLDER = "<turn on Coding agents>";
 
@@ -129,12 +155,12 @@ export interface AgentActivity {
   at: string;
   /** What the agent calls itself. */
   agent: string;
-  /** "projects" and "access" are listed only when refused. */
-  op: "meetings" | "notes" | "claim" | "complete" | "projects" | "access" | "other";
+  /** "projects" and "access" are listed only when refused. "draft" is a proposed follow-up. */
+  op: "meetings" | "notes" | "claim" | "complete" | "draft" | "projects" | "access" | "other";
   meetingId?: string;
   itemId?: string;
   allowed: boolean;
-  refused?: "token" | "read-only" | "unknown" | "rules";
+  refused?: "token" | "read-only" | "project" | "unknown" | "rules";
 }
 
 export interface ActivityView {
@@ -144,32 +170,32 @@ export interface ActivityView {
   meeting?: Meeting;
   /** Why it was refused, for the second line. */
   detail?: string;
-  status: "claimed" | "done" | "read" | "refused";
+  status: "claimed" | "done" | "proposed" | "read" | "refused";
 }
 
 const REFUSED: Record<NonNullable<AgentActivity["refused"]>, string> = {
   "read-only": "Agents are read-only",
+  project: "A project agents can't reach",
   token: "Old or wrong token",
   unknown: "Not a request Aftercall knows",
   rules: "Refused by Aftercall's rules",
+};
+
+/** What a request other than a claim or completion reads as. */
+const OP_WORDS: Record<Exclude<AgentActivity["op"], "claim" | "complete">, string> = {
+  draft: "Propose a follow-up",
+  meetings: "Read your meetings",
+  notes: "Read a meeting",
+  projects: "Read your projects",
+  access: "Check what agents may do",
+  other: "Unknown request",
 };
 
 /** How one activity entry reads on the screen. */
 export function describeActivity(a: AgentActivity, meetings: Meeting[]): ActivityView {
   const meeting = a.meetingId ? meetings.find((m) => m.id === a.meetingId) : undefined;
   const item = a.itemId ? meeting?.actionItems.find((i) => i.id === a.itemId) : undefined;
-  const what =
-    a.op === "claim" || a.op === "complete"
-      ? (item?.text ?? (a.op === "claim" ? "Claim an action item" : "Complete an action item"))
-      : a.op === "meetings"
-        ? "Read your meetings"
-        : a.op === "notes"
-          ? "Read a meeting"
-          : a.op === "projects"
-            ? "Read your projects"
-            : a.op === "access"
-              ? "Check what agents may do"
-              : "Unknown request";
-  const status = !a.allowed ? "refused" : a.op === "claim" ? "claimed" : a.op === "complete" ? "done" : "read";
+  const what = a.op === "claim" || a.op === "complete" ? (item?.text ?? (a.op === "claim" ? "Claim an action item" : "Complete an action item")) : OP_WORDS[a.op];
+  const status = !a.allowed ? "refused" : a.op === "claim" ? "claimed" : a.op === "complete" ? "done" : a.op === "draft" ? "proposed" : "read";
   return { what, meeting, detail: a.refused ? REFUSED[a.refused] : undefined, status };
 }

@@ -820,7 +820,7 @@ function FollowUpRow({
     <span className="text-ink-2">Autopilot held this for your approval · {where}</span>
   ) : (
     <span className="t-quote text-[14px] text-ink-2">
-      “{f.evidence.quote}” <span className="font-sans not-italic">· {where}</span>
+      “{f.evidence?.quote ?? f.proposedBy?.reason}” <span className="font-sans not-italic">· {f.evidence ? where : `${f.proposedBy?.agent ?? "An agent"}'s reason · ${where}`}</span>
     </span>
   );
 

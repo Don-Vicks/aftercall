@@ -1,6 +1,6 @@
 # Design: coding agents and the meeting's follow-ups
 
-Status: a design, not built. What exists today is listed first.
+Status: 1 to 4 are built; what they do and the tests for them are in [agents-demo.md](../agents-demo.md#what-changed-since-the-run). 5 is not. "Today" below is what existed before them.
 
 ## Today
 
