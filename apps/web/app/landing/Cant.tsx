@@ -41,7 +41,7 @@ const ROWS: Row[] = [
     body: (
       <>
         Payment rules live in a NEAR contract: listed payees, a daily cap and a per-payment cap. The key on your Mac can call only <code>pay</code> and <code>record_proof</code>, and open and release a deal held in escrow
-        (built, not yet on testnet); every rule change needs your own wallet. Anything over a cap waits in the contract for your wallet.
+        (on testnet, not yet run live); every rule change needs your own wallet. Anything over a cap waits in the contract for your wallet.
       </>
     ),
     tests: [
