@@ -16,7 +16,7 @@
 //!
 //! What a request can do is fixed here: read processed meetings and projects, and,
 //! only while the user has turned on "Let agents claim and complete action items",
-//! claim or complete one action item. That switch is off by default and goes back off
+//! claim or complete one action item, completing it with a note and a link to the work. That switch is off by default and goes back off
 //! when agents are turned off. Nothing else in notes.json can be changed. Your notes
 //! (what you typed during the call) and their salt are never sent.
 //!
@@ -48,6 +48,8 @@ use crate::{at_rest, notes_file};
 
 const MAX_REQUEST: u64 = 64 * 1024;
 const NOTE_MAX: usize = 500;
+/// The longest link to the work kept on a completed item (`WORK_LINK_MAX` in core).
+const LINK_MAX: usize = 300;
 
 /// What an agent is told when it tries to claim or complete while agents may only read.
 pub const WRITES_OFF: &str =
@@ -242,7 +244,7 @@ pub fn dispatch(data_dir: &Path, req: &Value, writes: bool, now: &dyn Fn() -> St
         "notes" => notes(data_dir, &str_arg("id")),
         "access" => Ok(json!({ "allowWrites": writes })),
         "claim" => claim(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), now),
-        "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), now),
+        "complete" => complete(data_dir, &str_arg("meetingId"), &str_arg("itemId"), &str_arg("agent"), req["note"].as_str(), req["link"].as_str(), now),
         _ => Err("Unknown request".into()),
     }
 }
@@ -344,9 +346,29 @@ fn claim(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, now: &dy
     })
 }
 
-fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note: Option<&str>, now: &dyn Fn() -> String) -> Result<Value, String> {
+/// The link an agent gives to its work, when it is a plain http or https URL: one line of
+/// printable ASCII, a host and no user name or password, at most `LINK_MAX` characters
+/// (`workLink` in core). Empty is none. It is the agent's statement: the app shows it as
+/// such, never opens or checks it, and nothing that pays reads action items.
+pub fn check_link(link: Option<&str>) -> Result<Option<String>, String> {
+    let Some(link) = link.map(str::trim).filter(|l| !l.is_empty()) else { return Ok(None) };
+    let bad = || "Give the link to your work as a plain http or https URL, at most 300 characters".to_string();
+    if link.chars().count() > LINK_MAX || !link.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err(bad());
+    }
+    let lower = link.to_ascii_lowercase();
+    let rest = lower.strip_prefix("https://").or_else(|| lower.strip_prefix("http://")).ok_or_else(bad)?;
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if host.is_empty() || host.contains('@') {
+        return Err(bad());
+    }
+    Ok(Some(link.to_string()))
+}
+
+fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note: Option<&str>, link: Option<&str>, now: &dyn Fn() -> String) -> Result<Value, String> {
     let agent = check_agent(agent)?;
     let note: Option<String> = note.map(|n| n.trim().chars().take(NOTE_MAX).collect()).filter(|n: &String| !n.is_empty());
+    let link = check_link(link)?;
     let file = notes_path(data_dir, meeting_id)?;
     notes_file::try_update(&file, |notes| {
         let item = open_item(notes, item_id, &agent, |by, _| format!("Claimed by {by}; only that agent can complete it"))?;
@@ -358,6 +380,9 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
         let mut completed = json!({ "agent": agent, "at": at });
         if let Some(n) = note {
             completed["note"] = n.into();
+        }
+        if let Some(l) = link {
+            completed["link"] = l.into();
         }
         item.insert("completed".into(), completed);
         Ok(json!({ "completed": true, "item": item }))
@@ -973,6 +998,27 @@ mod tests {
         assert_eq!(item["done"], true);
         assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "2026-10-26T12:05:00.000Z", "note": "Sent the plan as a doc" }));
         assert!(dispatch_rw(&dir, &claim_req("Claude Code"), &at("x")).unwrap_err().contains("already done"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn complete_with_a_link_to_the_work_and_only_a_plain_web_link() {
+        let dir = data_dir("link");
+        let complete = |item: &str, link: Value| dispatch_rw(&dir, &json!({ "op": "complete", "meetingId": "1761000000", "itemId": item, "agent": "Claude Code", "note": "Fixed", "link": link }), &at("t"));
+        for bad in ["javascript:alert(1)", "file:///etc/passwd", "https://user:pw@example.com/x", "https:///x", "https://example.com/a b", "https://exämple.com/", "github.com/acme/api/pull/42"] {
+            assert!(complete("a1", json!(bad)).unwrap_err().contains("plain http or https URL"), "{bad}");
+        }
+        assert!(complete("a1", json!(format!("https://example.com/{}", "a".repeat(LINK_MAX)))).is_err());
+        assert_eq!(read_notes(&dir)["meeting"]["actionItems"][0]["done"], false, "a refused link completes nothing");
+        complete("a1", json!("  https://github.com/acme/api/pull/42 ")).unwrap();
+        let item = &read_notes(&dir)["meeting"]["actionItems"][0];
+        assert_eq!(item["completed"], json!({ "agent": "Claude Code", "at": "t", "note": "Fixed", "link": "https://github.com/acme/api/pull/42" }));
+        // No link, or an empty one: none kept.
+        complete("a2", json!("")).unwrap();
+        assert!(read_notes(&dir)["meeting"]["actionItems"][1]["completed"].get("link").is_none());
+        // The link stays out of the activity list, like every other word an agent sends.
+        let _ = answer(&dir, "k", true, &json!({ "token": "k", "op": "complete", "meetingId": "1761000000", "itemId": "a1", "agent": "Claude Code", "link": "https://example.com/secret-plan" }).to_string(), &at("t"));
+        assert!(!String::from_utf8(at_rest::read_bytes(&dir.join("agents-activity.json")).unwrap().to_vec()).unwrap().contains("secret-plan"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
