@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bot } from "lucide-react";
 import { handoffBlockers, handoffPrompt, type ActionItem, type HandoffAgent, type Meeting } from "@aftercall/core";
-import { PREVIEW_INFO, agentsApi, type AgentsInfo } from "./agents";
+import { PREVIEW_INFO, agentsApi, reachesProject, type AgentsInfo } from "./agents";
 import { projectsApi } from "./projects";
 import { isDesktop } from "./recorder";
 import { IconButton, Menu, toast } from "./ui";
@@ -16,7 +16,7 @@ interface Access {
 async function access(meeting: Pick<Meeting, "project">): Promise<Access> {
   const info: AgentsInfo = isDesktop ? await agentsApi.info().catch(() => PREVIEW_INFO) : PREVIEW_INFO;
   const project = (await projectsApi.list().catch(() => [])).find((p) => p.name === meeting.project);
-  return { blockers: handoffBlockers({ ...info, projectAllowed: true }, meeting.project), codeFolder: project?.codeFolder };
+  return { blockers: handoffBlockers({ ...info, projectAllowed: reachesProject(info, project?.id) }, meeting.project), codeFolder: project?.codeFolder };
 }
 
 /** Copies the prompt and says, in the same toast, which switch would refuse the agent; `lead` says why it was copied, when it was a fallback. */

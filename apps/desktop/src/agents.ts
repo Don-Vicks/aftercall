@@ -19,6 +19,8 @@ export interface AgentsInfo {
   /** Whether "Connect Claude Code" gave Claude Code this token: "stale" means an older one, so reconnect. */
   claudeCode: "none" | "connected" | "stale";
   socketPath: string;
+  /** The ids of the projects agents may reach; null for every project (and for settings from before the choice). */
+  projects: string[] | null;
 }
 
 /** What "Open in Claude Code" did (agents.rs, `OpenOutcome`). */
@@ -43,6 +45,8 @@ export const agentsApi = {
   setEnabled: (enabled: boolean) => invoke<AgentsInfo>("agents_set_enabled", { enabled }),
   /** A new token; agents set up with the old one stop working. */
   newToken: () => invoke<AgentsInfo>("agents_new_token"),
+  /** The projects agents may reach, by id, or null for every project. Applies to the next request. */
+  setProjects: (projects: string[] | null) => invoke<AgentsInfo>("agents_set_projects", { projects }),
   /** "Let agents claim and complete action items". Applies to the next request. */
   setAllowWrites: (allow: boolean) => invoke<AgentsInfo>("agents_set_allow_writes", { allow }),
   /**
@@ -81,7 +85,11 @@ export const PREVIEW_INFO: AgentsInfo = {
   tokenSince: null,
   claudeCode: "none",
   socketPath: "~/Library/Application Support/dev.aftercall.app/agents/aftercall.sock",
+  projects: null,
 };
+
+/** Whether agents may reach a meeting in the project with this id (`info.projects` null: every project). */
+export const reachesProject = (info: Pick<AgentsInfo, "projects">, projectId: string | undefined) => info.projects === null || (!!projectId && info.projects.includes(projectId));
 
 const TOKEN_PLACEHOLDER = "<turn on Coding agents>";
 
@@ -152,7 +160,7 @@ export interface AgentActivity {
   meetingId?: string;
   itemId?: string;
   allowed: boolean;
-  refused?: "token" | "read-only" | "unknown" | "rules";
+  refused?: "token" | "read-only" | "project" | "unknown" | "rules";
 }
 
 export interface ActivityView {
@@ -167,6 +175,7 @@ export interface ActivityView {
 
 const REFUSED: Record<NonNullable<AgentActivity["refused"]>, string> = {
   "read-only": "Agents are read-only",
+  project: "A project agents can't reach",
   token: "Old or wrong token",
   unknown: "Not a request Aftercall knows",
   rules: "Refused by Aftercall's rules",
