@@ -42,7 +42,7 @@ returns the contract's counts as bytes of JSON, `{"wallets":1,"proofs":1,"paymen
 
 ### 2 minutes: the app in your browser
 
-Open https://getaftercall.vercel.app/demo. It is the Mac app's own interface on made-up meetings. You'll see the notes with the quote behind each item, the Verify sheet re-running the checks on a test proof, the follow-ups, a $5,000 payment the contract holds for the owner's wallet, and Pay Kemi on Solana with a live NEAR Intents quote fetched from 1Click as the page loads (a dry quote: nothing is sent). Recording, notes and payments need the Mac app.
+Open https://getaftercall.vercel.app/demo, the Mac app's own interface on made-up meetings. You'll see the notes with the quote behind each item, the Verify sheet re-running the checks on a test proof, the follow-ups, a $5,000 payment the contract holds for the owner's wallet, and Pay Kemi on Solana with a live NEAR Intents quote from 1Click (a dry quote: nothing is sent).
 
 ### 5 minutes: approve from your own phone
 
@@ -53,7 +53,7 @@ pnpm install
 pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app
 ```
 
-Open the link it prints on your phone. You'll see the six-digit code, then what needs you: a recap and payments, each with What leaves; Approve and Dismiss behind a 5-second Undo; a recap on an autopilot countdown you can undo; a $5,000 payment over the cap that opens your NEAR wallet on `/sign`; a payee not on the list, which you can only dismiss. The terminal logs each tap the made-up Mac accepts or refuses. The relay only passes sealed boxes. There are no push notifications yet: the page checks every 10 s. This hasn't run with the Mac app yet.
+Open the link it prints on your phone. You'll see the six-digit code, then what needs you: a recap and payments, each with What leaves; Approve and Dismiss behind a 5-second Undo; a recap on an autopilot countdown; a $5,000 payment over the cap that opens your NEAR wallet on `/sign`; a payee not on the list, which you can only dismiss. The terminal logs each tap the made-up Mac accepts or refuses; the relay only passes sealed boxes. No push notifications yet: the page checks every 10 s.
 
 ### 10 minutes: the Mac app
 
@@ -63,10 +63,10 @@ macOS 14.2 or later, Apple silicon or Intel. It's an unsigned test build on NEAR
 curl -fsSL https://getaftercall.vercel.app/install.sh | sh
 ```
 
-The script checks the DMG's SHA-256, copies Aftercall into Applications and opens it. Installed this way, macOS shows no warning: you trust this script instead of Apple's notarization, which the build doesn't have yet. From https://getaftercall.vercel.app/download instead, open it once, click Done (not Move to Bin) when macOS says it "could not verify" Aftercall, then click Open Anyway in System Settings › Privacy & Security. Allow Microphone and Screen & System Audio Recording when asked.
+It checks the DMG's SHA-256, copies Aftercall into Applications and opens it with no macOS warning: you trust this script instead of Apple's notarization, which the build doesn't have yet. From https://getaftercall.vercel.app/download instead, open it once, click Done (not Move to Bin) when macOS says it "could not verify" Aftercall, then Open Anyway in System Settings › Privacy & Security. Allow Microphone and Screen & System Audio Recording.
 
 - **Without a NEAR AI key** you can record a call (no bot joins it; the audio stays sealed on the Mac), open the two made-up sample recordings on Home, and set up payments.
-- **Making notes needs your own NEAR AI API key** from https://cloud.near.ai. Onboarding asks for it (Skip for now works; add it later in Settings). Nothing is sent unless NEAR AI's attestation passes. Test credits (a capped key from Aftercall for each tester) are built and tested, but off until Aftercall's own NEAR AI account is set up, so the app shows only the key field.
+- **Making notes needs your own NEAR AI API key** from https://cloud.near.ai: onboarding asks (Skip for now works; add it later in Settings). Test credits (a capped key from Aftercall for each tester) are built and tested but off until Aftercall's own NEAR AI account is set up, so the app shows only the key field.
 
 ### Full: a payment on testnet
 
@@ -87,7 +87,7 @@ Needs Node 24, pnpm 10 and stable Rust.
 pnpm install && pnpm verify --quick
 ```
 
-You should see a ✓ line for each step and exit code 0: typecheck, unit tests (core, backend, MCP server), the web build, the NEAR signer, the desktop Rust tests (macOS only; listed as skipped on Linux) and the contract's unit tests. It takes a few minutes, longer on a machine's first Rust build. `pnpm verify` also runs the contract on a local NEAR node (20 sandbox tests, about 8 minutes more) and needs:
+You should see a ✓ line per step and exit code 0: typecheck, unit tests, the web build, the NEAR signer, the desktop Rust tests (macOS only; skipped on Linux) and the contract's unit tests, in a few minutes (longer on a first Rust build). `pnpm verify` also runs the contract on a local NEAR node (20 sandbox tests, about 8 minutes more) and needs:
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -110,8 +110,8 @@ Running every part locally: [docs/development.md](docs/development.md).
 ## What it does
 
 1. **Records the call on your Mac.** Your mic and the call's audio, from any app. No bot joins the call.
-2. **Makes the notes inside secure hardware.** Whisper and Qwen run in NEAR AI Cloud's TEEs. The app checks their attestation on every run and encrypts the transcript so only the attested model can read it. Any item without an exact quote from the call is dropped.
-3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, and anyone can re-run the checks in a browser at `/verify`.
+2. **Makes the notes inside secure hardware.** Whisper and Qwen run in NEAR AI Cloud's TEEs, checked on every run; the transcript is encrypted so only the attested model can read it. Any item without an exact quote from the call is dropped.
+3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, and anyone you share the proof link with can re-run the checks in a browser at `/verify`.
 4. **Does what the meeting decided.** The recap goes out with a footer saying what was checked. An agreed USDC payment is made after one tap, within the caps of a NEAR contract; anything over a cap waits for your own wallet.
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting through Aftercall's local MCP server, claims an item, marks it done with a link to the work, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
@@ -144,7 +144,6 @@ The checks are under [How to test](#how-to-test). The full guide, for people and
 
 Every claim with its exact test names: [What is proven](docs/proven.md). What has run live and what hasn't: [Live today](#live-today).
 
-
 ## Live today
 
 | What | Where | Status (7 Nov 2026) |
@@ -159,17 +158,16 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | A sample meeting's public proof link for judges | README | Not yet |
 | Test credits (a capped NEAR AI key per tester) | backend | Built and tested, off until Aftercall's NEAR AI account is set up |
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
-| Coding agents in the Mac app: Connect Claude Code, Hand to an agent, Open in Claude Code, done with a link, agent-drafted follow-ups, projects agents can reach | Mac app, MCP server | Built and tested. Claude Code ran against the MCP server and a stand-in for the app on 1 Nov ([recorded](docs/agents-demo.md)), before these additions; not yet with the Mac app. Codex not yet run |
-| Approvals on a phone: the `/phone` page, the relay, Settings → Your phone | Web app, backend, Mac app | Built, tested and deployed on 7 Nov, when a stand-in Mac (`pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app`) paired with the live `/phone` page through the live relay in a phone-sized browser, and an approve, a dismiss, an autopilot recap and a held payment's wallet link went through. Not yet run with the Mac app or on a real phone |
+| Coding agents: Connect Claude Code, Hand to an agent, done with a link, agent-drafted follow-ups | Mac app, MCP server | Built and tested. Claude Code ran against the MCP server and a stand-in for the app on 1 Nov ([recorded](docs/agents-demo.md)), before most of these existed; not yet with the Mac app. Codex not yet run |
+| Approvals on a phone: the `/phone` page, the relay, Settings → Your phone | Web app, backend, Mac app | Deployed 7 Nov and run end to end with a stand-in Mac in a phone-sized browser (the 5-minute check above). Not yet with the Mac app or on a real phone |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
-**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone, lists what waits for you and approves or dismisses it, end-to-end encrypted through a relay that can't read it (deployed; not yet run with the Mac app or on a real phone). Recording meetings in the room on a phone is a later version. Approving a held payment in your NEAR wallet, and a payee's claim link, also work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
-
+**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone. A held payment's wallet approval and a payee's claim link also work on a phone. Recording meetings in the room on a phone is a later version.
 
 ## How it works
 
 - **Mac app** (Tauri, Rust and React): records both sides of the call, seals audio and notes on disk with a key in the Keychain, and holds a NEAR key that can only call `pay` and `record_proof`. It ships a local MCP server for coding agents.
-- **NEAR AI Cloud:** Whisper and Qwen3.8-27B in TEEs. Every run checks Intel TDX quotes, NVIDIA GPU evidence and the response signature; the transcript is end-to-end encrypted to the attested model, or not sent.
+- **NEAR AI Cloud:** Whisper and Qwen3.8-27B in TEEs, checked on every run ([above](#built-on-nears-newest)).
 - **NEAR contract** (`contracts/agent-wallet`): proof registry, payee list, daily and per-payment caps; over-cap payments wait for the owner's wallet.
 - **Web:** `/verify` re-runs a proof's checks in the browser; `/sign` for owner actions in any NEAR wallet; `/claim` for payees; `/phone` for approvals on a paired phone.
 - **Backend** (NestJS and Postgres): sign-in with NEAR, recap email through Resend, claim links, and the phone relay, which passes sealed boxes it can't open. It keeps nothing about a meeting.
@@ -178,7 +176,7 @@ The full diagram, every check and what each part does with your data: [docs/how-
 
 ## Follow-ups: what leaves, who approves, what's kept
 
-The notes are made inside secure hardware, but a follow-up has to leave it to do anything. This is what each one shares, who can say yes, and what record it leaves. The app says the same in place: each follow-up card has a "What leaves?" line before you approve it (`packages/core/src/followups/boundaries.ts`, tested), each meeting has a "Where this meeting went" trail of what actually left, and the record sheet's Copy notice gives the people on the call a message to read before you record.
+A follow-up has to leave the secure hardware to do anything. This is what each one shares, who can say yes, and what record it leaves. The app says the same in place: a "What leaves?" line on each follow-up card (`packages/core/src/followups/boundaries.ts`, tested) and a "Where this meeting went" trail on each meeting.
 
 | Follow-up | What leaves, and to whom | Who approves | What's kept, and where |
 | --- | --- | --- | --- |
@@ -190,8 +188,8 @@ The notes are made inside secure hardware, but a follow-up has to leave it to do
 | **Claim link** for a new payee | A token hash and the amount, to Aftercall's backend. The payee's name and the meeting title stay in the link itself | The payee chooses where to be paid; you confirm them as a payee in your own wallet | Backend: the token hash, owner, amount, expiry, status and the account the payee shared |
 | **Changing your caps, payees or pause** | A transaction from your wallet, to NEAR | Only your wallet. Each change needs 1 yoctoNEAR attached, which the app's limited key can't attach | On NEAR |
 | **Coding agents** (Claude Code, Codex) | To Aftercall's servers, nothing: agents read meetings over a socket only the running app opens, and only in the projects you let them reach. What an agent reads, it sends to its own model provider, as with anything it reads | You. Agents are off by default; claiming, completing and proposing follow-ups is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim, completion, proposal and refusal (the newest 200), never meeting content |
-| **A follow-up a coding agent proposes** (`draft_follow_up`) | Nothing until you approve it; then the same as the recap or payment rows above | You tap Approve on the Mac. It shows "Proposed by" the agent, with its reason in place of a quote; it never runs on autopilot and never reaches the phone. A payment only to a payee already on your list, within your per-payment cap and what's left today | On the Mac: the proposal, with the agent's name and reason, in the meeting's sealed `notes.json` (a dismissed one stays there, marked dismissed, and a meeting keeps at most 20 from agents); the activity list records it |
-| **Approving from your phone** | Each waiting recap's address and subject; each payment's payee, amount, heard words, route and quote; the meeting's title and start. Sealed to a key only your Mac and phone hold, through Aftercall's relay; a held payment's wallet links also carry your NEAR account and what's left of today's cap. Your taps come back the same way | You, on the phone, with a 5-second undo. The Mac opens each tap, checks the follow-up again and runs its own Approve, Dismiss or Undo under the same rules and caps. A held payment opens your NEAR wallet instead | Relay: the latest sealed snapshot and hashes of the tokens, until you unpair or 30 days after your Mac last called; taps until the Mac collects them, a day at most. Phone: the pairing and the latest snapshot in the browser's storage, until you unpair |
+| **A follow-up a coding agent proposes** (`draft_follow_up`) | Nothing until you approve it; then the same as the recap or payment rows above | You tap Approve on the Mac. It shows "Proposed by" the agent, with its reason in place of a quote; it never runs on autopilot and never reaches the phone. A payment only to a payee already on your list, within your per-payment cap and what's left today | On the Mac: the proposal, with the agent's name and reason, in the meeting's sealed `notes.json` (at most 20 per meeting); the activity list records it |
+| **Approving from your phone** | Each waiting recap's address and subject; each payment's payee, amount, heard words, route and quote; the meeting's title and start. Sealed to a key only your Mac and phone hold, through Aftercall's relay; a held payment's wallet links also carry your NEAR account and what's left of today's cap. Your taps come back the same way | You, on the phone, with a 5-second undo. The Mac checks each tap again and runs its own button under the same rules and caps. A held payment opens your NEAR wallet instead | Relay: the latest sealed snapshot and hashes of the tokens, until you unpair or 30 days after your Mac last called; taps until the Mac collects them, a day at most. Phone: the pairing and the latest snapshot in the browser's storage, until you unpair |
 
 Every meeting also leaves a proof on NEAR, for good: the recording's start time, a hash and the model name, never the meeting itself. The proof link you share carries the checks, hashes and counts, your logged notice and your NEAR account, never the notes or the transcript. Everything else, the field-by-field list with file and line pointers: [docs/privacy.md](docs/privacy.md).
 
