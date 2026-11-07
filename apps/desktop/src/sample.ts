@@ -1,4 +1,4 @@
-import { estimateCost, type Dropped, type Meeting, type Notes, type ProjectBrief } from "@aftercall/core";
+import { estimateCost, type Dropped, type Meeting, type Notes, type PayeeDestination, type ProjectBrief } from "@aftercall/core";
 
 /**
  * Sample data for building the interface before the capture and summary pipeline
@@ -144,6 +144,17 @@ export const syncWithAda: Meeting = {
       payeeListed: true,
       evidence: { quote: "the full five thousand when the deck is done", at: 150 },
     },
+    {
+      id: "f4",
+      kind: "payment",
+      status: "proposed",
+      payeeName: "Kemi",
+      payeeAccount: "kemi.near",
+      amount: 20_000_000n,
+      heard: "twenty dollars",
+      payeeListed: true,
+      evidence: { quote: "send Kemi the twenty dollars for the icons", at: 155 },
+    },
   ],
   transcript: [
     { at: 4, speaker: "you", text: "Hi team, thanks for jumping on. Quick one today, I mainly want to agree on Friday." },
@@ -155,8 +166,17 @@ export const syncWithAda: Meeting = {
       text: "Send Ada the recap after this call, and pay the designer the fifty dollar deposit today.",
     },
     { at: 150, speaker: "you", text: "And the full five thousand when the deck is done." },
+    { at: 155, speaker: "you", text: "Oh, and send Kemi the twenty dollars for the icons. She wants it on Solana." },
     { at: 160, speaker: "others", text: "Great. I'll look out for the recap. Talk Friday." },
   ],
+};
+
+/**
+ * Where the sample's payees are paid off NEAR. Kemi's address was made at random and
+ * nobody holds its key; the sample only ever asks NEAR Intents for a dry quote to it.
+ */
+export const sampleDestinations: Record<string, PayeeDestination> = {
+  "kemi.near": { chain: "solana", address: "UttL3QV9t88hZycjqgxZfUpMPM7tqV4qeqHTKRGHx98" },
 };
 
 /**

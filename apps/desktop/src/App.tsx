@@ -12,7 +12,7 @@ import { LivePill } from "./recording/LivePill";
 import { LiveScreen } from "./recording/LiveScreen";
 import { getSession, openNotes, pressRecordShortcut, useRecordShortcut, useRecordingEvents, useRecordingSession } from "./recording/session";
 import { warnAway } from "./recording/notify";
-import { syncWithAda, syncWithAdaCost, syncWithAdaDropped, syncWithAdaSigned } from "./sample";
+import { sampleDestinations, syncWithAda, syncWithAdaCost, syncWithAdaDropped, syncWithAdaSigned } from "./sample";
 import { spendOf } from "./costs";
 import { isDesktop, recorder, type SavedRecording } from "./recorder";
 import { RecordingScreen } from "./RecordingScreen";
@@ -509,7 +509,7 @@ export default function App() {
         else if (destinations[f.payeeAccount]) payCrossChain(meeting, f, destinations[f.payeeAccount], apply(id)).then(refreshWallet);
         else pay(meeting, f, apply(id)).then(refreshWallet);
       },
-      routeFor: (f: FollowUp) => (sample || f.kind !== "payment" ? null : (destinations[f.payeeAccount] ?? null)),
+      routeFor: (f: FollowUp) => (f.kind !== "payment" ? null : ((sample ? sampleDestinations : destinations)[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
       // A held item keeps its flag, so Undo brings back why it waits; it shows only while proposed.
       onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
