@@ -2,7 +2,7 @@
 
 Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Cloud's secure hardware, and Aftercall's own servers keep nothing about a meeting after a response returns. This page lists every place data goes, what each place keeps and for how long, and the code that enforces it. Line numbers are for this commit.
 
-For the follow-ups in one table (what each sends, who approves it, and what record it leaves), see [Follow-ups: what leaves, who approves, what's kept](../README.md#follow-ups-what-leaves-who-approves-whats-kept) in the README.
+For the follow-ups in one table (what each sends, who approves it, and what record it leaves), see [Follow-ups: what leaves, who approves, what's kept](#follow-ups-what-leaves-who-approves-whats-kept) below.
 
 ## Summary
 
@@ -30,6 +30,25 @@ For the follow-ups in one table (what each sends, who approves it, and what reco
 | A NEAR Intents payment | 1Click API (`1click.chaindefuser.com`) | 1Click's policy: amount, destination address, your refund account |
 | A recovery phrase you keep other than on paper (Copy, Save kit, or Print or save as PDF on a phrase screen) | Your clipboard for up to 60 s; a recovery kit file only where you choose in the Save dialog; or your printer, or a PDF wherever you save it | Not encrypted, and Delete everything can't reach a saved kit or printout. The clipboard is cleared after 60 s, or when you leave the step, if it still holds the words |
 | A meeting you export (Export → Copy as Markdown, or Print or save as PDF) | Your clipboard, then wherever you paste it; or your printer, or a PDF wherever you save it | Not encrypted, and Delete everything can't reach it. Your notes and the transcript only when you tick them; never email addresses, NEAR accounts, transaction ids or proof details |
+
+## Follow-ups: what leaves, who approves, what's kept
+
+A follow-up has to leave the secure hardware to do anything. This is what each one shares, who can say yes, and what record it leaves. The app says the same in place: a "What leaves?" line on each follow-up card (`packages/core/src/followups/boundaries.ts`, tested) and a "Where this meeting went" trail on each meeting.
+
+| Follow-up | What leaves, and to whom | Who approves | What's kept, and where |
+| --- | --- | --- | --- |
+| Recap, **Draft in Mail** (the default) | The summary, decisions and open action items, to your own mail app. Nothing goes to Aftercall's servers | You, when you send it from Mail | Your mail provider. On the Mac: when you drafted it |
+| Recap, **Send through Aftercall** | The same recap, to Aftercall's backend (in memory for one request), then Resend, then the recipient | You tap Send, with a 5-second undo. Autopilot sends only to team domains you list, with a 60-second undo | Resend keeps sent mail under its own policy; the backend keeps a count. On the Mac: the time sent and Resend's email id |
+| **Payment within your caps** | The payee's NEAR account and the amount, to NEAR, with a fixed memo ("Aftercall payment") and an id made of the recording's start time and the follow-up's number. No meeting title or text | You tap Approve. Autopilot pays only listed payees within your per-payment cap and today's allowance, with a 60-second undo. The contract checks the payee list and both caps either way | On NEAR, publicly and for good. On the Mac: the transaction hash |
+| **Payment over a cap** | The same, parked on the contract instead of paid | Only your own NEAR wallet, on the `/sign` page, can approve or decline it. The app's key can't | On NEAR: the parked payment and your decision |
+| **Payment on Solana or Base** (NEAR Intents 1Click) | The amount, the payee's address and your refund account, to the 1Click API; then the payment, to NEAR, with 1Click's deposit address and quote id | As above, and only for payees you opted in, under a cross-chain cap that is 0 (off) until your wallet sets it. Over that cap it's refused, not parked | 1Click's own policy; NEAR as above |
+| **Claim link** for a new payee | A token hash and the amount, to Aftercall's backend. The payee's name and the meeting title stay in the link itself | The payee chooses where to be paid; you confirm them as a payee in your own wallet | Backend: the token hash, owner, amount, expiry, status and the account the payee shared |
+| **Changing your caps, payees or pause** | A transaction from your wallet, to NEAR | Only your wallet. Each change needs 1 yoctoNEAR attached, which the app's limited key can't attach | On NEAR |
+| **Coding agents** (Claude Code, Codex) | To Aftercall's servers, nothing: agents read meetings over a socket only the running app opens, and only in the projects you let them reach. What an agent reads, it sends to its own model provider, as with anything it reads | You. Agents are off by default; claiming, completing and proposing follow-ups is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim, completion, proposal and refusal (the newest 200), never meeting content |
+| **A follow-up a coding agent proposes** (`draft_follow_up`) | Nothing until you approve it; then the same as the recap or payment rows above | You tap Approve on the Mac. It shows "Proposed by" the agent, with its reason in place of a quote; it never runs on autopilot and never reaches the phone. A payment only to a payee already on your list, within your per-payment cap and what's left today | On the Mac: the proposal, with the agent's name and reason, in the meeting's sealed `notes.json` (at most 20 per meeting); the activity list records it |
+| **Approving from your phone** | Each waiting recap's address and subject; each payment's payee, amount, heard words, route and quote; the meeting's title and start. Sealed to a key only your Mac and phone hold, through Aftercall's relay; a held payment's wallet links also carry your NEAR account and what's left of today's cap. Your taps come back the same way | You, on the phone, with a 5-second undo. The Mac checks each tap again and runs its own button under the same rules and caps. A held payment opens your NEAR wallet instead | Relay: the latest sealed snapshot and hashes of the tokens, until you unpair or 30 days after your Mac last called; taps until the Mac collects them, a day at most. Phone: the pairing and the latest snapshot in the browser's storage, until you unpair |
+
+Every meeting also leaves a proof on NEAR, for good: the recording's start time, a hash and the model name, never the meeting itself. The proof link you share carries the checks, hashes and counts, your logged notice and your NEAR account, never the notes or the transcript. Everything else, field by field with file and line pointers, is below.
 
 ## On the Mac
 
