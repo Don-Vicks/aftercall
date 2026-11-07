@@ -88,6 +88,10 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
     else if (!domain || !rules.recapDomains.map((d) => d.toLowerCase().replace(/^@/, "")).includes(domain)) reasons.push("Not your team's domain");
     return { run: reasons.length === 0, reasons };
   }
+  // A deal waits on something (or the model said it did): only you decide it happened.
+  if (f.condition) reasons.push("It waits on a condition: only you can say it's met");
+  else if (f.conditionDropped) reasons.push("The call may have set a condition: check it yourself");
+  if (f.escrow) reasons.push("Held in escrow for the payee to confirm");
   if (!rules.payments) reasons.push("Autopilot payments are off");
   if (!f.payeeListed) reasons.push("Payee isn't on your list");
   if (f.amount === null) reasons.push(AMOUNT_PROBLEM_REASONS[f.amountProblem ?? "unclear"]);

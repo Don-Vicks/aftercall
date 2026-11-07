@@ -70,6 +70,9 @@ test("only follow-ups that wait on someone become items; sent and paid ones are 
   const { evidence: _quote, ...unquoted } = payment;
   assert.equal(toPendingItem(meeting, { ...unquoted, proposedBy: { agent: "Codex", at: "2026-11-02T10:00:00.000Z", reason: "Pay the designer" } }, opts), null);
   assert.equal(toPendingItem(meeting, { ...payment, status: "blocked" }, opts)?.status, "blocked");
+  // A deal waits on the Mac: the phone shows no condition, so it could pay before it's met.
+  assert.equal(toPendingItem(meeting, { ...payment, condition: { text: "when the icons are delivered", evidence: { quote: "once the icons are delivered", at: 0 } } }, opts), null);
+  assert.equal(toPendingItem(meeting, { ...payment, conditionDropped: true }, opts), null);
   assert.equal(toDoneItem(meeting, email), null);
   assert.deepEqual(toDoneItem(meeting, { ...payment, status: "paid", doneAt: "14:06", byAutopilot: true }), { kind: "payment", meetingTitle: "Sync with Ada", label: "Paid Kemi 20.00 USDC", doneAt: "14:06", byAutopilot: true });
   assert.equal(toDoneItem(meeting, { ...email, status: "sent", doneAt: "14:07" })?.label, "Recap sent to Ada");
