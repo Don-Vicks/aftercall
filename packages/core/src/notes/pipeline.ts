@@ -6,7 +6,7 @@ import { mergeTranscript, numberedTranscript, type TranscribedChunk, type Whispe
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import type { E2eeRecord, ProofBundleV2, ProofBundleV3 } from "./bundle.ts";
 import { lineTreeOf } from "./lines.ts";
-import { attestGateway, attestModel, attestedKeys, failedLabels, gatewayChecks, gatewayTlsPin, loadNvidiaKeys, modelChecks, tlsPinMismatch, type ModelAttestation, type TeeEvidence, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
+import { attestGateway, attestModel, attestedKeys, failedLabels, gatewayChecks, gatewayTlsPin, loadNvidiaKeys, modelChecks, tlsPinMismatch, type ModelAttestation, type TeeTransport, type VerifiedTee } from "../tee/attest.ts";
 import { responseChecks, short, signingIdentity, strip0x, type SignatureResponse, type TeeCheck } from "../tee/checks.ts";
 import { encryptMessages, newClientKeys } from "../tee/e2ee.ts";
 import { decodeJwt } from "../tee/nvidia.ts";
