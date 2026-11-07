@@ -38,6 +38,7 @@ The Merkle helpers are exported too: `lineLeafHash`, `merkleRoot`, `merklePath`,
 ## What it can't prove
 
 - That anyone else heard a shared line. It shows the line is in the transcript the recorder's Mac committed to in its proof on NEAR, with that proof's checks.
+- That NEAR AI's model was given that exact line. The Mac commits to its transcript in the proof; NEAR AI's signature covers the encrypted request as a whole, not each line.
 - That the transcript is accurate (Whisper can mishear), or that it came from the attested Whisper TEE: NEAR AI doesn't sign transcriptions.
 - Who said a line. `speaker` is the side: the recorder's microphone or the call's audio, never a name.
 - That the Intel quotes were genuine. The app verified them with Intel when it made the notes, and the proof records the values it read. This package re-checks the values; it can't re-run Intel's verification, because the quotes aren't in the link.
