@@ -6,7 +6,7 @@ A guide for reviewing this repository, written for people and for coding agents 
 
 - **What it is:** a Mac app for meeting notes. The call is transcribed and summarised inside NEAR AI Cloud's secure hardware (TEEs), checked by attestation on every run, and a proof of that goes on NEAR that anyone can re-check in a browser.
 - **What it does next:** the meeting's follow-ups. The recap email, and USDC payments to people the meeting agreed to pay, from a NEAR contract whose caps the app can't get around.
-- **Where it stands (6 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. Payments from the app haven't run on testnet yet.
+- **Where it stands (7 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. Payments from the app haven't run on testnet yet. The newest parts, more for coding agents and approvals on a phone, are built and tested but haven't run live.
 
 ## Checks to run
 
@@ -35,7 +35,11 @@ Each claim names the code that does it and the tests that check it. The full lis
 | Payments go only to listed payees within a daily and a per-payment cap; over a cap they wait for the owner's own wallet | `contracts/agent-wallet/src/lib.rs` | `over_cap_is_blocked_then_owner_approves`, `per_payment_cap_parks_big_single_payments` (sandbox) |
 | Payments to Solana or Base through NEAR Intents 1Click stay under the same caps and a cross-chain cap that is off until the owner sets it | `packages/core/src/intents/oneclick.ts`, `contracts/agent-wallet/src/lib.rs` | `cross_chain_pays_the_deposit_address_within_caps` (sandbox), `oneclick.test.ts` |
 | The backend keeps nothing about a recap; claim links keep a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts` ("a sent recap leaves only counts behind…"), `claims.test.ts` |
-| Coding agents only read until the owner allows more, and never send, pay or change rules | `apps/desktop/src-tauri/src/agents.rs`, `apps/mcp/` | `agents_read_only_by_default…` (`agents.rs`), `apps/mcp/src/tools.test.ts` |
+| Coding agents only read until the owner allows more, reach only the projects the owner chose, and never send, pay or change rules | `apps/desktop/src-tauri/src/agents.rs`, `apps/mcp/` | `agents_read_only_by_default_and_are_told_which_switch_to_turn_on`, `agents_reach_only_the_projects_the_user_chose` (`agents.rs`), `apps/mcp/src/tools.test.ts` |
+| A follow-up an agent proposes waits for the owner's tap: it never runs on autopilot, never reaches the phone, and pays only a listed payee within the caps | `agents.rs` (`draft`), `packages/core/src/followups/autopilot.ts`, `packages/core/src/relay/messages.ts` | `agents_propose_payments_only_to_listed_payees_within_the_caps` (`agents.rs`); `autopilot.test.ts` ("a follow-up a coding agent proposed never runs by itself, even when every rule passes"); `messages.test.ts` ("only follow-ups that wait on someone become items…") |
+| "Done" carries the agent's link as the agent's word: only a plain http or https link is kept, and a recap lists agents' work only when the owner turns that on | `packages/core/src/agents/work.ts`, `packages/core/src/followups/recap.ts`, `agents.rs` | `work.test.ts`; `recap.test.ts` ("with agentWork, items agents finished are listed as the agents' statement, with their links"); `complete_with_a_link_to_the_work_and_only_a_plain_web_link` (`agents.rs`) |
+| Handing an item to an agent quotes the meeting's words as data, and Open in Claude Code never puts them in a shell command | `packages/core/src/agents/handoff.ts`, `agents.rs` (`open_in_claude_code`) | `handoff.test.ts` ("the meeting's words are data…"); `open_in_claude_code_passes_the_prompt_as_one_argument_never_as_code` (`agents.rs`) |
+| The phone sees only what approving needs, sealed (X25519, XChaCha20-Poly1305) so the relay can't read or forge it; the Mac re-checks every tap and then runs the app's own button | `packages/core/src/relay/`, `apps/backend/src/relay/` | `messages.test.ts` ("fields outside the schema never ride along…"); `mac.test.ts` ("pair, snapshot, tap and act, through a fake relay that holds only hashes and boxes", "an action is refused when the follow-up changed…"); `relay.test.ts` ("nothing readable is stored…"); `crypto.test.ts` ("a key swapped in by someone who saw the QR gives different codes and keys") |
 
 ## Tracks
 
@@ -57,6 +61,8 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 - Test credits (a capped NEAR AI key for each tester) are built and tested against a stand-in for NEAR AI's API, and are off until Aftercall's own NEAR AI account exists.
 - The Mac app is an unsigned test build; macOS asks once to open it.
 - Audio isn't end-to-end encrypted, because NEAR AI has none for transcription. It goes over TLS pinned to the key the gateway's attestation binds.
+- Coding agents: Claude Code was recorded against the MCP server and a stand-in for the app ([agents-demo.md](agents-demo.md)), before Hand to an agent, Open in Claude Code, links, proposals and projects existed. None of those has run with the Mac app and a real Claude Code session yet, and Codex hasn't run at all.
+- Approvals on a phone: the relay and the `/phone` page aren't deployed yet, and the Mac app, the relay and a real phone haven't run together; the parts are tested against fakes, and `pnpm dev:phone` shows the page against a stand-in Mac. No push notifications yet: the page checks for news every 10 s while it's open.
 - Everything else not yet run live is listed at the end of [proven.md](proven.md).
 
 ## How it was built
