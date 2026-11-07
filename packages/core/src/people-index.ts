@@ -36,6 +36,8 @@ export interface PersonPayment {
   followUpId: string;
   amount: bigint | null;
   heard: string;
+  /** The coding agent that proposed it, when it came from an agent and not the call (so nothing was heard). */
+  proposedBy?: string;
   status: FollowUpStatus;
   doneAt?: string;
 }
@@ -446,7 +448,7 @@ export function buildPeople(meetings: Meeting[], opts: { me?: readonly string[];
     for (const f of m.followUps) {
       if (f.kind !== "payment") continue;
       const p = f.payeeAccount ? drafts.get(`near:${f.payeeAccount.toLowerCase()}`) : f.payeeName ? assignedTo(f.payeeName, m) : undefined;
-      p?.payments.push({ ...base, followUpId: f.id, amount: f.amount, heard: f.heard, status: f.status, doneAt: f.doneAt });
+      p?.payments.push({ ...base, followUpId: f.id, amount: f.amount, heard: f.heard, ...(f.proposedBy ? { proposedBy: f.proposedBy.agent } : {}), status: f.status, doneAt: f.doneAt });
     }
 
     const solo = oneToOne[m.id] ? drafts.get(oneToOne[m.id]) : undefined;
