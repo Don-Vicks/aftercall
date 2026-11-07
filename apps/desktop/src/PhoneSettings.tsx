@@ -80,9 +80,9 @@ export function PhoneSettings() {
       {paired && phone.problem && <p className="m-0 text-[13px] leading-[19px] text-caution">Your phone can't hear from this Mac right now: {phone.problem}</p>}
       <Why>
         Your phone sees each waiting recap's address and subject, each payment's payee, amount and the words it was heard as, the quote from the call behind it, and
-        the meeting's title and time. Never the summary, the transcript or your notes, and never this Mac's NEAR key, your caps or your payee list. Aftercall's
+        the meeting's title and time. Never the summary, the transcript or your notes, and never this Mac's NEAR key, your rules or your payee list. Aftercall's
         backend passes sealed boxes between the two that it can't read. This Mac checks every tap again before it runs it, under the same rules and caps; a
-        payment over a cap opens your NEAR wallet on the phone.
+        payment over a cap opens your NEAR wallet on the phone, so its link also carries your NEAR account and what's left of today's cap.
       </Why>
       <AnimatePresence>{pairing && <PairSheet key="pair" onClose={() => setPairing(false)} />}</AnimatePresence>
     </section>

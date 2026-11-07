@@ -20,7 +20,8 @@ Version 1 has no push notifications. The phone asks the relay for news every 10 
 | "What leaves" lines (`emailWhatLeaves`, `paymentWhatLeaves` in `packages/core/src/followups/boundaries.ts`) | Yes | The same boundaries as on the Mac's cards |
 | Meeting title and start time | Yes | To tell meetings apart |
 | Summary, decisions, action items, transcript, your notes, proofs | Never | Not needed to approve anything |
-| The app's NEAR key, your caps, rules, payee list | Never | Rules and keys stay on the Mac and in your wallet |
+| A held payment's wallet links (`signUrls`): your NEAR account, the contract, and what's left of today's cap | Yes, for a payment held over a cap | The wallet page shows them, as from the Mac's wallet screen |
+| The app's NEAR key, your rules, payee list, and your caps otherwise | Never | Rules and keys stay on the Mac and in your wallet |
 
 Every item is built by `toPendingItem` and every snapshot is checked against `SnapshotSchema` before it's sealed: `sealSnapshot` seals the parsed copy, so a field outside the schema (a summary, a transcript) can't ride along even by mistake. A test checks this ("fields outside the schema never ride along…").
 

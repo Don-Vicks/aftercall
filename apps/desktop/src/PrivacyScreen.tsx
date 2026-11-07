@@ -48,7 +48,7 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
     icon: <Smartphone size={14} strokeWidth={1.75} />,
     name: "Your paired phone",
     kind: "Only if you pair one",
-    sees: "What waits for you: each recap's address and subject, each payment's payee, amount and the words it was heard as, the quote behind it, the meeting's title and time. Never the summary, transcript or your notes.",
+    sees: "What waits for you: each recap's address and subject, each payment's payee, amount and the words it was heard as, the quote behind it, the meeting's title and time. For a payment held over a cap, your NEAR account and what's left of today's cap, for your wallet. Never the summary, transcript or your notes.",
     keeps: "The latest snapshot, in the phone browser's storage for Aftercall's site, until you unpair.",
   },
   {
