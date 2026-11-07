@@ -167,6 +167,8 @@ export function PhoneClient() {
         const tried = helloAttempt(start);
         await persist(tried);
         const next = afterHello(tried, await phoneRelay(tried).hello(tried.hello));
+        // A new link or Start over while the hello was out: that answer is for a record gone since.
+        if (pairingRef.current?.id !== tried.id) return;
         if ("problem" in next) return void (await forget(next.problem === "taken" ? "taken" : "cancelled"));
         await persist(next.pairing);
         setNet((n) => ({ ...n, unreachable: false }));
