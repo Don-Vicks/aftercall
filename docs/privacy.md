@@ -170,7 +170,7 @@ The protocol is [docs/design/phone-protocol.md](design/phone-protocol.md).
 ## Other services
 
 - NEAR Intents 1Click (`packages/core/src/intents/oneclick.ts:13`), only for payees you opted in to paying on Solana or Base: the amount, the destination address and your NEAR account for refunds.
-- NEAR RPC (FastNEAR by default) sees the account and contract reads and the transactions the app sends.
+- NEAR RPC (FastNEAR by default) sees the account and contract reads and the transactions the app sends. On `/deal`, the payee's browser asks FastNEAR for the escrow and the meeting's proof by owner, escrow id and meeting id (`readDealOnChain`), never the terms, and their wallet sends the confirmation; NEAR Connect loads its wallet list as on `/sign`.
 
 ## Sample recordings
 
