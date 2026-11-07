@@ -18,6 +18,7 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 2. **Makes the notes inside secure hardware.** Whisper and Qwen run in NEAR AI Cloud's TEEs. The app checks their attestation on every run and encrypts the transcript so only the attested model can read it. Any item without an exact quote from the call is dropped.
 3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, and anyone can re-run the checks in a browser at `/verify`.
 4. **Does what the meeting decided.** The recap goes out with a footer saying what was checked. An agreed USDC payment is made after one tap, within the caps of a NEAR contract; anything over a cap waits for your own wallet.
+5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting through Aftercall's local MCP server, claims an item, marks it done with a link to the work, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
 <table>
 <tr>
@@ -69,13 +70,14 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 | The app's key can only `pay` and `record_proof`, within the caps; over-cap payments wait for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
 | Anyone can re-run a proof's checks in a browser | `apps/web/app/verify/` | `verify.test.ts`, `proof.test.ts` |
 | The backend keeps nothing about a recap; claim links keep only a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts`, `claims.test.ts` |
+| A follow-up a coding agent proposes waits for your tap: never autopilot, never the phone, payments only to listed payees within your caps | `apps/desktop/src-tauri/src/agents.rs`, `packages/core/src/followups/autopilot.ts` | `agents.rs` tests, `autopilot.test.ts`, `apps/mcp/src/tools.test.ts` |
 
 Every claim with its exact test names: [What is proven](docs/proven.md). What has run live and what hasn't: [Live today](#live-today).
 
 
 ## Live today
 
-| What | Where | Status (6 Nov 2026) |
+| What | Where | Status (7 Nov 2026) |
 | --- | --- | --- |
 | Website, browser demo, install guide | https://getaftercall.vercel.app | Live |
 | Test build for Mac (Apple silicon and Intel) | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
@@ -87,6 +89,7 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | A sample meeting's public proof link for judges | README | Not yet |
 | Test credits (a capped NEAR AI key per tester) | backend | Built and tested, off until Aftercall's NEAR AI account is set up |
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
+| Coding agents in the Mac app: Connect Claude Code, Hand to an agent, Open in Claude Code, done with a link, agent-drafted follow-ups, projects agents can reach | Mac app, MCP server | Built and tested. Claude Code ran against the MCP server and a stand-in for the app on 1 Nov ([recorded](docs/agents-demo.md)), before these additions; not yet with the Mac app. Codex not yet run |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
 **Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone, lists what waits for you and approves or dismisses it, end-to-end encrypted through a relay that can't read it. Recording meetings in the room on a phone is a later version. Approving a held payment in your NEAR wallet, and a payee's claim link, also work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
@@ -94,7 +97,7 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 
 ## How it works
 
-- **Mac app** (Tauri, Rust and React): records both sides of the call, seals audio and notes on disk with a key in the Keychain, and holds a NEAR key that can only call `pay` and `record_proof`.
+- **Mac app** (Tauri, Rust and React): records both sides of the call, seals audio and notes on disk with a key in the Keychain, and holds a NEAR key that can only call `pay` and `record_proof`. It ships a local MCP server for coding agents.
 - **NEAR AI Cloud:** Whisper and Qwen3.8-27B in TEEs. Every run checks Intel TDX quotes, NVIDIA GPU evidence and the response signature; the transcript is end-to-end encrypted to the attested model, or not sent.
 - **NEAR contract** (`contracts/agent-wallet`): proof registry, payee list, daily and per-payment caps; over-cap payments wait for the owner's wallet.
 - **Web:** `/verify` re-runs a proof's checks in the browser; `/sign` for owner actions in any NEAR wallet; `/claim` for payees.
@@ -115,7 +118,8 @@ The notes are made inside secure hardware, but a follow-up has to leave it to do
 | **Payment on Solana or Base** (NEAR Intents 1Click) | The amount, the payee's address and your refund account, to the 1Click API; then the payment, to NEAR, with 1Click's deposit address and quote id | As above, and only for payees you opted in, under a cross-chain cap that is 0 (off) until your wallet sets it. Over that cap it's refused, not parked | 1Click's own policy; NEAR as above |
 | **Claim link** for a new payee | A token hash and the amount, to Aftercall's backend. The payee's name and the meeting title stay in the link itself | The payee chooses where to be paid; you confirm them as a payee in your own wallet | Backend: the token hash, owner, amount, expiry, status and the account the payee shared |
 | **Changing your caps, payees or pause** | A transaction from your wallet, to NEAR | Only your wallet. Each change needs 1 yoctoNEAR attached, which the app's limited key can't attach | On NEAR |
-| **Coding agents** (Claude Code, Codex) | Nothing leaves the Mac: agents read meetings over a socket only the running app opens | You. Agents are off by default; claiming and completing action items is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim and refusal (the newest 200), never meeting content |
+| **Coding agents** (Claude Code, Codex) | To Aftercall's servers, nothing: agents read meetings over a socket only the running app opens, and only in the projects you let them reach. What an agent reads, it sends to its own model provider, as with anything it reads | You. Agents are off by default; claiming, completing and proposing follow-ups is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim, completion, proposal and refusal (the newest 200), never meeting content |
+| **A follow-up a coding agent proposes** (`draft_follow_up`) | Nothing until you approve it; then the same as the recap or payment rows above | You tap Approve on the Mac. It shows "Proposed by" the agent, with its reason in place of a quote; it never runs on autopilot and never reaches the phone. A payment only to a payee already on your list, within your per-payment cap and what's left today | On the Mac: the proposal, with the agent's name and reason, in the meeting's sealed `notes.json` (a dismissed one stays there, marked dismissed); the activity list records it |
 
 Every meeting also leaves a proof on NEAR, for good: the recording's start time, a hash and the model name, never the meeting itself. The proof link you share carries the checks, hashes and counts, your logged notice and your NEAR account, never the notes or the transcript. Everything else, the field-by-field list with file and line pointers: [docs/privacy.md](docs/privacy.md).
 
@@ -144,7 +148,7 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 | [docs/privacy.md](docs/privacy.md) | What leaves the Mac, and who keeps what |
 | [docs/development.md](docs/development.md) | Running every part locally, and what each check shows |
 | [docs/plan.md](docs/plan.md) | The build plan by milestone, and the submission checklist |
-| [docs/agents-demo.md](docs/agents-demo.md) | Claude Code on Aftercall's MCP server |
+| [docs/agents-demo.md](docs/agents-demo.md) | Claude Code on Aftercall's MCP server: the recorded run, Connect Claude Code, and what agents can do since |
 | [docs/near-intents-1click.md](docs/near-intents-1click.md) | Paying a payee on Solana or Base through NEAR Intents 1Click |
 | [docs/staking-for-inference.md](docs/staking-for-inference.md) | Paying for notes by staking NEAR |
 | [docs/design/phone.md](docs/design/phone.md) | Aftercall on a phone: approvals (built, no push notifications yet), then in-room meetings (not built) |
