@@ -26,9 +26,12 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
  */
 export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItems">, f: Pick<EmailFollowUp, "to">, opts: { backend: boolean; agentWork?: boolean }): WhatLeaves {
   const open = meeting.actionItems.filter((a) => !a.done).length;
-  const work = opts.agentWork ? agentWorkItems(meeting).length : 0;
+  const work = opts.agentWork ? agentWorkItems(meeting) : [];
   const to = f.to.trim() ? `to ${f.to.trim()}` : "to the address you add";
-  const agents = work ? `, ${count(work, "item a coding agent marked done, with its link", "items coding agents marked done, with their links")}` : "";
+  const links = work.filter((w) => w.link).length;
+  const agents = work.length
+    ? `, ${count(work.length, "item a coding agent marked done", "items coding agents marked done")}${links ? ` (${count(links, "link", "links")} to the work)` : ""}`
+    : "";
   const details = [
     `The recap holds the summary, ${count(meeting.decisions.length, "decision", "decisions")}, ${count(open, "open action item", "open action items")}${agents} and a footer on what was checked. It goes ${to}.`,
     "Draft in Mail opens it in your own mail app; Aftercall's servers never see it.",

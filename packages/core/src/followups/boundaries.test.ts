@@ -34,7 +34,9 @@ test("a recap's what-leaves counts what buildRecap puts in, and names the addres
 test("a recap that says what agents finished counts those items too, as the recap does", () => {
   const done = { agent: "Claude Code", at: "2026-11-02T10:00:00.000Z", link: "https://github.com/acme/api/pull/42" };
   const m = { ...meeting, actionItems: [...meeting.actionItems, { id: "a4", text: "Fix the login bug", owner: "You", done: true, completed: done }] };
-  assert.match(emailWhatLeaves(m, email, { backend: false, agentWork: true }).details[0], /2 open action items, 1 item a coding agent marked done, with its link and a footer/);
+  assert.match(emailWhatLeaves(m, email, { backend: false, agentWork: true }).details[0], /2 open action items, 1 item a coding agent marked done \(1 link to the work\) and a footer/);
+  const noLink = { ...m, actionItems: m.actionItems.map((a) => (a.completed ? { ...a, completed: { agent: "Codex", at: done.at } } : a)) };
+  assert.match(emailWhatLeaves(noLink, email, { backend: false, agentWork: true }).details[0], /1 item a coding agent marked done and a footer/, "no link, none counted");
   assert.doesNotMatch(emailWhatLeaves(m, email, { backend: false }).details[0], /coding agent/, "off unless the recap includes them");
   const facts: RecapFacts = { verified: true, e2ee: true, handlingUrl: "https://x/handling" };
   assert.equal((buildRecap(m, email, { facts, agentWork: true }).text.match(/^- /gm) ?? []).length, 3);
