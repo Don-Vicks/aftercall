@@ -1,11 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isYou, type Meeting } from "@aftercall/core";
 import { account as sampleAccount } from "./sample";
+import { unpair } from "./phone";
 
 /**
  * Data helpers shared by the library screens: People, Person, Ask, All meetings
- * and Action items. They read the meetings already in the app; nothing here
- * leaves the Mac.
+ * and Action items. They read the meetings already in the app; nothing from a
+ * meeting leaves the Mac.
  */
 
 /**
@@ -33,9 +34,13 @@ export interface Wiped {
   keychainFailed: string[];
 }
 
-/** Deletes the app's data folder and Keychain items, then the interface's own settings. */
+/**
+ * Deletes the app's data folder and Keychain items, then the interface's own settings.
+ * A paired phone is unpaired on the relay too, with the token still in memory.
+ */
 export async function deleteEverything(): Promise<Wiped> {
   const wiped = await invoke<Wiped>("delete_all_data");
+  await unpair().catch(() => false);
   try {
     for (const key of Object.keys(localStorage)) if (key.startsWith("aftercall.")) localStorage.removeItem(key);
   } catch {

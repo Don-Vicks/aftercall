@@ -107,6 +107,8 @@ interface FollowUpBase {
   autopilotHeld?: boolean;
   /** Set when autopilot sent or paid it, rather than a person approving it. */
   byAutopilot?: boolean;
+  /** Set when you approved it on your paired phone and the Mac sent or paid it (docs/design/phone-protocol.md). */
+  byPhone?: boolean;
 }
 
 export interface EmailFollowUp extends FollowUpBase {

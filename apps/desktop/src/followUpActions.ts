@@ -123,6 +123,11 @@ const DRY_QUOTE_REFUND = "near";
 /** A live quote; `quoteOnly` when this agent wallet can't send it (not on mainnet). */
 export type RoutePreview = PayoutPreview & { quoteOnly?: boolean };
 
+/** The latest preview per route and amount, for a paired phone's snapshot (`quoted`). Approving always asks again. */
+const previews = new Map<string, { amountOut: string; at: number }>();
+const previewKey = (f: PaymentFollowUp, dest: PayeeDestination) => `${dest.chain}:${dest.address}:${f.amount}`;
+export const latestPreview = (f: PaymentFollowUp, dest: PayeeDestination) => previews.get(previewKey(f, dest));
+
 /** A dry 1Click quote: what the payee would get, without creating a deposit address. */
 export async function previewCrossChain(f: PaymentFollowUp, dest: PayeeDestination): Promise<RoutePreview> {
   if (f.amount === null) throw new Error("Amount unclear");
@@ -130,6 +135,7 @@ export async function previewCrossChain(f: PaymentFollowUp, dest: PayeeDestinati
   const mainnet = config?.network === "mainnet";
   const refundTo = mainnet && config ? config.account : DRY_QUOTE_REFUND;
   const preview = previewOf(await oneClick.quote({ amount: f.amount, chain: dest.chain, recipient: dest.address, refundTo, dry: true }));
+  previews.set(previewKey(f, dest), { amountOut: preview.amountOut.toString(), at: Date.now() });
   return mainnet ? preview : { ...preview, quoteOnly: true };
 }
 

@@ -145,6 +145,9 @@ export function deferred({
   return handleFor(key);
 }
 
+/** Whether the deferred action with this id is still waiting: a 5 s window a phone's tap mustn't race. */
+export const isDeferred = (id: string) => pending.has(id);
+
 /** A deferred action that is still waiting, for a row that shows its own countdown. */
 export interface PendingDeferred extends DeferredHandle {
   startedAt: number;

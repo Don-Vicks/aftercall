@@ -8,6 +8,7 @@ mod live_window;
 mod near;
 mod nearai;
 mod notes_file;
+mod phone;
 mod projects;
 mod recorder;
 mod recovery;
@@ -884,6 +885,30 @@ fn sweep_audio(recordings: &std::path::Path) -> usize {
     entries.flatten().filter(|e| e.path().join("notes.json").is_file()).map(|e| delete_audio_in(&e.path()).unwrap_or(0)).sum()
 }
 
+/// The paired phone, read at launch: phone.json and its Keychain item, or None.
+#[tauri::command]
+fn phone_load(app: AppHandle) -> Result<Option<phone::Pairing>, String> {
+    phone::load(&data_dir(&app)?)
+}
+
+/// Keeps a phone you just paired (after They match), replacing any other.
+#[tauri::command]
+fn phone_pair(app: AppHandle, state: phone::PhoneState, secrets: phone::PhoneSecrets) -> Result<(), String> {
+    phone::pair(&data_dir(&app)?, &state, &secrets)
+}
+
+/// Saves the paired phone's counters and results; a counter never goes back.
+#[tauri::command]
+fn phone_save(app: AppHandle, state: phone::PhoneState) -> Result<(), String> {
+    phone::save(&data_dir(&app)?, &state)
+}
+
+/// Forgets the paired phone on this Mac (Unpair, or the relay forgot it).
+#[tauri::command]
+fn phone_forget(app: AppHandle) -> Result<(), String> {
+    phone::forget(&data_dir(&app)?)
+}
+
 #[tauri::command]
 fn nearai_set_key(key: String) -> Result<(), String> {
     nearai::set_key(&key)
@@ -1265,6 +1290,10 @@ pub fn run() {
             agents_set_wallet,
             agents_set_projects,
             delete_audio,
+            phone_load,
+            phone_pair,
+            phone_save,
+            phone_forget,
             nearai_set_key,
             nearai_has_key,
             nearai_clear_key,

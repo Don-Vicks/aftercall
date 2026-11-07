@@ -7,6 +7,8 @@ import { CalendarSettings } from "./CalendarSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import type { CalendarStatus } from "./calendar";
 import { NearAiSettings } from "./NearAiSettings";
+import { CAN_PAIR, usePhone } from "./phone";
+import { PhoneSettings } from "./PhoneSettings";
 import type { Spend } from "./costs";
 import { KEY_METHODS } from "./near";
 import { useNearSetup, type NearSetup } from "./nearSetup";
@@ -25,6 +27,7 @@ import { Button, Card, Pill, SectionTitle, Spinner, cx } from "./ui";
  */
 export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPrivacy?: () => void; spend?: Spend | null; spendIsSample?: boolean } = {}) {
   const n = useNearSetup();
+  const phone = usePhone();
   const [nearAi, setNearAi] = useState(false);
   const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
   /** Set up payments, open at a step ("auto": the first one not done). */
@@ -39,6 +42,7 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
     { id: "settings-shortcut", label: "Shortcut" },
     { id: "settings-recaps", label: "Recaps" },
     { id: "settings-autopilot", label: "Autopilot" },
+    ...(CAN_PAIR ? [{ id: "settings-phone", label: "Your phone", done: Boolean(phone.paired) }] : []),
   ];
 
   const jump = (id: string) => {
@@ -123,8 +127,14 @@ export function ConnectNear({ onOpenPrivacy, spend, spendIsSample }: { onOpenPri
             <AutopilotSettings />
           </div>
 
+          {CAN_PAIR && (
+            <div id="settings-phone" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(9)}>
+              <PhoneSettings />
+            </div>
+          )}
+
           {onOpenPrivacy && (
-            <Card as="button" interactive pad="none" onClick={onOpenPrivacy} className="w-full" style={rise(9)}>
+            <Card as="button" interactive pad="none" onClick={onOpenPrivacy} className="w-full" style={rise(10)}>
               <span className="flex items-center gap-3.5 px-5 py-4">
                 <IconDisc tone="verdigris">
                   <ShieldCheck size={16} strokeWidth={1.75} />

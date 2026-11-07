@@ -25,6 +25,8 @@ For the follow-ups in one table (what each sends, who approves it, and what reco
 | Claim link | Aftercall backend | Token hash, owner, amount, expiry, status, the account the payee shared. The payee's name and the meeting title stay in the link |
 | Sign-in | Aftercall backend | A one-time nonce for up to 5 minutes, in memory. Sessions are signed tokens; no session table |
 | Usage stats | Aftercall backend | Counts only (`emails_sent`, claim totals), never per account or per meeting |
+| What waits for you, if you pair a phone: each pending recap's address and subject, each payment's payee, amount, heard words and route, the quote behind it, the meeting's title and start time; for a payment held over a cap, its wallet links, which carry your NEAR account and what's left of today's cap | Your phone, through the Aftercall backend's relay, sealed (XChaCha20-Poly1305) under a key only the Mac and the phone hold. Never the summary, decisions, action items, transcript or your notes | Backend: the latest sealed snapshot and token hashes, which it can't open, until you unpair or 30 days after your Mac last called. Phone: the latest snapshot, in the browser's storage for Aftercall's site, until you unpair |
+| Your taps on a paired phone (approve, dismiss, undo autopilot) | Your Mac, through the relay, sealed and padded to one size | Backend: until your Mac collects them, a day at most |
 | A NEAR Intents payment | 1Click API (`1click.chaindefuser.com`) | 1Click's policy: amount, destination address, your refund account |
 | A recovery phrase you keep other than on paper (Copy, Save kit, or Print or save as PDF on a phrase screen) | Your clipboard for up to 60 s; a recovery kit file only where you choose in the Save dialog; or your printer, or a PDF wherever you save it | Not encrypted, and Delete everything can't reach a saved kit or printout. The clipboard is cleared after 60 s, or when you leave the step, if it still holds the words |
 | A meeting you export (Export → Copy as Markdown, or Print or save as PDF) | Your clipboard, then wherever you paste it; or your printer, or a PDF wherever you save it | Not encrypted, and Delete everything can't reach it. Your notes and the transcript only when you tick them; never email addresses, NEAR accounts, transaction ids or proof details |
@@ -42,7 +44,7 @@ For the follow-ups in one table (what each sends, who approves it, and what reco
 - The NEAR AI key lives in the macOS Keychain and never reaches the web view: `apps/desktop/src-tauri/src/nearai.rs:43`.
 - Calendar lookups (EventKit), search, the People list, the MCP server for agents (shipped inside the app as `mcp/aftercall-mcp.mjs` and run with your own `node`) and backups are all local.
 - To warn when your mic or the call goes silent, and to ask "Call ended?", the recorder measures each side's loudness over each second (`apps/desktop/src-tauri/src/recorder.rs`). The levels aren't saved. A warning notification goes out only when Aftercall's window isn't focused, and says only which side went silent and that recording goes on (`warningText`, `apps/desktop/src/recording/notify.tsx`).
-- **Delete everything on this Mac** (Settings → Privacy and your data) removes the app's data folder (with the agent settings and the agent activity list) and its four Keychain items (`data-key`, `near-app-key`, `nearai-api-key`, `backup-key` under `dev.aftercall.app`), after you type "delete": `apps/desktop/src-tauri/src/wipe.rs`, called by `delete_all_data` in `lib.rs`. The folder goes first and the keys only once it's gone. Proofs and payments on NEAR, this Mac's access key on your NEAR account, the agent wallet's balance, backups you exported and meetings you copied or printed stay.
+- **Delete everything on this Mac** (Settings → Privacy and your data) removes the app's data folder (with the agent settings, the agent activity list and a paired phone's `phone.json`) and its five Keychain items (`data-key`, `near-app-key`, `nearai-api-key`, `backup-key`, `phone-relay` under `dev.aftercall.app`), after you type "delete": `apps/desktop/src-tauri/src/wipe.rs`, called by `delete_all_data` in `lib.rs`. The folder goes first and the keys only once it's gone. A paired phone is then unpaired on the relay as well (`deleteEverything`, `apps/desktop/src/library.ts`). Proofs and payments on NEAR, this Mac's access key on your NEAR account, the agent wallet's balance, backups you exported and meetings you copied or printed stay.
 
 ## NEAR AI Cloud
 
@@ -117,6 +119,17 @@ Off by default. While on, agents reach meetings only through the running app's o
 
 - NEP-413 sign-in keeps a single-use nonce in memory until it is checked or expires (`apps/backend/src/auth/auth.service.ts:55`); sessions are signed tokens, not rows.
 - `/stats` returns counts only (`apps/backend/src/stats/stats.test.ts:33`).
+
+## A paired phone
+
+The protocol is [docs/design/phone-protocol.md](design/phone-protocol.md).
+
+- What the phone may see is decided by one schema: each item is built by `toPendingItem` from a follow-up and its meeting's title and start only, and `sealSnapshot` seals the parsed snapshot, so no other field can ride along (`packages/core/src/relay/messages.ts`; the Mac's snapshot builder is `buildSnapshot` in `packages/core/src/relay/mac.ts`).
+- The relay sees opaque boxes, when each side calls, and the pairing id and both bearer tokens only as sha256 hashes at rest. Every action box is padded to the same size, so it can't tell an approve from a dismiss. The pairing travels in the QR code's URL fragment, which browsers never send to a server.
+- Keys: the Mac's relay secret key, its relay token and the session key are one Keychain item, `phone-relay`; the pairing id, the phone's label and public key, and the counters are in `phone.json`, sealed like the other settings (`apps/desktop/src-tauri/src/phone.rs`). The app's window holds the session key in memory while it runs, because the relay's cryptography is the shared TypeScript in `packages/core/src/relay/`.
+- A tap does nothing by itself: the Mac opens it, refuses a replayed, reflected or tampered box, re-checks the follow-up as it is now (`checkPhoneAction`), and only then runs the app's own Approve, Dismiss or Undo, under the same rules and caps (`handlePhoneActions` in `packages/core/src/relay/mac.ts`, called from `apps/desktop/src/phoneSync.ts`).
+- Tested: `packages/core/src/relay/mac.test.ts` pairs, posts a snapshot, taps and acts through a fake relay, and checks the relay holds no name, amount, quote, label or token in readable form.
+- Unpair (Settings → Your phone) deletes the pairing, its snapshot and its waiting taps on the relay, then the Keychain item and `phone.json`.
 
 ## NEAR blockchain (public, permanent)
 

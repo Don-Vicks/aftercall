@@ -87,7 +87,7 @@ export interface WalletView {
 export const oneClick = createOneClickClient({ fetch: (url, init) => fetch(url, init) });
 
 /** A follow-up's id on the contract: unique per user across meetings. */
-export const contractFollowupId = (meetingId: string, followupId: string) => `${meetingId}-${followupId}`;
+export { contractFollowupId } from "@aftercall/core";
 
 /** The signing page didn't answer, so nothing was opened. Its message says how to start it. */
 export class SignPageDown extends Error {}

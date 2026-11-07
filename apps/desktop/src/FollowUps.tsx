@@ -405,7 +405,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             : "open";
 
   let sub: ReactNode;
-  if (state === "sent") sub = f.byAutopilot ? "Sent by autopilot · every rule passed" : `Sent through Aftercall · ${f.to}`;
+  if (state === "sent") sub = f.byAutopilot ? "Sent by autopilot · every rule passed" : f.byPhone ? `Approved on your phone · ${f.to}` : `Sent through Aftercall · ${f.to}`;
   else if (state === "sending") sub = `To ${f.to}`;
   else if (state === "drafted") sub = `Opened as a draft in your Mail · “${f.subject}”`;
   else if (!f.to)
@@ -660,6 +660,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
 
   let sub: ReactNode;
   if (paid && f.byAutopilot) sub = "By autopilot · every rule passed";
+  else if (paid && f.byPhone) sub = f.crossChain ? `Approved on your phone · paid on ${CHAIN_NAME[f.crossChain.chain]}` : "Approved on your phone";
   else if (paid && f.crossChain) sub = `Paid on ${CHAIN_NAME[f.crossChain.chain]} · ${shortAddress(f.crossChain.address)}`;
   else if (shared) sub = `Confirm in your wallet that this account is ${first}’s, then the payment can go.`;
   else if (!f.payeeListed) sub = <span className="text-caution">Not on your payee list yet. A claim link lets {first} tell you where to be paid.</span>;
