@@ -1,12 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from "react";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
-import { ChevronRight, Lock, Search, ShieldCheck, Users } from "lucide-react";
-import { decisionEvidence, formatClock, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type Evidence, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
+import { ChevronRight, Link2, Lock, Search, ShieldCheck, Users } from "lucide-react";
+import { canShareLines, decisionEvidence, formatClock, lineOfQuote, formatDuration, meetingLabel, othersOn, speakerLabel, type ActionItem, type Attendee, type Dropped, type Evidence, type ExportOptions, type FollowUp, type ItemFields, type Meeting, type TranscriptLine, type WalletLimits } from "@aftercall/core";
 import { ExportMenu } from "./ExportMenu";
 import { EditItemButton, EditedMark, ItemEditor, editButtonId, useItemEditing } from "./ActionItemEditor";
 import { FollowUps, followUpTitle, type FollowUpHandlers } from "./FollowUps";
-import { Avatar, AvatarStack, Button, Input, MeProvider, Pill, RollingNumber, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
+import { Avatar, AvatarStack, Button, IconButton, Input, MeProvider, Pill, RollingNumber, SectionTitle, Strike, TabPanel, Tabs, Tick, cx, enter, exit, useIsYou } from "./ui";
 import { AllDone, BackPill, QuoteReveal, flashLine, useAllDone, useQuoteReveal, withMoments } from "./Quote";
 import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { grow } from "./SettingsParts";
@@ -15,6 +15,7 @@ import { MeetingTrail } from "./MeetingTrail";
 import { HandToAgent } from "./HandToAgent";
 import { WorkLink } from "./WorkLink";
 import type { SavedNotes } from "./nearai";
+import { ShareLineSheet } from "./ShareLineSheet";
 // For the transcript's model-inferred speaker names.
 import { likelySpeakerAt } from "@aftercall/core";
 import { Tooltip } from "./ui";
@@ -96,6 +97,9 @@ export function MeetingScreen({
   const scroller = useRef<HTMLElement>(null);
   const restore = useRef<Jump["back"] | null>(null);
   const others = othersOn(meeting);
+  // "Share this line" is offered only when the proof is on NEAR, commits to the lines, and this Mac has their key.
+  const [sharing, setSharing] = useState<number | null>(null);
+  const shareLine = saved?.onChain && canShareLines(saved.proof, saved.lineKey) ? (i: number) => setSharing(i) : undefined;
 
   /** Shows a quote's line in the transcript, remembering where the notes were. */
   const jumpTo = (at: number, quote: string, focusId?: string) => {
@@ -202,9 +206,10 @@ export function MeetingScreen({
                 autopilotOn={autopilotOn}
                 onOpenAgents={onOpenAgents}
                 onOpenAutopilot={onOpenAutopilot}
+                onShareLine={shareLine}
               />
             ) : (
-              <Transcript meeting={meeting} others={others} target={target} onOpenFollowUp={openFollowUp} />
+              <Transcript meeting={meeting} others={others} target={target} onOpenFollowUp={openFollowUp} onShareLine={shareLine} />
             )}
           </TabPanel>
 
@@ -218,6 +223,7 @@ export function MeetingScreen({
             </div>
           )}
         </article>
+        {sharing !== null && saved && <ShareLineSheet meeting={meeting} saved={saved} index={sharing} others={others} onClose={() => setSharing(null)} />}
       </main>
     </MeProvider>
   );
@@ -260,6 +266,7 @@ function Notes({
   autopilotOn,
   onOpenAgents,
   onOpenAutopilot,
+  onShareLine,
 }: {
   meeting: Meeting;
   dropped: Dropped[];
@@ -275,6 +282,8 @@ function Notes({
   autopilotOn?: boolean;
   onOpenAgents?: () => void;
   onOpenAutopilot?: () => void;
+  /** Opens "Share this line" for a transcript line, when the meeting's lines can be shared. */
+  onShareLine?: (index: number) => void;
 }) {
   const open = meeting.actionItems.filter((a) => !a.done).length;
   const agents = meeting.actionItems.some((a) => a.claimed || a.completed);
@@ -295,6 +304,11 @@ function Notes({
     },
     { title: "Action items", words: { onOpen: "Show its moment in the transcript" } },
   );
+  // An action item's quote shares the transcript line it was said in, when there is one.
+  const shareQuote = (item: ActionItem) => {
+    const i = onShareLine && item.evidence ? lineOfQuote(meeting.transcript, item.evidence) : null;
+    return i === null ? undefined : () => onShareLine!(i);
+  };
   // Items new since the notes were made keep a verdigris edge for a few seconds on screen, then it fades.
   const fresh = useFresh(meeting.id);
   useEffect(() => {
@@ -375,6 +389,7 @@ function Notes({
                 fresh={fresh.isNew(freshKey.action(item.id))}
                 roving={roving.row(item.id)}
                 onJump={(e) => jump(e, `action-${item.id}`)}
+                onShare={shareQuote(item)}
               />
             ))}
           </ul>
@@ -484,6 +499,7 @@ function ActionRow({
   fresh = false,
   roving,
   onJump,
+  onShare,
 }: {
   rowKey: string;
   /** The meeting the item is in, for "Hand to an agent". */
@@ -498,6 +514,8 @@ function ActionRow({
   roving?: ReturnType<ReturnType<typeof useRovingList>["row"]>;
   /** Shows the item's quote in the transcript. */
   onJump: (e: Evidence) => void;
+  /** Shares the transcript line the quote is in. */
+  onShare?: () => void;
 }) {
   const textId = useId();
   const quoteId = useId();
@@ -584,7 +602,7 @@ function ActionRow({
           {item.due}
         </span>
       </div>
-      {item.evidence && <QuoteReveal evidence={item.evidence} open={quote.open} descId={quoteId} onJump={() => onJump(item.evidence!)} className="pr-6 pl-[34px]" />}
+      {item.evidence && <QuoteReveal evidence={item.evidence} open={quote.open} descId={quoteId} onJump={() => onJump(item.evidence!)} onShare={onShare} className="pr-6 pl-[34px]" />}
     </li>
   );
 }
@@ -648,11 +666,14 @@ function Transcript({
   others,
   target,
   onOpenFollowUp,
+  onShareLine,
 }: {
   meeting: Meeting;
   others: Attendee[];
   target: Jump | null;
   onOpenFollowUp: (id: string) => void;
+  /** Opens "Share this line", when the meeting's lines can be shared. */
+  onShareLine?: (index: number) => void;
 }) {
   const [query, setQuery] = useState("");
   const targetRef = useRef<HTMLParagraphElement>(null);
@@ -743,17 +764,31 @@ function Transcript({
                 const isTarget = line.at === target?.at;
                 return (
                   <BubbleWithChips key={`${line.at}-${i}`} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
-                    <p
-                      ref={isTarget ? targetRef : undefined}
-                      tabIndex={isTarget ? -1 : undefined}
-                      className={cx(
-                        "selectable m-0 max-w-[78%] scroll-mt-16 px-4 py-3 font-serif text-[17px] leading-[26px] text-ink",
-                        you ? "bg-verdigris-tint" : "bg-elevated shadow-1",
+                    <div className={cx("group/line flex w-full items-center gap-1", you && "flex-row-reverse")}>
+                      <p
+                        ref={isTarget ? targetRef : undefined}
+                        tabIndex={isTarget ? -1 : undefined}
+                        className={cx(
+                          "selectable m-0 max-w-[78%] scroll-mt-16 px-4 py-3 font-serif text-[17px] leading-[26px] text-ink",
+                          you ? "bg-verdigris-tint" : "bg-elevated shadow-1",
+                        )}
+                        style={{ borderRadius: corners(you, i, turn.lines.length) }}
+                      >
+                        <Highlighted text={line.text} quotes={evidence.map((f) => f.evidence.quote)} jumped={isTarget ? target?.quote : undefined} />
+                      </p>
+                      {onShareLine && (
+                        <IconButton
+                          size="sm"
+                          variant="quiet"
+                          tooltip="Share this line"
+                          aria-label={`Share this line, said at ${formatClock(line.at)}`}
+                          onClick={() => onShareLine(meeting.transcript.indexOf(line))}
+                          className="shrink-0 opacity-0 transition-opacity duration-(--dur-1) group-focus-within/line:opacity-100 group-hover/line:opacity-100"
+                        >
+                          <Link2 size={14} strokeWidth={2} aria-hidden="true" />
+                        </IconButton>
                       )}
-                      style={{ borderRadius: corners(you, i, turn.lines.length) }}
-                    >
-                      <Highlighted text={line.text} quotes={evidence.map((f) => f.evidence.quote)} jumped={isTarget ? target?.quote : undefined} />
-                    </p>
+                    </div>
                   </BubbleWithChips>
                 );
               })}

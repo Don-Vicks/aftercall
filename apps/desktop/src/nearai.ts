@@ -53,8 +53,10 @@ export const recordingFiles = {
  * proof need. Notes made before full attestation checks have a version 1 proof
  * and no `checks`; notes made before costs were estimated have no `cost`.
  */
-export type SavedNotes = Omit<ProcessResult, "meeting" | "proof" | "checks" | "cost"> & {
+export type SavedNotes = Omit<ProcessResult, "meeting" | "proof" | "checks" | "cost" | "lineKey"> & {
   meeting: Meeting;
+  /** The key behind the transcript lines' salts; absent on notes made before lines could be shared. */
+  lineKey?: string;
   proof: ProofBundle;
   checks?: TeeCheck[];
   /** What making these notes probably cost in NEAR AI credit. Not in the proof. */
