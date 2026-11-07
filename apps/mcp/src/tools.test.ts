@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { WRITES_OFF, startFakeApp, type FakeApp } from "./fixture.ts";
-import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
+import { claimActionItem, completeActionItem, draftFollowUp, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 import { NO_TOKEN, NOT_RUNNING, checkId, connectApp, socketPathFor, type AppChannel } from "./store.ts";
 
 // Every test goes through the real socket client (store.ts) to a stand-in for the app's agents socket.
@@ -134,6 +134,40 @@ test("complete with a link to the work: kept as given, and only a plain web link
   assert.equal(seen?.link, "https://github.com/acme/api/pull/42");
 });
 
+test("draft_follow_up: a recap lands as proposed by the agent, with its reason and no quote", async () => {
+  const r = await draftFollowUp(app, { meetingId: "1761100000", agent: "Codex", kind: "email", to: "olamide@client.test", toName: "Olamide", reason: "Olamide asked for the staging DNS once it was up" });
+  assert.equal(r.waitsForApproval, true);
+  assert.deepEqual(r.followUp, {
+    id: "agent-1",
+    kind: "email",
+    status: "proposed",
+    quote: null,
+    proposedBy: { agent: "Codex", at: T0, reason: "Olamide asked for the staging DNS once it was up" },
+    doneAt: undefined,
+    error: undefined,
+    toName: "Olamide",
+    subject: "Team standup",
+  });
+  const saved = fake.notes("1761100000").meeting.followUps[0];
+  assert.equal(saved.evidence, undefined, "nothing from the call backs it");
+  assert.equal((await listMeetings(app)).meetings[0].followUpsToApprove, 1);
+  await assert.rejects(draftFollowUp(app, { meetingId: "1761100000", agent: "Codex", kind: "email", to: "Ada <ada@example.com>", reason: "x" }), /plain email address/);
+  await assert.rejects(draftFollowUp(app, { meetingId: "1761100000", agent: "Codex", kind: "email", to: "ada@example.com", reason: "  " }), /reason/);
+});
+
+test("draft_follow_up: a payment only to a listed payee, within the caps", async () => {
+  const pay = (payee: string, amount: string) => draftFollowUp(app, { meetingId: "1761000000", agent: "Claude Code", kind: "payment", payee, amount, reason: "The deposit agreed in the call" });
+  await assert.rejects(pay("eve.testnet", "1"), /payees already on the user's list/);
+  await assert.rejects(pay("Designer", "60"), /per-payment cap/);
+  await assert.rejects(pay("Designer", "30.01"), /still pay today/);
+  const r = await pay("designer.testnet", "12.5");
+  assert.ok("amountUsdc" in r.followUp);
+  assert.equal(r.followUp.amountUsdc, "12.50");
+  assert.equal(r.followUp.payeeName, "Designer");
+  assert.equal(r.followUp.proposedBy?.agent, "Claude Code");
+  assert.equal(r.followUp.status, "proposed", "it waits for the user; nothing is paid");
+});
+
 test("read-only by default: reads work, claim and complete are refused by name, nothing changes", async () => {
   await fake.close();
   fake = await startFakeApp({ now: () => clock });
@@ -145,6 +179,8 @@ test("read-only by default: reads work, claim and complete are refused by name, 
   assert.match(list.note ?? "", /read only/);
   await assert.rejects(claimActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), (e: Error) => e.message === WRITES_OFF);
   await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), /Coding agents in Aftercall's sidebar/);
+  await assert.rejects(draftFollowUp(app, { meetingId: "1761100000", agent: "Codex", kind: "email", to: "ada@example.com", reason: "x" }), (e: Error) => e.message === WRITES_OFF);
+  assert.equal(fake.notes("1761100000").meeting.followUps.length, 0);
   const item = fake.notes("1761100000").meeting.actionItems[1];
   assert.equal(item.claimed, undefined);
   assert.equal(item.done, false);

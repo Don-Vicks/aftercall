@@ -2,17 +2,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { WORK_LINK_MAX, workLink } from "@aftercall/core";
 import type { AppChannel } from "./store.ts";
-import { claimActionItem, completeActionItem, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
+import { claimActionItem, completeActionItem, draftFollowUp, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 
 const READ_ONLY =
-  "Aftercall's MCP server only reads meetings, plus claiming and completing action items when the user has allowed that. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or follow-ups: those stay in the app, with the user. It works only while the Aftercall app is open with Coding agents turned on.";
+  "Aftercall's MCP server only reads meetings, plus claiming and completing action items and proposing follow-ups for the user to approve, when the user has allowed that. It can't send emails, make payments, record proofs on NEAR, or change notes, decisions or existing follow-ups: those stay in the app, with the user. It works only while the Aftercall app is open with Coding agents turned on.";
 
 const WRITES =
-  'Claiming and completing need the user\'s switch "Let agents claim and complete action items" in Aftercall; it is off by default, and while it is off the app refuses these calls and says so. list_action_items reports whether it is on.';
+  'Claiming, completing and proposing need the user\'s switch "Let agents claim and complete action items" in Aftercall; it is off by default, and while it is off the app refuses these calls and says so. list_action_items reports whether it is on.';
 
-export const INSTRUCTIONS = `Aftercall keeps private meeting notes on this Mac: summary, decisions, action items with owners, and follow-ups. Use list_action_items to find work, claim_action_item before you start one (with your agent name), and complete_action_item when it's done. ${WRITES} ${READ_ONLY}`;
+export const INSTRUCTIONS = `Aftercall keeps private meeting notes on this Mac: summary, decisions, action items with owners, and follow-ups. Use list_action_items to find work, claim_action_item before you start one (with your agent name), and complete_action_item with a link to the work when it's done. draft_follow_up proposes a recap or a payment for the user to approve. ${WRITES} ${READ_ONLY}`;
 
-export const TOOL_NAMES = ["list_meetings", "get_meeting", "search", "list_action_items", "claim_action_item", "complete_action_item"] as const;
+export const TOOL_NAMES = ["list_meetings", "get_meeting", "search", "list_action_items", "claim_action_item", "complete_action_item", "draft_follow_up"] as const;
 
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] });
 
@@ -130,6 +130,31 @@ export function createServer(channel: AppChannel): McpServer {
       annotations: { ...itemWrite, idempotentHint: false },
     },
     (args) => run(() => completeActionItem(app, args)),
+  );
+
+  server.registerTool(
+    "draft_follow_up",
+    {
+      title: "Propose a follow-up",
+      description: `Proposes one follow-up for a meeting: a recap email to an address (kind "email"), or a USDC payment (kind "payment") to a payee already on the user's list, within their per-payment cap and what's left today. It lands in Aftercall marked "Proposed by" your agent name, with your reason in place of a quote from the call, and waits for the user to approve or dismiss it: it never runs on autopilot, and this tool sends and pays nothing. At most 5 proposals wait per meeting. ${WRITES} ${READ_ONLY}`,
+      inputSchema: {
+        meetingId: z.string().describe("Meeting id"),
+        agent: agentArg,
+        kind: z.enum(["email", "payment"]).describe('"email" for a recap of the meeting, "payment" for USDC to a listed payee'),
+        reason: z.string().min(1).max(300).describe("Why, in one line. The user sees it in place of a quote from the call"),
+        to: z.string().max(254).optional().describe("For a recap: the email address it goes to"),
+        toName: z.string().max(80).optional().describe("For a recap: the person's name"),
+        subject: z.string().max(200).optional().describe("For a recap: the subject (defaults to the meeting's title)"),
+        payee: z.string().max(80).optional().describe("For a payment: the payee's name or NEAR account, as on the user's list"),
+        amount: z
+          .string()
+          .regex(/^\d{1,12}(\.\d{1,6})?$/, 'USDC, like "12.50"')
+          .optional()
+          .describe('For a payment: the amount in USDC, like "12.50"'),
+      },
+      annotations: { ...itemWrite, idempotentHint: false },
+    },
+    (args) => run(() => draftFollowUp(app, args)),
   );
 
   return server;

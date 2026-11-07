@@ -35,6 +35,7 @@ test("the server starts over stdio, lists its tools and answers a call through t
     assert.deepEqual(tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
     for (const t of tools) assert.match(t.description ?? "", /can't send emails, make payments, record proofs on NEAR/);
     assert.equal(tools.find((t) => t.name === "get_meeting")?.annotations?.readOnlyHint, true);
+    assert.match(tools.find((t) => t.name === "draft_follow_up")?.description ?? "", /never runs on autopilot, and this tool sends and pays nothing/);
 
     // Read-only until the user allows writes: the agent gets the app's reason.
     const refused = await client.callTool({ name: "claim_action_item", arguments: { meetingId: "1761000000", itemId: "a1", agent: "Codex" } });

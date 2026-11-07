@@ -1,11 +1,11 @@
 import { formatClock, formatUsdc, meetingIso, search as searchMeetings, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
-import { claimItem, completeItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type StoredMeeting } from "./store.ts";
+import { claimItem, completeItem, draftItem, readAccess, readMeetings, readNotes, readProjects, type AppChannel, type DraftArgs, type StoredMeeting } from "./store.ts";
 
 /**
  * The tools behind the MCP server, as plain functions over the channel to the app
  * (store.ts), so they can be tested without an MCP transport. Everything here reads,
  * except claiming and completing an action item, which the app does on that one item,
- * and only when the user has allowed it.
+ * and proposing a follow-up, which waits for the user; both only when the user has allowed it.
  */
 
 const norm = (s: string) => s.trim().toLowerCase();
@@ -144,6 +144,10 @@ export async function listActionItems(
 
 export async function claimActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string }) {
   return { claimed: true, item: await claimItem(app, args) };
+}
+
+export async function draftFollowUp(app: AppChannel, args: DraftArgs) {
+  return { drafted: true, waitsForApproval: true, followUp: followUpView(await draftItem(app, args)) };
 }
 
 export async function completeActionItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string; note?: string; link?: string }) {

@@ -3,13 +3,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { workLink, type ActionItem, type Meeting } from "@aftercall/core";
+import { workLink, type ActionItem, type FollowUp, type Meeting } from "@aftercall/core";
 import type { NotesFile } from "./store.ts";
 
 /**
  * A stand-in for the Aftercall app's agents socket (apps/desktop/src-tauri/src/agents.rs):
- * the same line protocol, token check, read-only default and claim rules, over in-memory
- * notes. The real rules, locking, encryption and activity list are tested in Rust
+ * the same line protocol, token check, read-only default, claim rules and proposal rules
+ * (against a fixed payee list and caps), over in-memory notes. The real rules, locking, encryption and activity list are tested in Rust
  * (`cargo test agents`).
  */
 export interface FakeApp {
@@ -87,6 +87,11 @@ function fixtureMeetings(): Map<string, NotesFile> {
   return notes;
 }
 
+/** The owner's payee list and caps as the app last read them (agents.rs, `WalletSnapshot`). */
+const PAYEES = [{ name: "Designer", account: "designer.testnet" }];
+const PER_PAYMENT_CAP = 50_000_000n;
+const LEFT_TODAY = 30_000_000n;
+
 const PROJECTS = [
   { id: "general", name: "General" },
   { id: "fundraise-k3x", name: "Fundraise" },
@@ -107,6 +112,9 @@ export interface Seen {
   allowed: boolean;
   error?: string;
 }
+
+/** A request field as text, empty when absent. */
+const r = (v: unknown) => (typeof v === "string" ? v : "");
 
 function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, now: () => string): unknown {
   const missing = (id: unknown) => new Error(`No processed meeting with id "${String(id)}". Use list_meetings to see ids.`);
@@ -138,6 +146,38 @@ function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, n
       const { item, agent } = openItem(req, (by, at) => `Already claimed by ${by} at ${at}`);
       item.claimed ??= { agent, at: now() };
       return { claimed: true, item };
+    }
+    case "draft": {
+      if (!allowWrites) throw new Error(WRITES_OFF);
+      const agent = String(r(req.agent)).trim();
+      if (!agent || agent.length > 60) throw new Error('Give your agent name, 1 to 60 characters (e.g. "Claude Code")');
+      const reason = String(r(req.reason)).replace(/\s+/g, " ").trim();
+      if (!reason || reason.length > 300) throw new Error("Give your reason for this follow-up, one line of at most 300 characters; the user sees it in place of a quote");
+      const meeting = notesOf(req.meetingId).meeting;
+      const proposedBy = { agent, at: now(), reason };
+      let followUp: FollowUp;
+      if (req.kind === "email") {
+        const to = String(r(req.to)).trim();
+        if (!/^[^\s@<>",;]+@[^\s@<>",;.][^\s@<>",;]*\.[^\s@<>",;]+$/.test(to)) throw new Error("Give the recap's address as a plain email address");
+        followUp = { id: "", kind: "email", status: "proposed", to, toName: String(r(req.toName)).trim() || to.split("@")[0], subject: String(r(req.subject)).trim() || meeting.title, proposedBy };
+      } else if (req.kind === "payment") {
+        const m = /^(\d{1,12})(?:\.(\d{1,6}))?$/.exec(String(r(req.amount)).trim());
+        const units = m ? BigInt(m[1]) * 1_000_000n + BigInt((m[2] ?? "").padEnd(6, "0")) : 0n;
+        if (units <= 0n) throw new Error('Give the amount in USDC, like "12.50"');
+        const wanted = String(r(req.payee)).trim().toLowerCase();
+        const payee = PAYEES.find((p) => wanted && (p.account === wanted || p.name.toLowerCase() === wanted));
+        if (!payee) throw new Error("Agents can only propose payments to payees already on the user's list. Use the payee's name or NEAR account as listed.");
+        if (units > PER_PAYMENT_CAP) throw new Error("That's over the user's per-payment cap, so agents can't propose it");
+        if (units > LEFT_TODAY) throw new Error("That's over what the user's agent wallet can still pay today, so agents can't propose it");
+        followUp = { id: "", kind: "payment", status: "proposed", payeeName: payee.name, payeeAccount: payee.account, amount: { $bigint: String(units) } as unknown as bigint, heard: "", payeeListed: true, proposedBy };
+      } else throw new Error('A follow-up is a recap (kind "email") or a payment (kind "payment")');
+      if (meeting.followUps.filter((f) => f.proposedBy && f.status === "proposed").length >= 5)
+        throw new Error("5 proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first.");
+      let n = 1;
+      while (meeting.followUps.some((f) => f.id === `agent-${n}`)) n++;
+      followUp.id = `agent-${n}`;
+      meeting.followUps.push(followUp);
+      return { drafted: true, followUp };
     }
     case "complete": {
       if (!allowWrites) throw new Error(WRITES_OFF);

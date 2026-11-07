@@ -1,7 +1,7 @@
 import { createConnection } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ActionItem, Meeting } from "@aftercall/core";
+import type { ActionItem, FollowUp, Meeting } from "@aftercall/core";
 
 /**
  * Talks to the running Aftercall app. Meetings are encrypted on disk with a key in
@@ -11,13 +11,14 @@ import type { ActionItem, Meeting } from "@aftercall/core";
  * line, each carrying the token shown on that screen
  * (apps/desktop/src-tauri/src/agents.rs):
  *
- *   → {"token":"…","op":"projects"|"meetings"|"notes"|"access"|"claim"|"complete", ...args}
+ *   → {"token":"…","op":"projects"|"meetings"|"notes"|"access"|"claim"|"complete"|"draft", ...args}
  *   ← {"ok":true,"result":…} or {"ok":false,"error":"…"}
  *
  * Agents only read unless the user turns on "Let agents claim and complete action
- * items" on that screen; until then the app refuses claim and complete. When it is
- * on, the app does every write itself, under the same lock as its own saves, and only
- * lets an agent claim or complete one action item.
+ * items" on that screen; until then the app refuses claim, complete and draft. When it
+ * is on, the app does every write itself, under the same lock as its own saves, and only
+ * lets an agent claim or complete one action item, or add one follow-up marked as
+ * proposed by that agent, which waits for the user's approval.
  */
 
 /** Where the app keeps its data: Tauri's app data dir for `dev.aftercall.app`. */
@@ -127,6 +128,27 @@ export async function readAccess(app: AppChannel): Promise<{ allowWrites: boolea
 /** Claims one action item for `agent`; the app stamps the time. */
 export async function claimItem(app: AppChannel, args: { meetingId: string; itemId: string; agent: string }): Promise<ActionItem> {
   return ((await app("claim", args)) as { item: ActionItem }).item;
+}
+
+/** What an agent proposes: a recap to an address, or a payment to a listed payee. */
+export interface DraftArgs {
+  meetingId: string;
+  agent: string;
+  kind: "email" | "payment";
+  /** Why, in one line; shown to the user in place of a quote from the call. */
+  reason: string;
+  to?: string;
+  toName?: string;
+  subject?: string;
+  /** A listed payee's name or NEAR account. */
+  payee?: string;
+  /** USDC, as "12.50". */
+  amount?: string;
+}
+
+/** Adds one follow-up marked as proposed by `agent`; the app checks it and stamps the time. */
+export async function draftItem(app: AppChannel, args: DraftArgs): Promise<FollowUp> {
+  return ((await app("draft", { ...args })) as { followUp: FollowUp }).followUp;
 }
 
 /** Completes one action item for `agent`, with an optional note and link to the work; the app stamps the time. */
