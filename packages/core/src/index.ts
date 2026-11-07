@@ -37,3 +37,4 @@ export * from "./notes/briefTemplates.ts";
 export * from "./notes/githubBrief.ts";
 export * from "./notes/briefDraft.ts";
 export * from "./relay/crypto.ts";
+export * from "./relay/messages.ts";
