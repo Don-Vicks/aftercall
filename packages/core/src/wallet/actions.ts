@@ -4,7 +4,7 @@ import { CHAIN_NAME, isValidPayoutAddress, PAYOUT_CHAINS, type PayoutChain } fro
 
 /**
  * Everything only the owner's own NEAR wallet may do with the agent wallet. The app
- * can't sign these (its key is limited to `pay` and `record_proof`), so it opens a
+ * can't sign these (its key is limited to `APP_KEY_METHODS`), so it opens a
  * signing page with a request; the page shows exactly what will be signed and hands
  * the transactions to the user's wallet.
  */
@@ -18,6 +18,16 @@ export const USDC_CONTRACT: Record<Network, string> = {
 };
 
 const ONE_YOCTO = "1";
+
+/**
+ * The only methods this Mac's limited key may call on the contract: paying and recording
+ * proofs, and opening and releasing escrows (Handshake). Never a rule change: those need
+ * 1 yoctoNEAR, which a function-call key can't attach.
+ */
+export const APP_KEY_METHODS = ["pay", "record_proof", "open_escrow", "release_escrow"] as const;
+/** What a key added before escrows existed may call. It still pays; it can't open an escrow until the owner approves the new list once (`update-key`). */
+export const OLD_APP_KEY_METHODS = ["pay", "record_proof"] as const;
+const keyMethodsText = "pay, record_proof, open_escrow and release_escrow";
 const TGAS = (n: number) => `${n}000000000000`;
 /** NEAR in yocto, from a decimal string like "0.1". */
 function near(amount: string): string {
@@ -35,6 +45,11 @@ function nearText(yocto: string): string {
 export type OwnerAction =
   | { kind: "register" }
   | { kind: "authorise-key"; publicKey: string }
+  /**
+   * Re-adds this Mac's key with today's method list, in one transaction: a key added before
+   * escrows existed can't open or release one. The same key, so nothing else changes.
+   */
+  | { kind: "update-key"; publicKey: string }
   /**
    * First-time setup in one wallet approval: whichever of these is still missing. One
    * transaction to the contract (`register`, then `set_cap`, in order, as one receipt),
@@ -56,6 +71,10 @@ export type OwnerAction =
   | { kind: "withdraw"; amount: string }
   | { kind: "approve"; followupId: string; payee: string; amount: string; context?: PaymentContext }
   | { kind: "cancel"; followupId: string; payee: string; amount: string }
+  /** Sets aside a deal the contract parked over a cap, for the payee to confirm. */
+  | { kind: "approve-escrow"; escrowId: string; payee: string; amount: string; payeeName?: string }
+  /** Takes an escrow back: parked, or open before the payee confirmed, or confirmed 30 days ago and not released. */
+  | { kind: "cancel-escrow"; escrowId: string; payee: string; amount: string; payeeName?: string }
   | { kind: "pause"; paused: boolean };
 
 /** Where a payee is paid outside NEAR; the contract's `Destination`. */
@@ -90,22 +109,19 @@ export interface WalletTransaction {
   actions: (
     | { type: "FunctionCall"; params: { methodName: string; args: Record<string, unknown>; gas: string; deposit: string } }
     | { type: "AddKey"; params: { publicKey: string; accessKey: { permission: { receiverId: string; allowance: string; methodNames: string[] } } } }
+    | { type: "DeleteKey"; params: { publicKey: string } }
   )[];
 }
 
 /** Registers an account with USDC (NEP-145), so it can hold USDC. A no-op refund if it already is. */
 const USDC_STORAGE = "1250000000000000000000";
 
-/** The limited key: only pay and record_proof on the contract, with 0.25 NEAR for fees. */
-const addKey = (r: SignRequest, publicKey: string): WalletTransaction => ({
-  receiverId: r.owner,
-  actions: [
-    {
-      type: "AddKey",
-      params: { publicKey, accessKey: { permission: { receiverId: r.contract, allowance: near("0.25"), methodNames: ["pay", "record_proof"] } } },
-    },
-  ],
+/** The limited key: only `APP_KEY_METHODS` on the contract, with 0.25 NEAR for fees. */
+const addKeyAction = (r: SignRequest, publicKey: string): WalletTransaction["actions"][number] => ({
+  type: "AddKey",
+  params: { publicKey, accessKey: { permission: { receiverId: r.contract, allowance: near("0.25"), methodNames: [...APP_KEY_METHODS] } } },
 });
+const addKey = (r: SignRequest, publicKey: string): WalletTransaction => ({ receiverId: r.owner, actions: [addKeyAction(r, publicKey)] });
 
 const call = (receiverId: string, methodName: string, args: Record<string, unknown>, deposit = ONE_YOCTO, gas = TGAS(30)): WalletTransaction => ({
   receiverId,
@@ -123,6 +139,9 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
       return [call(r.contract, "register", {}, near("0.1"))];
     case "authorise-key":
       return [addKey(r, a.publicKey)];
+    case "update-key":
+      // NEAR can't change a key's permission in place: delete and add it back, in one transaction.
+      return [{ receiverId: r.owner, actions: [{ type: "DeleteKey", params: { publicKey: a.publicKey } }, addKeyAction(r, a.publicKey)] }];
     case "setup": {
       const txs: WalletTransaction[] = [];
       // The owner's own USDC registration first: the faucet's USDC would bounce without it.
@@ -167,6 +186,10 @@ export function toTransactions(r: SignRequest): WalletTransaction[] {
       return [call(r.contract, "approve_pending", { followup_id: a.followupId }, ONE_YOCTO, TGAS(60))];
     case "cancel":
       return [call(r.contract, "cancel_pending", { followup_id: a.followupId })];
+    case "approve-escrow":
+      return [call(r.contract, "approve_escrow", { escrow_id: a.escrowId })];
+    case "cancel-escrow":
+      return [call(r.contract, "cancel_escrow", { escrow_id: a.escrowId })];
     case "pause":
       return [call(r.contract, "set_paused", { paused: a.paused })];
   }
@@ -197,10 +220,10 @@ export function describe(r: SignRequest): Description {
     case "authorise-key":
       return {
         title: "Authorise this Mac",
-        intro: "Adds Aftercall's key to your account, limited to two methods on one contract. It can never move funds outside your rules.",
+        intro: "Adds Aftercall's key to your account, limited to four methods on one contract. It can never move funds outside your rules.",
         rows: [
           { label: "Key", value: a.publicKey, mono: true },
-          { label: "May call", value: `pay and record_proof on ${r.contract}`, mono: true },
+          { label: "May call", value: `${keyMethodsText} on ${r.contract}`, mono: true },
           { label: "Gas allowance", value: "0.25 NEAR" },
         ],
         walletNote: "Your wallet will ask you to add a limited access key to your account.",
@@ -222,7 +245,7 @@ export function describe(r: SignRequest): Description {
           ...(a.publicKey
             ? [
                 { label: "This Mac's key", value: a.publicKey, mono: true },
-                { label: "May call", value: `pay and record_proof on ${r.contract}`, mono: true },
+                { label: "May call", value: `${keyMethodsText} on ${r.contract}`, mono: true },
                 { label: "Fee allowance", value: "0.25 NEAR" },
               ]
             : []),
@@ -232,6 +255,19 @@ export function describe(r: SignRequest): Description {
         confirm: "Approve in wallet",
       };
     }
+    case "update-key":
+      return {
+        title: "Let this Mac hold deals in escrow",
+        intro:
+          "This Mac's key was added before escrows existed, so it can pay but can't hold a deal for the payee to confirm. This adds the same key back with two more methods. Escrows count against the same caps, and the key still can't change a rule or take money back.",
+        rows: [
+          { label: "Key", value: a.publicKey, mono: true },
+          { label: "May call", value: `${keyMethodsText} on ${r.contract}`, mono: true },
+          { label: "Fee allowance", value: "0.25 NEAR, fresh" },
+        ],
+        walletNote: "Your wallet will ask you to delete this Mac's key and add it back, in one transaction. That's how NEAR changes what a key may call.",
+        confirm: "Update key",
+      };
     case "set-cap":
       return { title: "Change your daily cap", intro: "The most Aftercall can pay in one day without your wallet.", rows: [{ label: "New daily cap", value: usdc(a.dailyCap), mono: true }], walletNote: note("set_cap"), confirm: "Set cap" };
     case "set-payment-cap":
@@ -329,6 +365,30 @@ export function describe(r: SignRequest): Description {
         walletNote: note("approve_pending"),
         confirm: "Approve in wallet",
       };
+    case "approve-escrow":
+      return {
+        title: "Hold a deal over your caps",
+        intro:
+          "The call agreed a payment that both sides confirm before it's paid. It's over your caps, so only your wallet can set the money aside. Approving moves it from your balance into escrow and counts towards today's spending; the payee then confirms, and it's paid when you release it.",
+        rows: [
+          { label: "Amount", value: usdc(a.amount), mono: true },
+          { label: "For", value: a.payeeName ? `${a.payeeName} · ${a.payee}` : a.payee },
+        ],
+        walletNote: note("approve_escrow"),
+        confirm: "Approve in wallet",
+      };
+    case "cancel-escrow":
+      return {
+        title: "Take back a deal held in escrow",
+        intro:
+          "The money goes back on your balance. You can do this before the payee confirms, or once 30 days have passed since they confirmed without it being released. In between, only they can give it back.",
+        rows: [
+          { label: "Amount", value: usdc(a.amount), mono: true },
+          { label: "For", value: a.payeeName ? `${a.payeeName} · ${a.payee}` : a.payee },
+        ],
+        walletNote: note("cancel_escrow"),
+        confirm: "Take back",
+      };
     case "cancel":
       return { title: "Decline a blocked payment", intro: "Nothing is paid, and the storage it used comes back to you.", rows: [{ label: "Payment", value: `${usdc(a.amount)} to ${a.payee}` }], walletNote: note("cancel_pending"), confirm: "Decline" };
     case "pause":
@@ -370,6 +430,8 @@ function fromBase64Url(text: string): string {
 }
 
 const ACCOUNT = /^(?=.{2,64}$)(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+/** A NEAR account id (named or implicit), as the protocol allows it. */
+export const isAccountId = (id: unknown): id is string => typeof id === "string" && ACCOUNT.test(id);
 const DIGITS = /^\d{1,30}$/;
 
 export function encodeSignRequest(r: SignRequest): string {
@@ -390,7 +452,8 @@ export function decodeSignRequest(fragment: string): SignRequest {
     const d = a.destination as PayeeDestination;
     if (!PAYOUT_CHAINS.includes(d.chain) || !isValidPayoutAddress(d.chain, d.address)) throw new Error("BAD_DESTINATION");
   }
-  if ((a.kind === "authorise-key" || (a.kind === "setup" && a.publicKey !== undefined)) && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.publicKey ?? "")) throw new Error("BAD_KEY");
+  if ((a.kind === "authorise-key" || a.kind === "update-key" || (a.kind === "setup" && a.publicKey !== undefined)) && !/^ed25519:[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a.publicKey ?? "")) throw new Error("BAD_KEY");
+  if ("escrowId" in a && (typeof a.escrowId !== "string" || !a.escrowId || a.escrowId.length > 64)) throw new Error("BAD_ACTION");
   if (a.kind === "setup" && (typeof a.register !== "boolean" || typeof a.registerUsdc !== "boolean")) throw new Error("BAD_ACTION");
   toTransactions(r); // throws on an unknown kind
   if (!describe(r)) throw new Error("BAD_ACTION");
