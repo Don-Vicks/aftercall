@@ -9,10 +9,10 @@ import {
   decodeVerifyLink,
   droppedLine,
   explorerAccountUrl,
+  formatClock,
   groupChecks,
   hasFullChecks,
   hasStatements,
-  lineOffsetWords,
   lineSpeakerWords,
   noticeLine,
   proofHash,
@@ -307,7 +307,9 @@ function SharedLine({ meetingId, line: { line } }: { meetingId: string; line: Li
       <figcaption className={v.sharedMeta}>
         <span>{lineSpeakerWords(line.speaker)}</span>
         <span className="muted">·</span>
-        <span className="mono">{lineOffsetWords(line.at)}</span>
+        <span>
+          <span className="mono">{formatClock(line.at)}</span> into the recording
+        </span>
         {said && (
           <>
             <span className="muted">·</span>

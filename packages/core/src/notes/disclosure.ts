@@ -2,7 +2,7 @@ import { hasFullChecks, type ProofBundle } from "./bundle.ts";
 import { checkLineProof, proveLine, type LineProof } from "./lines.ts";
 import { decodeLinkPayload, decodePublicProof, encodeLinkPayload, type Check, type PublicProof } from "./proof.ts";
 import { isNetwork } from "../network.ts";
-import { formatClock, type Evidence, type Speaker, type TranscriptLine } from "../meeting.ts";
+import type { Evidence, Speaker, TranscriptLine } from "../meeting.ts";
 
 /**
  * Sharing one transcript line. The link is /verify#line=<base64url of canonical JSON>: the
@@ -113,9 +113,6 @@ export function lineOfQuote(transcript: readonly TranscriptLine[], evidence: Evi
 export function lineSpeakerWords(speaker: Speaker): string {
   return speaker === "you" ? "The person who recorded, on their microphone" : "The call's audio: someone on the other side";
 }
-
-/** "12:04 into the recording". */
-export const lineOffsetWords = (at: number) => `${formatClock(at)} into the recording`;
 
 /**
  * When the recording started, from its meeting id: the Mac app names a recording by the Unix

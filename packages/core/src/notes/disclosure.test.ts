@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { utf8ToBytes } from "@noble/hashes/utils";
 import type { ProofBundleV2 } from "./bundle.ts";
-import { LINE_LINK_PREFIX, canShareLines, lineOffsetWords, lineSpeakerWords, recordingStartMs, decodeVerifyLink, encodeLineDisclosure, lineCheck, lineOfQuote, makeLineDisclosure, type VerifyLink } from "./disclosure.ts";
+import { LINE_LINK_PREFIX, canShareLines, lineSpeakerWords, recordingStartMs, decodeVerifyLink, encodeLineDisclosure, lineCheck, lineOfQuote, makeLineDisclosure, type VerifyLink } from "./disclosure.ts";
 import { lineTreeOf } from "./lines.ts";
 import { encodePublicProof, proofHash, verifyProof, type OnChainProof } from "./proof.ts";
 import { NVIDIA_JWKS_URL, allChecksPassed, runLinkChecks, type ProofFetch } from "./proofLink.ts";
@@ -186,7 +186,6 @@ test("a link is never made from a transcript that no longer gives the proof's ro
 test("a shared line names the side and the time, never a person", () => {
   assert.equal(lineSpeakerWords("you"), "The person who recorded, on their microphone");
   assert.equal(lineSpeakerWords("others"), "The call's audio: someone on the other side");
-  assert.equal(lineOffsetWords(724), "12:04 into the recording");
   assert.equal(recordingStartMs("1793006441"), 1793006441000, "a real recording's id is its start second");
   assert.equal(recordingStartMs("sample-test-proof"), null);
 });
