@@ -662,10 +662,11 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
   if (paid && f.byAutopilot) sub = "By autopilot · every rule passed";
   else if (paid && f.crossChain) sub = `Paid on ${CHAIN_NAME[f.crossChain.chain]} · ${shortAddress(f.crossChain.address)}`;
   else if (shared) sub = `Confirm in your wallet that this account is ${first}’s, then the payment can go.`;
-  else if (f.proposedBy && !paid) sub = <span className="text-ink-2">Proposed by {f.proposedBy.agent} · <span className="font-mono">{f.payeeAccount}</span></span>;
   else if (!f.payeeListed) sub = <span className="text-caution">Not on your payee list yet. A claim link lets {first} tell you where to be paid.</span>;
   else if (route && !paid) sub = <span className="font-mono">{`To ${CHAIN_NAME[route.chain]} · ${shortAddress(route.address)}`}</span>;
   else sub = <span className="font-mono">{f.payeeAccount}</span>;
+  // An agent's proposal says so first, and still says where the money goes.
+  if (f.proposedBy && !paid) sub = <span className="text-ink-2">Proposed by {f.proposedBy.agent} · {sub}</span>;
 
   return (
     <Card pad="none" className={cx("lift px-5", paid ? "py-3.5" : "py-[18px]")}>
