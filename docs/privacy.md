@@ -112,6 +112,7 @@ Share this line, on a transcript line or an action item's quote, makes a link th
 - The link (`/verify#line=…`, `encodeLineDisclosure`, `packages/core/src/notes/disclosure.ts:20`) carries what a proof link carries (your NEAR account, the contract, the proof bundle with its checks, hashes and counts, your logged notice) plus the line's index, time, side, words, salt and Merkle path. From the proof it also follows when the recording started (the meeting id is its start time) and how many lines the transcript has. It never carries the title, another line, the notes, your notes, the key or a name: a line from the call's side says only that, even when your calendar names who was on the other side.
 - The sheet says this before it copies anything, and the app makes the link only after the line checks against the proof on this Mac (`ShareLineSheet`, `apps/desktop/src/ShareLineSheet.tsx`). It is offered only for a meeting whose proof is on NEAR, has a line tree, and whose key is in `notes.json`.
 - Whoever gets the link can read the line and forward it; Aftercall can't take it back. The proof on NEAR stays a hash.
+- Like every proof link, it also carries `transcriptHash` and `notesHash`: plain sha256, with no salt, of the whole transcript and the whole notes (`pipeline.ts:799-800`). Neither can be read back, but someone who guessed every other line exactly, with the second it was said and its side, could confirm the guess against `transcriptHash`; only a very short call makes that conceivable.
 
 ## Coding agents
 
