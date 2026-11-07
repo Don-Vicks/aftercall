@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { Copy, Link2 } from "lucide-react";
+import { Copy, Handshake, Link2, Mail } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   AUTOPILOT_HELD,
@@ -12,6 +12,7 @@ import {
   capsCrossed,
   currencyIn,
   emailWhatLeaves,
+  escrowStateText,
   formatClock,
   formatUsdc,
   paymentWhatLeaves,
@@ -60,6 +61,14 @@ export interface FollowUpHandlers {
   routeFor?: (f: PaymentFollowUp) => PayeeDestination | null;
   /** A dry NEAR Intents quote for that route. */
   previewRoute?: (f: PaymentFollowUp, dest: PayeeDestination) => Promise<RouteQuote>;
+  /** Holds the payment in escrow for the payee to confirm, and copies their link (Handshake). */
+  onAskToConfirm?: (id: string) => void;
+  /** Pays a confirmed escrow to the payee. The rows wait out a 5-second Undo before calling it. */
+  onReleaseEscrow?: (id: string) => void;
+  /** Opens your wallet to set aside a deal parked over a cap, or to take one back. */
+  onEscrowInWallet?: (id: string, kind: "approve-escrow" | "cancel-escrow") => void;
+  /** Emails the payee's confirm link through Aftercall. */
+  onEmailDeal?: (id: string, to: string) => void;
 }
 
 /** A live NEAR Intents quote; `quoteOnly` when this agent wallet can't send it (it isn't on mainnet). */
@@ -87,6 +96,7 @@ export function FollowUps({
   invited = [],
   autopilotOn = false,
   onOpenAutopilot,
+  proofOnChain = false,
   ...h
 }: {
   meetingId: string;
@@ -100,6 +110,8 @@ export function FollowUps({
   /** Whether any autopilot rule is on (Settings). */
   autopilotOn?: boolean;
   onOpenAutopilot?: () => void;
+  /** The meeting's proof is on NEAR: its payments point to it, and a deal can be held in escrow. */
+  proofOnChain?: boolean;
 } & FollowUpHandlers) {
   const network = useNetwork();
   // One dismissed on your phone stays, labelled, as one approved there does; one dismissed here goes.
@@ -117,7 +129,7 @@ export function FollowUps({
       undo: () => h.onRestore(f.id, before),
     });
   };
-  const ctx: RowContext = { meetingId, meeting, h, limits, invited, network, dismiss };
+  const ctx: RowContext = { meetingId, meeting, h, limits, invited, network, dismiss, proofOnChain };
 
   return (
     <section aria-labelledby="followups" className="flex flex-col gap-3">
@@ -164,6 +176,7 @@ interface RowContext {
   invited: Attendee[];
   network: "testnet" | "mainnet" | null;
   dismiss: (f: FollowUp) => void;
+  proofOnChain: boolean;
 }
 
 /** The NEAR network, for transaction links (desktop only). */
@@ -184,7 +197,7 @@ function useNetwork(): RowContext["network"] {
 }
 
 /** The id of a follow-up's pending deferred action, per kind. */
-const graceId = (kind: "pay" | "send" | "claim", meetingId: string, fuId: string) => `${kind}:${meetingId}:${fuId}`;
+const graceId = (kind: "pay" | "send" | "claim" | "release", meetingId: string, fuId: string) => `${kind}:${meetingId}:${fuId}`;
 
 /** The time, refreshed every 250 ms, for countdowns. */
 function useNow(): number {
@@ -577,11 +590,13 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
   const { h } = c;
   const paying = useDeferred(graceId("pay", c.meetingId, f.id));
   const confirming = useDeferred(graceId("claim", c.meetingId, f.id));
-  const pending = paying ?? confirming;
+  const releasing = useDeferred(graceId("release", c.meetingId, f.id));
+  const pending = paying ?? confirming ?? releasing;
   const paidNow = useChanged(f.status);
   const [held, setHeld] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [amountText, setAmountText] = useState(f.amount === null ? "" : formatUsdc(f.amount).replace(/,/g, ""));
   const parsed = parseUsdcInput(amountText);
   const route = f.payeeListed ? (h.routeFor?.(f) ?? null) : null;
@@ -609,6 +624,26 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
       text: (s) => `Paying ${f.payeeName}${amount ? ` ${amount} USDC` : ""} in ${s}…`,
       run: () => h.onApprove(f.id),
     });
+  const release = () =>
+    deferred({
+      id: graceId("release", c.meetingId, f.id),
+      quiet: true,
+      ms: GRACE_MS,
+      text: (s) => `Releasing ${amount ?? ""} USDC to ${f.payeeName} in ${s}…`,
+      run: () => h.onReleaseEscrow?.(f.id),
+    });
+  // A deal both sides confirm, held in escrow: NEAR payees only (a release can't take a NEAR Intents route).
+  const escrowLive = !!f.escrow && (f.escrow.state === "parked" || f.escrow.state === "open" || f.escrow.state === "confirmed");
+  // Not with a condition the model heard but couldn't quote: held without one, the payee's confirmation would pay at once.
+  const canDeal = !!h.onAskToConfirm && f.payeeListed && f.amount !== null && !route && !f.escrow && !f.conditionDropped;
+  const askToConfirm = canDeal && (
+    <Button variant={f.condition ? "primary" : undefined} onClick={() => {
+        setAsking(true);
+        h.onAskToConfirm!(f.id);
+      }} icon={<Handshake size={13} aria-hidden="true" />}>
+      Ask {first} to confirm
+    </Button>
+  );
   const confirmClaim = () =>
     deferred({
       id: graceId("claim", c.meetingId, f.id),
@@ -708,13 +743,19 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
       <AnimatePresence initial={false} mode="wait">
         {state === "countdown" && pending && (
           <Body key="countdown">
-            <Countdown verb={confirming ? "Opening your wallet" : "Paying"} startedAt={pending.startedAt} endsAt={pending.endsAt} onUndo={pending.cancel} />
+            <Countdown verb={confirming ? "Opening your wallet" : releasing ? "Releasing" : "Paying"} startedAt={pending.startedAt} endsAt={pending.endsAt} onUndo={pending.cancel} />
           </Body>
         )}
         {state === "sending" && (
           <Body key="sending" className="flex-row items-center gap-2.5 text-ink-2">
             <Spinner size={14} />
-            {f.crossChain ? `${swapWords[f.crossChain.swapStatus] ?? f.crossChain.swapStatus} · ${routeLabel(f.crossChain.chain)}` : "Sending through your agent wallet on NEAR…"}
+            {f.crossChain
+              ? `${swapWords[f.crossChain.swapStatus] ?? f.crossChain.swapStatus} · ${routeLabel(f.crossChain.chain)}`
+              : f.escrow?.state === "confirmed"
+                ? "Releasing from escrow on NEAR…"
+                : asking
+                  ? "Holding it in escrow on NEAR…"
+                  : "Sending through your agent wallet on NEAR…"}
           </Body>
         )}
         {state === "paid" && (
@@ -767,6 +808,21 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
                     {amount === null ? <span className="text-caution">{missingAmount(f)}</span> : <span className="t-mono">{amount} USDC</span>}
                     {amount === null && amountNote(f) && <span className="mt-0.5 block text-[13px] leading-[19px] text-ink-2">{amountNote(f)}</span>}
                   </dd>
+                </div>
+              )}
+              {f.condition && (
+                <div className="flex items-baseline gap-2.5">
+                  <dt className="w-14 shrink-0 text-[12px] text-muted">When</dt>
+                  <dd className="m-0">
+                    {f.condition.text} <span className="font-serif text-ink-2 italic">“{f.condition.evidence.quote}”</span>
+                    <span className="mt-0.5 block text-[13px] leading-[19px] text-ink-2">Agreed on the call. Only you can say it's met: it never pays by itself.</span>
+                  </dd>
+                </div>
+              )}
+              {f.conditionDropped && (
+                <div className="flex items-baseline gap-2.5">
+                  <dt className="w-14 shrink-0 text-[12px] text-muted">When</dt>
+                  <dd className="m-0 text-caution">The model heard a condition, but its words aren't in the transcript, so it was left out. Check the call before paying.</dd>
                 </div>
               )}
               <div className="flex items-baseline gap-2.5">
@@ -822,18 +878,31 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
                 </Button>
               </div>
             )}
+            {f.escrow && <EscrowPanel f={f} escrow={f.escrow} c={c} first={first} />}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <WhatLeavesNote w={paymentWhatLeaves(f, { route, claimLinks: HAS_BACKEND })} />
+              <WhatLeavesNote w={paymentWhatLeaves(f, { route, claimLinks: HAS_BACKEND, proof: c.proofOnChain, deal: canDeal || !!f.escrow })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
-                <Button variant="quiet" onClick={() => c.dismiss(f)}>
-                  Dismiss
-                </Button>
-                {!shared && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
-                {f.payeeListed ? (
-                  <Button variant="primary" onClick={pay} disabled={f.amount === null}>
-                    Approve payment
+                {/* Money held in escrow stays on the card until it's released, cancelled or given back. */}
+                {!escrowLive && (
+                  <Button variant="quiet" onClick={() => c.dismiss(f)}>
+                    Dismiss
                   </Button>
+                )}
+                {!shared && !f.escrow && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
+                {f.escrow ? (
+                  f.escrow.state === "confirmed" && (
+                    <Button variant="primary" onClick={release}>
+                      Release {amount} USDC
+                    </Button>
+                  )
+                ) : f.payeeListed ? (
+                  <>
+                    {askToConfirm}
+                    <Button variant={f.condition ? undefined : "primary"} onClick={pay} disabled={f.amount === null}>
+                      {f.condition ? "Pay now" : "Approve payment"}
+                    </Button>
+                  </>
                 ) : shared ? (
                   <Button variant="primary" onClick={confirmClaim}>
                     Confirm in wallet
@@ -852,6 +921,76 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
         )}
       </AnimatePresence>
     </Card>
+  );
+}
+
+/**
+ * A deal held in escrow: where it is on NEAR, the payee's confirm link, and what you can do
+ * from here. Releasing is the card's main button once the payee has confirmed.
+ */
+function EscrowPanel({ f, escrow: e, c, first }: { f: PaymentFollowUp; escrow: NonNullable<PaymentFollowUp["escrow"]>; c: RowContext; first: string }) {
+  const { h } = c;
+  const [copied, setCopied] = useState(false);
+  const [to, setTo] = useState("");
+  const live = e.state === "parked" || e.state === "open" || e.state === "confirmed";
+  const validEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to.trim());
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] px-3.5 py-2.5 shadow-[inset_0_0_0_1px_var(--hairline)]">
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {live && e.state !== "confirmed" && <Spinner size={12} />}
+        <span className={cx("flex-1", e.state === "parked" ? "text-caution" : "text-ink-2")}>{escrowStateText(e.state, first)}</span>
+        {e.ref && <TxLink hash={e.ref} network={c.network} />}
+      </span>
+      {(e.state === "open" || e.state === "parked") && (
+        <span className="text-[13px] leading-[19px] text-ink-2">
+          {first} checks the terms against NEAR and confirms with their own wallet.{" "}
+          {f.condition ? "Then it waits for you to release it, when the condition is met." : "With no condition, their confirmation pays them."}
+        </span>
+      )}
+      {e.state === "confirmed" && (
+        <span className="text-[13px] leading-[19px] text-ink-2">
+          You can't take it back alone now: release it{f.condition ? " when the condition is met" : ""}, or ask {first} to give it back. After 30 days unreleased, your wallet can take it back.
+        </span>
+      )}
+      {live && (
+        <span className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Copy size={12} aria-hidden="true" />}
+            onClick={async () => {
+              await navigator.clipboard.writeText(e.link);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1600);
+            }}
+          >
+            {copied ? "Copied" : "Copy confirm link"}
+          </Button>
+          {e.state === "parked" && h.onEscrowInWallet && (
+            <Button size="sm" onClick={() => h.onEscrowInWallet!(f.id, "approve-escrow")}>
+              Approve in wallet
+            </Button>
+          )}
+          {(e.state === "parked" || e.state === "open") && h.onEscrowInWallet && (
+            <Button variant="quiet" size="sm" onClick={() => h.onEscrowInWallet!(f.id, "cancel-escrow")}>
+              Take back
+            </Button>
+          )}
+        </span>
+      )}
+      {HAS_BACKEND && h.onEmailDeal && (e.state === "open" || e.state === "parked") && (
+        <span className="flex flex-wrap items-center gap-2">
+          <label htmlFor={`deal-to-${f.id}`} className="sr-only">
+            {first}'s email
+          </label>
+          <Input id={`deal-to-${f.id}`} value={to} onChange={(ev) => setTo(ev.target.value)} placeholder={`${first}'s email`} className="w-56" />
+          <Button size="sm" disabled={!validEmail} icon={<Mail size={12} aria-hidden="true" />} onClick={() => h.onEmailDeal!(f.id, to)}>
+            Email the link
+          </Button>
+          {e.emailedAt && <span className="text-[12px] text-muted">Sent {e.emailedAt}</span>}
+        </span>
+      )}
+    </div>
   );
 }
 

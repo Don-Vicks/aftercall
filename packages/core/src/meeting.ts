@@ -152,6 +152,42 @@ export interface PaymentFollowUp extends FollowUpBase {
    * became of it. Absent on payments held before it was kept.
    */
   heldOn?: NearPlace;
+  /**
+   * What the call said must happen before paying ("when the icons are delivered"), with the
+   * exact words behind it. Only from the transcript: no quote, no condition. Absent on
+   * meetings made before conditions were read, and on payments without one.
+   */
+  condition?: { text: string; evidence: Evidence };
+  /**
+   * The model gave a condition whose words aren't in the transcript, so it was dropped. The
+   * payment still never runs on autopilot or from the phone: it waits for you on the Mac.
+   */
+  conditionDropped?: boolean;
+  /** Set once the payment is held in escrow for the payee to confirm (Handshake, docs/handshake.md). */
+  escrow?: EscrowFollowUp;
+}
+
+/** An escrow's state on the agent-wallet contract (`EscrowState` in contracts/agent-wallet). */
+export type EscrowState = "parked" | "open" | "confirmed" | "released" | "cancelled" | "returned";
+
+/** A payment held in escrow, as the app keeps it with the follow-up. The contract is the source of truth. */
+export interface EscrowFollowUp {
+  /** Its id on the contract: the follow-up's contract id (`contractFollowupId`). */
+  id: string;
+  /** As last read from the contract. */
+  state: EscrowState;
+  /** The payee's confirm page, with the terms in its #fragment (`dealLink`). */
+  link: string;
+  /** sha256 of the terms, as the contract holds it (`dealTermsHash`). */
+  termsHash: string;
+  /** The network, contract and owner account it was opened on. */
+  on: NearPlace;
+  /** The transaction that opened it. */
+  ref?: string;
+  /** The transaction that released it, when the app did. */
+  releasedRef?: string;
+  /** When the confirm link was emailed through Aftercall ("14:06"), if it was. */
+  emailedAt?: string;
 }
 
 /** A NEAR network, agent-wallet contract and owner account, as the app's NEAR settings name them. */

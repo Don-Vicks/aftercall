@@ -70,3 +70,11 @@ test("a queued follow-up read from disk at launch is held for you, never run", (
   assert.equal(holdInterruptedAutopilot(meeting([queued, recap]), (id) => id === queued.id), null, "queued in this run: its countdown goes on");
   assert.equal(JSON.parse(JSON.stringify({ ...pay, amount: null })).autopilotHeld, true, "the flag is plain JSON, so notes.json keeps it");
 });
+
+test("a payment that waits on a condition, or is held in escrow, never runs by itself", () => {
+  const condition = { text: "when the icons are delivered", evidence: { quote: "once the icons are delivered on Friday", at: 0 } };
+  assert.deepEqual(autopilotDecision({ ...payment, condition }, on, limits), { run: false, reasons: ["It waits on a condition: only you can say it's met"] });
+  assert.deepEqual(autopilotDecision({ ...payment, conditionDropped: true }, on, limits).reasons, ["The call may have set a condition: check it yourself"]);
+  const escrow = { id: "m1-f2", state: "open" as const, link: "https://x/deal#t", termsHash: "a".repeat(64), on: { network: "testnet" as const, contract: "w.testnet", account: "v.testnet" } };
+  assert.deepEqual(autopilotDecision({ ...payment, escrow }, on, limits).reasons, ["Held in escrow for the payee to confirm"]);
+});

@@ -761,6 +761,8 @@ function NeedsYou({
 function approvable(f: FollowUp, h: InlineHandlers): boolean {
   if (f.autopilotAt) return false;
   if (f.kind === "email") return Boolean(f.to);
+  // A deal with a condition, or one held in escrow, is decided on the meeting's page, where the condition shows.
+  if (f.condition || f.conditionDropped || f.escrow) return false;
   return f.amount !== null && f.payeeListed && !h.routeFor?.(f);
 }
 

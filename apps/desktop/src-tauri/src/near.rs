@@ -1,5 +1,5 @@
 //! The app's side of NEAR: its own limited key (kept in the Keychain), the account
-//! and agent-wallet contract it works with, and the two calls it may make.
+//! and agent-wallet contract it works with, and the calls it may make (`KEY_METHODS`).
 
 use std::path::{Path, PathBuf};
 
@@ -37,8 +37,12 @@ pub struct SetupCheck {
 #[serde(rename_all = "camelCase")]
 pub struct NearStatus {
     pub public_key: String,
-    /// The app's key is on the account, limited to this contract, `pay` and `record_proof`.
+    /// The app's key is on the account, limited to this contract and the app's methods
+    /// (today's list, or the one from before escrows).
     pub key_added: bool,
+    /// The key may open and release escrows. False for a key added before escrows existed:
+    /// it still pays and records proofs, and the owner approves the new list once (`update-key`).
+    pub key_escrow: bool,
     /// What the key may do, if it is on the account with other permissions.
     pub key_problem: Option<String>,
     /// The account has a wallet on the contract (`register` was called).
@@ -158,8 +162,14 @@ pub fn set_app_key(key: &KeyPair) -> Result<(), String> {
     entry()?.set_password(&key.secret()).map_err(|e| e.to_string())
 }
 
-/// Is this function-call permission exactly what the app needs, and no more?
-pub fn check_permission(permission: &Value, contract: &str) -> Result<(), String> {
+/// The methods the app's key may call (packages/core `APP_KEY_METHODS`).
+pub const KEY_METHODS: [&str; 4] = ["pay", "record_proof", "open_escrow", "release_escrow"];
+/// What a key added before escrows existed may call.
+const OLD_KEY_METHODS: [&str; 2] = ["pay", "record_proof"];
+
+/// Is this function-call permission exactly what the app needs, and no more? `Ok(true)` for
+/// today's methods; `Ok(false)` for a key from before escrows, which may only pay and record proofs.
+pub fn check_permission(permission: &Value, contract: &str) -> Result<bool, String> {
     let Some(fc) = permission.get("FunctionCall") else {
         return Err("The app's key has full access; remove it and add it as a limited key".into());
     };
@@ -168,20 +178,28 @@ pub fn check_permission(permission: &Value, contract: &str) -> Result<(), String
     }
     let mut methods: Vec<&str> = fc["method_names"].as_array().map(|m| m.iter().filter_map(|v| v.as_str()).collect()).unwrap_or_default();
     methods.sort();
-    if methods != ["pay", "record_proof"] {
-        return Err("The app's key must be limited to pay and record_proof".into());
+    let sorted = |list: &[&'static str]| {
+        let mut l = list.to_vec();
+        l.sort();
+        l
+    };
+    if methods == sorted(&KEY_METHODS) {
+        return Ok(true);
     }
-    Ok(())
+    if methods == sorted(&OLD_KEY_METHODS) {
+        return Ok(false);
+    }
+    Err(format!("The app's key must be limited to {}", KEY_METHODS.join(", ")))
 }
 
 pub async fn status(config: &NearConfig) -> Result<NearStatus, String> {
     let key = app_key()?;
     let rpc = client(config);
-    let (key_added, key_problem) = match rpc.access_key(&config.account, &key.public_key()).await.map_err(|e| plain(config, e))? {
-        None => (false, None),
+    let (key_added, key_escrow, key_problem) = match rpc.access_key(&config.account, &key.public_key()).await.map_err(|e| plain(config, e))? {
+        None => (false, false, None),
         Some(access) => match check_permission(&access["permission"], &config.contract) {
-            Ok(()) => (true, None),
-            Err(problem) => (false, Some(problem)),
+            Ok(escrow) => (true, escrow, None),
+            Err(problem) => (false, false, Some(problem)),
         },
     };
     // A contract that's missing or isn't Aftercall's is said as such, not read as "not registered".
@@ -190,7 +208,7 @@ pub async fn status(config: &NearConfig) -> Result<NearStatus, String> {
         .await
         .map(|w| !w.is_null())
         .map_err(|e| plain(config, e))?;
-    Ok(NearStatus { public_key: key.public_key(), key_added, key_problem, registered })
+    Ok(NearStatus { public_key: key.public_key(), key_added, key_escrow, key_problem, registered })
 }
 
 /// A recorded proof's transaction, and what it cost.
@@ -339,12 +357,13 @@ pub struct PayOutcome {
 
 /// Pays a listed payee with the app's limited key. The contract decides: it sends
 /// within the caps, or parks the payment for the owner's wallet.
-pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str) -> Result<PayOutcome, String> {
+/// With `meeting_id` (the meeting's proof is on this contract), the payment records which proof it came from.
+pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str, meeting_id: Option<&str>) -> Result<PayOutcome, String> {
     if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
         return Err("Bad amount".into());
     }
     let rpc = client(config);
-    let args = json!({ "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id });
+    let args = pay_args(json!({ "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id }), meeting_id);
     let outcome = rpc
         .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
         .await
@@ -364,7 +383,17 @@ pub async fn pay(config: &NearConfig, payee: &str, amount: &str, memo: &str, fol
 /// of the quote the person approved. Same limited key, same `pay` method and caps, but over a cap
 /// it's refused and nothing is parked (the quote would expire); the contract refuses payees the
 /// owner hasn't opted in and records the route.
-pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, memo: &str, followup_id: &str, deposit_address: &str, quote_id: &str) -> Result<PayOutcome, String> {
+#[allow(clippy::too_many_arguments)]
+pub async fn pay_cross_chain(
+    config: &NearConfig,
+    payee: &str,
+    amount: &str,
+    memo: &str,
+    followup_id: &str,
+    deposit_address: &str,
+    quote_id: &str,
+    meeting_id: Option<&str>,
+) -> Result<PayOutcome, String> {
     if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
         return Err("Bad amount".into());
     }
@@ -372,10 +401,13 @@ pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, mem
         return Err("The quote's deposit address isn't a NEAR implicit account".into());
     }
     let rpc = client(config);
-    let args = json!({
-        "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id,
-        "cross_chain": { "deposit_address": deposit_address, "quote_id": quote_id },
-    });
+    let args = pay_args(
+        json!({
+            "payee": payee, "amount": amount, "memo": memo, "followup_id": followup_id,
+            "cross_chain": { "deposit_address": deposit_address, "quote_id": quote_id },
+        }),
+        meeting_id,
+    );
     let outcome = rpc
         .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "pay".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
         .await
@@ -389,6 +421,71 @@ pub async fn pay_cross_chain(config: &NearConfig, payee: &str, amount: &str, mem
     let paid = rpc.view(&config.contract, "is_paid", &json!({ "owner": config.account, "followup_id": followup_id })).await?;
     let status = if paid == Value::Bool(true) { "paid" } else { "failed" };
     Ok(PayOutcome { tx_hash: outcome.tx_hash, status: status.into(), reason: None, left_today })
+}
+
+/// `pay`'s arguments, with the meeting's id only when there is one: an older contract
+/// without the field, given none, behaves as before.
+fn pay_args(mut args: Value, meeting_id: Option<&str>) -> Value {
+    if let Some(m) = meeting_id {
+        args["meeting_id"] = json!(m);
+    }
+    args
+}
+
+const ESCROW_GAS: u64 = 30_000_000_000_000;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EscrowOutcome {
+    pub tx_hash: String,
+    /// The escrow's state after the call: "open", "parked" (over a cap), "confirmed" or "released".
+    pub state: String,
+    /// OVER_CAP or OVER_PAYMENT_CAP when parked.
+    pub reason: Option<String>,
+}
+
+/// Opens an escrow (Handshake) with the app's key: the contract sets the money aside within the
+/// caps, or parks it for the owner's wallet. Only the terms' hash goes on chain.
+pub async fn open_escrow(config: &NearConfig, escrow_id: &str, payee: &str, amount: &str, meeting_id: &str, terms_hash: &str, has_condition: bool) -> Result<EscrowOutcome, String> {
+    if amount.is_empty() || !amount.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Bad amount".into());
+    }
+    if !is_sha256_hex(terms_hash) {
+        return Err("Bad terms hash".into());
+    }
+    let args = json!({ "escrow_id": escrow_id, "payee": payee, "amount": amount, "meeting_id": meeting_id, "terms_hash": terms_hash, "has_condition": has_condition });
+    let outcome = client(config)
+        .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "open_escrow".into(), args: args.to_string().into_bytes(), gas: ESCROW_GAS, deposit: 0 })
+        .await
+        .map_err(|e| plain(config, e))?;
+    let result = outcome.value.unwrap_or(Value::Null);
+    Ok(EscrowOutcome {
+        tx_hash: outcome.tx_hash,
+        state: result["state"].as_str().unwrap_or("open").to_string(),
+        reason: result["reason"].as_str().map(String::from),
+    })
+}
+
+/// Releases a confirmed escrow to its payee with the app's key, then reads where it ended up:
+/// "released", or "confirmed" again if the transfer bounced.
+pub async fn release_escrow(config: &NearConfig, escrow_id: &str) -> Result<EscrowOutcome, String> {
+    let rpc = client(config);
+    let args = json!({ "escrow_id": escrow_id });
+    let outcome = rpc
+        .call(&config.account, &app_key()?, &config.contract, FunctionCall { method_name: "release_escrow".into(), args: args.to_string().into_bytes(), gas: PAY_GAS, deposit: 0 })
+        .await
+        .map_err(|e| plain(config, e))?;
+    let escrow = escrow(config, escrow_id).await?;
+    Ok(EscrowOutcome { tx_hash: outcome.tx_hash, state: escrow["state"].as_str().unwrap_or("released").to_string(), reason: None })
+}
+
+/// The owner's escrow as the contract holds it, or null.
+pub async fn escrow(config: &NearConfig, escrow_id: &str) -> Result<Value, String> {
+    client(config).view(&config.contract, "get_escrow", &json!({ "owner": config.account, "escrow_id": escrow_id })).await.map_err(|e| plain(config, e))
+}
+
+fn is_sha256_hex(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 /// 1Click deposit addresses on NEAR are implicit accounts (64 lowercase hex), as the contract requires.
@@ -474,11 +571,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_a_key_limited_to_pay_and_record_proof_is_accepted() {
-        let good = json!({ "FunctionCall": { "allowance": "250000000000000000000000", "receiver_id": "w.testnet", "method_names": ["record_proof", "pay"] } });
-        assert!(check_permission(&good, "w.testnet").is_ok());
+    fn only_a_key_limited_to_the_apps_methods_is_accepted() {
+        let good = json!({ "FunctionCall": { "allowance": "250000000000000000000000", "receiver_id": "w.testnet", "method_names": ["release_escrow", "record_proof", "pay", "open_escrow"] } });
+        assert_eq!(check_permission(&good, "w.testnet"), Ok(true));
+        // A key from before escrows: still accepted, but it can't hold deals until the owner updates it.
+        let old = json!({ "FunctionCall": { "allowance": "250000000000000000000000", "receiver_id": "w.testnet", "method_names": ["record_proof", "pay"] } });
+        assert_eq!(check_permission(&old, "w.testnet"), Ok(false));
+        let more = json!({ "FunctionCall": { "receiver_id": "w.testnet", "method_names": ["pay", "record_proof", "open_escrow", "release_escrow", "withdraw"] } });
+        assert!(check_permission(&more, "w.testnet").is_err());
         assert!(check_permission(&json!("FullAccess"), "w.testnet").is_err());
         assert!(check_permission(&good, "other.testnet").is_err());
+        assert!(check_permission(&old, "other.testnet").is_err());
         let wide = json!({ "FunctionCall": { "receiver_id": "w.testnet", "method_names": [] } });
         assert!(check_permission(&wide, "w.testnet").is_err(), "an empty list means every method");
     }
@@ -592,6 +695,15 @@ mod tests {
     async fn name_free_reads_testnet() {
         assert_eq!(testnet_name_free("aftercall.testnet").await.unwrap(), false);
         assert!(testnet_name_free("Bad.testnet").await.is_err());
+    }
+
+    #[test]
+    fn a_payment_names_its_meeting_only_when_it_has_one() {
+        let base = json!({ "payee": "kemi.testnet", "amount": "1", "memo": "Aftercall payment", "followup_id": "1793006441-f2" });
+        assert_eq!(pay_args(base.clone(), Some("1793006441"))["meeting_id"], "1793006441");
+        assert!(pay_args(base, None).get("meeting_id").is_none());
+        assert!(is_sha256_hex(&"ab".repeat(32)));
+        assert!(!is_sha256_hex(&"AB".repeat(32)));
     }
 
     #[test]

@@ -221,6 +221,6 @@ Every spoken claim, and where the repo says it.
 [^agentsrun]: docs/agents-demo.md: Claude Code 2.1.314 against the MCP server and its stand-in for the app, 1 Nov 2026.
 [^onlytee]: docs/how-it-works.md, "Privacy in detail": "Meeting audio and text go only to NEAR AI Cloud's Confidential TEE models, and only after their attestation passes." What you choose to send yourself (a recap, a payment, an export, what connected coding agents read) is listed in README.md, "Follow-ups: what leaves…", and docs/privacy.md.
 [^payoff]: The outcomes of beat 6, with the same sources: the recap, the deposit paid within the caps, and the over-cap hold. If beat 6 used the fallback, so does this shot, with its label.
-[^yocto]: docs/judging.md, row "The app's NEAR key can only call `pay` and `record_proof`; rule changes need 1 yoctoNEAR, which that key can't attach". Sandbox tests `limited_key_cannot_change_rules`, `one_yocto_rule_holds_even_if_key_lists_owner_methods`.
+[^yocto]: docs/judging.md, row "The app's NEAR key can only call `pay`, `record_proof`, `open_escrow` and `release_escrow`; rule changes need 1 yoctoNEAR, which that key can't attach". Sandbox tests `limited_key_cannot_change_rules`, `one_yocto_rule_holds_even_if_key_lists_owner_methods`.
 [^tagline]: README.md, the bold line under the title.
 [^built]: README.md says "Built for NEAR HACKATHON (1–14 Nov 2026)". Planning docs start on 24 Oct and code on 26 Oct, after the 19 Oct announcement; the FAQ counts code from then (Q-001; README.md, "Built with"). Victor to confirm "Built at" before recording.

@@ -96,7 +96,8 @@ export function likelySpeakersFrom(speakers: Notes["speakers"], transcript: Tran
  * Turns the model's notes into a meeting. Anything whose evidence quote isn't in
  * the transcript is dropped and reported, so the model can't invent a payment, and
  * a payment that appears only in your notes never becomes a follow-up. A payment's
- * amount must also be in its quote (see `checkedAmount`).
+ * amount must also be in its quote (see `checkedAmount`), and its condition needs a quote
+ * of its own.
  */
 export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dropped[] } {
   const { notes, transcript } = input;
@@ -138,6 +139,12 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
       return [{ id: `f${i + 1}`, kind: "email", status: "proposed", evidence, to: "", toName: f.to_name ?? "", subject: f.subject }];
     }
     const payee = matchPayee(input.payees, f.payee_name);
+    // A condition stays only with its own quote from the transcript. One the model gave without
+    // one is dropped, but the payment is marked so it can't be paid as if it had none.
+    const conditionText = f.condition?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
+    const conditionQuote = conditionText && f.condition_evidence ? findQuote(transcript, f.condition_evidence) : null;
+    const condition = conditionText && conditionQuote ? { condition: { text: conditionText, evidence: { quote: conditionQuote.text, at: conditionQuote.at } } } : {};
+    const conditionDropped = conditionText && !conditionQuote ? { conditionDropped: true } : {};
     return [
       {
         id: `f${i + 1}`,
@@ -149,6 +156,8 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
         payeeListed: !!payee,
         ...checkedAmount(f.amount_words, quote.text),
         heard: f.amount_words,
+        ...condition,
+        ...conditionDropped,
       },
     ];
   });

@@ -1032,8 +1032,31 @@ async fn near_get_proof(app: AppHandle, owner: String, meeting_id: String) -> Re
 }
 
 #[tauri::command]
-async fn near_pay(app: AppHandle, payee: String, amount: String, memo: String, followup_id: String) -> Result<near::PayOutcome, String> {
-    near::pay(&near_config(&app)?, &payee, &amount, &memo, &followup_id).await
+async fn near_pay(app: AppHandle, payee: String, amount: String, memo: String, followup_id: String, meeting_id: Option<String>) -> Result<near::PayOutcome, String> {
+    near::pay(&near_config(&app)?, &payee, &amount, &memo, &followup_id, meeting_id.as_deref()).await
+}
+
+#[tauri::command]
+async fn near_open_escrow(
+    app: AppHandle,
+    escrow_id: String,
+    payee: String,
+    amount: String,
+    meeting_id: String,
+    terms_hash: String,
+    has_condition: bool,
+) -> Result<near::EscrowOutcome, String> {
+    near::open_escrow(&near_config(&app)?, &escrow_id, &payee, &amount, &meeting_id, &terms_hash, has_condition).await
+}
+
+#[tauri::command]
+async fn near_release_escrow(app: AppHandle, escrow_id: String) -> Result<near::EscrowOutcome, String> {
+    near::release_escrow(&near_config(&app)?, &escrow_id).await
+}
+
+#[tauri::command]
+async fn near_escrow(app: AppHandle, escrow_id: String) -> Result<serde_json::Value, String> {
+    near::escrow(&near_config(&app)?, &escrow_id).await
 }
 
 #[tauri::command]
@@ -1045,8 +1068,9 @@ async fn near_pay_cross_chain(
     followup_id: String,
     deposit_address: String,
     quote_id: String,
+    meeting_id: Option<String>,
 ) -> Result<near::PayOutcome, String> {
-    near::pay_cross_chain(&near_config(&app)?, &payee, &amount, &memo, &followup_id, &deposit_address, &quote_id).await
+    near::pay_cross_chain(&near_config(&app)?, &payee, &amount, &memo, &followup_id, &deposit_address, &quote_id, meeting_id.as_deref()).await
 }
 
 #[tauri::command]
@@ -1320,6 +1344,9 @@ pub fn run() {
             near_get_proof,
             near_pay,
             near_pay_cross_chain,
+            near_open_escrow,
+            near_release_escrow,
+            near_escrow,
             near_wallet,
             near_payment_state,
             near_check_payee,

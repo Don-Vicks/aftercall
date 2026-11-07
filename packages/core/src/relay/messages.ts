@@ -174,6 +174,9 @@ export function toPendingItem(meeting: Pick<Meeting, "id" | "title" | "startedAt
   if (f.status !== "proposed" && f.status !== "sending" && f.status !== "blocked" && f.status !== "failed") return null;
   // A coding agent's proposal has no words from the call to show; it waits for you on the Mac.
   if (f.proposedBy || !f.evidence) return null;
+  // A deal with a condition, or one held in escrow, waits for you on the Mac: the phone shows
+  // no condition, so approving there could pay before it's met.
+  if (f.kind === "payment" && (f.condition || f.conditionDropped || f.escrow)) return null;
   const base = {
     meetingId: meeting.id,
     followUpId: f.id,

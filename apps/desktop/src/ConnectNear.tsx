@@ -10,7 +10,7 @@ import { NearAiSettings } from "./NearAiSettings";
 import { CAN_PAIR, usePhone } from "./phone";
 import { PhoneSettings } from "./PhoneSettings";
 import type { Spend } from "./costs";
-import { KEY_METHODS } from "./near";
+import { KEY_METHODS_TEXT } from "./near";
 import { useNearSetup, type NearSetup } from "./nearSetup";
 import { CheckCircle } from "./primitives/Check";
 import { isDesktop } from "./recorder";
@@ -181,7 +181,7 @@ function NearStatusCard({ n, onSetup }: { n: NearSetup; onSetup: (step: SetupSte
   const rows: { label: string; value: ReactNode; done: boolean; mono?: boolean }[] = [
     { label: "NEAR account", value: account ?? "Not added", done: n.accountDone, mono: Boolean(account) },
     { label: "Agent wallet", value: registered ? `On ${n.saved?.contract ?? n.config.contract}` : "Not created", done: registered, mono: registered },
-    { label: "This Mac's key", value: keyAdded ? `May call ${KEY_METHODS.join(" and ")}` : n.publicKey ? "Not authorised" : "No key yet", done: keyAdded },
+    { label: "This Mac's key", value: keyAdded ? `May call ${KEY_METHODS_TEXT}` : n.publicKey ? "Not authorised" : "No key yet", done: keyAdded },
   ];
   const network = n.saved?.network ?? n.config.network;
 
@@ -245,8 +245,8 @@ function NearStatusCard({ n, onSetup }: { n: NearSetup; onSetup: (step: SetupSte
       {n.error && n.errorFrom !== "sign" && <p className="selectable m-0 text-[13px] leading-[19px] break-words text-record">{n.error}</p>}
       <Why>
         Your agent wallet lives in Aftercall's contract, and each meeting's proof is recorded there. A proof holds a hash and the model name, never what was said.
-        This Mac's key can call only <span className="font-mono text-ink">pay</span> and <span className="font-mono text-ink">record_proof</span>; raising a cap,
-        adding a payee or withdrawing still needs your wallet.
+        This Mac's key can call only <span className="font-mono text-ink">{KEY_METHODS_TEXT}</span>; raising a cap, adding a payee, withdrawing or taking back a deal
+        held in escrow still needs your wallet.
       </Why>
       <Why label="Prefer near-cli?">
         {n.commands ? (

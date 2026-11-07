@@ -1,6 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { NETWORK_CONFIG, createOneClickClient, encodeSignRequest, explorerTxUrl, type Network, type OnChainProof, type OwnerAction, type PayoutChain } from "@aftercall/core";
+import {
+  APP_KEY_METHODS,
+  NETWORK_CONFIG,
+  createOneClickClient,
+  encodeSignRequest,
+  explorerTxUrl,
+  type EscrowState,
+  type EscrowView,
+  type Network,
+  type OnChainProof,
+  type OwnerAction,
+  type PayoutChain,
+} from "@aftercall/core";
 import { isDesktop } from "./recorder";
 
 export interface NearConfig {
@@ -21,6 +33,8 @@ export const builtInContract = (network: Network): string | null => NETWORK_CONF
 export interface NearStatus {
   publicKey: string;
   keyAdded: boolean;
+  /** The key may open and release escrows. False for a key added before escrows: the owner updates it once. */
+  keyEscrow: boolean;
   keyProblem: string | null;
   registered: boolean;
 }
@@ -45,17 +59,30 @@ export const near = {
   status: () => invoke<NearStatus>("near_status"),
   recordProof: (meetingId: string, proofHash: string, model: string) => invoke<{ txHash: string; fee: string | null }>("near_record_proof", { meetingId, proofHash, model }),
   getProof: (owner: string, meetingId: string) => invoke<OnChainProof | null>("near_get_proof", { owner, meetingId }),
-  pay: (payee: string, amount: bigint, memo: string, followupId: string) =>
-    invoke<PayOutcome>("near_pay", { payee, amount: amount.toString(), memo, followupId }),
+  /** With `meetingId` (its proof is on this contract), the payment records which proof it came from. */
+  pay: (payee: string, amount: bigint, memo: string, followupId: string, meetingId?: string) =>
+    invoke<PayOutcome>("near_pay", { payee, amount: amount.toString(), memo, followupId, meetingId: meetingId ?? null }),
   /** `pay` with a NEAR Intents route: the USDC goes to the quote's deposit address, under the same caps. */
-  payCrossChain: (payee: string, amount: bigint, memo: string, followupId: string, depositAddress: string, quoteId: string) =>
-    invoke<PayOutcome>("near_pay_cross_chain", { payee, amount: amount.toString(), memo, followupId, depositAddress, quoteId }),
+  payCrossChain: (payee: string, amount: bigint, memo: string, followupId: string, depositAddress: string, quoteId: string, meetingId?: string) =>
+    invoke<PayOutcome>("near_pay_cross_chain", { payee, amount: amount.toString(), memo, followupId, depositAddress, quoteId, meetingId: meetingId ?? null }),
+  /** Holds a deal in escrow (Handshake): set aside within the caps, or parked for the owner's wallet. */
+  openEscrow: (escrowId: string, payee: string, amount: bigint, meetingId: string, termsHash: string, hasCondition: boolean) =>
+    invoke<EscrowOutcome>("near_open_escrow", { escrowId, payee, amount: amount.toString(), meetingId, termsHash, hasCondition }),
+  /** Pays a confirmed escrow to its payee; the state after says whether it landed. */
+  releaseEscrow: (escrowId: string) => invoke<EscrowOutcome>("near_release_escrow", { escrowId }),
+  escrow: (escrowId: string) => invoke<EscrowView | null>("near_escrow", { escrowId }),
   wallet: () => invoke<WalletView>("near_wallet"),
   checkPayee: (account: string) => invoke<{ exists: boolean; usdcReady: boolean }>("near_check_payee", { account }),
   ownerUsdc: () => invoke<string>("near_owner_usdc"),
   /** `asked`: the network, contract and account that answered, read with the answer. */
   paymentState: (followupId: string) => invoke<{ paid: boolean; pending: boolean; asked: NearConfig }>("near_payment_state", { followupId }),
 };
+
+export interface EscrowOutcome {
+  txHash: string;
+  state: EscrowState;
+  reason: "OVER_CAP" | "OVER_PAYMENT_CAP" | null;
+}
 
 export interface PayOutcome {
   txHash: string;
@@ -129,6 +156,8 @@ export async function waitFor(check: () => Promise<boolean>, timeoutMs = 120_000
 export const WEB_URL = import.meta.env.VITE_WEB_URL ?? "http://localhost:3000";
 export const VERIFY_URL = `${WEB_URL}/verify`;
 export const SIGN_URL = `${WEB_URL}/sign`;
+/** The payee's confirm page for a deal held in escrow. */
+export const DEAL_URL = `${WEB_URL}/deal`;
 /** The web app is the local dev server (no VITE_WEB_URL at build time). */
 const LOCAL_WEB = /^http:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(WEB_URL);
 
@@ -139,8 +168,10 @@ export function explorerTx(network: NearConfig["network"], txHash: string): stri
 /** What the setup approval attaches, as packages/core/src/wallet/actions.ts sends it. */
 export const REGISTER_DEPOSIT = "0.1 NEAR";
 export const KEY_ALLOWANCE = "0.25 NEAR";
-/** The two methods this Mac's limited key may call. */
-export const KEY_METHODS = ["pay", "record_proof"] as const;
+/** The methods this Mac's limited key may call. */
+export const KEY_METHODS = APP_KEY_METHODS;
+/** "pay, record_proof, open_escrow and release_escrow". */
+export const KEY_METHODS_TEXT = `${KEY_METHODS.slice(0, -1).join(", ")} and ${KEY_METHODS[KEY_METHODS.length - 1]}`;
 
 /** The one-time near-cli commands that connect the account to the app. */
 export function setupCommands(c: NearConfig, publicKey: string): { register: string; addKey: string } {

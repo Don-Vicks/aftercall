@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { decodeSignRequest, describe, encodeSignRequest, toTransactions, USDC_CONTRACT, type SignRequest } from "./actions.ts";
+import { APP_KEY_METHODS, decodeSignRequest, describe, encodeSignRequest, readAccessKeyPermission, toTransactions, updateKeyProblem, USDC_CONTRACT, type SignRequest } from "./actions.ts";
 
 const base = { network: "testnet" as const, contract: "wallet.victor.testnet", owner: "victor.testnet" };
 
@@ -14,6 +14,8 @@ test("every owner method carries exactly 1 yoctoNEAR, as the contract requires",
     { kind: "withdraw", amount: "1000000" },
     { kind: "approve", followupId: "m1-f3", payee: "designer.testnet", amount: "5000000000" },
     { kind: "cancel", followupId: "m1-f3", payee: "designer.testnet", amount: "5000000000" },
+    { kind: "approve-escrow", escrowId: "m1-f3", payee: "designer.testnet", amount: "5000000000" },
+    { kind: "cancel-escrow", escrowId: "m1-f3", payee: "designer.testnet", amount: "5000000000" },
     { kind: "pause", paused: true },
   ] as const) {
     const [tx] = toTransactions({ ...base, action });
@@ -59,12 +61,41 @@ test("deposits go to the USDC contract as ft_transfer_call to the agent wallet",
   assert.deepEqual(a.params.args, { receiver_id: base.contract, amount: "250000000", msg: "" });
 });
 
-test("authorising the Mac adds a key limited to pay and record_proof on the contract", () => {
+test("authorising the Mac adds a key limited to pay, record_proof, open_escrow and release_escrow on the contract", () => {
   const [tx] = toTransactions({ ...base, action: { kind: "authorise-key", publicKey: "ed25519:3w4RMJEvhWGNAjEWrrFgVNeXTqhiGrMvj4jHgYG67b6S" } });
   assert.equal(tx.receiverId, base.owner);
   const a = tx.actions[0];
   assert.ok(a.type === "AddKey");
-  assert.deepEqual(a.params.accessKey.permission, { receiverId: base.contract, allowance: "250000000000000000000000", methodNames: ["pay", "record_proof"] });
+  assert.deepEqual(a.params.accessKey.permission, { receiverId: base.contract, allowance: "250000000000000000000000", methodNames: ["pay", "record_proof", "open_escrow", "release_escrow"] });
+  assert.deepEqual([...APP_KEY_METHODS], ["pay", "record_proof", "open_escrow", "release_escrow"]);
+});
+
+test("a key from before escrows is updated in one transaction: deleted and added back with the new methods", () => {
+  const publicKey = "ed25519:3w4RMJEvhWGNAjEWrrFgVNeXTqhiGrMvj4jHgYG67b6S";
+  const r: SignRequest = { ...base, action: { kind: "update-key", publicKey } };
+  const txs = toTransactions(r);
+  assert.equal(txs.length, 1);
+  assert.equal(txs[0].receiverId, base.owner, "on the owner's own account");
+  assert.deepEqual(txs[0].actions.map((a) => a.type), ["DeleteKey", "AddKey"]);
+  const [del, add] = txs[0].actions;
+  assert.ok(del.type === "DeleteKey" && add.type === "AddKey");
+  assert.equal(del.params.publicKey, publicKey);
+  assert.equal(add.params.publicKey, publicKey);
+  assert.deepEqual(add.params.accessKey.permission.methodNames, [...APP_KEY_METHODS]);
+  assert.deepEqual(decodeSignRequest(encodeSignRequest(r)), r);
+  assert.throws(() => decodeSignRequest(encodeSignRequest({ ...base, action: { kind: "update-key", publicKey: "ed25519:short" } })), /BAD_KEY/);
+  assert.match(describe(r).rows[1].value, /^pay, record_proof, open_escrow and release_escrow on /);
+});
+
+test("an escrow over a cap is approved, or taken back, only in the owner's wallet", () => {
+  const approve: SignRequest = { ...base, action: { kind: "approve-escrow", escrowId: "1793006441-f2", payee: "kemi.testnet", amount: "500000000", payeeName: "Kemi" } };
+  const a = toTransactions(approve)[0].actions[0];
+  assert.ok(a.type === "FunctionCall");
+  assert.deepEqual([a.params.methodName, a.params.args, a.params.deposit], ["approve_escrow", { escrow_id: "1793006441-f2" }, "1"]);
+  assert.deepEqual(describe(approve).rows.map((r) => r.value), ["500.00 USDC", "Kemi · kemi.testnet"]);
+  const cancel = toTransactions({ ...base, action: { kind: "cancel-escrow", escrowId: "1793006441-f2", payee: "kemi.testnet", amount: "500000000" } })[0].actions[0];
+  assert.ok(cancel.type === "FunctionCall" && cancel.params.methodName === "cancel_escrow");
+  assert.throws(() => decodeSignRequest(encodeSignRequest({ ...approve, action: { ...approve.action, escrowId: "x".repeat(65) } } as SignRequest)), /BAD_ACTION/);
 });
 
 test("the approve page shows the amount, payee, meeting and the words heard", () => {
@@ -173,4 +204,28 @@ test("setup links with nothing to sign, a bad key, a bad cap or missing flags ar
   bad({ kind: "setup", register: true, dailyCap: null, registerUsdc: false });
   bad({ kind: "setup", register: "yes", registerUsdc: false });
   bad({ kind: "setup", register: true });
+});
+
+test("an update only ever deletes this Mac's limited key, never a full-access or another key", async () => {
+  const fc = (receiver_id: string, method_names: string[]) => ({ FunctionCall: { allowance: "250000000000000000000000", receiver_id, method_names } });
+  assert.equal(updateKeyProblem(fc(base.contract, ["record_proof", "pay"]), base.contract), null, "a key from before escrows");
+  assert.equal(updateKeyProblem(fc(base.contract, ["release_escrow", "pay", "open_escrow", "record_proof"]), base.contract), null, "an updated key, again");
+  assert.match(updateKeyProblem("FullAccess", base.contract) ?? "", /full access/);
+  assert.match(updateKeyProblem(null, base.contract) ?? "", /isn't on your account/);
+  assert.match(updateKeyProblem(fc("other.testnet", ["pay", "record_proof"]), base.contract) ?? "", /isn't limited to/);
+  assert.match(updateKeyProblem(fc(base.contract, []), base.contract) ?? "", /other methods/, "an empty list means every method");
+  assert.match(updateKeyProblem(fc(base.contract, ["pay", "record_proof", "withdraw"]), base.contract) ?? "", /other methods/);
+  assert.match(updateKeyProblem(fc(base.contract, ["pay", "pay"]), base.contract) ?? "", /other methods/);
+
+  // Read from NEAR at final finality; a key that isn't there reads as null.
+  const publicKey = "ed25519:3w4RMJEvhWGNAjEWrrFgVNeXTqhiGrMvj4jHgYG67b6S";
+  let sent: { params: Record<string, string> } | undefined;
+  const answer = (body: unknown) => (async (_url: unknown, init?: { body?: unknown }) => {
+    sent = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify(body));
+  }) as typeof fetch;
+  assert.equal(await readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ result: { nonce: 1, permission: "FullAccess" } })), "FullAccess");
+  assert.deepEqual(sent?.params, { request_type: "view_access_key", finality: "final", account_id: base.owner, public_key: publicKey });
+  assert.equal(await readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCESS_KEY" } } })), null);
+  await assert.rejects(readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCOUNT" } } })));
 });

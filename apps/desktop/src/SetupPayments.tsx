@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import { ArrowRight, Check, Clock, Coins, ExternalLink, FlaskConical, KeyRound, Link2, ShieldCheck, UserCheck, UserPlus, Wallet } from "lucide-react";
 import { exampleAccount, formatUsdc } from "@aftercall/core";
-import { KEY_ALLOWANCE, KEY_METHODS, REGISTER_DEPOSIT, builtInContract, near, type NearConfig, type WalletView } from "./near";
+import { KEY_ALLOWANCE, KEY_METHODS_TEXT, REGISTER_DEPOSIT, builtInContract, near, type NearConfig, type WalletView } from "./near";
 import type { NearSetup, SetupAction } from "./nearSetup";
 import { isDesktop } from "./recorder";
 import { recovery } from "./recovery";
@@ -566,7 +566,7 @@ function SignStep({ n, created, onBack, onNext }: { n: NearSetup; created: Creat
         ]
       : []),
     ...(!keyAdded
-      ? [{ icon: <KeyRound size={16} strokeWidth={1.75} />, title: "Let this Mac pay and record proofs", detail: <>A limited key: {mono(KEY_METHODS.join(" and "))} only</> }]
+      ? [{ icon: <KeyRound size={16} strokeWidth={1.75} />, title: "Let this Mac pay and record proofs", detail: <>A limited key: {mono(KEY_METHODS_TEXT)} only</> }]
       : []),
     ...(action.registerUsdc
       ? [{ icon: <Coins size={16} strokeWidth={1.75} />, title: "Register with USDC", detail: <>{mono("0.00125 NEAR")}, so your account can hold USDC</> }]
