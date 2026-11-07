@@ -7,7 +7,7 @@ import request from "supertest";
 import { Pool } from "pg";
 import { MemoryDailyCounts } from "../limits";
 import { RelayController } from "./relay.controller";
-import { ACTION_TTL_MS, MAX_WAITING_ACTIONS, PAIRING_IDLE_MS, PAIRING_WAIT_MS, RELAY_BOX_LIMITS, RELAY_DAILY, RelayService } from "./relay.service";
+import { ACTION_TTL_MS, MAX_WAITING_ACTIONS, PAIRING_IDLE_MS, PAIRING_WAIT_MS, RELAY_BOX_LIMITS, RELAY_DAILY, RelayService, SWEEP_EVERY_MS } from "./relay.service";
 import { MemoryRelayStore, PgRelayStore, RELAY_ACTION_COLUMNS, RELAY_PAIRING_COLUMNS, relayHash, type RelayPairing, type RelayStore } from "./relay.store";
 
 /** packages/core's relay code, loaded from source (tsx runs it; the backend's build can't import it). */
@@ -242,7 +242,7 @@ for (const [name, make] of stores) {
       clock.now = T0 + 20 * DAY + PAIRING_IDLE_MS;
       assert.equal((await http().get(`/relay/pairings/${active.id}/snapshot`).set(bearer(active.phoneToken))).status, 404);
 
-      // Expired rows are deleted on the next write.
+      // Expired rows are deleted on the next write (the last sweep was days ago).
       await pairThrough(http, { confirm: false });
       assert.equal(await store.get(relayHash(waiting.id), 0), null);
       assert.equal(await store.get(relayHash(active.id), 0), null);
@@ -506,6 +506,27 @@ test("nothing readable is stored: only hashes of the id and tokens, and the seal
     const all = strings.join("\n");
     for (const secret of [p.id, p.macToken, p.phoneToken, ...secrets]) assert.ok(!all.includes(secret), `"${secret}" reached the store`);
     assert.ok(seen.some((args) => (args as unknown[]).includes(relayHash(p.id))), "the pairing is stored under its id's hash");
+  } finally {
+    await close();
+  }
+});
+
+test("expired rows are swept on a write at most once a minute, not on every one", async () => {
+  const store = new MemoryRelayStore();
+  let sweeps = 0;
+  const counting: RelayStore = Object.create(store, { sweep: { value: (...args: [number, number]) => (sweeps++, store.sweep(...args)) } });
+  const { http, clock, close } = await relayApp(counting);
+  try {
+    const p = await pairThrough(http);
+    const tap = () => http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+    assert.equal(sweeps, 1, "making the pairing swept once; the hello a moment later didn't");
+    for (let i = 0; i < 5; i++) assert.equal((await tap()).status, 200);
+    clock.now += SWEEP_EVERY_MS - 1;
+    await tap();
+    assert.equal(sweeps, 1);
+    clock.now += 1;
+    await tap();
+    assert.equal(sweeps, 2, "a minute on, the next write sweeps");
   } finally {
     await close();
   }
