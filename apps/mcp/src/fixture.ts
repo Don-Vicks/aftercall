@@ -20,6 +20,8 @@ export interface FakeApp {
   notes: (id: string) => NotesFile;
   /** The "Let agents claim and complete action items" switch. */
   setAllowWrites: (on: boolean) => void;
+  /** The projects agents may reach, by id; null for every project (the default). */
+  setProjects: (ids: string[] | null) => void;
   /** Stops listening and removes the temp dir. */
   close: () => Promise<void>;
 }
@@ -97,6 +99,9 @@ const PROJECTS = [
   { id: "fundraise-k3x", name: "Fundraise" },
 ];
 
+/** The app's refusal for a meeting in a project the user keeps from agents (agents.rs, `PROJECT_OFF`). */
+export const PROJECT_OFF = "Aftercall doesn't let agents reach this meeting's project. The user can allow it under Coding agents in Aftercall's sidebar.";
+
 /** The app's refusal while agents may only read (agents.rs, `WRITES_OFF`). */
 export const WRITES_OFF =
   "Aftercall lets agents read only. To let them claim and complete action items, turn that on under Coding agents in Aftercall's sidebar.";
@@ -116,11 +121,15 @@ export interface Seen {
 /** A request field as text, empty when absent. */
 const r = (v: unknown) => (typeof v === "string" ? v : "");
 
-function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, now: () => string): unknown {
+function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, scope: string[] | null, now: () => string): unknown {
   const missing = (id: unknown) => new Error(`No processed meeting with id "${String(id)}". Use list_meetings to see ids.`);
+  // The chosen projects by name, as meetings keep them; null for every project.
+  const names = scope && PROJECTS.filter((p) => scope.includes(p.id)).map((p) => p.name);
+  const reachable = (m: Meeting) => !names || names.includes(m.project);
   const notesOf = (id: unknown) => {
     const n = typeof id === "string" && /^\d{1,20}$/.test(id) ? store.get(id) : undefined;
     if (!n) throw missing(id);
+    if (!reachable(n.meeting)) throw new Error(PROJECT_OFF);
     return n;
   };
   const openItem = (r: Req, otherClaim: (by: string, at: string) => string) => {
@@ -134,13 +143,16 @@ function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, n
   };
   switch (req.op) {
     case "projects":
-      return PROJECTS;
+      return PROJECTS.filter((p) => !names || names.includes(p.name));
     case "meetings":
-      return [...store.entries()].sort((a, b) => Number(b[0]) - Number(a[0])).map(([id, notes]) => ({ id, notes }));
+      return [...store.entries()]
+        .filter(([, notes]) => reachable(notes.meeting))
+        .sort((a, b) => Number(b[0]) - Number(a[0]))
+        .map(([id, notes]) => ({ id, notes }));
     case "notes":
       return notesOf(req.id);
     case "access":
-      return { allowWrites };
+      return { allowWrites, allProjects: !names };
     case "claim": {
       if (!allowWrites) throw new Error(WRITES_OFF);
       const { item, agent } = openItem(req, (by, at) => `Already claimed by ${by} at ${at}`);
@@ -208,6 +220,7 @@ export async function startFakeApp(opts: { now?: () => string; allowWrites?: boo
   const store = fixtureMeetings();
   const now = opts.now ?? (() => new Date().toISOString());
   let allowWrites = opts.allowWrites ?? false;
+  let scope: string[] | null = null;
   const server: Server = createServer((sock) => {
     let buf = "";
     sock.on("data", (d) => {
@@ -219,7 +232,7 @@ export async function startFakeApp(opts: { now?: () => string; allowWrites?: boo
       try {
         req = JSON.parse(buf.slice(0, nl)) as Req;
         if (req.token !== token) throw new Error("Aftercall refused the token. Copy the current setup from Coding agents in Aftercall's sidebar.");
-        reply = { ok: true, result: handle(store, req, allowWrites, now) };
+        reply = { ok: true, result: handle(store, req, allowWrites, scope, now) };
       } catch (e) {
         reply = { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
@@ -245,6 +258,9 @@ export async function startFakeApp(opts: { now?: () => string; allowWrites?: boo
     notes: (id) => structuredClone(store.get(id)!),
     setAllowWrites: (on) => {
       allowWrites = on;
+    },
+    setProjects: (ids) => {
+      scope = ids;
     },
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));

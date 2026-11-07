@@ -129,11 +129,12 @@ export async function listActionItems(
           .map((a) => itemView(id, notes.meeting, a))
       : [],
   );
-  const { allowWrites } = await readAccess(app);
+  const { allowWrites, allProjects } = await readAccess(app);
   return {
     items,
     total: items.length,
     canClaim: allowWrites,
+    ...(allProjects === false ? { someProjectsOnly: "The user lets agents reach only some projects; meetings in the others aren't listed here." } : {}),
     ...(allowWrites === true
       ? {}
       : allowWrites === false

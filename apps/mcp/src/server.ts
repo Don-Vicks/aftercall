@@ -41,7 +41,7 @@ export function createServer(channel: AppChannel): McpServer {
     "list_meetings",
     {
       title: "List meetings",
-      description: `Processed meetings on this Mac, newest first, with open action items and follow-ups waiting for approval in the app (a payment on NEAR over a cap waits for the owner's NEAR wallet instead, and shows as "blocked" in get_meeting). Read-only. ${READ_ONLY}`,
+      description: `Processed meetings on this Mac that the user lets agents reach (every project, or only the ones they chose), newest first, with open action items and follow-ups waiting for approval in the app (a payment on NEAR over a cap waits for the owner's NEAR wallet instead, and shows as "blocked" in get_meeting). Read-only. ${READ_ONLY}`,
       inputSchema: {
         project: z.string().optional().describe("Only meetings in this project (name or id)"),
         limit: z.number().int().min(1).max(500).optional().describe("Most meetings to return (default 50)"),

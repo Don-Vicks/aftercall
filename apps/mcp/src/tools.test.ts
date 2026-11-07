@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { WRITES_OFF, startFakeApp, type FakeApp } from "./fixture.ts";
+import { PROJECT_OFF, WRITES_OFF, startFakeApp, type FakeApp } from "./fixture.ts";
 import { claimActionItem, completeActionItem, draftFollowUp, getMeeting, listActionItems, listMeetings, search } from "./tools.ts";
 import { NO_TOKEN, NOT_RUNNING, checkId, connectApp, socketPathFor, type AppChannel } from "./store.ts";
 
@@ -195,6 +195,29 @@ test("read-only by default: reads work, claim and complete are refused by name, 
   fake.setAllowWrites(false);
   await assert.rejects(completeActionItem(app, { meetingId: "1761100000", itemId: "a2", agent: "Claude Code" }), (e: Error) => e.message === WRITES_OFF);
   assert.equal(fake.notes("1761100000").meeting.actionItems[1].done, false);
+});
+
+test("only the projects the user chose: others are neither listed nor reachable, and the refusal names no project", async () => {
+  fake.setProjects(["general"]);
+  assert.deepEqual((await listMeetings(app)).meetings.map((m) => m.title), ["Team standup"]);
+  assert.deepEqual((await listMeetings(app)).projects, ["General"]);
+  assert.equal((await search(app, { query: "pilot" })).meetingsMatched, 0);
+  const list = await listActionItems(app, { includeDone: true });
+  assert.deepEqual([...new Set(list.items.map((i) => i.project))], ["General"]);
+  assert.match(list.someProjectsOnly ?? "", /only some projects/);
+  for (const call of [
+    getMeeting(app, { id: "1761000000" }),
+    claimActionItem(app, { meetingId: "1761000000", itemId: "a1", agent: "Codex" }),
+    completeActionItem(app, { meetingId: "1761000000", itemId: "a1", agent: "Codex" }),
+    draftFollowUp(app, { meetingId: "1761000000", agent: "Codex", kind: "email", to: "ada@example.com", reason: "x" }),
+  ]) {
+    await assert.rejects(call, (e: Error) => e.message === PROJECT_OFF && !/Fundraise/.test(e.message));
+  }
+  assert.equal(fake.notes("1761000000").meeting.actionItems[0].claimed, undefined);
+  // Every project again (as settings from before the choice read).
+  fake.setProjects(null);
+  assert.equal((await listMeetings(app)).total, 2);
+  assert.equal("someProjectsOnly" in (await listActionItems(app)), false);
 });
 
 test("an app from before the write switch still lists action items", async () => {
