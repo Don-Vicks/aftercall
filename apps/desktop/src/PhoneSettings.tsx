@@ -3,9 +3,9 @@ import { AnimatePresence } from "motion/react";
 import { Check, Smartphone } from "lucide-react";
 import { encode } from "uqr";
 import { clockTime, longDate } from "@aftercall/core";
-import { cancelPairing, confirmPairing, loadPhone, startPairing, unpair, usePhone, waitForHello, type PendingPairing, type PhoneHello } from "./phone";
+import { cancelPairing, confirmPairing, loadPhone, pairingProblem, startPairing, unpair, usePhone, waitForHello, type PendingPairing, type PhoneHello } from "./phone";
 import { CheckCircle } from "./primitives/Check";
-import { CardRow, IconDisc, Pop, Why, errorText } from "./SettingsParts";
+import { CardRow, IconDisc, Pop, Why } from "./SettingsParts";
 import { Button, Card, Dialog, Pill, SectionTitle, Spinner, toast, useConfirm } from "./ui";
 
 /**
@@ -134,7 +134,7 @@ function PairSheet({ onClose }: { onClose: () => void }) {
       } catch (e) {
         if (!live) return;
         drop();
-        setStep({ name: "failed", error: errorText(e) });
+        setStep({ name: "failed", error: pairingProblem(e) });
       }
     })();
     return () => {
@@ -158,7 +158,7 @@ function PairSheet({ onClose }: { onClose: () => void }) {
     } catch (e) {
       if (open.current) cancelPairing(open.current);
       open.current = null;
-      setStep({ name: "failed", error: errorText(e) });
+      setStep({ name: "failed", error: pairingProblem(e) });
     }
   };
 

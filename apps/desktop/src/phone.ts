@@ -65,6 +65,15 @@ export class RelayHttpError extends Error {
   }
 }
 
+/** A relay failure while pairing, in plain words rather than the relay's code. */
+export function pairingProblem(e: unknown): string {
+  if (!(e instanceof RelayHttpError)) return e instanceof Error ? e.message : String(e);
+  if (e.status === 0) return e.message;
+  if (e.status === 404 || e.status === 401) return "The relay no longer knows this code. Make a new one.";
+  if (e.status === 429) return "Too many pairing codes from this network today. Try again tomorrow.";
+  return `Aftercall's relay refused it (${e.message}). Make a new code, or try again later.`;
+}
+
 /** The pairing is gone on the relay: unpaired from the phone, or expired. */
 const isGone = (e: unknown) => e instanceof RelayHttpError && (e.status === 401 || e.status === 404);
 
