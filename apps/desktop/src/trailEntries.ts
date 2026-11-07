@@ -126,7 +126,7 @@ function followUpEntries(f: FollowUp, network: Network | null): TrailEntry[] {
       what: `${f.kind === "email" ? `Recap to ${f.toName || "someone"}` : `Payment to ${f.payeeName}`} dismissed on your phone`,
       detail: `Nothing was ${f.kind === "email" ? "sent" : "paid"}`,
       who: "You, on your phone",
-      kept: "Nothing sent. The relay keeps your tap until this Mac collects it",
+      kept: "Aftercall's relay kept your sealed tap until this Mac collected it",
     });
   if (f.kind === "email") {
     // Drafting opens your own mail app; it stays true even if the item was dismissed after.
