@@ -16,7 +16,7 @@ This is a guide for reviewing this repository, written for people and for coding
 | --- | --- | --- | --- |
 | 1 | `pnpm install && pnpm verify --quick` (Node 24, pnpm 10, stable Rust) | A summary of ✓ lines, exit code 0: typecheck, 451 core, 52 backend and 25 MCP tests, the web build, the NEAR signer, the desktop Rust tests (macOS only; on Linux listed as skipped), the contract's unit tests | a few minutes; longer on a machine's first Rust build |
 | 2 | `pnpm verify` (adds `cargo-near` and the `wasm32-unknown-unknown` target) | The above plus the contract on a local NEAR node: 20 sandbox tests | about 8 more minutes |
-| 3 | Open https://getaftercall.vercel.app/demo | The Mac app's interface on sample meetings: notes with their quotes, the Verify sheet, follow-ups, a $5,000 payment the contract holds for the owner's wallet, and a live NEAR Intents quote for a payment on Solana (Pay Kemi) | 2 minutes |
+| 3 | Open https://getaftercall.vercel.app/demo in a browser (it renders with JavaScript) | It opens on the sample meeting Sync with Ada; if it lands on Home, click Sync with Ada under Sample in the sidebar. The Mac app's interface on sample meetings: notes with their quotes, the Verify sheet, follow-ups, a $5,000 payment the contract holds for the owner's wallet, and a live NEAR Intents quote for a payment on Solana (Pay Kemi) | 2 minutes |
 | 4 | The `curl` commands under [How to test](../README.md#how-to-test) | `nov3.testnet` calling `record_proof` on `wallet.aftercall.testnet`, status `SuccessValue`; the contract's counts | 1 minute |
 | 5 | Open https://getaftercall.vercel.app/stats | The same counts, read live from the contract and the backend | 1 minute |
 
