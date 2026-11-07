@@ -789,6 +789,21 @@ async fn agents_claude(app: AppHandle, connect: bool) -> Result<agents::ClaudeOu
     Ok(outcome)
 }
 
+/// "Open in Claude Code" on an action item: Terminal in the project's code folder, running
+/// claude with the hand-off prompt and Aftercall's MCP server (see agents.rs).
+#[tauri::command]
+async fn agents_open_claude(app: AppHandle, project: String, prompt: String) -> Result<agents::OpenOutcome, String> {
+    let dir = data_dir(&app)?;
+    let server = mcp_server_path(&app);
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (claude, node) = agents::find_claude_and_node(&home);
+        agents::open_in_claude_code(&dir, &project, &prompt, &server, claude.as_deref(), node, &agents::open_terminal)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// The cached transcription of one audio chunk, e.g. "mic-000".
 fn transcript_path(app: &AppHandle, id: &str, chunk: &str) -> Result<PathBuf, String> {
     let valid = chunk.len() <= 32 && chunk.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
@@ -1218,6 +1233,7 @@ pub fn run() {
             agents_set_allow_writes,
             agents_activity,
             agents_claude,
+            agents_open_claude,
             delete_audio,
             nearai_set_key,
             nearai_has_key,

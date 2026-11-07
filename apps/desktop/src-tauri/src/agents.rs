@@ -32,7 +32,7 @@
 //! only read files; it is not a wall against malware running as the user.
 
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -673,6 +673,205 @@ pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), S
     save_settings(data_dir, &s)
 }
 
+// ---------- Open in Claude Code ----------
+//
+// "Open in Claude Code" on an action item opens Terminal in the project's code folder and
+// starts `claude` with the hand-off prompt (`handoffPrompt` in core). The prompt carries
+// the meeting's words, so it never goes into a shell string: it is written to a private
+// file (0600, in a 0700 folder under `agents/`), and the script Terminal runs reads it
+// into a variable, which the shell hands to claude as one argument without reading it as
+// code. The script holds only paths Aftercall chose, each single-quoted. When Claude Code
+// isn't connected with the current token, the script also passes `--mcp-config` with the
+// same server "Connect Claude Code" adds; that file holds the token, so it sits in the same
+// private folder, which the script deletes when claude exits (or the next Open does).
+
+/// The longest prompt passed to Claude Code, in bytes.
+const PROMPT_MAX: usize = 8 * 1024;
+/// A private folder older than this is left from an earlier Open whose claude has long read its files.
+const HANDOFF_STALE: Duration = Duration::from_secs(120);
+
+/// Where the private folders for Open in Claude Code go.
+pub fn handoff_root(data_dir: &Path) -> PathBuf {
+    socket_dir(data_dir).join("handoff")
+}
+
+/// One word for /bin/sh: single-quoted, with each `'` closed, escaped and reopened.
+pub fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// The code folder as a real folder, or why it can't be used.
+pub fn check_folder(folder: &Path) -> Result<PathBuf, String> {
+    match std::fs::metadata(folder) {
+        Ok(m) if m.is_dir() => folder.canonicalize().map_err(|e| e.to_string()),
+        Ok(_) => Err(format!("{} isn't a folder. Choose the code folder again on the project page.", folder.display())),
+        Err(_) => Err(format!("The code folder {} isn't there. Choose it again on the project page.", folder.display())),
+    }
+}
+
+/// A prompt claude takes as its first message: not empty, not huge, and not read as an option.
+pub fn check_prompt(prompt: &str) -> Result<(), String> {
+    if prompt.trim().is_empty() || prompt.len() > PROMPT_MAX || prompt.starts_with('-') || prompt.contains('\0') {
+        return Err("That prompt can't be passed to Claude Code. Copy it instead.".into());
+    }
+    Ok(())
+}
+
+/// The same server "Connect Claude Code" adds (`claude_add_args`), as a `--mcp-config` file.
+pub fn mcp_config(token: &str, node: &Path, server: &Path, data_dir: &Path) -> Value {
+    json!({ "mcpServers": { "aftercall": {
+        "command": node.display().to_string(),
+        "args": [server.display().to_string(), "--data-dir", data_dir.display().to_string()],
+        "env": { "AFTERCALL_TOKEN": token },
+    } } })
+}
+
+/// The script Terminal runs. Everything in it is a path Aftercall chose, single-quoted;
+/// the prompt is only ever in `prompt_file`.
+pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt_file: &Path, mcp: Option<&Path>, private_dir: &Path) -> String {
+    let q = |p: &Path| sh_quote(&p.display().to_string());
+    let mut lines = vec!["#!/bin/sh".to_string(), "# Written by Aftercall for Open in Claude Code. The prompt is read from a file; it is never part of this script.".to_string()];
+    if !path_dirs.is_empty() {
+        // claude installed by npm starts with `#!/usr/bin/env node`.
+        lines.push(format!("PATH={}:\"$PATH\"; export PATH", path_dirs.iter().map(|d| q(d)).collect::<Vec<_>>().join(":")));
+    }
+    lines.push(format!("cd {} || exit 1", q(folder)));
+    lines.push(format!("prompt=$(cat {}) || exit 1", q(prompt_file)));
+    lines.push(format!("rm -f {}", q(prompt_file)));
+    let config = mcp.map(|c| format!(" --mcp-config {}", q(c))).unwrap_or_default();
+    lines.push(format!("{}{config} \"$prompt\"", q(claude)));
+    lines.push(format!("rm -rf {}", q(private_dir)));
+    lines.join("\n") + "\n"
+}
+
+/// What `open` is given: Terminal, and the script.
+pub fn terminal_args(script: &Path) -> Vec<String> {
+    vec!["-a".into(), "Terminal".into(), script.display().to_string()]
+}
+
+/// A new file only the user can read (and, with `exec`, run).
+fn write_private(path: &Path, text: &str, exec: bool) -> Result<(), String> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(if exec { 0o700 } else { 0o600 })
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    f.write_all(text.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// The private folder for one Open: the prompt, the MCP config when one is needed, and the script.
+pub struct Prepared {
+    pub dir: PathBuf,
+    pub script: PathBuf,
+}
+
+/// Writes the private folder for one Open, after clearing folders earlier ones left.
+pub fn prepare_launch(data_dir: &Path, folder: &Path, prompt: &str, claude: &Path, node: Option<&Path>, mcp: Option<&Value>) -> Result<Prepared, String> {
+    check_prompt(prompt)?;
+    let folder = check_folder(folder)?;
+    let root = handoff_root(data_dir);
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&root).map_err(|e| e.to_string())?;
+    for dir in [socket_dir(data_dir), root.clone()] {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
+    }
+    for e in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > HANDOFF_STALE);
+        if old {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    let dir = root.join(&new_token()?[..16]);
+    std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(|e| e.to_string())?;
+    let prompt_file = dir.join("prompt.txt");
+    write_private(&prompt_file, prompt, false)?;
+    let config = match mcp {
+        Some(v) => {
+            let p = dir.join("mcp.json");
+            write_private(&p, &v.to_string(), false)?;
+            Some(p)
+        }
+        None => None,
+    };
+    let mut path_dirs: Vec<PathBuf> = [Some(claude), node].into_iter().flatten().filter_map(|p| p.parent().map(Path::to_path_buf)).collect();
+    path_dirs.dedup();
+    let script = dir.join("open-in-claude-code.command");
+    write_private(&script, &launch_script(&folder, claude, &path_dirs, &prompt_file, config.as_deref(), &dir), true)?;
+    Ok(Prepared { dir, script })
+}
+
+/// What Open in Claude Code did, as the action item's menu shows it.
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenOutcome {
+    pub ok: bool,
+    /// What's missing, so the menu copies the prompt instead: "folder", "agents", "claude" or "node".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<&'static str>,
+    pub message: String,
+}
+
+impl OpenOutcome {
+    fn missing(what: &'static str, message: String) -> Self {
+        Self { ok: false, missing: Some(what), message }
+    }
+}
+
+/// "Open in Claude Code" for a meeting in `project`: Terminal in the project's code folder,
+/// running claude with `prompt`, with Aftercall's MCP server. `open` starts Terminal with
+/// the given arguments (tests pass a stand-in).
+pub fn open_in_claude_code(
+    data_dir: &Path,
+    project: &str,
+    prompt: &str,
+    server: &Path,
+    claude: Option<&Path>,
+    node: Result<PathBuf, String>,
+    open: &dyn Fn(&[String]) -> Result<(), String>,
+) -> OpenOutcome {
+    let Some(folder) = crate::projects::code_folder(data_dir, project) else {
+        return OpenOutcome::missing("folder", format!("{project} has no code folder. Choose one on its project page."));
+    };
+    let settings = load_settings(data_dir);
+    let Some(token) = settings.token.clone().filter(|_| settings.enabled) else {
+        return OpenOutcome::missing("agents", "Turn on \u{201c}Let agents read your meetings\u{201d} in Coding agents first, so Claude Code can reach this meeting.".into());
+    };
+    let Some(claude) = claude else {
+        return OpenOutcome::missing("claude", "Aftercall couldn't find the claude command on this Mac, so it copied the prompt instead.".into());
+    };
+    // Connected with this token: Claude Code already has the server, for every project.
+    let (node, mcp) = if claude_link(&settings) == "connected" {
+        (node.ok(), None)
+    } else {
+        let node = match node {
+            Ok(n) => n,
+            Err(message) => return OpenOutcome::missing("node", message),
+        };
+        if !server.exists() {
+            return OpenOutcome { ok: false, missing: None, message: format!("Aftercall's server isn't at {}. Reinstall Aftercall, then try again.", server.display()) };
+        }
+        let config = mcp_config(&token, &node, server, data_dir);
+        (Some(node), Some(config))
+    };
+    let prepared = match prepare_launch(data_dir, &folder, prompt, claude, node.as_deref(), mcp.as_ref()) {
+        Ok(p) => p,
+        Err(message) => return OpenOutcome { ok: false, missing: None, message },
+    };
+    match open(&terminal_args(&prepared.script)) {
+        Ok(()) => OpenOutcome { ok: true, missing: None, message: format!("Claude Code is starting in Terminal, in {}.", folder.display()) },
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&prepared.dir);
+            OpenOutcome { ok: false, missing: None, message: format!("Terminal didn't open: {e}") }
+        }
+    }
+}
+
+/// Starts Terminal with the script, through macOS's `open`.
+pub fn open_terminal(args: &[String]) -> Result<(), String> {
+    let out = run(Command::new("/usr/bin/open").args(args), Duration::from_secs(10))?;
+    if out.status.success() { Ok(()) } else { Err(said(&out, "")) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1138,6 +1337,111 @@ mod tests {
         assert!(gone.ok);
         remember_claude(&dir, &gone).unwrap();
         assert_eq!(claude_link(&load_settings(&dir)), "none");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// A stand-in `claude` that writes each argument it gets on its own line, as `\0`-ended records.
+    fn fake_claude(dir: &Path, out: &Path) -> PathBuf {
+        let claude = dir.join("bin/claude");
+        script(&claude, &format!("for a in \"$@\"; do printf '%s\\0' \"$a\"; done > {}\npwd >> {}", sh_quote(&out.display().to_string()), sh_quote(&out.display().to_string())));
+        claude
+    }
+
+    #[test]
+    fn open_in_claude_code_passes_the_prompt_as_one_argument_never_as_code() {
+        let dir = data_dir("open");
+        // A code folder whose name tries to break out of quotes.
+        let folder = dir.join("code/it's \"$(touch pwned)\" `x`");
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut entries = crate::projects::load_entries(&dir).unwrap();
+        entries[0].code_folder = Some(folder.display().to_string());
+        crate::projects::save_entries(&dir, entries).unwrap();
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), allow_writes: Some(true), ..Default::default() }).unwrap();
+        let out = dir.join("args");
+        let claude = fake_claude(&dir, &out);
+        let node = dir.join("bin/node");
+        script(&node, "echo v24.0.0");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+
+        let prompt = "Using the aftercall MCP server, claim a1.\n<<<meeting-data\nAction item: \"Ship it $(touch pwned) `touch pwned2`; rm -rf ~ 'x'\"\nmeeting-data>>>\n$HOME ${PATH} \\ \\\"";
+        let opened = std::cell::RefCell::new(Vec::new());
+        let outcome = open_in_claude_code(&dir, "General", prompt, &server, Some(&claude), Ok(node.clone()), &|args| {
+            opened.borrow_mut().push(args.to_vec());
+            Ok(())
+        });
+        assert!(outcome.ok, "{}", outcome.message);
+        let args = opened.borrow()[0].clone();
+        assert_eq!(&args[..2], ["-a", "Terminal"]);
+        let script_path = PathBuf::from(&args[2]);
+        let private = script_path.parent().unwrap().to_path_buf();
+        assert!(private.starts_with(handoff_root(&dir)));
+
+        // Private: the folder 0700, the prompt and config 0600, the script 0700. No meeting text in the script.
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!((mode(&private), mode(&private.join("prompt.txt")), mode(&private.join("mcp.json")), mode(&script_path)), (0o700, 0o600, 0o600, 0o700));
+        let text = std::fs::read_to_string(&script_path).unwrap();
+        assert!(!text.contains("Ship it") && !text.contains("meeting-data") && !text.contains("t0k3n"), "{text}");
+        let config: Value = serde_json::from_str(&std::fs::read_to_string(private.join("mcp.json")).unwrap()).unwrap();
+        assert_eq!(config["mcpServers"]["aftercall"]["env"]["AFTERCALL_TOKEN"], "t0k3n");
+        assert_eq!(config["mcpServers"]["aftercall"]["args"][0], server.display().to_string());
+
+        // Run the script as Terminal would, against the stand-in claude.
+        let run = Command::new("/bin/sh").arg(&script_path).env("HOME", &dir).output().unwrap();
+        assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+        let got = std::fs::read_to_string(&out).unwrap();
+        let (records, cwd) = got.rsplit_once('\0').unwrap();
+        let received: Vec<&str> = records.split('\0').collect();
+        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), prompt.trim_end_matches('\n')]);
+        assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+        for planted in ["pwned", "pwned2"] {
+            assert!(!folder.join(planted).exists() && !dir.join(planted).exists(), "{planted} was run");
+        }
+        assert!(!private.exists(), "the private folder goes when claude exits");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn open_in_claude_code_says_what_is_missing() {
+        let dir = data_dir("open-missing");
+        let server = dir.join("aftercall-mcp.mjs");
+        std::fs::write(&server, "").unwrap();
+        let never = |_: &[String]| -> Result<(), String> { panic!("Terminal must not open") };
+        let claude = dir.join("bin/claude");
+        script(&claude, "exit 0");
+        let go = |claude: Option<&Path>, node: Result<PathBuf, String>| open_in_claude_code(&dir, "General", "Using the aftercall MCP server", &server, claude, node, &never);
+
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("folder"));
+        let mut entries = crate::projects::load_entries(&dir).unwrap();
+        entries[0].code_folder = Some(dir.join("recordings/1761000000/notes.json").display().to_string());
+        crate::projects::save_entries(&dir, entries.clone()).unwrap();
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("agents"), "agents off");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
+        assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"));
+        assert_eq!(go(Some(&claude), Err("no node".into())).message, "no node");
+        // A file, not a folder.
+        let file = go(Some(&claude), Ok(claude.clone()));
+        assert!(!file.ok && file.message.contains("isn't a folder"), "{}", file.message);
+        // Connected with this token: no node needed, and no config file with the token.
+        let mut s = load_settings(&dir);
+        s.claude_code = Some(fingerprint("t0k3n"));
+        save_settings(&dir, &s).unwrap();
+        entries[0].code_folder = Some(dir.display().to_string());
+        crate::projects::save_entries(&dir, entries).unwrap();
+        let seen = std::cell::RefCell::new(None);
+        let ok = open_in_claude_code(&dir, "General", "Using the aftercall MCP server", &server, Some(&claude), Err("no node".into()), &|a| {
+            *seen.borrow_mut() = Some(a[2].clone());
+            Ok(())
+        });
+        assert!(ok.ok, "{}", ok.message);
+        let script_path = PathBuf::from(seen.borrow().clone().unwrap());
+        assert!(!script_path.parent().unwrap().join("mcp.json").exists());
+        assert!(!std::fs::read_to_string(&script_path).unwrap().contains("--mcp-config"));
+        // A prompt that would read as an option, or none at all, is refused before anything is written.
+        for bad in ["--dangerously-skip-permissions", "  ", &"x".repeat(PROMPT_MAX + 1)] {
+            assert!(check_prompt(bad).is_err(), "{bad}");
+        }
+        assert_eq!(sh_quote("it's"), "'it'\\''s'");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

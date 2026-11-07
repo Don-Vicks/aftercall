@@ -2,28 +2,48 @@ import { useState } from "react";
 import { Bot } from "lucide-react";
 import { handoffBlockers, handoffPrompt, type ActionItem, type HandoffAgent, type Meeting } from "@aftercall/core";
 import { PREVIEW_INFO, agentsApi, type AgentsInfo } from "./agents";
+import { projectsApi } from "./projects";
 import { isDesktop } from "./recorder";
 import { IconButton, Menu, toast } from "./ui";
 
-/** What the agent switches allow, from the app; the preview has no app, so agents read as off. */
-async function access(): Promise<AgentsInfo & { projectAllowed: boolean }> {
-  const info = isDesktop ? await agentsApi.info().catch(() => PREVIEW_INFO) : PREVIEW_INFO;
-  return { ...info, projectAllowed: true };
+interface Access {
+  blockers: string[];
+  /** The project's code folder, where Open in Claude Code starts. */
+  codeFolder?: string;
 }
 
-/** Copies the prompt and says, in the same toast, which switch would refuse the agent. */
-async function copyPrompt(meeting: Pick<Meeting, "id" | "title" | "project">, item: ActionItem, agent: HandoffAgent, blockers: string[]) {
+/** What the agent switches allow, from the app (the preview has no app, so agents read as off), and the project's code folder. */
+async function access(meeting: Pick<Meeting, "project">): Promise<Access> {
+  const info: AgentsInfo = isDesktop ? await agentsApi.info().catch(() => PREVIEW_INFO) : PREVIEW_INFO;
+  const project = (await projectsApi.list().catch(() => [])).find((p) => p.name === meeting.project);
+  return { blockers: handoffBlockers({ ...info, projectAllowed: true }, meeting.project), codeFolder: project?.codeFolder };
+}
+
+/** Copies the prompt and says, in the same toast, which switch would refuse the agent; `lead` says why it was copied, when it was a fallback. */
+async function copyPrompt(meeting: Pick<Meeting, "id" | "title" | "project">, item: ActionItem, agent: HandoffAgent, blockers: string[], lead?: string) {
   try {
     await navigator.clipboard.writeText(handoffPrompt(meeting, item, agent));
   } catch {
     toast({ text: "Couldn't copy the prompt. Try again.", tone: "record" });
     return;
   }
+  if (lead) return toast({ text: `${lead} Paste it into ${agent}.`, tone: "caution" });
   toast(
     blockers.length
       ? { text: `Prompt for ${agent} copied. ${blockers[0]}`, tone: "caution" }
       : { text: `Prompt for ${agent} copied. Paste it into a new ${agent} session.`, tone: "verdigris" },
   );
+}
+
+/**
+ * Opens Terminal in the project's code folder with claude and the prompt. When something
+ * is missing (claude, Node, agents off), it says so plainly and copies the prompt instead.
+ */
+async function openClaude(meeting: Pick<Meeting, "id" | "title" | "project">, item: ActionItem, blockers: string[]) {
+  const prompt = handoffPrompt(meeting, item, "Claude Code");
+  const out = await agentsApi.openClaude(meeting.project, prompt).catch((e: unknown) => ({ ok: false, missing: undefined, message: e instanceof Error ? e.message : String(e) }));
+  if (!out.ok) return copyPrompt(meeting, item, "Claude Code", blockers, out.missing === "claude" ? out.message : `${out.message} The prompt is copied instead.`);
+  toast(blockers.length ? { text: `${out.message} ${blockers[0]}`, tone: "caution" } : { text: out.message, tone: "verdigris" });
 }
 
 /**
@@ -33,16 +53,17 @@ async function copyPrompt(meeting: Pick<Meeting, "id" | "title" | "project">, it
  * it with a link to the work. The menu says which switches are off, if any.
  */
 export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "title" | "project">; item: ActionItem }) {
-  const [blockers, setBlockers] = useState<string[] | null>(null);
+  const [state, setState] = useState<Access | null>(null);
   const refresh = () =>
-    access().then((a) => {
-      const found = handoffBlockers(a, meeting.project);
-      setBlockers(found);
-      return found;
+    access(meeting).then((a) => {
+      setState(a);
+      return a;
     });
+  const current = () => (state ? Promise.resolve(state) : refresh());
   const copy = (agent: HandoffAgent) => () => {
-    void (blockers ? Promise.resolve(blockers) : refresh()).then((b) => copyPrompt(meeting, item, agent, b));
+    void current().then((a) => copyPrompt(meeting, item, agent, a.blockers));
   };
+  const blockers = state?.blockers ?? null;
 
   return (
     <span className="absolute top-1/2 right-full mr-[38px] flex -translate-y-1/2">
@@ -67,6 +88,7 @@ export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "
           </IconButton>
         )}
         items={[
+          ...(state?.codeFolder && isDesktop ? [{ label: "Open in Claude Code", onSelect: () => void current().then((a) => openClaude(meeting, item, a.blockers)) }, null] : []),
           { label: "Copy prompt for Claude Code", onSelect: copy("Claude Code") },
           { label: "Copy prompt for Codex", onSelect: copy("Codex") },
         ]}
@@ -75,7 +97,9 @@ export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "
             ? "Checking what agents may do…"
             : blockers.length
               ? blockers.join(" ")
-              : "The agent claims this item through Aftercall and completes it with a link to the work."
+              : state?.codeFolder
+                ? "The agent claims this item through Aftercall and completes it with a link to the work. Open in Claude Code starts it in this project's code folder."
+                : `The agent claims this item through Aftercall and completes it with a link to the work. Set a code folder on ${meeting.project}'s page to open Claude Code there.`
         }
       />
     </span>

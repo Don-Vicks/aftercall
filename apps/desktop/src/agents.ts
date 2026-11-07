@@ -21,6 +21,14 @@ export interface AgentsInfo {
   socketPath: string;
 }
 
+/** What "Open in Claude Code" did (agents.rs, `OpenOutcome`). */
+export interface OpenOutcome {
+  ok: boolean;
+  /** Why it couldn't open, so the menu copies the prompt instead. */
+  missing?: "folder" | "agents" | "claude" | "node";
+  message: string;
+}
+
 /** What "Connect Claude Code" or "Disconnect Claude Code" did (agents.rs, `ClaudeOutcome`). */
 export interface ClaudeOutcome {
   ok: boolean;
@@ -42,6 +50,11 @@ export const agentsApi = {
    * entry; disconnect (false) runs `claude mcp remove`. Agents must be on to connect.
    */
   claude: (connect: boolean) => invoke<ClaudeOutcome>("agents_claude", { connect }),
+  /**
+   * Opens Terminal in the project's code folder and starts claude with `prompt`, with
+   * Aftercall's MCP server. The prompt goes through a private file, never a shell string.
+   */
+  openClaude: (project: string, prompt: string) => invoke<OpenOutcome>("agents_open_claude", { project, prompt }),
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */
