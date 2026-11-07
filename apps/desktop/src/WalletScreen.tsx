@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, ExternalLink, Pause, Play, Plus, RefreshCw } from "lucide-react";
-import { CHAIN_NAME, exampleAccount, formatClock, formatUsdc, isValidPayoutAddress, meetingLabel, meetingTime, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
+import { CHAIN_NAME, exampleAccount, formatClock, formatUsdc, heldPaymentActions, isValidPayoutAddress, meetingTime, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
 import { SignPageDown, contractFollowupId, explorerTx, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast, useRecalledFigure } from "./ui";
 import { isDesktop } from "./recorder";
@@ -276,6 +276,8 @@ export function WalletScreen({
           blocked.map(({ meeting, followUp: f }) => {
             const id = contractFollowupId(meeting.id, f.id);
             const amount = f.amount === null ? "?" : formatUsdc(f.amount);
+            // The same answers a paired phone's /sign links carry (heldPaymentSignUrls).
+            const answers = heldPaymentActions(meeting, f, { leftToday: left, dailyCap: cap });
             return (
               <Card key={id} tone="caution" pad="none" className="flex flex-wrap items-center gap-4 px-[18px] py-4">
                 <Avatar name={f.payeeName} size={36} decorative />
@@ -296,7 +298,7 @@ export function WalletScreen({
                     onClick={() =>
                       signAndWait(
                         "Decline payment",
-                        { kind: "cancel", followupId: id, payee: f.payeeAccount, amount: String(f.amount ?? 0n) },
+                        answers.cancel,
                         async () => !(await near.paymentState(id)).pending,
                         () => `Declined paying ${f.payeeName} ${amount} USDC`,
                         () => onResolved(meeting.id, f.id, "dismissed"),
@@ -312,13 +314,7 @@ export function WalletScreen({
                     onClick={() =>
                       signAndWait(
                         "Approve payment",
-                        {
-                          kind: "approve",
-                          followupId: id,
-                          payee: f.payeeAccount,
-                          amount: String(f.amount ?? 0n),
-                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}` },
-                        },
+                        answers.approve,
                         async () => (await near.paymentState(id)).paid,
                         () => `Paid ${f.payeeName} ${amount} USDC`,
                         () => onResolved(meeting.id, f.id, "paid"),
