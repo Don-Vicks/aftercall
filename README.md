@@ -147,6 +147,8 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 | [docs/agents-demo.md](docs/agents-demo.md) | Claude Code on Aftercall's MCP server |
 | [docs/near-intents-1click.md](docs/near-intents-1click.md) | Paying a payee on Solana or Base through NEAR Intents 1Click |
 | [docs/staking-for-inference.md](docs/staking-for-inference.md) | Paying for notes by staking NEAR |
+| [docs/design/phone.md](docs/design/phone.md) | Design, not built: Aftercall on a phone for approvals, then in-room meetings |
+| [docs/design/agents.md](docs/design/agents.md) | Design, not built: what coding agents could do next with a meeting's follow-ups |
 
 ## Built with
 
