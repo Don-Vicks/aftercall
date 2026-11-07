@@ -115,6 +115,12 @@ test("a damaged link is refused, a line that can't be shown included", () => {
   for (const bad of ["", "#", "#line=", "#line=@@@", `#line=${Buffer.from("{}").toString("base64url")}`, good.slice(0, good.length - 40), "#bm90IGpzb24"]) {
     assert.throws(() => decodeVerifyLink(bad), /BAD_LINK/, bad.slice(0, 20));
   }
+  // A bundle the checks would trip over is a damaged link too, not a page stuck on "Checking".
+  const { signature: _, ...unsigned } = bundle;
+  for (const b of [{ meetingId: "1" }, { ...bundle, evidence: "x" }, { ...bundle, checks: [null] }, unsigned]) {
+    assert.throws(() => decodeVerifyLink(encodePublicProof({ ...place, bundle: b as ProofBundleV2 })), /BAD_LINK/);
+    assert.throws(() => decodeVerifyLink(`#${LINE_LINK_PREFIX}${Buffer.from(JSON.stringify({ ...read.proof, bundle: b, line: read.line.line, path: read.line.path })).toString("base64url")}`), /BAD_LINK/);
+  }
 });
 
 test("the line check says why a line doesn't belong", () => {

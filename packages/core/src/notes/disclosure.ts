@@ -1,6 +1,6 @@
 import { hasFullChecks, type ProofBundle } from "./bundle.ts";
 import { checkLineProof, proveLine, type LineProof } from "./lines.ts";
-import { decodeLinkPayload, decodePublicProof, encodeLinkPayload, type Check, type PublicProof } from "./proof.ts";
+import { decodeLinkPayload, decodePublicProof, droppedLine, encodeLinkPayload, groupChecks, noticeLine, proofHash, verifyProof, type Check, type PublicProof } from "./proof.ts";
 import { isNetwork } from "../network.ts";
 import type { Evidence, Speaker, TranscriptLine } from "../meeting.ts";
 
@@ -27,7 +27,30 @@ export type VerifyLink = { kind: "proof"; proof: PublicProof } | { kind: "line";
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
 function wellFormedProof(p: unknown): p is PublicProof {
-  return isObject(p) && isNetwork(p.network) && typeof p.contract === "string" && typeof p.owner === "string" && isObject(p.bundle) && typeof p.bundle.meetingId === "string";
+  return isObject(p) && isNetwork(p.network) && typeof p.contract === "string" && typeof p.owner === "string" && isObject(p.bundle) && typeof p.bundle.meetingId === "string" && checkable(p.bundle);
+}
+
+/**
+ * Whether the checks and /verify can read a bundle at all: a link's bundle is anyone's
+ * JSON, and one the checks would trip over (a missing signature, evidence that isn't a
+ * list, a recorded check that isn't one) is a damaged link, not a page stuck on
+ * "Checking" or a crash in code that calls the receipts package.
+ */
+function checkable(bundle: Record<string, unknown>): boolean {
+  const b = bundle as unknown as PublicProof["bundle"];
+  const isCheck = (c: unknown) => isObject(c) && typeof c.label === "string" && typeof c.detail === "string" && typeof c.ok === "boolean";
+  try {
+    if (hasFullChecks(b)) {
+      if (!Array.isArray(b.evidence) || !b.evidence.every(isObject) || !Array.isArray(b.checks) || !b.checks.every(isCheck)) return false;
+      groupChecks(b.checks, b);
+      droppedLine(b);
+      noticeLine(b.notice);
+    }
+    proofHash(b);
+    return verifyProof(b, null).every(isCheck);
+  } catch {
+    return false;
+  }
 }
 
 /** A line a page can show: its words a string, its time a number, its side one of the two. */

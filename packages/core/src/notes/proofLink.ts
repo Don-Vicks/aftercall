@@ -91,7 +91,10 @@ export function contractCheck(p: Pick<PublicProof, "network" | "contract">): Che
 /** Every check /verify runs for a link, in the order it lists them. */
 export async function runLinkChecks(link: VerifyLink, fetchFn: ProofFetch = defaultFetch): Promise<LinkChecks> {
   const { bundle } = link.proof;
-  const gpu = verifyProofGpu(bundle, await fetchNvidiaKeys(fetchFn));
+  // Never left to reject unawaited: a token that can't be read fails its check instead.
+  const gpu = verifyProofGpu(bundle, await fetchNvidiaKeys(fetchFn)).catch(
+    (): Check => ({ id: "gpu", label: "NVIDIA attested the signer's GPUs", ok: false, detail: "NVIDIA's token in the proof can't be read" }),
+  );
   const contract = contractCheck(link.proof);
   const line = link.kind === "line" ? [lineCheck(bundle, link.line)] : [];
   const withRest = async (checks: Check[]) => {
