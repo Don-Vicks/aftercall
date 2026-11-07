@@ -7,7 +7,7 @@ import request from "supertest";
 import { Pool } from "pg";
 import { MemoryDailyCounts } from "../limits";
 import { RelayController } from "./relay.controller";
-import { ACTION_TTL_MS, MAX_WAITING_ACTIONS, PAIRING_IDLE_MS, PAIRING_WAIT_MS, RELAY_BOX_LIMITS, RELAY_DAILY, RelayService } from "./relay.service";
+import { ACTION_TTL_MS, MAX_WAITING_ACTIONS, PAIRING_IDLE_MS, PAIRING_WAIT_MS, RELAY_BOX_LIMITS, RELAY_DAILY, RelayService, SWEEP_EVERY_MS } from "./relay.service";
 import { MemoryRelayStore, PgRelayStore, RELAY_ACTION_COLUMNS, RELAY_PAIRING_COLUMNS, relayHash, type RelayPairing, type RelayStore } from "./relay.store";
 
 /** packages/core's relay code, loaded from source (tsx runs it; the backend's build can't import it). */
@@ -242,7 +242,7 @@ for (const [name, make] of stores) {
       clock.now = T0 + 20 * DAY + PAIRING_IDLE_MS;
       assert.equal((await http().get(`/relay/pairings/${active.id}/snapshot`).set(bearer(active.phoneToken))).status, 404);
 
-      // Expired rows are deleted on the next write.
+      // Expired rows are deleted on the next write (the last sweep was days ago).
       await pairThrough(http, { confirm: false });
       assert.equal(await store.get(relayHash(waiting.id), 0), null);
       assert.equal(await store.get(relayHash(active.id), 0), null);
@@ -266,6 +266,47 @@ for (const [name, make] of stores) {
       assert.deepEqual((await http().get(`/relay/pairings/${p.id}/actions`).set(bearer(p.macToken))).body, { actions: [] }, "a day-old action is gone");
       assert.equal((await post()).status, 200, "and no longer counts as waiting");
       assert.equal((await store.actions(relayHash(p.id), 0, 100)).length, 1, "the old ones were deleted on that write");
+    } finally {
+      await close();
+      await done();
+    }
+  });
+
+  test(`[${name}] taps posted at the same moment never go over 50 waiting`, async () => {
+    const { store, done } = await make();
+    const { http, close } = await relayApp(store);
+    try {
+      const p = await pairThrough(http);
+      const idHash = relayHash(p.id);
+      // Straight to the store, so the taps really arrive together; again once its connections are open.
+      const add = () => store.addAction(idHash, "AAAA", T0, T0 - ACTION_TTL_MS, MAX_WAITING_ACTIONS);
+      for (let round = 0; round < 3; round++) {
+        await store.ack(idHash, Number.MAX_SAFE_INTEGER);
+        for (let i = 0; i < MAX_WAITING_ACTIONS - 5; i++) await add();
+        const seqs = await Promise.all(Array.from({ length: 20 }, add));
+        assert.deepEqual([seqs.filter((s) => typeof s === "number").length, seqs.filter((s) => s === "full").length], [5, 15]);
+        assert.equal((await store.actions(idHash, 0, 100)).length, MAX_WAITING_ACTIONS);
+      }
+      const full = await http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+      assert.deepEqual([full.status, full.body.message], [429, "TOO_MANY_ACTIONS"]);
+    } finally {
+      await close();
+      await done();
+    }
+  });
+
+  test(`[${name}] a tap posted as the pairing is deleted is NO_PAIRING, not a server error`, async () => {
+    const { store, done } = await make();
+    // Unpairing lands between the phone's token check and the insert.
+    const racing: RelayStore = Object.create(store, {
+      addAction: { value: async (idHash: string, ...rest: [string, number, number, number]) => (await store.delete(idHash), store.addAction(idHash, ...rest)) },
+    });
+    const { http, close } = await relayApp(racing);
+    try {
+      const p = await pairThrough(http);
+      const res = await http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+      assert.deepEqual([res.status, res.body.message], [404, "NO_PAIRING"]);
+      assert.deepEqual(await store.actions(relayHash(p.id), 0, 100), []);
     } finally {
       await close();
       await done();
@@ -410,6 +451,8 @@ test("the daily limits: pairings and hellos per IP, snapshots and actions per pa
     const over = await create("7.7.7.7");
     assert.deepEqual([over.status, over.body.message], [429, "IP_DAILY_LIMIT"]);
     assert.equal((await create("8.8.8.8")).status, 201, "another IP isn't held back");
+    const spoofed = await http().post("/relay/pairings").set("x-vercel-forwarded-for", "7.7.7.7").set("x-forwarded-for", "1.2.3.4").send({ id: newId(), macTokenHash: relayHash("t") });
+    assert.deepEqual([spoofed.status, spoofed.body.message], [429, "IP_DAILY_LIMIT"], "on Vercel, a made-up x-forwarded-for doesn't get round it");
 
     const hello = (ip: string) => http().post(`/relay/pairings/${newId()}/hello`).set("x-forwarded-for", ip).send({ box: "AAAA" });
     for (let i = 0; i < RELAY_DAILY.hellosPerIp; i++) assert.equal((await hello("9.9.9.9")).body.message, "NO_PAIRING", "guessing ids counts too");
@@ -468,6 +511,27 @@ test("nothing readable is stored: only hashes of the id and tokens, and the seal
   }
 });
 
+test("expired rows are swept on a write at most once a minute, not on every one", async () => {
+  const store = new MemoryRelayStore();
+  let sweeps = 0;
+  const counting: RelayStore = Object.create(store, { sweep: { value: (...args: [number, number]) => (sweeps++, store.sweep(...args)) } });
+  const { http, clock, close } = await relayApp(counting);
+  try {
+    const p = await pairThrough(http);
+    const tap = () => http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+    assert.equal(sweeps, 1, "making the pairing swept once; the hello a moment later didn't");
+    for (let i = 0; i < 5; i++) assert.equal((await tap()).status, 200);
+    clock.now += SWEEP_EVERY_MS - 1;
+    await tap();
+    assert.equal(sweeps, 1);
+    clock.now += 1;
+    await tap();
+    assert.equal(sweeps, 2, "a minute on, the next write sweeps");
+  } finally {
+    await close();
+  }
+});
+
 test("the backend's copies of core's limits and hash match core", async () => {
   const c = await crypto();
   const m = await messages();
@@ -507,6 +571,29 @@ if (process.env.DATABASE_URL) {
             .sort();
         assert.deepEqual(await cols("relay_pairings"), [...RELAY_PAIRING_COLUMNS].sort());
         assert.deepEqual(await cols("relay_actions"), [...RELAY_ACTION_COLUMNS].sort());
+      } finally {
+        client.release();
+      }
+    } finally {
+      await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await pool.end();
+    }
+  });
+
+  test("[postgres] the sweep finds expired pairings and old taps by index, not by reading every row", async () => {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const schema = `relayidx_${process.pid}`;
+    try {
+      await pool.query(`CREATE SCHEMA ${schema}`);
+      const client = await pool.connect();
+      try {
+        await client.query(`SET search_path TO ${schema}`);
+        await new PgRelayStore(client as unknown as Pool).migrate();
+        // With sequential scans off, a plan that still reads the whole table has no index to use.
+        await client.query("SET enable_seqscan = off");
+        const plan = async (sql: string) => (await client.query<{ "QUERY PLAN": string }>(`EXPLAIN ${sql}`)).rows.map((r) => r["QUERY PLAN"]).join("\n");
+        assert.match(await plan("DELETE FROM relay_pairings WHERE expires_at <= 1"), /Index/);
+        assert.match(await plan("DELETE FROM relay_actions WHERE posted_at <= 1"), /Index/);
       } finally {
         client.release();
       }

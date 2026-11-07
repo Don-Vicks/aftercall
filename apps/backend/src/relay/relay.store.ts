@@ -32,7 +32,7 @@ export interface RelayAction {
 }
 
 export interface RelayStore {
-  /** False if a live pairing already has this id. */
+  /** False if a pairing already has this id: an expired one too, until the sweep deletes it. */
   insert(p: RelayPairing): Promise<boolean>;
   /** A pairing that hasn't expired, or null. */
   get(idHash: string, now: number): Promise<RelayPairing | null>;
@@ -44,8 +44,8 @@ export interface RelayStore {
   macSeen(idHash: string, now: number, expiresAt: number): Promise<void>;
   /** Replaces the snapshot; the new version, or null when the pairing isn't active. */
   putSnapshot(idHash: string, box: string, now: number): Promise<number | null>;
-  /** Queues an action and returns its seq; null when `max` posted after `since` already wait. */
-  addAction(idHash: string, box: string, now: number, since: number, max: number): Promise<number | null>;
+  /** Queues an action and returns its seq; "full" when `max` posted after `since` already wait, null when the pairing is gone. */
+  addAction(idHash: string, box: string, now: number, since: number, max: number): Promise<number | "full" | null>;
   /** Waiting actions posted after `since`, oldest first. */
   actions(idHash: string, since: number, limit: number): Promise<RelayAction[]>;
   /** Deletes the pairing's actions up to `seq`. */
@@ -98,7 +98,8 @@ export class MemoryRelayStore implements RelayStore {
     return p.snapshotVersion;
   }
   async addAction(idHash: string, box: string, now: number, since: number, max: number) {
-    if (this.queued.filter((a) => a.idHash === idHash && a.postedAt > since).length >= max) return null;
+    if (!this.pairings.has(idHash)) return null;
+    if (this.queued.filter((a) => a.idHash === idHash && a.postedAt > since).length >= max) return "full" as const;
     this.queued.push({ idHash, seq: ++this.seq, box, postedAt: now });
     return this.seq;
   }
@@ -145,6 +146,8 @@ CREATE TABLE IF NOT EXISTS relay_actions (
   posted_at bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS relay_actions_pairing ON relay_actions (id_hash, seq);
+CREATE INDEX IF NOT EXISTS relay_pairings_expires ON relay_pairings (expires_at);
+CREATE INDEX IF NOT EXISTS relay_actions_posted ON relay_actions (posted_at);
 `;
 
 /** Every column of the relay's tables. A test checks the live tables have exactly these. */
@@ -240,13 +243,30 @@ export class PgRelayStore implements RelayStore {
     return r.rows[0] ? Number(r.rows[0].snapshot_version) : null;
   }
   async addAction(idHash: string, box: string, now: number, since: number, max: number) {
-    const r = await this.pool.query<{ seq: string }>(
-      `INSERT INTO relay_actions (id_hash, box, posted_at)
-       SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
-       RETURNING seq`,
-      [idHash, box, now, since, max],
-    );
-    return r.rows[0] ? Number(r.rows[0].seq) : null;
+    // Counted and inserted while holding the pairing's row: two taps at once can't both take
+    // the last place, and an unpair waits for the insert (or comes first, and the tap finds no
+    // pairing) instead of breaking the foreign key.
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const pairing = await client.query("SELECT 1 FROM relay_pairings WHERE id_hash = $1 FOR UPDATE", [idHash]);
+      const r = pairing.rowCount
+        ? await client.query<{ seq: string }>(
+            `INSERT INTO relay_actions (id_hash, box, posted_at)
+             SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
+             RETURNING seq`,
+            [idHash, box, now, since, max],
+          )
+        : null;
+      await client.query("COMMIT");
+      if (!r) return null;
+      return r.rows[0] ? Number(r.rows[0].seq) : ("full" as const);
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
   }
   async actions(idHash: string, since: number, limit: number) {
     const r = await this.pool.query<{ seq: string; box: string; posted_at: string }>(

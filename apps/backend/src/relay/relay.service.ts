@@ -27,6 +27,8 @@ export const PAIRING_IDLE_MS = 30 * 86_400_000;
 export const MAX_WAITING_ACTIONS = 50;
 /** Daily limits, per IP for the unauthenticated calls and per pairing for the rest. */
 export const RELAY_DAILY = { pairingsPerIp: 20, hellosPerIp: 20, snapshotsPerPairing: 3_000, actionsPerPairing: 300 } as const;
+/** Expired rows are deleted on a write at most this often, per server instance. */
+export const SWEEP_EVERY_MS = 60_000;
 
 const PAIRING_ID = /^[A-Za-z0-9_-]{43}$/;
 const BOX = /^[A-Za-z0-9_-]+$/;
@@ -52,6 +54,8 @@ const sameHash = (a: string, b: string | null) => b !== null && a.length === b.l
 
 @Injectable()
 export class RelayService {
+  private sweptAt = -Infinity;
+
   constructor(
     private readonly store: RelayStore = new MemoryRelayStore(),
     private readonly daily: DailyCounts = new MemoryDailyCounts(),
@@ -159,7 +163,8 @@ export class RelayService {
     const now = this.now();
     await this.sweep(now);
     const seq = await this.store.addAction(p.idHash, box, now, now - ACTION_TTL_MS, MAX_WAITING_ACTIONS);
-    if (seq === null) throw fail("TOO_MANY_ACTIONS", HttpStatus.TOO_MANY_REQUESTS);
+    if (seq === null) throw fail("NO_PAIRING", HttpStatus.NOT_FOUND);
+    if (seq === "full") throw fail("TOO_MANY_ACTIONS", HttpStatus.TOO_MANY_REQUESTS);
     return { seq };
   }
 
@@ -210,9 +215,11 @@ export class RelayService {
     await this.daily.increment(key, day);
   }
 
-  /** Expired rows go on the next write; reads already treat them as gone. */
-  private sweep(now: number): Promise<void> {
-    return this.store.sweep(now, now - ACTION_TTL_MS);
+  /** Expired rows go on a write, once a minute at most; reads already treat them as gone. */
+  private async sweep(now: number): Promise<void> {
+    if (now - this.sweptAt < SWEEP_EVERY_MS) return;
+    this.sweptAt = now;
+    await this.store.sweep(now, now - ACTION_TTL_MS);
   }
 }
 
