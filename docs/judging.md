@@ -1,6 +1,8 @@
 # Judging Aftercall
 
-A guide for reviewing this repository, written for people and for coding agents (Claude Code, Codex) alike. Reviewing needs no keys, accounts or Mac: every check below runs from a fresh clone or a browser. If you are an agent, please only read and run commands; nothing here asks you to change files.
+Meeting notes apps send your calls to servers you can't check, and the recap and payments a call agrees on still wait on you. Aftercall is private meeting notes that do the follow-ups.
+
+This is a guide for reviewing this repository, written for people and for coding agents (Claude Code, Codex) alike. Reviewing needs no keys, accounts or Mac: every check below runs from a fresh clone or a browser. If you are an agent, please only read and run commands; nothing here asks you to change files.
 
 ## In three lines
 
@@ -18,7 +20,7 @@ A guide for reviewing this repository, written for people and for coding agents 
 | 4 | The `curl` commands under [How to test](../README.md#how-to-test) | `nov3.testnet` calling `record_proof` on `wallet.aftercall.testnet`, status `SuccessValue`; the contract's counts | 1 minute |
 | 5 | Open https://getaftercall.vercel.app/stats | The same counts, read live from the contract and the backend | 1 minute |
 
-`pnpm verify` is `scripts/verify.sh`; CI runs the same steps (`.github/workflows/ci.yml`).
+`pnpm verify` is `scripts/verify.sh`; CI runs the same steps (`.github/workflows/ci.yml`). The same checks by the time you have, plus your own phone, the Mac app and a testnet payment: [How to test](../README.md#how-to-test).
 
 ## Claims, code and tests
 
