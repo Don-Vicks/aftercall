@@ -79,7 +79,7 @@ export default function Download() {
                 {HAS_DOWNLOAD ? (
                   <>
                     A build for early testers. Notes are real; money isn&apos;t: payments run on NEAR testnet with test USDC. Recaps open in your own
-                    Mail app, since Send through Aftercall and claim links need a server this build doesn&apos;t have.
+                    Mail app, or go through Aftercall when you choose Send.
                   </>
                 ) : (
                   <>
@@ -295,7 +295,7 @@ export default function Download() {
                     <span>Approve the follow-ups</span>
                     <span>
                       {HAS_DOWNLOAD
-                        ? "Draft the recaps you want in Mail. To try a payment, connect a NEAR testnet account in Settings and approve it from your agent wallet: it's test money."
+                        ? "Draft a recap in Mail, or send it through Aftercall once a NEAR testnet account is connected in Settings, which signs you in. Payments use that account's agent wallet, with test money."
                         : "Approve the recap and payments you want. Connect NEAR in Settings when you're ready to pay from your agent wallet."}
                     </span>
                   </span>
