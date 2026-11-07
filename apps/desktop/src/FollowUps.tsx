@@ -633,6 +633,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
       run: () => h.onReleaseEscrow?.(f.id),
     });
   // A deal both sides confirm, held in escrow: NEAR payees only (a release can't take a NEAR Intents route).
+  const escrowLive = !!f.escrow && (f.escrow.state === "parked" || f.escrow.state === "open" || f.escrow.state === "confirmed");
   const canDeal = !!h.onAskToConfirm && f.payeeListed && f.amount !== null && !route && !f.escrow;
   const askToConfirm = canDeal && (
     <Button variant={f.condition ? "primary" : undefined} onClick={() => {
@@ -881,9 +882,12 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
               <WhatLeavesNote w={paymentWhatLeaves(f, { route, claimLinks: HAS_BACKEND, proof: c.proofOnChain, deal: canDeal || !!f.escrow })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
-                <Button variant="quiet" onClick={() => c.dismiss(f)}>
-                  Dismiss
-                </Button>
+                {/* Money held in escrow stays on the card until it's released, cancelled or given back. */}
+                {!escrowLive && (
+                  <Button variant="quiet" onClick={() => c.dismiss(f)}>
+                    Dismiss
+                  </Button>
+                )}
                 {!shared && !f.escrow && <Button onClick={() => setEditing((e) => !e)}>{f.amount === null ? "Enter amount" : "Edit amount"}</Button>}
                 {f.escrow ? (
                   f.escrow.state === "confirmed" && (
@@ -983,13 +987,6 @@ function EscrowPanel({ f, escrow: e, c, first }: { f: PaymentFollowUp; escrow: N
             Email the link
           </Button>
           {e.emailedAt && <span className="text-[12px] text-muted">Sent {e.emailedAt}</span>}
-        </span>
-      )}
-      {!live && (
-        <span className="flex justify-end">
-          <Button variant="quiet" size="sm" onClick={() => c.dismiss(f)}>
-            Dismiss
-          </Button>
         </span>
       )}
     </div>

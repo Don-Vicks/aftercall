@@ -288,6 +288,7 @@ export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: 
     const proof = proofHere(saved, config);
     if (!proof) throw new Error("Record this meeting's proof on NEAR first (Verify), so the deal points to it.");
     const status = await near.status();
+    if (!status.registered || !status.keyAdded) throw new Error("Finish setting up payments in Settings first: this Mac's key isn't on your account.");
     if (!status.keyEscrow) {
       await signInWallet({ kind: "update-key", publicKey: status.publicKey });
       throw new KeyNeedsUpdate("This Mac's key was added before deals in escrow. Approve the update in your wallet, then ask again.");
