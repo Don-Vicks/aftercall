@@ -299,6 +299,19 @@ test("the relay's answers the page acts on: gone after unpairing, full at 50 wai
   await assert.rejects(down.snapshot(0), TypeError);
 });
 
+test("unpairing from the phone deletes a pairing your Mac confirmed, and leaves one it hasn't yet", async () => {
+  const relay = fakeRelay(() => NOW);
+  const mac = await fakeMac(relay.fetch, BACKEND);
+  const phone = startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW);
+  const api = phoneRelay(phone, relay.fetch);
+  assert.equal(await api.hello(phone.hello), "ok");
+  await api.unpair(); // the relay refuses the token: done, quietly
+  assert.equal(await mac.takeHello(), phone.code, "the code on your Mac still works");
+  await mac.confirm();
+  await api.unpair();
+  assert.deepEqual(await api.snapshot(0), { kind: "gone" });
+});
+
 test("a wrong phone token is treated as unpaired", async () => {
   const { relay, mac, phone } = await paired();
   await mac.post(snapshot([]));

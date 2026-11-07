@@ -101,11 +101,15 @@ export function PhoneClient() {
     setScreen({ kind: "none", problem });
   }, []);
 
-  /** One Mac per phone: a new code replaces the old pairing, on the relay too. */
+  /**
+   * One Mac per phone: a new code replaces the old pairing, on the relay too. An unfinished
+   * one is unpaired as well, in case your Mac confirmed it while this page was closed; if it
+   * didn't, the relay refuses the phone's token and leaves it to run out.
+   */
   const replaceWith = useCallback(
     async (fresh: PhonePairing) => {
       const stored = pairingRef.current;
-      if (stored?.state === "paired") void phoneRelay(stored).unpair().catch(() => {});
+      if (stored) void phoneRelay(stored).unpair().catch(() => {});
       await forget();
       await persist(fresh);
       setScreen({ kind: "pairing" });
