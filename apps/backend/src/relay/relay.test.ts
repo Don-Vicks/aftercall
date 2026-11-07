@@ -410,6 +410,8 @@ test("the daily limits: pairings and hellos per IP, snapshots and actions per pa
     const over = await create("7.7.7.7");
     assert.deepEqual([over.status, over.body.message], [429, "IP_DAILY_LIMIT"]);
     assert.equal((await create("8.8.8.8")).status, 201, "another IP isn't held back");
+    const spoofed = await http().post("/relay/pairings").set("x-vercel-forwarded-for", "7.7.7.7").set("x-forwarded-for", "1.2.3.4").send({ id: newId(), macTokenHash: relayHash("t") });
+    assert.deepEqual([spoofed.status, spoofed.body.message], [429, "IP_DAILY_LIMIT"], "on Vercel, a made-up x-forwarded-for doesn't get round it");
 
     const hello = (ip: string) => http().post(`/relay/pairings/${newId()}/hello`).set("x-forwarded-for", ip).send({ box: "AAAA" });
     for (let i = 0; i < RELAY_DAILY.hellosPerIp; i++) assert.equal((await hello("9.9.9.9")).body.message, "NO_PAIRING", "guessing ids counts too");
