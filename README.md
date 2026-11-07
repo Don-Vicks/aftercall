@@ -140,7 +140,8 @@ The checks are under [How to test](#how-to-test). The full guide, for people and
 | Claim | Code | Tests |
 | --- | --- | --- |
 | Nothing is sent unless NEAR AI's TEEs pass attestation; the transcript is end-to-end encrypted to the attested model | `packages/core/src/tee/`, `packages/core/src/notes/pipeline.ts` | `pipeline.test.ts`, `checks.test.ts`, `e2ee.test.ts` |
-| The model can't invent a follow-up: anything without an exact quote from the transcript is dropped | `packages/core/src/notes/build.ts` | `build.test.ts` |
+| Every reply's signature is checked against the attested model's key; notes that fail are marked unverified, and autopilot runs nothing from them | `packages/core/src/notes/pipeline.ts`, `packages/core/src/followups/autopilot.ts` | `pipeline.test.ts`, `autopilot.test.ts` |
+| The model can't propose a follow-up without an exact quote from the call: items without one are dropped, and a payment's amount must be in its quote | `packages/core/src/notes/build.ts`, `transcript.ts` | `build.test.ts`, `transcript.test.ts` |
 | The app's key can only `pay` and `record_proof`, within the caps; over-cap payments wait for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
 | Anyone can re-run a proof's checks in a browser | `apps/web/app/verify/` | `verify.test.ts`, `proof.test.ts` |
 | The backend keeps nothing about a recap; claim links keep only a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts`, `claims.test.ts` |
