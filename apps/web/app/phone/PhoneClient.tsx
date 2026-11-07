@@ -11,6 +11,7 @@ import {
   forgetTap,
   groupCode,
   helloAttempt,
+  inOrder,
   itemAmount,
   itemKey,
   itemTitle,
@@ -219,27 +220,30 @@ export function PhoneClient() {
     else setOpen(null);
   };
 
+  /** Taps go out one at a time, so they reach the relay in counter order. */
+  const queue = useRef(inOrder());
   /** Seals and posts one tap; the record with the new counter is saved first. */
   const send = useCallback(
-    async (item: PendingItem, kind: "approve" | "dismiss" | "undo-autopilot") => {
-      const cur = pairingRef.current;
-      if (!cur) return;
-      const key = itemKey(item);
-      const tap = phoneAction(cur, kind, item, Date.now() + offset.current);
-      await persist(tap.pairing);
-      setTapErrors(({ [key]: _, ...rest }) => rest);
-      const failed = async (message: string) => {
-        if (pairingRef.current) await persist(forgetTap(pairingRef.current, tap.n));
-        setTapErrors((e) => ({ ...e, [key]: message }));
-      };
-      try {
-        const r = await phoneRelay(tap.pairing).action(tap.box);
-        if (r.kind === "gone") await forget("unpaired");
-        else if (r.kind === "full") await failed("Your Mac has 50 taps waiting. Open Aftercall on your Mac, then try again.");
-      } catch {
-        await failed("Couldn't reach Aftercall's relay. Check your connection and try again.");
-      }
-    },
+    (item: PendingItem, kind: "approve" | "dismiss" | "undo-autopilot") =>
+      queue.current(async () => {
+        const cur = pairingRef.current;
+        if (!cur) return;
+        const key = itemKey(item);
+        const tap = phoneAction(cur, kind, item, Date.now() + offset.current);
+        await persist(tap.pairing);
+        setTapErrors(({ [key]: _, ...rest }) => rest);
+        const failed = async (message: string) => {
+          if (pairingRef.current) await persist(forgetTap(pairingRef.current, tap.n));
+          setTapErrors((e) => ({ ...e, [key]: message }));
+        };
+        try {
+          const r = await phoneRelay(tap.pairing).action(tap.box);
+          if (r.kind === "gone") await forget("unpaired");
+          else if (r.kind === "full") await failed("Your Mac has 50 taps waiting. Open Aftercall on your Mac, then try again.");
+        } catch {
+          await failed("Couldn't reach Aftercall's relay. Check your connection and try again.");
+        }
+      }),
     [persist, forget],
   );
 

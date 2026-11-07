@@ -319,6 +319,20 @@ export function phoneAction(p: PhonePairing, kind: PhoneAction["kind"], item: Pe
   return { pairing: { ...p, actionN: n, sent }, box, n };
 }
 
+/**
+ * Runs async steps one at a time, in the order they were asked for. The page seals and
+ * posts taps through one: the Mac refuses a counter at or below one it already took, so a
+ * tap that reached the relay after a later one would be dropped as a replay.
+ */
+export function inOrder() {
+  let last: Promise<unknown> = Promise.resolve();
+  return <T>(step: () => Promise<T>): Promise<T> => {
+    const run = last.then(step, step);
+    last = run.catch(() => {});
+    return run;
+  };
+}
+
 /** Forgets a tap the relay never took (offline, refused), so its card doesn't say "Sent". The counter stays used. */
 export const forgetTap = (p: PhonePairing, n: number): PhonePairing => ({ ...p, sent: p.sent.filter((s) => s.n !== n) });
 

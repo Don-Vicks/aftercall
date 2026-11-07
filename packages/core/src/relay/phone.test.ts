@@ -8,6 +8,7 @@ import {
   afterHello,
   forgetTap,
   helloAttempt,
+  inOrder,
   countdownText,
   deviceLabel,
   groupCode,
@@ -213,6 +214,33 @@ test("a tap goes to the Mac sealed, with the next counter and the item's digest,
   const forgotten = forgetTap(lost.pairing, lost.n);
   assert.equal(tapState(forgotten, pay)?.sent.n, 1, "a tap the relay never took no longer says Sent");
   assert.equal(forgotten.actionN, lost.n, "and its counter isn't used again");
+});
+
+test("taps reach the relay in counter order, or the Mac drops the earlier one as a replay", async () => {
+  const { relay, mac, phone } = await paired();
+  await mac.post(snapshot([]));
+  // The first post is slow on the wire; the second would overtake it.
+  let calls = 0;
+  const slowFirst = async (url: string, init?: RequestInit) => {
+    if (calls++ === 0) await new Promise((r) => setTimeout(r, 30));
+    return relay.fetch(url, init);
+  };
+  const a = phoneAction(phone, "approve", item(payment), NOW);
+  const b = phoneAction(a.pairing, "dismiss", item(email), NOW);
+
+  await Promise.all([phoneRelay(phone, slowFirst).action(a.box), phoneRelay(phone, slowFirst).action(b.box)]);
+  assert.deepEqual((await mac.collect()).map((x) => x.n), [2], "posted side by side, tap 1 lands second and is refused");
+
+  const c = phoneAction(b.pairing, "approve", item(payment), NOW);
+  const d = phoneAction(c.pairing, "dismiss", item(email), NOW);
+  calls = 0;
+  const queue = inOrder();
+  await Promise.all([queue(() => phoneRelay(phone, slowFirst).action(c.box)), queue(() => phoneRelay(phone, slowFirst).action(d.box))]);
+  assert.deepEqual((await mac.collect()).map((x) => x.n), [3, 4], "in order, both reach the Mac");
+
+  const failing = queue(() => Promise.reject(new Error("offline")));
+  await assert.rejects(failing);
+  assert.equal(await queue(async () => "next"), "next", "a failed post doesn't stop the ones after it");
 });
 
 test("the relay's answers the page acts on: gone after unpairing, full at 50 waiting, errors otherwise", async () => {
