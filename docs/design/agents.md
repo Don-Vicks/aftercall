@@ -39,7 +39,7 @@ This keeps the rule that the call is the only source of what Aftercall does on i
 
 Size: medium. Needs care: it's the first time an agent can put something in front of the Approve button.
 
-Built with the same switch as claiming, at most five proposals waiting per meeting, and at most 20 from agents in a meeting in all. Differences: a payment must also fit your per-payment cap and what's left today as the app last read them from the contract, and with no per-payment cap set agents propose no payments; a proposal never reaches the phone; Dismiss hides it but keeps it in `notes.json`, marked dismissed, and the five-waiting limit counts only the ones still waiting, while the limit of 20 counts dismissed ones too, so an agent can't keep adding them.
+Built with the same switch as claiming, at most five proposals waiting per meeting, and at most 20 from agents in a meeting in all. Differences: a payment must also fit your per-payment cap and what's left today as the app last read them from the contract (forgotten when the account or its wallet is gone, or another account is saved), and with no per-payment cap set agents propose no payments; a proposal never reaches the phone; Dismiss hides it but keeps it in `notes.json`, marked dismissed, and the five-waiting limit counts only the ones still waiting, while the limit of 20 counts dismissed ones too, so an agent can't keep adding them.
 
 ### 4. Agents only where you say (built)
 
