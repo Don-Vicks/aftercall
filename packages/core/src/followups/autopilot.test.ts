@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot } from "./autopilot.ts";
+import { AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot, meetingAutopilotDecision, NOT_VERIFIED_REASON } from "./autopilot.ts";
 import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 
 const usdc = (n: number) => BigInt(n) * 1_000_000n;
@@ -42,6 +42,14 @@ test("a follow-up a coding agent proposed never runs by itself, even when every 
   assert.equal(autopilotDecision({ ...payment, proposedBy }, on, limits).run, false);
   assert.equal(autopilotDecision(payNoQuote, on, limits).run, false);
   assert.equal(autopilotDecision(payment, on, limits).run, true, "the same payment from the call still runs");
+});
+
+test("nothing runs by itself from notes that aren't verified, even when every rule passes", () => {
+  // A reply whose signature isn't the attested model's leaves the notes unverified.
+  assert.deepEqual(meetingAutopilotDecision({ verified: false }, payment, on, limits), { run: false, reasons: [NOT_VERIFIED_REASON] });
+  assert.deepEqual(meetingAutopilotDecision({ verified: false }, recap, on, limits), { run: false, reasons: [NOT_VERIFIED_REASON] });
+  assert.deepEqual(meetingAutopilotDecision({ verified: true }, payment, on, limits), { run: true, reasons: [] }, "the same payment from verified notes runs");
+  assert.equal(meetingAutopilotDecision({ verified: true }, payment, DEFAULT_RULES, limits).run, false, "and the rules still apply");
 });
 
 test("a queued follow-up read from disk at launch is held for you, never run", () => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, agentWallet, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, agentWallet, applyItemEdit, holdInterruptedAutopilot, meetingAutopilotDecision, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -597,7 +597,8 @@ export default function App() {
       if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
       // Recaps go out through the backend; a build without one leaves them for Draft in Mail.
       if (f.kind === "email" && !HAS_BACKEND) continue;
-      if (!autopilotDecision(f, rules, limits).run) continue;
+      // Only from verified notes, and only when every rule passes.
+      if (!meetingAutopilotDecision(m, f, rules, limits).run) continue;
       queuedHere.current.add(`${m.id}:${f.id}`);
       patchFollowUp(m.id, f.id, { autopilotAt: at });
     }
@@ -615,7 +616,7 @@ export default function App() {
         if (f.autopilotAt && f.autopilotAt <= Date.now()) {
           patchFollowUp(m.id, f.id, { autopilotAt: undefined });
           // Re-check every rule at the moment it runs: limits may have changed.
-          if (!autopilotDecision(f, loadRules(), limits).run) continue;
+          if (!meetingAutopilotDecision(m, f, loadRules(), limits).run) continue;
           if (f.kind === "payment" && destinations[f.payeeAccount]) continue;
           // Marked as autopilot's only once it went out, so a later manual approval isn't credited to it.
           const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch.status === "sent" || patch.status === "paid" ? { ...patch, byAutopilot: true } : patch);

@@ -58,6 +58,19 @@ export function holdInterruptedAutopilot(m: Meeting, queuedHere: (followUpId: st
   };
 }
 
+/** Why a meeting's follow-ups wait for you when its notes didn't verify. */
+export const NOT_VERIFIED_REASON = "These notes aren't verified, so nothing in them runs by itself";
+
+/**
+ * Whether a follow-up in this meeting may run by itself: never from notes that aren't
+ * verified (a check failed, or a reply's signature isn't the attested model's), however
+ * the rules read; otherwise as autopilotDecision says.
+ */
+export function meetingAutopilotDecision(m: Pick<Meeting, "verified">, f: FollowUp, rules: AutopilotRules, limits: WalletLimits | null): Decision {
+  if (!m.verified) return { run: false, reasons: [NOT_VERIFIED_REASON] };
+  return autopilotDecision(f, rules, limits);
+}
+
 /**
  * Whether a follow-up may run by itself. Every rule must pass; anything unclear
  * waits for a person, and so does anything a coding agent proposed, whatever the
