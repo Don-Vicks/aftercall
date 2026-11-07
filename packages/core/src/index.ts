@@ -29,6 +29,7 @@ export * from "./followups/autopilot.ts";
 export * from "./search/search.ts";
 export * from "./intents/oneclick.ts";
 export * from "./followups/claimLink.ts";
+export * from "./followups/deal.ts";
 export * from "./ask.ts";
 export * from "./cost.ts";
 export * from "./errors.ts";

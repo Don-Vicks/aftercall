@@ -43,11 +43,13 @@ export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItem
 /**
  * What a payment puts on NEAR and who can approve it. `route` is the payee's address on
  * another chain when it goes through NEAR Intents 1Click; `claimLinks` is whether this
- * build can send a claim link to a payee who isn't on the list yet.
+ * build can send a claim link to a payee who isn't on the list yet; `proof` is whether the
+ * meeting's proof is on NEAR, so the payment points to it; `deal` is whether it can be held
+ * in escrow for the payee to confirm (Handshake).
  */
 export function paymentWhatLeaves(
   f: Pick<PaymentFollowUp, "payeeName" | "payeeAccount" | "payeeListed" | "amount">,
-  opts: { route?: PayeeDestination | null; claimLinks?: boolean } = {},
+  opts: { route?: PayeeDestination | null; claimLinks?: boolean; proof?: boolean; deal?: boolean } = {},
 ): WhatLeaves {
   const route = f.payeeListed ? (opts.route ?? null) : null;
   const who = f.payeeListed && f.payeeAccount ? f.payeeAccount : "the payee's NEAR account";
@@ -56,6 +58,11 @@ export function paymentWhatLeaves(
     `On NEAR, publicly and for good: ${who}, ${amount}, the memo “${PAY_MEMO}” and an id made of the recording's start time and this follow-up's number${route ? ", with NEAR Intents' deposit address and quote id" : ""}. Nothing from the meeting.`,
     `You approve it, and the contract pays only payees on your list within your caps. ${route ? "Over a cap it's refused, not parked." : "Over a cap it waits for your own NEAR wallet."}`,
   ];
+  if (opts.proof) details.push("It also points to this meeting's proof on NEAR (its id and hash, public already), so anyone can go from the payment to the proof.");
+  if (opts.deal && f.payeeListed)
+    details.push(
+      `Held in escrow instead, NEAR also keeps a salted hash of the terms, never the words. The confirm link carries the terms (the amount, the condition and the quotes from the call) in its #fragment to ${f.payeeName}; emailed through Aftercall, it passes the backend in memory and Resend, like a recap.`,
+    );
   if (route) details.push(`NEAR Intents 1Click sees the amount, the ${CHAIN_NAME[route.chain]} address and your NEAR account for refunds.`);
   if (!f.payeeListed && opts.claimLinks)
     details.push(`A claim link keeps the amount, your account and a hash of the link's token on Aftercall's backend; ${f.payeeName}'s name and the meeting title stay in the link.`);

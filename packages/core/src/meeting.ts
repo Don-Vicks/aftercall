@@ -163,6 +163,31 @@ export interface PaymentFollowUp extends FollowUpBase {
    * payment still never runs on autopilot or from the phone: it waits for you on the Mac.
    */
   conditionDropped?: boolean;
+  /** Set once the payment is held in escrow for the payee to confirm (Handshake, docs/handshake.md). */
+  escrow?: EscrowFollowUp;
+}
+
+/** An escrow's state on the agent-wallet contract (`EscrowState` in contracts/agent-wallet). */
+export type EscrowState = "parked" | "open" | "confirmed" | "released" | "cancelled" | "returned";
+
+/** A payment held in escrow, as the app keeps it with the follow-up. The contract is the source of truth. */
+export interface EscrowFollowUp {
+  /** Its id on the contract: the follow-up's contract id (`contractFollowupId`). */
+  id: string;
+  /** As last read from the contract. */
+  state: EscrowState;
+  /** The payee's confirm page, with the terms in its #fragment (`dealLink`). */
+  link: string;
+  /** sha256 of the terms, as the contract holds it (`dealTermsHash`). */
+  termsHash: string;
+  /** The network, contract and owner account it was opened on. */
+  on: NearPlace;
+  /** The transaction that opened it. */
+  ref?: string;
+  /** The transaction that released it, when the app did. */
+  releasedRef?: string;
+  /** When the confirm link was emailed through Aftercall ("14:06"), if it was. */
+  emailedAt?: string;
 }
 
 /** A NEAR network, agent-wallet contract and owner account, as the app's NEAR settings name them. */
