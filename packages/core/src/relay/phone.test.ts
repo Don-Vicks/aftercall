@@ -237,6 +237,8 @@ test("a tap goes to the Mac sealed, with the next counter and the item's digest,
   const held = item({ ...payment, status: "blocked" });
   assert.equal(tapHolds(tapState(phone, held), held), false, "a held payment offers the wallet");
   assert.equal(tapHolds({ ...tapState(phone, pay)!, result: null }, failed), true, "not answered yet: still waiting on the Mac");
+  const refused = item({ ...payment, error: "Over your per-payment cap" });
+  assert.equal(tapHolds(tapState(phone, refused), refused), false, "a payment back to proposed with its reason offers Try again");
 
   const lost = phoneAction(phone, "approve", pay, NOW);
   const forgotten = forgetTap(lost.pairing, lost.n);
