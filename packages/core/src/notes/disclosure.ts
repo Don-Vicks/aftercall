@@ -2,7 +2,7 @@ import { hasFullChecks, type ProofBundle } from "./bundle.ts";
 import { checkLineProof, proveLine, type LineProof } from "./lines.ts";
 import { decodeLinkPayload, decodePublicProof, encodeLinkPayload, type Check, type PublicProof } from "./proof.ts";
 import { isNetwork } from "../network.ts";
-import type { Evidence, TranscriptLine } from "../meeting.ts";
+import { formatClock, type Evidence, type Speaker, type TranscriptLine } from "../meeting.ts";
 
 /**
  * Sharing one transcript line. The link is /verify#line=<base64url of canonical JSON>: the
@@ -30,6 +30,11 @@ function wellFormedProof(p: unknown): p is PublicProof {
   return isObject(p) && isNetwork(p.network) && typeof p.contract === "string" && typeof p.owner === "string" && isObject(p.bundle) && typeof p.bundle.meetingId === "string";
 }
 
+/** A line a page can show: its words a string, its time a number, its side one of the two. */
+function readableLine(l: unknown): boolean {
+  return isObject(l) && typeof l.text === "string" && typeof l.at === "number" && (l.speaker === "you" || l.speaker === "others");
+}
+
 /**
  * Reads a /verify link: the whole URL, its fragment ("#…") or the fragment's text. Throws
  * BAD_LINK when it can't be read. A line link whose line doesn't check still reads; the
@@ -41,7 +46,7 @@ export function decodeVerifyLink(link: string): VerifyLink {
   try {
     if (fragment.startsWith(LINE_LINK_PREFIX)) {
       const d = decodeLinkPayload(fragment.slice(LINE_LINK_PREFIX.length));
-      if (!isObject(d) || !wellFormedProof(d) || !isObject(d.line) || !Array.isArray(d.path)) throw new Error("shape");
+      if (!isObject(d) || !wellFormedProof(d) || !readableLine(d.line) || !Array.isArray(d.path)) throw new Error("shape");
       const { network, contract, owner, bundle } = d;
       return { kind: "line", proof: { network, contract, owner, bundle }, line: { line: d.line as unknown as LineProof["line"], path: d.path as string[] } };
     }
@@ -103,3 +108,24 @@ export function lineOfQuote(transcript: readonly TranscriptLine[], evidence: Evi
   const i = transcript.findIndex((l) => l.at === evidence.at && squash(l.text).includes(quote));
   return i >= 0 ? i : null;
 }
+
+/** Who a shared line came from, as far as Aftercall knows: which side of the call, never a name. */
+export function lineSpeakerWords(speaker: Speaker): string {
+  return speaker === "you" ? "The person who recorded, on their microphone" : "The call's audio: someone on the other side";
+}
+
+/** "12:04 into the recording". */
+export const lineOffsetWords = (at: number) => `${formatClock(at)} into the recording`;
+
+/**
+ * When the recording started, from its meeting id: the Mac app names a recording by the Unix
+ * second it started, and the id is on NEAR with the proof. Null for any other id.
+ */
+export function recordingStartMs(meetingId: string): number | null {
+  return /^\d{9,11}$/.test(meetingId) ? Number(meetingId) * 1000 : null;
+}
+
+/** What a line link doesn't show, above the proof's own list (NOT_PROVEN). */
+export const LINE_NOT_PROVEN = [
+  "That anyone else heard it: this shows the line is in the transcript the recorder's Mac committed to in its proof on NEAR, with that proof's checks, not that someone else heard it said.",
+];

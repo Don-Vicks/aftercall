@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { utf8ToBytes } from "@noble/hashes/utils";
 import type { ProofBundleV2 } from "./bundle.ts";
-import { LINE_LINK_PREFIX, canShareLines, decodeVerifyLink, encodeLineDisclosure, lineCheck, lineOfQuote, makeLineDisclosure, type VerifyLink } from "./disclosure.ts";
+import { LINE_LINK_PREFIX, canShareLines, lineOffsetWords, lineSpeakerWords, recordingStartMs, decodeVerifyLink, encodeLineDisclosure, lineCheck, lineOfQuote, makeLineDisclosure, type VerifyLink } from "./disclosure.ts";
 import { lineTreeOf } from "./lines.ts";
 import { encodePublicProof, proofHash, verifyProof, type OnChainProof } from "./proof.ts";
 import { NVIDIA_JWKS_URL, allChecksPassed, runLinkChecks, type ProofFetch } from "./proofLink.ts";
@@ -104,8 +104,14 @@ test("a proof link still reads as a proof link", () => {
   assert.equal(proofHash(read.proof.bundle), OLD_HASH);
 });
 
-test("a damaged link is refused", () => {
+test("a damaged link is refused, a line that can't be shown included", () => {
   const good = lineLink(0);
+  const read = decodeVerifyLink(good) as Extract<VerifyLink, { kind: "line" }>;
+  const withLine = (line: unknown) => `#${LINE_LINK_PREFIX}${Buffer.from(JSON.stringify({ ...read.proof, line, path: read.line.path })).toString("base64url")}`;
+  assert.equal(decodeVerifyLink(withLine(read.line.line)).kind, "line");
+  for (const line of [{ ...read.line.line, text: { html: "<b>" } }, { ...read.line.line, speaker: "Ada" }, { ...read.line.line, at: "3" }, null]) {
+    assert.throws(() => decodeVerifyLink(withLine(line)), /BAD_LINK/);
+  }
   for (const bad of ["", "#", "#line=", "#line=@@@", `#line=${Buffer.from("{}").toString("base64url")}`, good.slice(0, good.length - 40), "#bm90IGpzb24"]) {
     assert.throws(() => decodeVerifyLink(bad), /BAD_LINK/, bad.slice(0, 20));
   }
@@ -175,4 +181,12 @@ test("an action item's quote leads to the line it was said in", () => {
 test("a link is never made from a transcript that no longer gives the proof's root", () => {
   assert.throws(() => makeLineDisclosure(place, bundle, transcript.slice(0, 2), KEY, 0), /LINE_TREE_MISMATCH/);
   assert.throws(() => makeLineDisclosure(place, bundle, transcript, undefined, 0), /NO_LINE_TREE/);
+});
+
+test("a shared line names the side and the time, never a person", () => {
+  assert.equal(lineSpeakerWords("you"), "The person who recorded, on their microphone");
+  assert.equal(lineSpeakerWords("others"), "The call's audio: someone on the other side");
+  assert.equal(lineOffsetWords(724), "12:04 into the recording");
+  assert.equal(recordingStartMs("1793006441"), 1793006441000, "a real recording's id is its start second");
+  assert.equal(recordingStartMs("sample-test-proof"), null);
 });
