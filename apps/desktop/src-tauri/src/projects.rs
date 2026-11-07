@@ -12,6 +12,10 @@
 //! repo, when it was looked up, and what GitHub suggested then), sealed in the same file.
 //! It never goes into any request or proof; it is only there so the project page can say
 //! where the brief came from and Refresh can show what changed on GitHub.
+//!
+//! A project can also name a code folder on this Mac (`codeFolder`), sealed in the same
+//! file: where "Open in Claude Code" starts Claude Code for that project's action items
+//! (agents.rs). It never leaves the Mac and agents never get it.
 
 use std::path::{Path, PathBuf};
 
@@ -89,20 +93,41 @@ pub struct BriefSource {
     pub seen: Option<Seen>,
 }
 
-/// A project as projects.json holds it: the project, and where its brief came from when
-/// it was filled from somewhere. Files from before have no `briefSource`.
+/// A project as projects.json holds it: the project, where its brief came from when it
+/// was filled from somewhere, and its code folder. Files from before have neither.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Entry {
     #[serde(flatten)]
     pub project: Project,
     #[serde(rename = "briefSource", default, skip_serializing_if = "Option::is_none")]
     pub brief_source: Option<BriefSource>,
+    /// The folder "Open in Claude Code" starts in, as a full path. Checked to be a folder
+    /// when it is used, not when it is saved: a drive can be away for a while.
+    #[serde(rename = "codeFolder", default, skip_serializing_if = "Option::is_none")]
+    pub code_folder: Option<String>,
 }
 
 impl From<Project> for Entry {
     fn from(project: Project) -> Self {
-        Entry { project, brief_source: None }
+        Entry { project, brief_source: None, code_folder: None }
     }
+}
+
+/// The longest code folder path kept, in characters.
+pub const FOLDER_MAX: usize = 1024;
+
+/// A code folder is a full path on one line.
+pub fn check_code_folder(folder: &str) -> Result<(), String> {
+    if !folder.starts_with('/') || folder.chars().count() > FOLDER_MAX || folder.chars().any(char::is_control) {
+        return Err("A project's code folder is a full path to a folder on this Mac".into());
+    }
+    Ok(())
+}
+
+/// The code folder of the project with this name, if it has one.
+pub fn code_folder(data_dir: &Path, project: &str) -> Option<PathBuf> {
+    let entries = load_entries(data_dir).ok()?;
+    entries.into_iter().find(|e| e.project.name == project).and_then(|e| e.code_folder).map(PathBuf::from)
 }
 
 pub fn path(data_dir: &Path) -> PathBuf {
@@ -189,12 +214,16 @@ pub fn save_entries(data_dir: &Path, entries: Vec<Entry>) -> Result<(), String> 
     for s in entries.iter().filter_map(|e| e.brief_source.as_ref()) {
         check_source(s)?;
     }
+    for f in entries.iter().filter_map(|e| e.code_folder.as_deref()).filter(|f| !f.is_empty()) {
+        check_code_folder(f)?;
+    }
     let entries: Vec<Entry> = entries
         .into_iter()
         .map(|e| {
             let brief = e.project.brief.filter(|b| !b.is_empty());
             let brief_source = e.brief_source.filter(|_| brief.is_some());
-            Entry { project: Project { brief, ..e.project }, brief_source }
+            let code_folder = e.code_folder.filter(|f| !f.is_empty());
+            Entry { project: Project { brief, ..e.project }, brief_source, code_folder }
         })
         .collect();
     std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
@@ -298,7 +327,7 @@ mod tests {
             fetched_at: 1_762_041_600,
             seen: Some(Seen { about: "Booking site for Moonbeam Bikes".into(), people: vec!["Olamide Adebayo".into()], words: vec!["Stripe".into()] }),
         };
-        vec![Entry { project: Project { id: "moonbeam-x1y".into(), name: "Moonbeam".into(), brief: Some(brief()) }, brief_source: Some(source) }]
+        vec![Entry { project: Project { id: "moonbeam-x1y".into(), name: "Moonbeam".into(), brief: Some(brief()) }, brief_source: Some(source), code_folder: None }]
     }
 
     #[test]
@@ -342,6 +371,29 @@ mod tests {
         no_brief[0].project.brief = Some(Brief::default());
         save_entries(&dir, no_brief).unwrap();
         assert_eq!(load_entries(&dir).unwrap()[0].brief_source, None);
+    }
+
+    #[test]
+    fn a_code_folder_is_sealed_with_the_project_and_never_reaches_agents() {
+        let dir = temp_dir("folder");
+        let mut entries = sourced();
+        entries[0].code_folder = Some("/Users/ada/code/moonbeam-web".into());
+        save_entries(&dir, entries.clone()).unwrap();
+        let raw = std::fs::read(path(&dir)).unwrap();
+        assert!(!raw.windows(11).any(|w| w == b"moonbeam-we"), "the folder is on disk in plaintext");
+        assert_eq!(load_entries(&dir).unwrap(), entries);
+        assert!(at_rest::read_string(&path(&dir)).unwrap().contains("\"codeFolder\": \"/Users/ada/code/moonbeam-web\""));
+        assert_eq!(code_folder(&dir, "Moonbeam"), Some(PathBuf::from("/Users/ada/code/moonbeam-web")));
+        assert_eq!(code_folder(&dir, "General"), None);
+        assert_eq!(public_list(&dir), json!([{ "id": "moonbeam-x1y", "name": "Moonbeam" }]));
+        // Only full paths on one line; an empty one is dropped.
+        for bad in ["code/moonbeam".to_string(), "/Users/ada/x\n/etc".to_string(), format!("/{}", "a".repeat(FOLDER_MAX))] {
+            entries[0].code_folder = Some(bad.clone());
+            assert!(save_entries(&dir, entries.clone()).is_err(), "{bad}");
+        }
+        entries[0].code_folder = Some(String::new());
+        save_entries(&dir, entries).unwrap();
+        assert_eq!(load_entries(&dir).unwrap()[0].code_folder, None);
     }
 
     #[test]

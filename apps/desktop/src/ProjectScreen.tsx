@@ -1,11 +1,13 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { RefreshCw } from "lucide-react";
+import { FolderCode, RefreshCw } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { briefFromGithub, draftBrief, draftFromBrief, emptyDraft, refreshDraft, seenFrom, type ActionItem, type BriefDraft, type BriefSource, type Meeting, type ProjectBrief } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import type { Project } from "./projects";
 import { MeetingRow, meetingRow, shortWhen } from "./MeetingRow";
 import { BriefPrivacy, BriefReview } from "./BriefReview";
 import { githubApi } from "./github";
+import { isDesktop } from "./recorder";
 import { Avatar, Button, Card, SectionTitle, Strike, Tick, cx, toast, useIsYou } from "./ui";
 
 const rise = (i: number): CSSProperties => ({ animation: `ac-in 320ms var(--ease) ${i * 40}ms both` });
@@ -28,6 +30,7 @@ export function ProjectScreen({
   onRecord,
   onRename,
   onSaveBrief,
+  onSaveCodeFolder,
   payees = [],
 }: {
   project: Project;
@@ -43,6 +46,8 @@ export function ProjectScreen({
   onRename: () => void;
   /** Saves the project's brief (undefined clears it) and where it came from (undefined keeps it, null drops it). */
   onSaveBrief: (brief: ProjectBrief | undefined, source?: BriefSource | null) => Promise<void>;
+  /** Saves the project's code folder; undefined clears it. */
+  onSaveCodeFolder: (folder: string | undefined) => Promise<void>;
   /** Payee names, for the preview of Whisper's spelling prompt. */
   payees?: string[];
 }) {
@@ -100,6 +105,8 @@ export function ProjectScreen({
         </header>
 
         <BriefCard key={project.id} name={project.name} brief={project.brief} source={project.briefSource} payees={payees} onSave={onSaveBrief} style={rise(1)} />
+
+        <CodeFolderCard name={project.name} folder={project.codeFolder} onSave={onSaveCodeFolder} style={rise(1)} />
 
         {sorted.length === 0 ? (
           <p className="m-0 text-ink-2" style={rise(2)}>
@@ -346,6 +353,58 @@ function BriefCard({
             <Button onClick={() => setDraft(emptyDraft())}>Add a brief</Button>
           </div>
         )}
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The project's code folder: where "Open in Claude Code" on its action items starts
+ * Claude Code, with Aftercall's MCP server. Chosen in the Mac's own folder picker.
+ */
+function CodeFolderCard({ name, folder, onSave, style }: { name: string; folder?: string; onSave: (folder: string | undefined) => Promise<void>; style?: CSSProperties }) {
+  const [busy, setBusy] = useState(false);
+  const save = async (next: string | undefined) => {
+    setBusy(true);
+    try {
+      await onSave(next);
+    } catch (e) {
+      toast({ text: `Couldn't save the code folder: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const choose = async () => {
+    if (!isDesktop) return toast({ text: "Choosing a folder needs the Mac app." });
+    const picked = await openDialog({ directory: true, multiple: false, defaultPath: folder, title: `Code folder for ${name}` }).catch(() => null);
+    if (typeof picked === "string") await save(picked);
+  };
+  return (
+    <section aria-labelledby="h-code" style={style}>
+      <Card pad="md" className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <FolderCode size={18} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-ink-2" />
+        <span className="flex min-w-0 flex-[1_1_260px] flex-col gap-0.5">
+          <SectionTitle id="h-code">Code folder</SectionTitle>
+          {folder ? (
+            <span className="t-mono selectable truncate text-[13px] text-ink" title={folder}>
+              {folder}
+            </span>
+          ) : (
+            <span className="text-[13px] leading-[19px] text-ink-2">
+              Where Claude Code opens for {name}’s action items. Set one, and each open item gets Open in Claude Code. It stays on this Mac.
+            </span>
+          )}
+        </span>
+        <span className="-my-1 flex gap-1">
+          {folder && (
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => save(undefined)}>
+              Clear
+            </Button>
+          )}
+          <Button variant={folder ? "quiet" : "secondary"} size="sm" loading={busy} onClick={choose}>
+            {folder ? "Change…" : "Choose folder…"}
+          </Button>
+        </span>
       </Card>
     </section>
   );

@@ -190,6 +190,16 @@ export default function App() {
     await projectsApi.save(next);
     setProjects(next);
   };
+  /** Saves or (undefined) clears one project's code folder, where "Open in Claude Code" starts. */
+  const saveCodeFolder = async (id: string, codeFolder: string | undefined) => {
+    const next = projects.map((p) => {
+      if (p.id !== id) return p;
+      const { codeFolder: _old, ...rest } = p;
+      return codeFolder ? { ...rest, codeFolder } : rest;
+    });
+    await projectsApi.save(next);
+    setProjects(next);
+  };
   /** Briefs by project name, for Ask and the notes of a recording in that project. */
   const briefs = Object.fromEntries(projects.map((p) => [p.name, p.brief]));
 
@@ -783,6 +793,7 @@ export default function App() {
                 }}
                 onRename={() => setRenaming(openProject)}
                 onSaveBrief={(brief, source) => saveBrief(openProject.id, brief, source)}
+                onSaveCodeFolder={(folder) => saveCodeFolder(openProject.id, folder)}
                 payees={payees.map((p) => p.name)}
               />
             )}

@@ -16,6 +16,11 @@ export interface Project {
    * sealed in the same file; absent when you wrote it. Never sent anywhere.
    */
   briefSource?: BriefSource;
+  /**
+   * A folder on this Mac where "Open in Claude Code" starts Claude Code for this
+   * project's action items. Sealed in projects.json; never sent anywhere, and agents never get it.
+   */
+  codeFolder?: string;
 }
 
 /** The browser preview: General, and the sample meeting's Fundraise with its brief. */
