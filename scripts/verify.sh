@@ -4,7 +4,7 @@
 #   pnpm verify --quick  # skips the NEAR node tests
 #
 # Needs Node 24, pnpm 10, Rust stable with the wasm32-unknown-unknown target and cargo-near.
-# Set DATABASE_URL to also run the claim-link tests against Postgres.
+# Set DATABASE_URL to also run the claim-link and phone relay tests against Postgres.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

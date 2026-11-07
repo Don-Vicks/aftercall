@@ -1,6 +1,6 @@
 # Design: the phone protocol (version 1)
 
-Status: the protocol for [phone.md](phone.md) version 1. The shared cryptography and message checks are built and tested in `packages/core/src/relay/` (`crypto.ts`, `messages.ts`); the relay, the Mac side and the phone page follow this document.
+Status: the protocol for [phone.md](phone.md) version 1. The shared cryptography and message checks are built and tested in `packages/core/src/relay/` (`crypto.ts`, `messages.ts`), and the relay in `apps/backend/src/relay/` (`relay.test.ts`); the Mac side and the phone page follow this document.
 
 Three parties:
 
@@ -192,11 +192,11 @@ A new NestJS module, `apps/backend/src/relay/`, with a memory store for tests an
 | `POST /relay/pairings/:id/ack` | Mac | Mac token | `{seq}` | 200 `{ok}`: deletes the pairing's actions up to `seq` |
 | `DELETE /relay/pairings/:id` | either | Mac or phone token | | 200 `{ok}`: deletes the pairing, its snapshot and its actions |
 
-A wrong token is 401 `BAD_TOKEN`; an unknown or expired pairing 404 `NO_PAIRING`; a box that isn't base64url 400 `BAD_BOX`; one over its limit 413 `TOO_LARGE`. Every request the Mac makes with its token sets `mac_seen_at`. CORS: the phone page is on `WEB_ORIGIN`, which `main.ts` already allows with GET, POST and DELETE; the JSON body limit (100 kB in Nest by default) holds the largest snapshot.
+A wrong token is 401 `BAD_TOKEN`; an unknown or expired pairing 404 `NO_PAIRING`; a box that isn't base64url 400 `BAD_BOX`; one over its limit 413 `TOO_LARGE`; a token hash that isn't 64 lowercase hex 400 `BAD_HASH`; an `ack` without a whole `seq` 400 `BAD_SEQ`; an `after` that isn't a whole number 400 `BAD_AFTER`. Every request the Mac makes with its token sets `mac_seen_at`. CORS: the phone page is on `WEB_ORIGIN`, which `main.ts` already allows with GET, POST and DELETE; the JSON body limit (100 kB in Nest by default) holds the largest snapshot.
 
 **Keeping.** A snapshot is replaced on each post (`version` goes up by one). Actions stay until the Mac acknowledges them, or 24 hours. A pairing not confirmed within 10 minutes of creation is gone; a confirmed one is gone 30 days after the Mac last called. Expired rows are deleted on the next write and treated as gone on reads.
 
-**Limits** (the existing `DailyCounts`, keys made with `limitKey`): 20 pairings and 20 hellos per IP per day; 3,000 snapshots and 300 actions per pairing per day; over a limit is 429. Reads aren't counted: the phone polls every 10 s only while visible (`PHONE_POLL_MS`) and the Mac every 10 s while running (`MAC_POLL_MS`).
+**Limits** (the existing `DailyCounts`, keys made with `limitKey`): 20 pairings and 20 hellos per IP per day; 3,000 snapshots and 300 actions per pairing per day; over a limit is 429 (`IP_DAILY_LIMIT` per IP, `DAILY_LIMIT` per pairing). A hello for an unknown id still counts, so guessing ids is limited too. Reads aren't counted: the phone polls every 10 s only while visible (`PHONE_POLL_MS`) and the Mac every 10 s while running (`MAC_POLL_MS`).
 
 **Tables.**
 
