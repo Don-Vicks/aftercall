@@ -1984,17 +1984,20 @@ pwd >> {out}"#
         let dir = data_dir("launch-keep");
         let folder = dir.join("code");
         std::fs::create_dir_all(&folder).unwrap();
-        // A stand-in claude that runs until it is told to stop, or for 30 seconds at most, so a
+        // A stand-in claude that runs until it is told to stop, or for 2 minutes at most, so a
         // failing check below can't leave it running and keep cargo waiting on its output.
         let go = dir.join("go");
         let claude = dir.join("bin/claude");
-        script(&claude, &format!("i=0; while [ ! -f {} ] && [ $i -lt 600 ]; do sleep 0.05; i=$((i+1)); done", sh_quote(&go.display().to_string())));
+        script(&claude, &format!("i=0; while [ ! -f {} ] && [ $i -lt 2400 ]; do sleep 0.05; i=$((i+1)); done", sh_quote(&go.display().to_string())));
         let config = json!({ "mcpServers": {} });
         let prepared = prepare_launch(&dir, &folder, "Claim a1", &claude, None, Some(&config)).unwrap();
         let mut sh = Command::new("/bin/sh").arg(&prepared.script).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
         let pid = prepared.dir.join("pid");
-        let until = Instant::now() + Duration::from_secs(10);
-        while !pid.exists() && Instant::now() < until {
+        // Generous: under a full `pnpm verify` the machine is busy building the contract too.
+        let until = Instant::now() + Duration::from_secs(60);
+        // The script creates the file, then writes its id: wait for the id, not just the file.
+        let written = || std::fs::read_to_string(&pid).map(|s| s.ends_with('\n')).unwrap_or(false);
+        while !written() && Instant::now() < until {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert_eq!(std::fs::read_to_string(&pid).unwrap().trim(), sh.id().to_string());
