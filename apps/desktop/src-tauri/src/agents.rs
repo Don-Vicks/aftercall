@@ -740,7 +740,9 @@ pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt
     lines.push(format!("rm -f {}", q(prompt_file)));
     let config = mcp.map(|c| format!(" --mcp-config {}", q(c))).unwrap_or_default();
     lines.push(format!("{}{config} \"$prompt\"", q(claude)));
+    lines.push("status=$?".into());
     lines.push(format!("rm -rf {}", q(private_dir)));
+    lines.push("exit $status".into());
     lines.join("\n") + "\n"
 }
 
@@ -1349,7 +1351,7 @@ mod tests {
 
     #[test]
     fn open_in_claude_code_passes_the_prompt_as_one_argument_never_as_code() {
-        let dir = data_dir("open");
+        let dir = data_dir("launch");
         // A code folder whose name tries to break out of quotes.
         let folder = dir.join("code/it's \"$(touch pwned)\" `x`");
         std::fs::create_dir_all(&folder).unwrap();
@@ -1403,7 +1405,7 @@ mod tests {
 
     #[test]
     fn open_in_claude_code_says_what_is_missing() {
-        let dir = data_dir("open-missing");
+        let dir = data_dir("launch-x");
         let server = dir.join("aftercall-mcp.mjs");
         std::fs::write(&server, "").unwrap();
         let never = |_: &[String]| -> Result<(), String> { panic!("Terminal must not open") };
