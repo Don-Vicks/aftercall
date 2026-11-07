@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAC_POLL_MS,
   SNAPSHOT_MIN_GAP_MS,
@@ -35,11 +35,11 @@ export interface PhoneSyncInput {
   ready: boolean;
   /** Your NEAR account, so the /sign links follow a change of account. */
   account: string | null;
-  /** Every meeting not waiting out its delete Undo. */
+  /** Every meeting not waiting out its delete Undo. Kept between renders: a new array means a meeting changed. */
   meetings: Meeting[];
-  /** The options the meeting's own follow-up cards use: backend, claim links, route, quote, sample. */
+  /** The options the meeting's own follow-up cards use: backend, claim links, route, quote, sample. Kept between renders too. */
   options: (m: Meeting, f: FollowUp) => ItemOptions;
-  /** What's left today and the daily cap, for a held payment's /sign context; null until the wallet is read. */
+  /** What's left today and the daily cap, for a held payment's /sign context; null until the wallet is read. Kept between renders too. */
   wallet: { leftToday: bigint; dailyCap: bigint } | null;
   /** Exactly what the app's own buttons run: onApprove, onDismiss or onUndoAutopilot. */
   run: (action: PhoneAction) => void;
@@ -101,11 +101,10 @@ export function usePhoneSync(input: PhoneSyncInput) {
       posted.current.at = Date.now();
       await postSnapshot(s);
     }).catch(() => {
-      // Offline, or the relay forgot the pairing (phone.ts says so): try again on the next change or tick.
+      // Offline, or the relay forgot the pairing (phone.ts says so): try again on the next change,
+      // once the relay answers again, or at the 5-minute refresh.
       posted.current.key = "";
     });
-  const buildRef = useRef(build);
-  buildRef.current = build;
   const postRef = useRef(post);
   postRef.current = post;
 
@@ -120,16 +119,27 @@ export function usePhoneSync(input: PhoneSyncInput) {
     };
   }, [pairedId]);
 
+  // What the phone should see, rebuilt only when what goes into it changes, not on every
+  // render: while you record, the app renders every second.
+  const results = phone.paired?.results;
+  const wanted = useMemo(
+    () => (pairedId ? snapshotKey(build()) : ""),
+    // `build` reads these through `latest` and `config`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pairedId, input.meetings, input.options, input.wallet, config, results],
+  );
+
+  // Also when the relay can be reached again (`problem` clears), after a post that failed.
   useEffect(() => {
     if (!pairedId) return;
     const p = posted.current;
-    if (p.timer || snapshotKey(buildRef.current()) === p.key) return;
+    if (p.timer || wanted === p.key) return;
     const wait = Math.max(0, p.at + SNAPSHOT_MIN_GAP_MS - Date.now());
     p.timer = window.setTimeout(() => {
       p.timer = 0;
       void postRef.current();
     }, wait);
-  });
+  }, [pairedId, wanted, phone.problem]);
 
   // Actions: every 10 s, in relay order, each re-checked against the follow-up as it is now.
   useEffect(() => {
