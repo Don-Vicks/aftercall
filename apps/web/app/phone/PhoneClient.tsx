@@ -325,7 +325,7 @@ export function PhoneClient() {
           <li>
             <span className={p.stepNo}>1</span>
             <span>
-              On your Mac, open Aftercall, then <strong>Settings → Phone → Pair a phone</strong>.
+              On your Mac, open Aftercall, then <strong>Settings → Your phone → Pair a phone</strong>.
             </span>
           </li>
           <li>
