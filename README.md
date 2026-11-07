@@ -2,7 +2,9 @@
 
 Meeting notes apps send your calls to servers you can't check, and the recap and payments a call agrees on still wait on you.
 
-**Aftercall is private meeting notes that do the follow-ups.** A Mac app: NEAR AI Cloud's secure hardware makes the notes once the app has checked it, a proof goes on NEAR that anyone with the link can re-check, and the recap and the agreed USDC payment go out once you approve, within caps a NEAR contract enforces.
+**Aftercall is private meeting notes that do the follow-ups.** A Mac app records the call, with no bot joining. The notes are made inside NEAR AI Cloud's secure hardware, which the app checks first. Then Aftercall sends the recap and pays what the call agreed in USDC, once you approve or by autopilot rules you set.
+
+**Why NEAR:** NEAR AI Cloud runs the models in attested hardware (TEEs), and the transcript is encrypted end to end to the attested model. A NEAR contract holds the money: the app's key can only pay listed payees within your caps and record each meeting's proof. Anything over a cap waits for your own wallet.
 
 [![Download for Mac](https://img.shields.io/badge/Download-Mac%20test%20build-2f7d6d)](https://getaftercall.vercel.app/download)
 [![Try it in your browser](https://img.shields.io/badge/Try%20it-in%20your%20browser-2f7d6d)](https://getaftercall.vercel.app/demo)
