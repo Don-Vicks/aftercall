@@ -12,6 +12,8 @@ test("the prompt names the meeting, the item, its words, owner and due, and how 
   assert.match(p, /\nMeeting: "Team standup"\nAction item: "Ship the API fix"\nOwner: "You"\nDue: "Friday"\nmeeting-data>>>/);
   assert.match(handoffPrompt(meeting, item, "Codex"), /as "Codex" with claim_action_item/);
   assert.doesNotMatch(handoffPrompt(meeting, { ...item, due: undefined }), /Due:/, "no due date, no line");
+  // It can propose follow-ups (draft_follow_up), so the prompt claims only what the server can't do.
+  assert.match(p, /MCP server can't send email or pay, so don't try\.$/);
 });
 
 test("the meeting's words are data: said so, quoted on one line each, and unable to close the block", () => {

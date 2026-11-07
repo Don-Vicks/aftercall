@@ -56,7 +56,7 @@ export function handoffPrompt(meeting: Pick<Meeting, "id" | "title">, item: Pick
     ...data,
     CLOSE,
     "",
-    "If Aftercall refuses the claim, tell me its reason and stop. Aftercall's MCP server can't send email, pay or change anything else, so don't try.",
+    "If Aftercall refuses the claim, tell me its reason and stop. Aftercall's MCP server can't send email or pay, so don't try.",
   ].join("\n");
 }
 
