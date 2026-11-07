@@ -6,7 +6,7 @@ A guide for reviewing this repository, written for people and for coding agents 
 
 - **What it is:** a Mac app for meeting notes. The call is transcribed and summarised inside NEAR AI Cloud's secure hardware (TEEs), checked by attestation on every run, and a proof of that goes on NEAR that anyone can re-check in a browser.
 - **What it does next:** the meeting's follow-ups. The recap email, and USDC payments to people the meeting agreed to pay, from a NEAR contract whose caps the app can't get around.
-- **Where it stands (7 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. Payments from the app haven't run on testnet yet. The newest parts, more for coding agents and approvals on a phone, are built and tested but haven't run live.
+- **Where it stands (7 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. Payments from the app haven't run on testnet yet. The newest parts, more for coding agents and approvals on a phone, are built and tested; the phone relay and page are deployed and ran end to end with a stand-in Mac, but not yet with the Mac app.
 
 ## Checks to run
 
@@ -62,7 +62,7 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 - The Mac app is an unsigned test build; macOS asks once to open it.
 - Audio isn't end-to-end encrypted, because NEAR AI has none for transcription. It goes over TLS pinned to the key the gateway's attestation binds.
 - Coding agents: Claude Code was recorded against the MCP server and a stand-in for the app ([agents-demo.md](agents-demo.md)), before Hand to an agent, Open in Claude Code, links, proposals and projects existed. None of those has run with the Mac app and a real Claude Code session yet, and Codex hasn't run at all.
-- Approvals on a phone: the relay and the `/phone` page aren't deployed yet, and the Mac app, the relay and a real phone haven't run together; the parts are tested against fakes, and `pnpm dev:phone` shows the page against a stand-in Mac. No push notifications yet: the page checks for news every 10 s while it's open.
+- Approvals on a phone: the relay and the `/phone` page were deployed on 7 Nov, when a stand-in Mac (`pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app`) paired with the live `/phone` page through the live relay in a phone-sized browser, and an approve, a dismiss, an autopilot recap and a held payment's wallet link went through. The Mac app, the relay and a real phone haven't run together yet. Anyone can repeat that run, and open its link on their own phone. No push notifications yet: the page checks for news every 10 s while it's open.
 - Everything else not yet run live is listed at the end of [proven.md](proven.md).
 
 ## How it was built
