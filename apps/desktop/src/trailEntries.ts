@@ -1,4 +1,4 @@
-import { clockTime, dayWord, formatUsdc, hasFullChecks, workLink, workLinkLabel, type FollowUp, type Meeting, type Network } from "@aftercall/core";
+import { clockTime, dayWord, formatUsdc, hasFullChecks, phoneDecision, workLink, workLinkLabel, type FollowUp, type Meeting, type Network } from "@aftercall/core";
 import type { SavedNotes } from "./nearai";
 
 /**
@@ -114,9 +114,20 @@ export function meetingTrail({ meeting, saved, network = null, now = Date.now() 
 const approver = (f: FollowUp) =>
   f.byAutopilot ? "Autopilot, under your rule" : f.proposedBy ? `You, on ${f.proposedBy.agent}'s proposal` : f.byPhone ? "You, approved on your phone" : "You";
 
-/** What one follow-up sent out, if anything. Proposed, sending and dismissed ones sent nothing. */
+/**
+ * What one follow-up sent out, if anything. Proposed, sending and dismissed ones sent
+ * nothing; one dismissed on your paired phone still says so, as an approval there does.
+ */
 function followUpEntries(f: FollowUp, network: Network | null): TrailEntry[] {
   const out: TrailEntry[] = [];
+  if (phoneDecision(f) === "Dismissed on your phone")
+    out.push({
+      id: `${f.id}-dismissed`,
+      what: `${f.kind === "email" ? `Recap to ${f.toName || "someone"}` : `Payment to ${f.payeeName}`} dismissed on your phone`,
+      detail: `Nothing was ${f.kind === "email" ? "sent" : "paid"}`,
+      who: "You, on your phone",
+      kept: "Nothing sent. The relay keeps your tap until this Mac collects it",
+    });
   if (f.kind === "email") {
     // Drafting opens your own mail app; it stays true even if the item was dismissed after.
     if (f.draftedAt)

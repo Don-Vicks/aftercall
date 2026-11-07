@@ -108,7 +108,10 @@ interface FollowUpBase {
   autopilotHeld?: boolean;
   /** Set when autopilot sent or paid it, rather than a person approving it. */
   byAutopilot?: boolean;
-  /** Set when you approved it on your paired phone and the Mac sent or paid it (docs/design/phone-protocol.md). */
+  /**
+   * Set when you approved it on your paired phone and the Mac sent or paid it, or you
+   * dismissed it there (docs/design/phone-protocol.md). `phoneDecision` labels it.
+   */
   byPhone?: boolean;
 }
 
@@ -239,6 +242,17 @@ export interface Meeting {
   attendees?: Attendee[];
   /** The invited people who have an email address: where a recap can go. */
   invited?: Attendee[];
+}
+
+/**
+ * How the Mac labels a follow-up you decided on your paired phone: "Approved on your
+ * phone" once it was sent or paid, "Dismissed on your phone" once dismissed there. Null
+ * when the phone didn't decide it, or what it approved hasn't gone out.
+ */
+export function phoneDecision(f: Pick<FollowUp, "status" | "byPhone">): "Approved on your phone" | "Dismissed on your phone" | null {
+  if (!f.byPhone) return null;
+  if (f.status === "dismissed") return "Dismissed on your phone";
+  return f.status === "sent" || f.status === "paid" ? "Approved on your phone" : null;
 }
 
 /**

@@ -544,7 +544,8 @@ export default function App() {
       routeFor: (f: FollowUp) => (f.kind !== "payment" ? null : ((sample ? sampleDestinations : destinations)[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
       // A held item keeps its flag, so Undo brings back why it waits; it shows only while proposed.
-      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
+      // `via` "phone": dismissed on your paired phone, and labelled so on the card and the trail.
+      onDismiss: (id: string, via?: "phone") => apply(id)({ status: "dismissed", autopilotAt: undefined, byPhone: via === "phone" || undefined }),
       onRestore: (id: string, status: FollowUp["status"]) => apply(id)({ status }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
       onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, autopilotHeld: undefined, error: undefined }),
@@ -703,7 +704,8 @@ export default function App() {
 
   /** A held payment your wallet paid or declined: from the wallet screen, or found on NEAR while a phone is paired. */
   const resolveHeld = (meetingId: string, fuId: string, status: "paid" | "dismissed") => {
-    patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
+    // Decided in your wallet, not on the phone: no "on your phone" label.
+    patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined, byPhone: undefined });
     refreshWallet();
   };
 
@@ -724,7 +726,7 @@ export default function App() {
       if (!m) return;
       const h = handlersFor(m);
       if (a.kind === "approve") h.onApprove(a.followUpId, "phone");
-      else if (a.kind === "dismiss") h.onDismiss(a.followUpId);
+      else if (a.kind === "dismiss") h.onDismiss(a.followUpId, "phone");
       else h.onUndoAutopilot(a.followUpId);
     },
     onHeldResolved: resolveHeld,

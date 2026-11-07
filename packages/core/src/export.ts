@@ -106,7 +106,7 @@ function itemOf(a: ActionItem, me: readonly string[]): ExportItem {
   return { text: a.text, owner, due: a.due ?? "", done: a.done, edited: !!a.edited, note };
 }
 
-/** Where a follow-up stands, as the page would say it. Dismissed ones aren't on the page, so they aren't here. */
+/** Where a follow-up stands, as the page would say it. Dismissed ones went nowhere, so they aren't here, even one the page keeps because your phone dismissed it. */
 function followUpOf(f: FollowUp): ExportFollowUp {
   const at = (verb: string) => (f.doneAt ? `${verb} at ${f.doneAt}` : verb);
   const auto = f.byAutopilot ? " by autopilot" : f.byPhone ? ", approved on your phone" : "";
