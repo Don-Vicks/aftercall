@@ -32,7 +32,7 @@ export interface RelayAction {
 }
 
 export interface RelayStore {
-  /** False if a live pairing already has this id. */
+  /** False if a pairing already has this id: an expired one too, until the sweep deletes it. */
   insert(p: RelayPairing): Promise<boolean>;
   /** A pairing that hasn't expired, or null. */
   get(idHash: string, now: number): Promise<RelayPairing | null>;
