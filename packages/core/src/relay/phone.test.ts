@@ -6,6 +6,7 @@ import { MAC_OFFLINE_AFTER_MS, PAIRING_WAIT_MS, checkPhoneAction, itemDigest, to
 import {
   RelayHttpError,
   afterHello,
+  checkPairingLink,
   forgetTap,
   helloAttempt,
   inOrder,
@@ -123,8 +124,20 @@ test("a new pairing link asks before it replaces a Mac this phone is paired with
   assert.equal(pairingLinkStep({ ...pairing, state: "paired" }, fresh, NOW + 30 * 86_400_000), "ask", "however old the pairing");
   assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + 60_000), "ask", "a pairing not finished yet may be the one on your Mac's screen");
   assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS - 1), "ask");
-  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS), "start", "after 10 minutes the relay has forgotten it, so the new code takes over");
-  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + PAIRING_WAIT_MS), "start");
+  assert.equal(pairingLinkStep({ ...pairing, state: "confirming" }, fresh, NOW + PAIRING_WAIT_MS), "check", "after 10 minutes the code has run out; the relay says whether it's gone");
+  assert.equal(pairingLinkStep({ ...pairing, state: "hello" }, fresh, NOW + PAIRING_WAIT_MS), "check");
+});
+
+test("an unfinished pairing 10 minutes old gives way to a new link only once the relay has forgotten it", async () => {
+  const fresh = startPhonePairing(`#pair=${encodePairing(newPairing(BACKEND).pairing)}`, "x", NOW);
+  // Your Mac said They match, but the page closed before the first snapshot: "confirming" here, paired on the relay.
+  const { mac, relay, phone } = await paired();
+  assert.equal(phone.state, "confirming");
+  assert.equal(pairingLinkStep(phone, fresh, NOW + PAIRING_WAIT_MS), "check");
+  assert.equal(await checkPairingLink(phone, relay.fetch), "ask", "a pairing your Mac confirmed is never dropped by a link alone");
+  assert.equal(await checkPairingLink(phone, () => Promise.reject(new TypeError("offline"))), "ask", "nor when the relay can't be reached");
+  await mac.unpair();
+  assert.equal(await checkPairingLink(phone, relay.fetch), "start", "gone from the relay: the new code takes over");
 });
 
 test("someone else's hello first: the phone says so; a retry of its own lost hello goes on to the code", async () => {

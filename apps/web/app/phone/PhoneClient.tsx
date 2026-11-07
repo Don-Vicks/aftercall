@@ -5,6 +5,7 @@ import {
   PHONE_POLL_MS,
   PHONE_UNDO_MS,
   afterHello,
+  checkPairingLink,
   clockTime,
   countdownText,
   deviceLabel,
@@ -136,13 +137,15 @@ export function PhoneClient() {
       setNotice("That pairing code didn't work. This phone is still paired with your Mac.");
       return setScreen(screenFor(stored));
     }
-    const step = pairingLinkStep(stored, fresh, Date.now());
+    const first = pairingLinkStep(stored, fresh, Date.now());
+    // An old unfinished pairing: only the relay knows whether your Mac confirmed it.
+    const step = first === "check" && stored ? await checkPairingLink(stored) : first;
     if (stored && step !== "start") {
       // The same code opened again carries on with the keys already made for it. A new code
       // while paired, or partway through pairing, waits for your tap: a link alone never
       // unpairs your Mac or drops the code it's showing.
       await persist(stored);
-      return setScreen(step === "ask" ? { kind: "replace", fresh } : screenFor(stored));
+      return setScreen(step === "same" ? screenFor(stored) : { kind: "replace", fresh });
     }
     await replaceWith(fresh);
   }, [persist, replaceWith]);
