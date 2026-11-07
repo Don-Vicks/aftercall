@@ -188,7 +188,8 @@ export function usePhoneSync(input: PhoneSyncInput) {
         for (const f of m.followUps) {
           if (f.kind !== "payment" || f.status !== "blocked" || latest.current.options(m, f).sample || heldElsewhere(f, here)) continue;
           const state = await near.paymentState(contractFollowupId(m.id, f.id)).catch(() => null);
-          const outcome = state && heldPaymentOutcome(f, here, state);
+          // Judged by where the answer came from, not `here`: a switch mid-check asks the new contract.
+          const outcome = state && heldPaymentOutcome(f, state.asked, state);
           if (outcome) latest.current.onHeldResolved(m.id, f.id, outcome);
         }
       }
