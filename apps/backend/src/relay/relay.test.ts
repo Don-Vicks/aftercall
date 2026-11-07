@@ -272,6 +272,24 @@ for (const [name, make] of stores) {
     }
   });
 
+  test(`[${name}] a tap posted as the pairing is deleted is NO_PAIRING, not a server error`, async () => {
+    const { store, done } = await make();
+    // Unpairing lands between the phone's token check and the insert.
+    const racing: RelayStore = Object.create(store, {
+      addAction: { value: async (idHash: string, ...rest: [string, number, number, number]) => (await store.delete(idHash), store.addAction(idHash, ...rest)) },
+    });
+    const { http, close } = await relayApp(racing);
+    try {
+      const p = await pairThrough(http);
+      const res = await http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+      assert.deepEqual([res.status, res.body.message], [404, "NO_PAIRING"]);
+      assert.deepEqual(await store.actions(relayHash(p.id), 0, 100), []);
+    } finally {
+      await close();
+      await done();
+    }
+  });
+
   test(`[${name}] unpairing, by either side, deletes the pairing, its snapshot and its actions`, async () => {
     const { store, done } = await make();
     const { http, close } = await relayApp(store);

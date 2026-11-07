@@ -117,7 +117,7 @@ Off by default. While on, agents reach meetings only through the running app's o
 
 ### Phone relay: sealed boxes only
 
-- Stored, if you pair a phone: sha256 hashes of the pairing id and of the Mac's and the phone's tokens, the sealed hello until the Mac confirms it, the latest sealed snapshot (replaced on each post) and the phone's sealed taps, with their times and the time the Mac last called: tables at `apps/backend/src/relay/relay.store.ts:127`. No key, so it can't open or forge a box.
+- Stored, if you pair a phone: sha256 hashes of the pairing id and of the Mac's and the phone's tokens, the sealed hello until the Mac confirms it, the latest sealed snapshot (replaced on each post) and the phone's sealed taps, with their times and the time the Mac last called: tables at `apps/backend/src/relay/relay.store.ts:128`. No key, so it can't open or forge a box.
 - How long: a pairing not confirmed within 10 minutes is gone, a confirmed one 30 days after the Mac last called; a tap until the Mac acknowledges it, 24 hours at most (`PAIRING_WAIT_MS`, `PAIRING_IDLE_MS`, `ACTION_TTL_MS`, `apps/backend/src/relay/relay.service.ts:21`). Unpairing from either side deletes all of it.
 - Limits are counted like the recap limit, under a hashed key: pairings and hellos per IP a day, snapshots and taps per pairing a day (`RELAY_DAILY`, `relay.service.ts:29`).
 - Tested: `apps/backend/src/relay/relay.test.ts`: "nothing readable is stored: only hashes of the id and tokens, and the sealed boxes as posted", "unpairing, by either side, deletes the pairing, its snapshot and its actions", and, against Postgres, "the relay's tables have exactly the columns in the protocol".

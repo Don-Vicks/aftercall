@@ -159,7 +159,8 @@ export class RelayService {
     const now = this.now();
     await this.sweep(now);
     const seq = await this.store.addAction(p.idHash, box, now, now - ACTION_TTL_MS, MAX_WAITING_ACTIONS);
-    if (seq === null) throw fail("TOO_MANY_ACTIONS", HttpStatus.TOO_MANY_REQUESTS);
+    if (seq === null) throw fail("NO_PAIRING", HttpStatus.NOT_FOUND);
+    if (seq === "full") throw fail("TOO_MANY_ACTIONS", HttpStatus.TOO_MANY_REQUESTS);
     return { seq };
   }
 

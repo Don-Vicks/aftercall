@@ -44,8 +44,8 @@ export interface RelayStore {
   macSeen(idHash: string, now: number, expiresAt: number): Promise<void>;
   /** Replaces the snapshot; the new version, or null when the pairing isn't active. */
   putSnapshot(idHash: string, box: string, now: number): Promise<number | null>;
-  /** Queues an action and returns its seq; null when `max` posted after `since` already wait. */
-  addAction(idHash: string, box: string, now: number, since: number, max: number): Promise<number | null>;
+  /** Queues an action and returns its seq; "full" when `max` posted after `since` already wait, null when the pairing is gone. */
+  addAction(idHash: string, box: string, now: number, since: number, max: number): Promise<number | "full" | null>;
   /** Waiting actions posted after `since`, oldest first. */
   actions(idHash: string, since: number, limit: number): Promise<RelayAction[]>;
   /** Deletes the pairing's actions up to `seq`. */
@@ -98,7 +98,8 @@ export class MemoryRelayStore implements RelayStore {
     return p.snapshotVersion;
   }
   async addAction(idHash: string, box: string, now: number, since: number, max: number) {
-    if (this.queued.filter((a) => a.idHash === idHash && a.postedAt > since).length >= max) return null;
+    if (!this.pairings.has(idHash)) return null;
+    if (this.queued.filter((a) => a.idHash === idHash && a.postedAt > since).length >= max) return "full" as const;
     this.queued.push({ idHash, seq: ++this.seq, box, postedAt: now });
     return this.seq;
   }
@@ -191,6 +192,9 @@ const toPairing = (r: Row): RelayPairing => ({
   snapshotAt: r.snapshot_at === null ? null : Number(r.snapshot_at),
 });
 
+/** Postgres's error code for a row whose foreign key points nowhere. */
+const FOREIGN_KEY_VIOLATION = "23503";
+
 export class PgRelayStore implements RelayStore {
   constructor(private readonly pool: Pool) {}
 
@@ -240,13 +244,19 @@ export class PgRelayStore implements RelayStore {
     return r.rows[0] ? Number(r.rows[0].snapshot_version) : null;
   }
   async addAction(idHash: string, box: string, now: number, since: number, max: number) {
-    const r = await this.pool.query<{ seq: string }>(
-      `INSERT INTO relay_actions (id_hash, box, posted_at)
-       SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
-       RETURNING seq`,
-      [idHash, box, now, since, max],
-    );
-    return r.rows[0] ? Number(r.rows[0].seq) : null;
+    try {
+      const r = await this.pool.query<{ seq: string }>(
+        `INSERT INTO relay_actions (id_hash, box, posted_at)
+         SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
+         RETURNING seq`,
+        [idHash, box, now, since, max],
+      );
+      return r.rows[0] ? Number(r.rows[0].seq) : ("full" as const);
+    } catch (e) {
+      // The pairing was deleted after the token check: as if it had never been there.
+      if ((e as { code?: string }).code === FOREIGN_KEY_VIOLATION) return null;
+      throw e;
+    }
   }
   async actions(idHash: string, since: number, limit: number) {
     const r = await this.pool.query<{ seq: string; box: string; posted_at: string }>(
