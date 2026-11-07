@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/*.test.ts src/notes/*.test.ts src/tee/*.test.ts src/wallet/*.test.ts src/followups/*.test.ts src/search/*.test.ts src/intents/*.test.ts src/node/*.test.ts",
+    "test": "node --test --experimental-strip-types src/*.test.ts src/notes/*.test.ts src/tee/*.test.ts src/wallet/*.test.ts src/followups/*.test.ts src/search/*.test.ts src/intents/*.test.ts src/node/*.test.ts src/relay/*.test.ts",
     "sample:notes": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/sample-notes.ts"
   },
   "devDependencies": {
