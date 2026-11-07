@@ -255,6 +255,19 @@ test("an action is refused when the follow-up changed, is gone, is too old, or t
   assert.equal(r.lastN, 4, "refused actions still move the counter on");
 });
 
+test("a dismissal from the phone passes the same checks as an approval: digest, age, still waiting", async () => {
+  const h = harness([email, payment, { ...payment, id: "f3", status: "dismissed" }]);
+  const changed = { ...h.tap("f2", "dismiss"), digest: "0".repeat(64) };
+  const stale = h.tap("f1", "dismiss", NOW - 25 * 3_600_000);
+  const done = { ...h.tap("f2", "dismiss"), followUpId: "f3" };
+  const r = await h.handle([changed, stale, done, h.tap("f1", "dismiss")].map((a, i) => ({ seq: i + 1, box: sealAction(h.phone.key, i + 1, a) })));
+  assert.deepEqual(h.ran.map((a) => `${a.kind}:${a.followUpId}`), ["dismiss:f1"], "only the one that matches what the phone showed");
+  assert.deepEqual(
+    r.results.reverse().map((x) => x.reason ?? x.outcome),
+    ["It changed on your Mac since your phone showed it. Look again.", "Too old: tapped more than a day ago.", "Nothing waits on it: it's dismissed on your Mac.", "accepted"],
+  );
+});
+
 test("a payment held for the wallet, or already sending, can't be approved from the phone", async () => {
   const h = harness([{ ...payment, status: "blocked" }, { ...email, status: "sending" }]);
   const r = await h.handle([
