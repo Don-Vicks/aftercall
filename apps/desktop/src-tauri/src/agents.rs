@@ -365,6 +365,8 @@ fn notes(data_dir: &Path, id: &str, scope: &Scope) -> Result<Value, String> {
 }
 
 /// notes.json without your notes and the salt behind their hash: those stay in the app.
+/// So does the key behind the transcript lines' salts (`lineKey`): with it an agent could
+/// make a share link for any line, and sharing a line is the owner's call alone.
 /// The proof's notice (your statement that you told everyone) stays out too: agents
 /// don't need it.
 fn for_agents(mut notes: Value) -> Value {
@@ -376,6 +378,7 @@ fn for_agents(mut notes: Value) -> Value {
     }
     if let Some(n) = notes.as_object_mut() {
         n.remove("yourNotesSalt");
+        n.remove("lineKey");
         // What the run cost is about your NEAR AI account, not the meeting.
         n.remove("cost");
     }
@@ -1195,7 +1198,7 @@ mod tests {
                 { "text": "Share the term sheet", "owner": "Ada", "due": null, "evidence": "e2" },
                 { "text": "Book the call", "owner": "You", "due": null, "evidence": "e3" }
             ] },
-            "proof": { "notesHash": "abc", "notice": { "by": "you", "at": "2026-10-26T11:58:00.000Z", "how": "chat" } }, "yourNotesSalt": "5a5a",
+            "proof": { "notesHash": "abc", "notice": { "by": "you", "at": "2026-10-26T11:58:00.000Z", "how": "chat" } }, "yourNotesSalt": "5a5a", "lineKey": "7b7b",
             "cost": { "usd": 0.0042, "whisperSeconds": 384, "whisperUsd": 0.00000384, "pricesAsOf": "2026-11-01" } });
         at_rest::write_json(&rec.join("notes.json"), &notes).unwrap();
         // Recorded, not processed: no notes.
@@ -1246,11 +1249,13 @@ mod tests {
             assert!(!text.contains("Push for the pilot") && !text.contains("yourNotes") && !text.contains("5a5a"), "{text}");
             assert!(!text.contains("\"notice\""), "the proof's notice stays in the app: {text}");
             assert!(!text.contains("pricesAsOf"), "the estimated cost stays in the app: {text}");
+            assert!(!text.contains("lineKey") && !text.contains("7b7b"), "the key behind the line salts stays in the app: {text}");
         }
         // Still on disk, untouched by the agent's write.
         let saved = read_notes(&dir);
         assert_eq!(saved["meeting"]["yourNotes"], "Push for the pilot");
         assert_eq!(saved["yourNotesSalt"], "5a5a");
+        assert_eq!(saved["lineKey"], "7b7b");
         assert_eq!(saved["proof"]["notice"]["how"], "chat");
         assert_eq!(saved["cost"]["pricesAsOf"], "2026-11-01");
         std::fs::remove_dir_all(dir).unwrap();
