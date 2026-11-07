@@ -67,4 +67,4 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 
 ## How it was built
 
-Building started on 26 Oct 2026, after the event was announced on 19 Oct; the FAQ counts code from the announcement (Q-001). The commit history is the real timeline. Most of the code was written by Claude Code under Victor's direction (README, [Built with](../README.md#built-with)); `CLAUDE.md` holds the working rules those sessions followed, and [kickoff.md](kickoff.md) the prompt that started them.
+Planning docs start on 24 Oct 2026 and code on 26 Oct 2026, both after the event was announced on 19 Oct; the FAQ counts code from the announcement (Q-001). The commit history is the real timeline. Most of the code was written by Claude Code under Victor's direction (README, [Built with](../README.md#built-with)); `CLAUDE.md` holds the working rules those sessions followed, and [kickoff.md](kickoff.md) the prompt that started them.
