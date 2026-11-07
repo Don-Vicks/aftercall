@@ -8,6 +8,7 @@ import {
   dealTermsHash,
   decodeDeal,
   newDealSalt,
+  openEscrowOrRecover,
   crossChainCapRefusal,
   recapFactsFrom,
   claimLink,
@@ -304,9 +305,16 @@ export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: 
           : "This payment needs an amount and a listed payee first.",
       );
     const termsHash = dealTermsHash(terms);
-    const out = await near.openEscrow(escrowId, f.payeeAccount, f.amount, proof.meetingId, termsHash, terms.condition !== null);
+    const amount = f.amount;
+    // If the answer is lost but the escrow landed, keep its link: without it nobody could confirm it.
+    const out = await openEscrowOrRecover(
+      () => near.openEscrow(escrowId, f.payeeAccount, amount, proof.meetingId, termsHash, terms.condition !== null),
+      () => near.escrow(escrowId),
+      termsHash,
+    );
     const link = dealLink(DEAL_URL, terms);
-    const escrow: EscrowFollowUp = { id: escrowId, state: out.state, link, termsHash, on: { network: config.network, contract: config.contract, account: config.account }, ref: out.txHash };
+    const ref = "txHash" in out ? out.txHash : undefined;
+    const escrow: EscrowFollowUp = { id: escrowId, state: out.state, link, termsHash, on: { network: config.network, contract: config.contract, account: config.account }, ref };
     apply({ status: "proposed", escrow, error: undefined, autopilotAt: undefined });
     await navigator.clipboard.writeText(link).catch(() => {});
   } catch (e) {

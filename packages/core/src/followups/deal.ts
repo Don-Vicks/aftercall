@@ -247,6 +247,26 @@ export async function readDealOnChain(t: DealTerms, rpcUrl: string, fetchImpl: t
   return { escrow, proof };
 }
 
+/**
+ * Opens an escrow, and when the answer is lost (an RPC timeout after the transaction went out),
+ * reads the escrow back: one on NEAR with exactly this terms hash was opened by this call, since
+ * the hash covers a fresh random salt. Its link must not be lost then, or nobody could confirm it.
+ * Any other failure is thrown as it came.
+ */
+export async function openEscrowOrRecover<T extends { state: EscrowState }>(
+  open: () => Promise<T>,
+  read: () => Promise<Pick<EscrowView, "terms_hash" | "state"> | null>,
+  termsHash: string,
+): Promise<T | { state: EscrowState; recovered: true }> {
+  try {
+    return await open();
+  } catch (e) {
+    const view = await read().catch(() => null);
+    if (view && view.terms_hash === termsHash) return { state: view.state, recovered: true };
+    throw e;
+  }
+}
+
 /** The payee's own transaction: confirm exactly these terms. 1 yoctoNEAR, so only a full-access key can sign it. */
 export function confirmEscrowTransaction(t: DealTerms): WalletTransaction {
   return {

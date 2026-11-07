@@ -10,6 +10,7 @@ import {
   decodeDeal,
   escrowStateText,
   newDealSalt,
+  openEscrowOrRecover,
   readDealOnChain,
   returnEscrowTransaction,
   type DealTerms,
@@ -187,4 +188,19 @@ test("the page reads the escrow and the proof from the contract named in the lin
       ["get_proof", { owner: "victor.testnet", meeting_id: "1793006441" }, "wallet.aftercall.testnet", "final"],
     ],
   );
+});
+
+test("an escrow whose answer was lost is read back by its terms hash, so its link is kept", async () => {
+  const hash = dealTermsHash(terms);
+  const timeout = async (): Promise<{ state: "open"; txHash: string }> => {
+    throw new Error("Timeout waiting for the transaction");
+  };
+  // The transaction landed: the escrow on NEAR has this hash.
+  assert.deepEqual(await openEscrowOrRecover(timeout, async () => escrowFor(terms), hash), { state: "open", recovered: true });
+  // It didn't, or another escrow holds the id: the failure stands.
+  await assert.rejects(openEscrowOrRecover(timeout, async () => null, hash), /Timeout/);
+  await assert.rejects(openEscrowOrRecover(timeout, async () => ({ ...escrowFor(terms), terms_hash: "cd".repeat(32) }), hash), /Timeout/);
+  await assert.rejects(openEscrowOrRecover(timeout, async () => { throw new Error("offline"); }, hash), /Timeout/);
+  // An answer is passed through untouched.
+  assert.deepEqual(await openEscrowOrRecover(async () => ({ state: "parked" as const, txHash: "abc" }), async () => null, hash), { state: "parked", txHash: "abc" });
 });
