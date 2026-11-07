@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -147,19 +147,30 @@ export default function App() {
   const deleteProject = async (id: string) => {
     const p = projects.find((x) => x.id === id);
     if (!p) return;
-    if (projects.length === 1) {
+    // Which projects agents may reach, so the meetings never move to one they can reach when this one is kept from them.
+    const reach = isDesktop ? await agentsApi.info().then((i) => i.projects, () => undefined) : null;
+    if (reach === undefined) {
+      toast({ text: "Couldn't read which projects agents can reach, so nothing was deleted. Try again.", tone: "record" });
+      return;
+    }
+    const count = recordings.filter((r) => r.project === p.name).length;
+    const plan = projectDeletion(projects, id, reach, count);
+    if (!plan) {
       toast({ text: "Keep at least one project. Rename this one instead.", tone: "caution" });
       return;
     }
-    const target = projects.find((x) => x.id !== id && x.name === "General") ?? projects.find((x) => x.id !== id)!;
-    const count = recordings.filter((r) => r.project === p.name).length;
+    const { target } = plan;
     const ok = await confirm({
       title: `Delete “${p.name}”?`,
-      body: count ? `Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.` : undefined,
+      body: count
+        ? `Its ${count} ${count === 1 ? "meeting moves" : "meetings move"} to “${target.name}”.${plan.keepsTarget ? ` Agents can't reach ${p.name}, so from now on they can't reach ${target.name} either.` : ""}`
+        : undefined,
       confirmLabel: "Delete project",
       tone: "danger",
     });
     if (!ok) return;
+    // Before anything moves, so agents never reach the meetings in between.
+    if (plan.agentProjects) await agentsApi.setProjects(plan.agentProjects);
     const next = projects.filter((x) => x.id !== id);
     await projectsApi.save(next);
     if (count) await refile(p.name, target.name);
