@@ -89,6 +89,8 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
+**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall would record meetings in the room and handle approvals; approving a held payment in your NEAR wallet, and a payee's claim link, already work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
+
 
 ## How it works
 
