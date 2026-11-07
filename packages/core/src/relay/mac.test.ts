@@ -5,6 +5,7 @@ import { decodeSignRequest } from "../wallet/actions.ts";
 import { decodePairing, deriveSession, newPairing, newRelayKeys, openHello, pairingIdText, pairingUrl, relayTokenHash, sealHello } from "./crypto.ts";
 import { itemDigest, openSnapshot, sealAction, sealSnapshot, signUrlsMatch, toPendingItem, type ActionResult, type PaymentItem, type PhoneAction } from "./messages.ts";
 import {
+  AUTOPILOT_COUNTING,
   MAX_RESULTS,
   buildSnapshot,
   contractFollowupId,
@@ -172,6 +173,16 @@ test("a payment held for the wallet, or already sending, can't be approved from 
   ]);
   assert.deepEqual(h.ran, []);
   assert.deepEqual(r.results.map((x) => x.reason), ["It's already on its way.", "It's held for your NEAR wallet: approve it there."]);
+});
+
+test("approving from the phone is refused while autopilot counts down on it; undoing autopilot isn't", async () => {
+  const h = harness([{ ...payment, autopilotAt: NOW + 30_000 }]);
+  const r = await h.handle([
+    { seq: 1, box: sealAction(h.phone.key, 1, h.tap("f2", "approve")) },
+    { seq: 2, box: sealAction(h.phone.key, 2, h.tap("f2", "undo-autopilot")) },
+  ]);
+  assert.deepEqual(h.ran.map((a) => a.kind), ["undo-autopilot"]);
+  assert.deepEqual(r.results.map((x) => [x.n, x.outcome, x.reason]), [[2, "accepted", undefined], [1, "refused", AUTOPILOT_COUNTING]]);
 });
 
 // ---------- the whole round trip, through a fake relay ----------

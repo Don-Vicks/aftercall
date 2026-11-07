@@ -105,6 +105,9 @@ export const snapshotKey = (s: Snapshot) => JSON.stringify({ ...s, at: 0 });
 /** New results first, then the older ones, at most `MAX_RESULTS`. */
 export const mergeResults = (newestFirst: ActionResult[], older: ActionResult[]): ActionResult[] => [...newestFirst, ...older].slice(0, MAX_RESULTS);
 
+/** Why an approval from the phone is refused while autopilot counts down on the follow-up. */
+export const AUTOPILOT_COUNTING = "Autopilot is counting down on it. Let it run, or undo autopilot first.";
+
 /** One sealed action as the relay hands it to the Mac. */
 export interface RelayActionBox {
   seq: number;
@@ -169,7 +172,10 @@ export async function handlePhoneActions(args: {
       ? { ok: false as const, reason: "Your phone asked twice; your Mac acted on the first." }
       : t.busy && t.followUp
         ? { ok: false as const, reason: t.busy }
-        : checkPhoneAction(action, t.followUp, t.item, args.now());
+        : // The app offers no Approve during autopilot's countdown, and approving then would race it.
+          action.kind === "approve" && t.followUp?.autopilotAt
+          ? { ok: false as const, reason: AUTOPILOT_COUNTING }
+          : checkPhoneAction(action, t.followUp, t.item, args.now());
     let result: ActionResult;
     if (check.ok) {
       acted.add(id);
