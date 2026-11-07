@@ -307,6 +307,10 @@ export default function App() {
   useEffect(() => {
     refreshWallet().finally(() => setWalletChecked(true));
   }, [refreshWallet]);
+  // Opening the wallet reads it again, for the app and for agents: after another account is saved they have none until then.
+  useEffect(() => {
+    if (view.name === "wallet") void refreshWallet();
+  }, [view.name, refreshWallet]);
 
   /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
   const queuedHere = useRef(new Set<string>());
@@ -875,6 +879,7 @@ export default function App() {
             {view.name === "settings" && (
               <ConnectNear
                 onOpenPrivacy={go.privacy}
+                onWalletChanged={refreshWallet}
                 // Real meetings on this Mac; the browser preview has none, so it shows the sample's figure, labelled.
                 spend={isDesktop ? spendOf(Object.entries(saved).filter(([id]) => !hidden[id]).map(([, s]) => s.cost)) : spendOf([syncWithAdaCost])}
                 spendIsSample={!isDesktop}
