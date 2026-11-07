@@ -1,5 +1,5 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
-import { hasFullChecks, type ProofBundle, type ProofBundleV2, type ProofBundleV3 } from "./pipeline.ts";
+import { hasFullChecks, type ProofBundle, type ProofBundleV2, type ProofBundleV3 } from "./bundle.ts";
 import type { SignatureResponse } from "../tee/checks.ts";
 import type { NoticeLog } from "../meeting.ts";
 import { isNetwork, type Network } from "../network.ts";
