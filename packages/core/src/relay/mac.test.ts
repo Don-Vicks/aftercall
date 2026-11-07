@@ -71,6 +71,14 @@ test("each follow-up gets its own options: a held payment carries /sign links th
   assert.equal(decodeSignRequest(signUrls.decline.split("#")[1]).action.kind, "cancel");
 });
 
+test("a held payment a coding agent proposed says so on its approve page, in place of words heard", () => {
+  const proposed: PaymentFollowUp = { ...payment, id: "agent-1", status: "blocked", heard: "", evidence: undefined, proposedBy: { agent: "Codex", at: "2026-11-04T09:30:00.000Z", reason: "The deposit agreed in the call" } };
+  const { approve } = heldPaymentActions(older, proposed, { leftToday: 5_000_000n, dailyCap: 50_000_000n }, NOW);
+  assert.equal(approve.kind === "approve" && approve.context?.proposedBy, "Codex: “The deposit agreed in the call”");
+  const { approve: heard } = heldPaymentActions(older, older.followUps[0] as PaymentFollowUp, { leftToday: 5_000_000n, dailyCap: 50_000_000n }, NOW);
+  assert.equal(heard.kind === "approve" && "proposedBy" in (heard.context ?? {}), false);
+});
+
 test("an item the schema refuses is left out and counted, and the rest still go", () => {
   const odd = meeting("1762440000", "2026-11-06T14:02:00Z", [email, { ...payment, id: "f2 with spaces" }]);
   const s = buildSnapshot({ at: NOW, network: "testnet", meetings: [{ meeting: odd, options: opts }], results: [] });

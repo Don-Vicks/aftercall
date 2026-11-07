@@ -53,7 +53,14 @@ export function heldPaymentActions(
       followupId,
       payee: f.payeeAccount,
       amount,
-      context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting, now)}`, heard: f.heard, leftToday: `${formatUsdc(wallet.leftToday)} of ${formatUsdc(wallet.dailyCap)}` },
+      context: {
+        payeeName: f.payeeName,
+        meeting: `${meeting.title} · ${meetingLabel(meeting, now)}`,
+        heard: f.heard,
+        leftToday: `${formatUsdc(wallet.leftToday)} of ${formatUsdc(wallet.dailyCap)}`,
+        // A coding agent's proposal has no words heard: the approve page says who proposed it and why.
+        ...(f.proposedBy ? { proposedBy: `${f.proposedBy.agent}: “${f.proposedBy.reason}”` } : {}),
+      },
     },
     cancel: { kind: "cancel", followupId, payee: f.payeeAccount, amount },
   };
