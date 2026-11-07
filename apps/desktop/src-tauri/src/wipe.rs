@@ -1,6 +1,6 @@
 //! "Delete everything on this Mac": the app's data folder (meetings, notes,
 //! transcripts, audio, projects and their briefs, NEAR settings, the agents socket, settings and
-//! activity list) and the Keychain items Aftercall keeps under the service
+//! activity list, the paired phone's phone.json) and the Keychain items Aftercall keeps under the service
 //! `dev.aftercall.app`.
 //!
 //! What it can't touch is said in the interface: proofs and payments on NEAR,
@@ -13,9 +13,9 @@ use serde::Serialize;
 
 pub const KEYCHAIN_SERVICE: &str = "dev.aftercall.app";
 
-/// Every Keychain account Aftercall uses (at_rest.rs, near.rs, nearai.rs, recovery.rs).
+/// Every Keychain account Aftercall uses (at_rest.rs, near.rs, nearai.rs, recovery.rs, phone.rs).
 /// A test checks this list against the sources, so a new item can't be missed.
-pub const KEYCHAIN_ITEMS: [&str; 4] = ["data-key", "near-app-key", "nearai-api-key", "backup-key"];
+pub const KEYCHAIN_ITEMS: [&str; 5] = ["data-key", "near-app-key", "nearai-api-key", "backup-key", "phone-relay"];
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
