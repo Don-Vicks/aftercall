@@ -71,6 +71,7 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 | Anyone can re-run a proof's checks in a browser | `apps/web/app/verify/` | `verify.test.ts`, `proof.test.ts` |
 | The backend keeps nothing about a recap; claim links keep only a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts`, `claims.test.ts` |
 | A follow-up a coding agent proposes waits for your tap: never autopilot, never the phone, payments only to listed payees within your caps | `apps/desktop/src-tauri/src/agents.rs`, `packages/core/src/followups/autopilot.ts` | `agents.rs` tests, `autopilot.test.ts`, `apps/mcp/src/tools.test.ts` |
+| The phone sees only what approving needs, sealed so the relay can't read it; the Mac re-checks every tap | `packages/core/src/relay/`, `apps/backend/src/relay/` | `messages.test.ts`, `mac.test.ts`, `relay.test.ts` |
 
 Every claim with its exact test names: [What is proven](docs/proven.md). What has run live and what hasn't: [Live today](#live-today).
 
@@ -90,9 +91,10 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | Test credits (a capped NEAR AI key per tester) | backend | Built and tested, off until Aftercall's NEAR AI account is set up |
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
 | Coding agents in the Mac app: Connect Claude Code, Hand to an agent, Open in Claude Code, done with a link, agent-drafted follow-ups, projects agents can reach | Mac app, MCP server | Built and tested. Claude Code ran against the MCP server and a stand-in for the app on 1 Nov ([recorded](docs/agents-demo.md)), before these additions; not yet with the Mac app. Codex not yet run |
+| Approvals on a phone: the `/phone` page, the relay, Settings → Your phone | Web app, backend, Mac app | Built and tested (`pnpm dev:phone` runs the page against a stand-in Mac and relay). Not deployed yet, and not yet run with the Mac app or on a real phone |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
-**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone, lists what waits for you and approves or dismisses it, end-to-end encrypted through a relay that can't read it. Recording meetings in the room on a phone is a later version. Approving a held payment in your NEAR wallet, and a payee's claim link, also work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
+**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone, lists what waits for you and approves or dismisses it, end-to-end encrypted through a relay that can't read it (built and tested, not yet deployed or run on a real phone). Recording meetings in the room on a phone is a later version. Approving a held payment in your NEAR wallet, and a payee's claim link, also work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
 
 
 ## How it works
@@ -100,8 +102,8 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 - **Mac app** (Tauri, Rust and React): records both sides of the call, seals audio and notes on disk with a key in the Keychain, and holds a NEAR key that can only call `pay` and `record_proof`. It ships a local MCP server for coding agents.
 - **NEAR AI Cloud:** Whisper and Qwen3.8-27B in TEEs. Every run checks Intel TDX quotes, NVIDIA GPU evidence and the response signature; the transcript is end-to-end encrypted to the attested model, or not sent.
 - **NEAR contract** (`contracts/agent-wallet`): proof registry, payee list, daily and per-payment caps; over-cap payments wait for the owner's wallet.
-- **Web:** `/verify` re-runs a proof's checks in the browser; `/sign` for owner actions in any NEAR wallet; `/claim` for payees.
-- **Backend** (NestJS and Postgres): sign-in with NEAR, recap email through Resend, claim links. It keeps nothing about a meeting.
+- **Web:** `/verify` re-runs a proof's checks in the browser; `/sign` for owner actions in any NEAR wallet; `/claim` for payees; `/phone` for approvals on a paired phone.
+- **Backend** (NestJS and Postgres): sign-in with NEAR, recap email through Resend, claim links, and the phone relay, which passes sealed boxes it can't open. It keeps nothing about a meeting.
 
 The full diagram, every check and what each part does with your data: [docs/how-it-works.md](docs/how-it-works.md). Who sees and keeps what: [docs/privacy.md](docs/privacy.md).
 
@@ -120,6 +122,7 @@ The notes are made inside secure hardware, but a follow-up has to leave it to do
 | **Changing your caps, payees or pause** | A transaction from your wallet, to NEAR | Only your wallet. Each change needs 1 yoctoNEAR attached, which the app's limited key can't attach | On NEAR |
 | **Coding agents** (Claude Code, Codex) | To Aftercall's servers, nothing: agents read meetings over a socket only the running app opens, and only in the projects you let them reach. What an agent reads, it sends to its own model provider, as with anything it reads | You. Agents are off by default; claiming, completing and proposing follow-ups is a second switch, also off. Agents can never send, pay or change your rules | On the Mac: a sealed list of each read, claim, completion, proposal and refusal (the newest 200), never meeting content |
 | **A follow-up a coding agent proposes** (`draft_follow_up`) | Nothing until you approve it; then the same as the recap or payment rows above | You tap Approve on the Mac. It shows "Proposed by" the agent, with its reason in place of a quote; it never runs on autopilot and never reaches the phone. A payment only to a payee already on your list, within your per-payment cap and what's left today | On the Mac: the proposal, with the agent's name and reason, in the meeting's sealed `notes.json` (a dismissed one stays there, marked dismissed); the activity list records it |
+| **Approving from your phone** | Each waiting recap's address and subject; each payment's payee, amount, heard words, route and quote; the meeting's title and start. Sealed to a key only your Mac and phone hold, through Aftercall's relay; a held payment's wallet links also carry your NEAR account and what's left of today's cap. Your taps come back the same way | You, on the phone, with a 5-second undo. The Mac opens each tap, checks the follow-up again and runs its own Approve, Dismiss or Undo under the same rules and caps. A held payment opens your NEAR wallet instead | Relay: the latest sealed snapshot and hashes of the tokens, until you unpair or 30 days after your Mac last called; taps until the Mac collects them, a day at most. Phone: the pairing and the latest snapshot in the browser's storage, until you unpair |
 
 Every meeting also leaves a proof on NEAR, for good: the recording's start time, a hash and the model name, never the meeting itself. The proof link you share carries the checks, hashes and counts, your logged notice and your NEAR account, never the notes or the transcript. Everything else, the field-by-field list with file and line pointers: [docs/privacy.md](docs/privacy.md).
 
@@ -152,6 +155,7 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 | [docs/near-intents-1click.md](docs/near-intents-1click.md) | Paying a payee on Solana or Base through NEAR Intents 1Click |
 | [docs/staking-for-inference.md](docs/staking-for-inference.md) | Paying for notes by staking NEAR |
 | [docs/design/phone.md](docs/design/phone.md) | Aftercall on a phone: approvals (built, no push notifications yet), then in-room meetings (not built) |
+| [docs/design/phone-protocol.md](docs/design/phone-protocol.md) | The phone protocol: pairing, sealed boxes, the relay's routes and what it keeps, and the tests for each part |
 | [docs/design/agents.md](docs/design/agents.md) | Design for coding agents and a meeting's follow-ups: parts 1 to 4 are built, paid work for agents is not |
 
 ## Built with
@@ -161,7 +165,7 @@ Disclosed per the hackathon FAQ (Q-005).
 - **AI-written code:** most of this repository was written by Claude Code (Anthropic's coding agent) under Victor's direction, from Victor's own plan and design. Commits carry a `Co-Authored-By: Claude` line.
 - **No templates or pre-existing project code.** Everything here was written from 26 Oct 2026. The attestation checks follow NEAR's [reference verifier](https://github.com/nearai/nearai-cloud-verifier) and the [NEAR AI Cloud agent skill](https://github.com/near/agent-skills/tree/main/skills/near-ai-cloud); the TDX test fixtures are Phala's sample quote and collateral (MIT), in `apps/desktop/src-tauri/tests/fixtures`.
 - **Libraries:**
-  - Desktop: Tauri 2 (with tauri-plugin-notification), React 19, Tailwind CSS 4, motion, lucide-react; Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, dcap-qvl (Phala, Intel TDX quote verification), bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
+  - Desktop: Tauri 2 (with tauri-plugin-notification), React 19, Tailwind CSS 4, motion, lucide-react, uqr (the pairing QR code); Rust: cidre (Core Audio tap), cpal, hound, reqwest, keyring, objc2-event-kit, dcap-qvl (Phala, Intel TDX quote verification), bip39, chacha20poly1305, hkdf, sha2, bs58, zeroize
   - Shared core: zod, @noble/curves, @noble/hashes, @noble/ciphers; `pnpm sample:notes` uses @phala/dcap-qvl-node
   - Backend: NestJS, pg, jose, @scure/base
   - Web: Next.js, @hot-labs/near-connect
