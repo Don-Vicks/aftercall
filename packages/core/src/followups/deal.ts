@@ -134,9 +134,23 @@ export function dealTermsFor(
     meetingId: at.meetingId,
     proofHash: at.proofHash,
     salt: at.salt,
-    payeeName: f.payeeName,
-    meetingTitle: meeting.title,
+    // Shown only, never hashed: clipped to what the confirm page accepts.
+    payeeName: f.payeeName.slice(0, LIMITS.payeeName),
+    meetingTitle: meeting.title.slice(0, LIMITS.meetingTitle),
   };
+}
+
+/**
+ * Why these terms couldn't be read back by the confirm page, or null when they can. Checked before
+ * the escrow opens: once money is set aside, a link the page refuses can never be confirmed.
+ */
+export function dealTermsProblem(t: DealTerms): string | null {
+  try {
+    decodeDeal(toBase64Url(JSON.stringify(t)));
+    return null;
+  } catch {
+    return "These terms don't fit a confirm link (a quote or the words heard are too long, or missing), so nothing was held. Pay it yourself instead.";
+  }
 }
 
 // ---------- the confirm link ----------

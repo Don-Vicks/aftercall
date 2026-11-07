@@ -6,6 +6,7 @@ import {
   confirmEscrowTransaction,
   dealLink,
   dealTermsFor,
+  dealTermsProblem,
   dealTermsHash,
   decodeDeal,
   escrowStateText,
@@ -203,4 +204,14 @@ test("an escrow whose answer was lost is read back by its terms hash, so its lin
   await assert.rejects(openEscrowOrRecover(timeout, async () => { throw new Error("offline"); }, hash), /Timeout/);
   // An answer is passed through untouched.
   assert.deepEqual(await openEscrowOrRecover(async () => ({ state: "parked" as const, txHash: "abc" }), async () => null, hash), { state: "parked", txHash: "abc" });
+});
+
+test("terms the confirm page would refuse are caught before anything is held; names shown are clipped to fit", () => {
+  assert.equal(dealTermsProblem(terms), null);
+  const long = dealTermsFor({ title: "T".repeat(300) }, { ...payment, payeeName: "K".repeat(200) }, at)!;
+  assert.equal(dealTermsProblem(long), null, "the title and the name are shown only, so they're clipped, not refused");
+  assert.equal(decodeDeal(dealLink("https://x/deal", long).split("#")[1]).meetingTitle?.length, 120);
+  const quote = "word ".repeat(150).trim();
+  assert.match(dealTermsProblem(dealTermsFor({ title: "x" }, { ...payment, evidence: { quote, at: 1 } }, at)!) ?? "", /too long/);
+  assert.match(dealTermsProblem({ ...terms, heard: "" }) ?? "", /don't fit/);
 });

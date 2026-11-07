@@ -6,6 +6,7 @@ import {
   dealLink,
   dealTermsFor,
   dealTermsHash,
+  dealTermsProblem,
   decodeDeal,
   newDealSalt,
   openEscrowOrRecover,
@@ -304,6 +305,9 @@ export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: 
           ? "The call may have set a condition that isn't in the transcript, so this can't be held as a deal without one: confirming would pay at once. Check the call, then pay it yourself when it's met."
           : "This payment needs an amount and a listed payee first.",
       );
+    // Once the money is set aside, a link the confirm page refuses could never be confirmed.
+    const problem = dealTermsProblem(terms);
+    if (problem) throw new Error(problem);
     const termsHash = dealTermsHash(terms);
     const amount = f.amount;
     // If the answer is lost but the escrow landed, keep its link: without it nobody could confirm it.
