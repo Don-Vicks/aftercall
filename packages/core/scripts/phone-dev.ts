@@ -9,9 +9,13 @@
  *   pnpm dev:phone -- --confirm-after 20    # the code stays on screen 20 s before the Mac confirms it
  *   pnpm dev:phone -- --offline-after 20    # the Mac stops calling after 20 s: the page says it's offline
  *   pnpm dev:phone -- --port 3211 --web http://localhost:3210   # other ports
+ *   pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app
+ *                                           # the deployed relay and phone page: open the link on a real phone
  *
- * Nothing leaves this machine: the relay listens on 127.0.0.1 only, so a real phone can't
- * reach it (use a phone-sized browser window). The real relay is apps/backend/src/relay.
+ * Without --relay nothing leaves this machine: the relay listens on 127.0.0.1 only, so a
+ * real phone can't reach it (use a phone-sized browser window). With --relay the made-up
+ * Mac talks to that relay, which sees only sealed boxes, as it would from the app.
+ * The real relay is apps/backend/src/relay.
  */
 import { createServer } from "node:http";
 import type { EmailFollowUp, FollowUp, Meeting, PaymentFollowUp } from "../src/meeting.ts";
@@ -27,11 +31,12 @@ const PORT = Number(arg("port", "3102"));
 const WEB = arg("web", "http://localhost:3000");
 const OFFLINE_AFTER_S = Number(arg("offline-after", "0"));
 const CONFIRM_AFTER_S = Number(arg("confirm-after", "0"));
-const BACKEND = `http://localhost:${PORT}`;
+const REAL_RELAY = arg("relay", "");
+const BACKEND = REAL_RELAY || `http://localhost:${PORT}`;
 const TICK_MS = 2_000;
 
 const relay = fakeRelay();
-const server = createServer(async (req, res) => {
+const server = REAL_RELAY ? null : createServer(async (req, res) => {
   res.setHeader("access-control-allow-origin", WEB);
   res.setHeader("access-control-allow-methods", "GET, POST, DELETE");
   res.setHeader("access-control-allow-headers", "content-type, authorization");
@@ -44,7 +49,7 @@ const server = createServer(async (req, res) => {
   res.writeHead(answer.status, { "content-type": "application/json" }).end(await answer.text());
   console.log(`relay ${req.method} ${req.url?.replace(/pairings\/[^/?]+/, "pairings/…")} → ${answer.status}`);
 });
-await new Promise<void>((resolve) => server.listen(PORT, "127.0.0.1", resolve));
+if (server) await new Promise<void>((resolve) => server.listen(PORT, "127.0.0.1", resolve));
 
 // ---------- a made-up Mac with a meeting's follow-ups ----------
 
@@ -92,8 +97,8 @@ const snapshot = (): Snapshot =>
   });
 
 const hhmm = () => new Date().toTimeString().slice(0, 5);
-const mac = await fakeMac(relay.fetch, BACKEND, `${WEB}/phone`);
-console.log(`\nOpen this in a browser on this machine (the relay is on 127.0.0.1, out of a phone's reach):\n\n  ${mac.url}\n`);
+const mac = await fakeMac(REAL_RELAY ? fetch : relay.fetch, BACKEND, `${WEB}/phone`);
+console.log(REAL_RELAY ? `\nOpen this on a phone (the relay is ${REAL_RELAY}):\n\n  ${mac.url}\n` : `\nOpen this in a browser on this machine (the relay is on 127.0.0.1, out of a phone's reach):\n\n  ${mac.url}\n`);
 
 let pairedAt = 0;
 let helloAt = 0;
