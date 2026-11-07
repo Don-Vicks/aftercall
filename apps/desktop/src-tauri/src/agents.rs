@@ -1049,7 +1049,8 @@ pub fn prepare_launch(data_dir: &Path, folder: &Path, prompt: &str, claude: &Pat
 #[serde(rename_all = "camelCase")]
 pub struct OpenOutcome {
     pub ok: bool,
-    /// What's missing, so the menu copies the prompt instead: "folder", "agents", "claude" or "node".
+    /// What's missing, so the menu copies the prompt instead: "folder", "agents", "claude" or "node";
+    /// or "project", a project the user keeps from agents, when nothing is copied either.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing: Option<&'static str>,
     pub message: String,
@@ -1080,6 +1081,10 @@ pub fn open_in_claude_code(
     let Some(token) = settings.token.clone().filter(|_| settings.enabled) else {
         return OpenOutcome::missing("agents", "Turn on \u{201c}Let agents read your meetings\u{201d} in Coding agents first, so Claude Code can reach this meeting.".into());
     };
+    // A project the user keeps from agents: the prompt carries the item's words, so nothing starts.
+    if !Scope::of(data_dir).allows(project) {
+        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
+    }
     let Some(claude) = claude else {
         return OpenOutcome::missing("claude", "Aftercall couldn't find the claude command on this Mac, so it copied the prompt instead.".into());
     };
@@ -1832,6 +1837,14 @@ mod tests {
         entries[0].code_folder = Some(dir.join("recordings/1761000000/notes.json").display().to_string());
         crate::projects::save_entries(&dir, entries.clone()).unwrap();
         assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("agents"), "agents off");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
+        // A project kept from agents: nothing starts, whatever else is ready.
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec![]), ..Default::default() }).unwrap();
+        let kept = go(Some(&claude), Ok(claude.clone()));
+        assert_eq!(kept.missing, Some("project"), "{}", kept.message);
+        assert!(!handoff_root(&dir).exists(), "no prompt written for a project kept from agents");
+        save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec!["general".into()]), ..Default::default() }).unwrap();
+        assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"), "a chosen project goes on");
         save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
         assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"));
         assert_eq!(go(Some(&claude), Err("no node".into())).message, "no node");

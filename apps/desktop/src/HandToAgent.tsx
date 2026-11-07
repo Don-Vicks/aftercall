@@ -38,10 +38,12 @@ async function copyPrompt(meeting: Pick<Meeting, "id" | "title" | "project">, it
 /**
  * Opens Terminal in the project's code folder with claude and the prompt. When something
  * is missing (claude, Node, agents off), it says so plainly and copies the prompt instead.
+ * A project kept from agents starts nothing and copies nothing: the prompt holds the item's words.
  */
 async function openClaude(meeting: Pick<Meeting, "id" | "title" | "project">, item: ActionItem, blockers: string[]) {
   const prompt = handoffPrompt(meeting, item, "Claude Code");
   const out = await agentsApi.openClaude(meeting.project, prompt).catch((e: unknown) => ({ ok: false, missing: undefined, message: e instanceof Error ? e.message : String(e) }));
+  if (out.missing === "project") return toast({ text: out.message, tone: "caution" });
   if (!out.ok) return copyPrompt(meeting, item, "Claude Code", blockers, out.missing === "claude" ? out.message : `${out.message} The prompt is copied instead.`);
   toast(blockers.length ? { text: `${out.message} ${blockers[0]}`, tone: "caution" } : { text: out.message, tone: "verdigris" });
 }

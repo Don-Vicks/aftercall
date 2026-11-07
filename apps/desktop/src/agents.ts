@@ -26,8 +26,8 @@ export interface AgentsInfo {
 /** What "Open in Claude Code" did (agents.rs, `OpenOutcome`). */
 export interface OpenOutcome {
   ok: boolean;
-  /** Why it couldn't open, so the menu copies the prompt instead. */
-  missing?: "folder" | "agents" | "claude" | "node";
+  /** Why it couldn't open, so the menu copies the prompt instead; "project" (kept from agents) copies nothing. */
+  missing?: "folder" | "agents" | "claude" | "node" | "project";
   message: string;
 }
 
