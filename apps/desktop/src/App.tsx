@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, agentWallet, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -278,7 +278,11 @@ export default function App() {
   const refreshWallet = useCallback(async () => {
     const config = isDesktop ? await near.getConfig().catch(() => null) : null;
     setAccount(config?.account ?? null);
-    if (!config) return;
+    if (!config) {
+      // No account: agents lose the payees and caps they had, so they propose no payments.
+      if (isDesktop) agentsApi.setWallet(null).catch(() => {});
+      return;
+    }
     try {
       const v = await near.wallet();
       setBalance(v.wallet ? BigInt(v.wallet.balance) : null);
@@ -286,15 +290,12 @@ export default function App() {
       setPayees(listed);
       setPayeesRead(true);
       setDestinations(Object.fromEntries((v.destinations ?? []).map((d) => [d.payee, { chain: d.chain, address: d.address }])));
-      if (v.wallet) {
-        const today = Math.floor(Date.now() / 86_400_000);
-        const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
-        const cap = BigInt(v.wallet.daily_cap);
-        const leftToday = cap > spent ? cap - spent : 0n;
-        setLimits({ leftToday, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
-        setDailyCap(cap);
-        // What agents may propose a payment to, and up to how much: the same list and caps.
-        agentsApi.setWallet({ payees: listed, perPaymentCap: v.wallet.per_payment_cap, leftToday: leftToday.toString() }).catch(() => {});
+      // What agents may propose a payment to, and up to how much: the same list and caps, or none without a wallet.
+      const forAgents = agentWallet(v.wallet, listed, Date.now());
+      agentsApi.setWallet(forAgents).catch(() => {});
+      if (v.wallet && forAgents) {
+        setLimits({ leftToday: BigInt(forAgents.leftToday), perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        setDailyCap(BigInt(v.wallet.daily_cap));
       }
     } catch {
       // Offline or not set up: keep what we have.

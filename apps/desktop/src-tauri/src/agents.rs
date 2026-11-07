@@ -501,10 +501,15 @@ pub struct WalletSnapshot {
 /// The snapshot for each data folder (one in the app; one per test).
 static WALLETS: Mutex<Option<HashMap<PathBuf, WalletSnapshot>>> = Mutex::new(None);
 
-/// Keeps the payee list and caps the app just read, for agents' payment proposals.
-pub fn set_wallet(data_dir: &Path, wallet: WalletSnapshot) {
+/// Keeps the payee list and caps the app just read, for agents' payment proposals. None
+/// forgets them (no NEAR account or wallet any more), so agents propose no payments.
+pub fn set_wallet(data_dir: &Path, wallet: Option<WalletSnapshot>) {
     if let Ok(mut all) = WALLETS.lock() {
-        all.get_or_insert_with(HashMap::new).insert(data_dir.to_path_buf(), wallet);
+        let all = all.get_or_insert_with(HashMap::new);
+        match wallet {
+            Some(w) => all.insert(data_dir.to_path_buf(), w),
+            None => all.remove(data_dir),
+        };
     }
 }
 
@@ -1274,7 +1279,7 @@ mod tests {
     fn wallet_for(dir: &Path) {
         set_wallet(
             dir,
-            WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() },
+            Some(WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "50000000".into(), left_today: "30000000".into() }),
         );
     }
 
@@ -1369,8 +1374,12 @@ mod tests {
                 "id": "agent-1", "status": "proposed", "proposedBy": { "agent": "Claude Code", "at": "t", "reason": "The deposit agreed in the call" } })
         );
         // A per-payment cap of 0 means none set: nothing is proposed.
-        set_wallet(&dir, WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() });
+        set_wallet(&dir, Some(WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() }));
         assert!(pay("Designer", "1").unwrap_err().contains("hasn't set a per-payment cap"));
+        // The wallet disconnected (no account, or another one): the snapshot goes, and so do payment proposals.
+        wallet_for(&dir);
+        set_wallet(&dir, None);
+        assert!(pay("Designer", "1").unwrap_err().contains("hasn't read your payee list"));
         assert_eq!(usdc_units("12.50"), Some(12_500_000));
         assert_eq!(usdc_units("7"), Some(7_000_000));
         std::fs::remove_dir_all(dir).unwrap();

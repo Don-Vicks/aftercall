@@ -811,9 +811,9 @@ async fn agents_claude(app: AppHandle, connect: bool) -> Result<agents::ClaudeOu
 }
 
 /// The payee list and caps the app just read from the contract, kept in memory for
-/// agents' payment proposals (see agents.rs).
+/// agents' payment proposals (see agents.rs); null forgets them.
 #[tauri::command]
-fn agents_set_wallet(app: AppHandle, wallet: agents::WalletSnapshot) -> Result<(), String> {
+fn agents_set_wallet(app: AppHandle, wallet: Option<agents::WalletSnapshot>) -> Result<(), String> {
     agents::set_wallet(&data_dir(&app)?, wallet);
     Ok(())
 }
@@ -992,7 +992,11 @@ fn near_get_config(app: AppHandle) -> Result<Option<near::NearConfig>, String> {
 
 #[tauri::command]
 fn near_save_config(app: AppHandle, config: near::NearConfig) -> Result<(), String> {
-    near::save_config(&data_dir(&app)?, &config)
+    let dir = data_dir(&app)?;
+    near::save_config(&dir, &config)?;
+    // Another account or contract: agents get its payees and caps when the app next reads them, not the old ones.
+    agents::set_wallet(&dir, None);
+    Ok(())
 }
 
 /// "Save and check": is the account there, and is the contract Aftercall's? Saves nothing.
