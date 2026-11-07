@@ -13,7 +13,7 @@ type Row = { n: string; title: string; body: ReactNode; tests: [string, string][
 const ROWS: Row[] = [
   {
     n: "01",
-    title: "It can't invent a payment.",
+    title: "No quote from the call, no follow-up.",
     body: "Every follow-up needs an exact quote from the transcript, on whole words. Anything without one is dropped, listed on the meeting page and never acted on. Amounts come from the words spoken, and are kept only when the same value is in the quote.",
     tests: [
       ["keeps what the transcript backs up and drops what it doesn't", "build.test.ts"],
