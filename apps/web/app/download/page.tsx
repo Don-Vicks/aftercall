@@ -112,7 +112,7 @@ export default function Download() {
                       <Icon name="laptop" size={19} />
                       Build it on your Mac
                     </a>
-                    <a href={`${REPO_URL}#for-judges`} className="arrow-link">
+                    <a href={`${REPO_URL}#how-to-test`} className="arrow-link">
                       Check it in five minutes
                       <Icon name="external" size={12} />
                     </a>
