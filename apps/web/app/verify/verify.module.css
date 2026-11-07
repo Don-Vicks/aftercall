@@ -21,6 +21,31 @@
 
 /* ---------- hero ---------- */
 
+.sharedLine {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 22px;
+  border-radius: var(--radius-md);
+  background: var(--well);
+  box-shadow: inset 2px 0 0 var(--verdigris), inset 0 0 0 1px var(--hairline);
+}
+.sharedText {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  line-height: 32px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.sharedMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+
 .hero {
   display: flex;
   align-items: center;

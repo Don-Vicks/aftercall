@@ -1,5 +1,5 @@
 import { utf8ToBytes } from "@noble/hashes/utils";
-import { hasFullChecks, type ProofBundle, type ProofBundleV2, type ProofBundleV3 } from "./pipeline.ts";
+import { hasFullChecks, type ProofBundle, type ProofBundleV2, type ProofBundleV3 } from "./bundle.ts";
 import type { SignatureResponse } from "../tee/checks.ts";
 import type { NoticeLog } from "../meeting.ts";
 import { isNetwork, type Network } from "../network.ts";
@@ -53,7 +53,7 @@ export const CONFIDENTIAL_MODELS = ["Qwen/Qwen3.8-27B"];
 const bound = (e: TeeEvidence) => bindsIdentity(e.reportData, e.signingAddress, e.nonce, e.tlsCertFingerprint, e.scope);
 
 export interface Check {
-  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes";
+  id: "on-chain" | "matches" | "signed" | "attested" | "e2ee" | "compose" | "gpu" | "confidential" | "unchanged" | "your-notes" | "line" | "contract";
   label: string;
   ok: boolean;
   detail: string;
@@ -431,12 +431,22 @@ function fromBase64Url(text: string): Uint8Array {
   return Uint8Array.from(s, (c) => c.charCodeAt(0));
 }
 
+/** A value as a link fragment: canonical JSON, UTF-8, base64url without padding. */
+export function encodeLinkPayload(value: unknown): string {
+  return toBase64Url(utf8ToBytes(canonicalJson(value)));
+}
+
+/** The value `encodeLinkPayload` made. Throws on anything that isn't base64url JSON. */
+export function decodeLinkPayload(text: string): unknown {
+  return JSON.parse(new TextDecoder().decode(fromBase64Url(text)));
+}
+
 export function encodePublicProof(p: PublicProof): string {
-  return toBase64Url(utf8ToBytes(canonicalJson(p)));
+  return encodeLinkPayload(p);
 }
 
 export function decodePublicProof(fragment: string): PublicProof {
-  const p = JSON.parse(new TextDecoder().decode(fromBase64Url(fragment.replace(/^#/, "")))) as PublicProof;
+  const p = decodeLinkPayload(fragment.replace(/^#/, "")) as PublicProof;
   if (!isNetwork(p.network)) throw new Error("BAD_NETWORK");
   return p;
 }

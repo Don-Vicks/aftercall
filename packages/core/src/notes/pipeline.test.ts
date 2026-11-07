@@ -22,6 +22,7 @@ import {
   type WritingProgress,
 } from "./pipeline.ts";
 import { droppedLine, encodePublicProof, noticeLine, proofHash, verifyProof, verifyProofGpu } from "./proof.ts";
+import { checkLineProof, lineTreeOf, proveLine } from "./lines.ts";
 import { NOTES_SYSTEM_PROMPT, OVERALL_SYSTEM_PROMPT } from "./schema.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 import { decryptWith, encryptTo } from "../tee/e2ee.ts";
@@ -593,6 +594,16 @@ test("a logged notice goes into the proof as your statement; without one the key
   assert.equal(proofHash(none.proof), proofHash({ ...none.proof, notice: undefined }));
 });
 
+test("the proof commits to a Merkle root over the transcript's lines; the key behind their salts stays out", async () => {
+  const r = await processRecording((await fakeNearAi({ notes })).transport, input, undefined, noWait);
+  assert.match(r.lineKey, /^[0-9a-f]{64}$/);
+  assert.deepEqual(r.proof.lineTree, lineTreeOf(r.meeting.transcript, r.lineKey));
+  assert.equal(r.proof.lineTree?.lines, r.meeting.transcript.length);
+  assert.ok(!JSON.stringify(r.proof).includes(r.lineKey), "the key is never in the proof or its public link");
+  const p = proveLine(r.meeting.transcript, r.lineKey, r.proof.lineTree!, 1);
+  assert.equal(checkLineProof(r.proof.lineTree, p), null);
+});
+
 // ---------- streaming ----------
 
 test("the notes are streamed: one request, the signature checked over the exact stream received, progress reported", async () => {
@@ -728,6 +739,7 @@ test("a long call is written up in parts at once, then one short overall request
   assert.deepEqual(p.calls.map((c) => [c.role, c.part]), [["section", 1], ["section", 2], ["section", 3], ["section", 4], ["section", 5], ["overall", undefined]]);
   assert.deepEqual(p.calls.map((c) => c.requestHash), ai.seenByGateway.map((b) => sha256Hex(b)));
   assert.ok(!("signature" in p) && !("requestHash" in p));
+  assert.deepEqual(p.lineTree, lineTreeOf(r.meeting.transcript, r.lineKey), "a long call's proof commits to its lines too");
   assert.deepEqual(failed(verifyProof(p, null, r.notes)), ["on-chain", "matches"]);
   assert.equal((await verifyProofGpu(p, JSON.parse(await ai.transport.nvidiaKeys())))?.ok, true);
   assert.equal(r.notes.title, "Long sync", "notesHash covers the merged notes the app shows");

@@ -101,7 +101,22 @@ export function withMoments(text: string, onJump: (at: number) => void): ReactNo
  * The quote under a row: a hidden description for screen readers (point the row's
  * control at `descId` with aria-describedby), and the line that opens on hover or focus.
  */
-export function QuoteReveal({ evidence, open: shown, descId, onJump, className }: { evidence: Evidence; open: boolean; descId: string; onJump: () => void; className?: string }) {
+export function QuoteReveal({
+  evidence,
+  open: shown,
+  descId,
+  onJump,
+  onShare,
+  className,
+}: {
+  evidence: Evidence;
+  open: boolean;
+  descId: string;
+  onJump: () => void;
+  /** Opens "Share this line" for the line the quote is in, when the meeting's lines can be shared. */
+  onShare?: () => void;
+  className?: string;
+}) {
   const still = useReducedMotion();
   return (
     <>
@@ -119,6 +134,15 @@ export function QuoteReveal({ evidence, open: shown, descId, onJump, className }
           >
             <p className="t-quote selectable m-0 pt-1.5 text-[15px] leading-[22px] text-ink-2">
               <span aria-hidden="true">“{evidence.quote}”</span> <TimeChip at={evidence.at} onJump={onJump} />
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className="ml-2 rounded-sm align-[1px] font-sans text-[12.5px] font-semibold text-ink-2 not-italic hover:text-verdigris"
+                >
+                  Share this line
+                </button>
+              )}
             </p>
           </m.div>
         )}

@@ -21,7 +21,7 @@ step() {
 
 step "Install" pnpm install --frozen-lockfile --silent
 step "Typecheck (core, backend, web, desktop, mcp)" pnpm -r typecheck
-step "Unit tests (core, backend, MCP server incl. a stdio tools/list run)" pnpm -r test
+step "Unit tests (core, backend, receipts against its build, MCP server incl. a stdio tools/list run)" pnpm -r test
 step "Web build (Verify, sign, claim and phone pages)" pnpm --filter @aftercall/web build
 step "NEAR signer (crates/near-tx)" cargo test --quiet --manifest-path crates/near-tx/Cargo.toml
 # The desktop build makes the MCP server bundle first; the app ships it as a resource.
