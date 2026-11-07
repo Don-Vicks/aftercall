@@ -22,7 +22,7 @@ step() {
 step "Install" pnpm install --frozen-lockfile --silent
 step "Typecheck (core, backend, web, desktop, mcp)" pnpm -r typecheck
 step "Unit tests (core, backend, MCP server incl. a stdio tools/list run)" pnpm -r test
-step "Web build (Verify, sign, claim pages)" pnpm --filter @aftercall/web build
+step "Web build (Verify, sign, claim and phone pages)" pnpm --filter @aftercall/web build
 step "NEAR signer (crates/near-tx)" cargo test --quiet --manifest-path crates/near-tx/Cargo.toml
 # The desktop build makes the MCP server bundle first; the app ships it as a resource.
 # The Tauri crate links Core Audio and WebKit, so its tests only build on macOS (CI runs them on macos-15).
