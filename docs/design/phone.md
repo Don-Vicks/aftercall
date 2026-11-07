@@ -35,7 +35,7 @@ A phone can't record another app's call: iOS and Android don't allow it. So the 
        Inbox                         A follow-up                    Over a cap
 ```
 
-- **Inbox:** everything waiting for you across meetings, newest first, and what went out today. A push notification when something new lands, or when autopilot starts a countdown you might want to stop.
+- **Inbox:** everything waiting for you across meetings, newest first, and what went out today. A push notification when something new lands, or when autopilot starts a countdown you might want to stop (push isn't built yet).
 - **A follow-up:** the same card as on the Mac: the amount, who, the route, the quote it came from, and "What leaves". Approve or Dismiss.
 - **Over a cap:** the payment waits for your NEAR wallet; the button opens it (Meteor, Intear, or any wallet NEAR Connect supports), as the web `/sign` page already does on a phone today.
 
@@ -50,15 +50,17 @@ Today a meeting never leaves the Mac except to NEAR AI's secure hardware. The ph
 | Payee, amount, route, status | Yes | Already public on NEAR once paid; needed to approve |
 | Who a recap goes to, its subject | Yes | Needed to approve a send |
 | The quote behind a follow-up | Yes, end-to-end encrypted | It's what you're approving |
+| A held payment's wallet links: your NEAR account, the contract, what's left of today's cap | Yes, for a payment held over a cap | The wallet page shows them, as from the Mac |
+| A follow-up a coding agent proposed | No: it waits on the Mac | It has no words from the call behind it |
 | Summary, transcript, your notes | No | Not needed to approve anything |
 
 How it travels: the Mac and phone pair once with a QR code, which exchanges keys. The Mac encrypts each pending item to the phone's key and posts it to the backend as an opaque blob; the backend relays blobs it can't read: it keeps only the latest one, replaced on each post, keeps the phone's taps until the Mac collects them or for a day, and forgets the pairing 30 days after the Mac last called (never readable; [phone-protocol.md](phone-protocol.md), "Keeping"). The phone's tap goes back the same way, and the Mac does the actual sending or paying, with the same limited NEAR key and the same caps. The phone never holds the app's NEAR key.
 
 ## What runs where
 
-- **The Mac** still makes every request to NEAR AI and NEAR. If the Mac is asleep, an approval waits until it wakes; the phone says so ("Your Mac will send this when it's back online").
+- **The Mac** still makes every request to NEAR AI and NEAR. If the Mac is asleep, an approval waits until it wakes; the phone says so ("Sent. Your Mac will act on this when it's back online.").
 - **Held payments** need no Mac at all: the phone opens your wallet, and the contract does the rest.
-- **The backend** gains a small relay: encrypted blobs in, encrypted blobs out, with push notifications that carry no content ("1 item needs you").
+- **The backend** gains a small relay: encrypted blobs in, encrypted blobs out (built, `apps/backend/src/relay/`), later with push notifications that carry no content ("1 item needs you").
 
 ## Version 2: meetings in the room
 
