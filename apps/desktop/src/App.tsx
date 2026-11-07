@@ -24,7 +24,8 @@ import { SearchScreen } from "./SearchScreen";
 import { WalletScreen, type BlockedPayment } from "./WalletScreen";
 import { near } from "./near";
 import { recordingFiles } from "./nearai";
-import { claimedAccounts, confirmClaim, createClaim, draftInMail, pay, payCrossChain, previewCrossChain, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
+import { claimedAccounts, confirmClaim, createClaim, draftInMail, latestPreview, pay, payCrossChain, previewCrossChain, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
+import { usePhoneSync } from "./phoneSync";
 import { dailyCap as sampleDailyCap, paidBySample, payees as samplePayees, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
 import { NewProjectSheet } from "./NewProjectSheet";
@@ -118,6 +119,8 @@ export default function App() {
   /** True once the payee list has been read from the contract, so an empty list means "none", not "not read yet". */
   const [payeesRead, setPayeesRead] = useState(false);
   const [limits, setLimits] = useState<WalletLimits | null>(null);
+  /** Today's cap, for a held payment's wallet page (with `limits.leftToday`). */
+  const [dailyCap, setDailyCap] = useState<bigint | null>(null);
   /** Payees the owner opted in to payment on Solana or Base, by NEAR account. */
   const [destinations, setDestinations] = useState<Record<string, PayeeDestination>>({});
   const [projects, setProjects] = useState<Project[]>([]);
@@ -266,14 +269,17 @@ export default function App() {
         const spent = v.wallet.day === today ? BigInt(v.wallet.spent_today) : 0n;
         const cap = BigInt(v.wallet.daily_cap);
         setLimits({ leftToday: cap > spent ? cap - spent : 0n, perPaymentCap: BigInt(v.wallet.per_payment_cap) });
+        setDailyCap(cap);
       }
     } catch {
       // Offline or not set up: keep what we have.
     }
   }, []);
 
+  /** True once the first wallet read finished (or there's no NEAR account): payees' routes are known. */
+  const [walletChecked, setWalletChecked] = useState(!isDesktop);
   useEffect(() => {
-    refreshWallet();
+    refreshWallet().finally(() => setWalletChecked(true));
   }, [refreshWallet]);
 
   /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
@@ -326,6 +332,9 @@ export default function App() {
     addProcessed([{ id, notes } as SavedRecording]);
   };
 
+  /** True once saved recordings are read from disk; a paired phone's snapshots and taps wait for it. */
+  const [libraryLoaded, setLibraryLoaded] = useState(!isDesktop);
+
   // Saved recordings from earlier sessions.
   useEffect(() => {
     if (!isDesktop) return;
@@ -337,7 +346,8 @@ export default function App() {
         addProcessed(list);
         nameFromCalendar(list);
       })
-      .catch(() => setRecordings([]));
+      .catch(() => setRecordings([]))
+      .finally(() => setLibraryLoaded(true));
   }, []);
 
   // Agents claim and complete action items by writing notes.json; pick that up
@@ -484,8 +494,15 @@ export default function App() {
     const apply = (id: string) => (patch: Patch) => patchFollowUp(meeting.id, id, patch);
     const sample = meeting.id === syncWithAda.id;
     return {
-      onApprove: (id: string) => {
+      /**
+       * Sends or pays it. `via` "phone": you approved it on your paired phone, and the Mac
+       * re-checked it (phoneSync.ts); the same path runs, and once it went out it's
+       * marked as approved there, as autopilot marks its own.
+       */
+      onApprove: (id: string, via?: "phone") => {
         const f = find(id);
+        const apply = (fuId: string) => (patch: Patch) =>
+          patchFollowUp(meeting.id, fuId, via === "phone" && (patch.status === "sent" || patch.status === "paid") ? { ...patch, byPhone: true } : patch);
         if (sample) {
           // The sample meeting only simulates the round trip, under the sample wallet's rules, as
           // the contract would: a payment over the per-payment cap or past today's cap waits for
@@ -669,6 +686,35 @@ export default function App() {
   /** The agent wallet's figure: from NEAR on this Mac; the sample wallet less what the sample paid in the browser preview. */
   const walletBalance = isDesktop ? balance : sampleBalance - paidBySample(meetings[syncWithAda.id]);
 
+  /** A held payment your wallet paid or declined: from the wallet screen, or found on NEAR while a phone is paired. */
+  const resolveHeld = (meetingId: string, fuId: string, status: "paid" | "dismissed") => {
+    patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
+    refreshWallet();
+  };
+
+  // A paired phone sees what waits (the same items the cards show, built with the same
+  // options) and sends back taps, which run through these same handlers once re-checked.
+  usePhoneSync({
+    ready: libraryLoaded && walletChecked,
+    account,
+    meetings: shownMeetings,
+    options: (m, f) => {
+      const route = handlersFor(m).routeFor(f);
+      const quoted = route && f.kind === "payment" ? latestPreview(f, route) : undefined;
+      return { backend: HAS_BACKEND, claimLinks: HAS_BACKEND, route, ...(quoted ? { quoted } : {}), ...(m.id === syncWithAda.id ? { sample: true } : {}) };
+    },
+    wallet: limits && dailyCap !== null ? { leftToday: limits.leftToday, dailyCap } : null,
+    run: (a) => {
+      const m = meetings[a.meetingId];
+      if (!m) return;
+      const h = handlersFor(m);
+      if (a.kind === "approve") h.onApprove(a.followUpId, "phone");
+      else if (a.kind === "dismiss") h.onDismiss(a.followUpId);
+      else h.onUndoAutopilot(a.followUpId);
+    },
+    onHeldResolved: resolveHeld,
+  });
+
   return (
     <MotionProvider>
       <MeProvider me={me}>
@@ -794,10 +840,7 @@ export default function App() {
                 paymentsFrom={shownMeetings.filter((m) => (isDesktop ? saved[m.id] : m.id === syncWithAda.id))}
                 onOpenMeeting={openMeeting}
                 onOpenSettings={() => setView({ name: "settings" })}
-                onResolved={(meetingId, fuId, status) => {
-                  patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
-                  refreshWallet();
-                }}
+                onResolved={resolveHeld}
                 onChanged={refreshWallet}
               />
             )}

@@ -163,7 +163,7 @@ async function macCall<T>(path: string, opts: { method?: string; body?: unknown 
     if (isGone(e)) {
       await forgetHere();
       toast({ text: "Your phone isn't paired any more. Pair it again in Settings.", tone: "caution" });
-    } else if (e instanceof RelayHttpError && e.status === 0) {
+    } else if (e instanceof RelayHttpError && e.status === 0 && status.problem !== e.message) {
       setStatus({ ...status, problem: e.message });
     }
     throw e;
