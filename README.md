@@ -89,7 +89,7 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
-**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall would record meetings in the room and handle approvals; approving a held payment in your NEAR wallet, and a payee's claim link, already work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
+**Platforms:** macOS now (Apple silicon and Intel, macOS 14.2 or later). Windows is next: most of the app already carries over, and recording the call's audio needs WASAPI loopback capture in place of the Mac's Core Audio tap. Phones can't record another app's call (iOS and Android don't allow it), so on a phone Aftercall handles approvals: the `/phone` page, paired with your Mac by a QR code in Settings → Your phone, lists what waits for you and approves or dismisses it, end-to-end encrypted through a relay that can't read it. Recording meetings in the room on a phone is a later version. Approving a held payment in your NEAR wallet, and a payee's claim link, also work on a phone. Anyone can try the interface in a browser at [/demo](https://getaftercall.vercel.app/demo).
 
 
 ## How it works
@@ -147,7 +147,7 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 | [docs/agents-demo.md](docs/agents-demo.md) | Claude Code on Aftercall's MCP server |
 | [docs/near-intents-1click.md](docs/near-intents-1click.md) | Paying a payee on Solana or Base through NEAR Intents 1Click |
 | [docs/staking-for-inference.md](docs/staking-for-inference.md) | Paying for notes by staking NEAR |
-| [docs/design/phone.md](docs/design/phone.md) | Design, not built: Aftercall on a phone for approvals, then in-room meetings |
+| [docs/design/phone.md](docs/design/phone.md) | Aftercall on a phone: approvals (built, no push notifications yet), then in-room meetings (not built) |
 | [docs/design/agents.md](docs/design/agents.md) | Design for coding agents and a meeting's follow-ups: parts 1 to 4 are built, paid work for agents is not |
 
 ## Built with

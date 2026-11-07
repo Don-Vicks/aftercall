@@ -1,6 +1,6 @@
 # Design: Aftercall on a phone
 
-Status: a design, not built. Nothing here is in the app yet. The exact protocol between the Mac, the relay and the phone is [phone-protocol.md](phone-protocol.md); version 1 has no push notifications yet: the phone checks for news while it's open.
+Status: version 1 is built without push notifications (build order steps 1 and 2 below): the relay in the backend, Settings → Your phone on the Mac, and the phone page at `/phone` in the web app. Steps 3 (push notifications) and 4 (version 2, in-room recording) are not; until push lands, the phone checks for news every 10 s while it's open, and its settings are pairing and Unpair. The exact protocol, and what is tested where, is [phone-protocol.md](phone-protocol.md). The Mac app, the deployed relay and a real phone have not yet run it together.
 
 ## The idea
 

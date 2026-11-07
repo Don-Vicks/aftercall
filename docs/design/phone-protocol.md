@@ -1,6 +1,6 @@
 # Design: the phone protocol (version 1)
 
-Status: the protocol for [phone.md](phone.md) version 1. The shared cryptography and message checks are built and tested in `packages/core/src/relay/` (`crypto.ts`, `messages.ts`), and the relay in `apps/backend/src/relay/` (`relay.test.ts`); the Mac side and the phone page follow this document.
+Status: built, as the protocol for [phone.md](phone.md) version 1. The shared cryptography and message checks are in `packages/core/src/relay/` (`crypto.ts`, `messages.ts`), the Mac's snapshots and action loop in `mac.ts` and the phone's side in `phone.ts`, each tested next to it; the relay is in `apps/backend/src/relay/` (`relay.test.ts`), the Mac's pairing sheet in `apps/desktop/src/PhoneSettings.tsx` with its Keychain item in `src-tauri/src/phone.rs`, and the phone page in `apps/web/app/phone/`. The parts have run together only in tests and against `pnpm dev:phone`'s in-memory relay and made-up Mac, not yet the Mac app, the deployed relay and a real phone at once.
 
 Three parties:
 
@@ -273,7 +273,7 @@ Push notifications; more than one phone per Mac; changing an amount, address or 
 
 | Part | Where | Tests |
 | --- | --- | --- |
-| Crypto and messages (done) | `packages/core/src/relay/crypto.ts`, `messages.ts` | `crypto.test.ts`, `messages.test.ts` |
-| Relay | `apps/backend/src/relay/` (controller, service, memory and Postgres stores), `app.module.ts` | `relay.test.ts`: routes, tokens, limits, TTLs, replace-on-post, ack, cascade on unpair, the stored columns |
-| Mac | pairing sheet and Settings section, snapshot builder, action loop (`apps/desktop/src/`), Keychain items (`src-tauri`) | logic in `packages/core`; Rust tests for Keychain commands |
-| Phone page | `apps/web/app/phone/` | logic in `packages/core` |
+| Crypto and messages (built) | `packages/core/src/relay/crypto.ts`, `messages.ts` | `crypto.test.ts`, `messages.test.ts` |
+| Relay (built) | `apps/backend/src/relay/` (controller, service, memory and Postgres stores), `app.module.ts` | `relay.test.ts`: routes, tokens, limits, TTLs, replace-on-post, ack, cascade on unpair, the stored columns |
+| Mac (built) | pairing sheet and Settings → Your phone (`PhoneSettings.tsx`), relay client and sync (`phone.ts`, `phoneSync.ts`), snapshot builder and action loop (`packages/core/src/relay/mac.ts`), the `phone-relay` Keychain item and `phone.json` (`src-tauri/src/phone.rs`) | `mac.test.ts`; `phone.rs` tests for the Keychain item, `phone.json` and counters |
+| Phone page (built) | `apps/web/app/phone/`, its logic in `packages/core/src/relay/phone.ts` | `phone.test.ts`, against the in-memory relay and made-up Mac in `testkit.ts` |
