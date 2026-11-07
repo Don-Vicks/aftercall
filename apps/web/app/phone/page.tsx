@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   // Scoped to /phone, so adding the landing page to a home screen doesn't install this.
   manifest: "/phone/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Aftercall", statusBarStyle: "default" },
-  icons: { apple: "/landing/app-icon.png" },
+  // iOS's Add to Home Screen: the icon edge to edge on its dark ground (scripts/phone-icons.sh).
+  icons: { apple: { url: "/phone-icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" } },
   // Nothing on this page is for search engines.
   robots: { index: false, follow: false },
 };
