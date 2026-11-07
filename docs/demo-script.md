@@ -4,6 +4,15 @@ The hackathon demo for NEAR HACKATHON. It goes on the submission, on the public 
 
 Status (7 Nov 2026): a draft. Nothing is recorded or posted yet. The X post at the end is a DRAFT for Victor to approve before anything goes out.
 
+## What it has to sell
+
+- **Who it's for:** founders and freelancers who agree work and payments on calls (the landing page's own line, `apps/web/app/landing/Hero.tsx`).
+- **The one thing to remember:** you hang up, and the follow-ups are done: the recap sent, the agreed payment made within your caps, anything bigger waiting for you. Privately, with a proof anyone can check.
+- **Why believe it, shown not told:** the secure hardware is checked before anything is sent (beat 4); every item quotes the call (beat 4); money moves only within caps a NEAR contract enforces (beat 6).
+- **What to do next:** try it in the browser at getaftercall.vercel.app/demo, on screen at the close (beat 10).
+
+Every beat serves one of these. The order is the viewer's day: the problem, the call, the notes, the follow-ups, the payoff.
+
 ## Rules for this video
 
 - **Every spoken line is true today.** Each one has a footnote pointing to the doc that says it ([Sources](#sources)).
@@ -15,7 +24,7 @@ Status (7 Nov 2026): a draft. Nothing is recorded or posted yet. The X post at t
 
 ## At a glance
 
-Voice-over: 196 words in 90 seconds, about 2.2 words a second (budget 2.3).
+Voice-over: 193 words in 90 seconds, about 2.1 words a second (budget 2.3).
 
 | # | Time | Beat | Words | Capture |
 | --- | --- | --- | --- | --- |
@@ -27,7 +36,7 @@ Voice-over: 196 words in 90 seconds, about 2.2 words a second (budget 2.3).
 | 6 | 0:43–0:59 | The follow-ups: recap, payment, hold | 36 | **Live session** |
 | 7 | 0:59–1:07 | Approve from your phone | 18 | **Live session** |
 | 8 | 1:07–1:15 | Hand an action item to Claude Code | 15 | **Live session** |
-| 9 | 1:15–1:24 | Why it's trustworthy | 21 | Today |
+| 9 | 1:15–1:24 | The payoff: hang up, it's done | 18 | Today, or from the live session |
 | 10 | 1:24–1:30 | Close | 12 | Today |
 
 ## The script
@@ -93,17 +102,17 @@ Voice-over: 196 words in 90 seconds, about 2.2 words a second (budget 2.3).
 - **Capture:** **Live session.** Hand to an agent and Open in Claude Code haven't run with the Mac app and a real Claude Code session[^agentslive].
 - **Fallback:** a real Claude Code session against Aftercall's MCP server and its stand-in for the app, as recorded on 1 Nov[^agentsrun]: `node apps/mcp/scripts/demo.ts`, press Enter to allow claims, then `claude -p "List my Aftercall meetings, then claim the open action item about the API fix as Claude Code." --mcp-config <the config it prints> --strict-mcp-config --allowedTools "mcp__aftercall__*"`. Label: "Claude Code on Aftercall's MCP server · stand-in app · sample meetings". Voice-over unchanged.
 
-### 9. Why it's trustworthy · 1:15–1:24 (9 s)
+### 9. The payoff: hang up, it's done · 1:15–1:24 (9 s)
 
-- **On screen:** three quick holds. The Verify sheet's list of checks. Privacy and your data, showing what stays on the Mac and where data goes. The Wallet's limits (daily and per-payment cap).
-- **On-screen text:** "Attested every run." · "Audio and text go only to the TEE." · "The app's key can't change your caps."
-- **Voice-over (21 words):** "The hardware is attested every run.[^attest] Audio and text go only to it.[^onlytee] And the app's key can't change your caps."[^yocto]
-- **Capture:** today. Use this session's meeting for the Verify sheet if it was captured, otherwise the `/demo` Verify sheet labelled "Browser demo · test proof". Privacy and Wallet from the Mac app on the testnet wallet set up on 3 Nov.
+- **On screen:** the meeting's follow-ups at rest: the recap Sent, the deposit Paid, the 5,000 Held for your wallet. Then two quick holds that say why to trust it: the Verify sheet's list of checks, and the Wallet's limits (daily and per-payment cap).
+- **On-screen text:** "Recap sent · deposit paid · 5,000 waits for you." then "Attested every run.[^attest] Audio and text go only to the TEE.[^onlytee] The app's key can't change your caps."[^yocto]
+- **Voice-over (18 words):** "Hang up, and it's done: recap sent, deposit paid, the big one waiting for you.[^payoff] Private, and provable."[^verify]
+- **Capture:** the follow-ups from L6 if the live session got them, otherwise F3 with its label. The Verify sheet from this session's meeting if it was captured, otherwise the `/demo` Verify sheet labelled "Browser demo · test proof". Wallet from the Mac app on the testnet wallet set up on 3 Nov.
 
 ### 10. Close · 1:24–1:30 (6 s)
 
 - **On screen:** the icon and "Aftercall"; under it the tagline, the link, and the credit line.
-- **On-screen text:** "Aftercall" · "Private meeting notes that do the follow-ups." · "getaftercall.vercel.app" · "Built at NEAR HACKATHON · @NEARProtocol" · small: "Mac test build · NEAR testnet"
+- **On-screen text:** "Aftercall" · "Private meeting notes that do the follow-ups." · "Try it in your browser: getaftercall.vercel.app/demo" · "Built at NEAR HACKATHON · @NEARProtocol" · small: "Mac test build · NEAR testnet"
 - **Voice-over (12 words):** "Aftercall. Private meeting notes that do the follow-ups.[^tagline] Built at NEAR HACKATHON."[^built]
 - **Capture:** today (the Remotion `Mark` scene with this copy; it currently reads "Built on NEAR AI · runs on NEAR testnet").
 
@@ -138,7 +147,7 @@ Expect from the notes: an action item "Ship the API fix", a recap to [Name], a 5
 
 | Shot | Beat | What to capture | App state needed | Live? |
 | --- | --- | --- | --- | --- |
-| L1 | 9 | Privacy and your data; Wallet → limits showing 10 / 20 USDC | Payments set up (step 3) | Today |
+| L1 | 9 | Wallet → limits showing 10 / 20 USDC | Payments set up (step 3) | Today |
 | L2 | 5 | nearblocks: the 3 Nov `record_proof` transaction | None | Today |
 | L3 | 3 | Home → Record → record sheet with the tick → recording screen beside the call; stop when the call ends | Call app open with [Name] | Today, in session |
 | L4 | 4 | Make notes → processing checks → Verified → meeting page; hover a quote | L3's recording; NEAR AI key | **Live** |
@@ -211,6 +220,7 @@ Every spoken claim, and where the repo says it.
 [^agentslive]: README.md, "Live today", the coding agents row; docs/judging.md, "Known limits"; docs/proven.md, "Built since, not yet run live (7 Nov)".
 [^agentsrun]: docs/agents-demo.md: Claude Code 2.1.314 against the MCP server and its stand-in for the app, 1 Nov 2026.
 [^onlytee]: docs/how-it-works.md, "Privacy in detail": "Meeting audio and text go only to NEAR AI Cloud's Confidential TEE models, and only after their attestation passes." What you choose to send yourself (a recap, a payment, an export, what connected coding agents read) is listed in README.md, "Follow-ups: what leaves…", and docs/privacy.md.
+[^payoff]: The outcomes of beat 6, with the same sources: the recap, the deposit paid within the caps, and the over-cap hold. If beat 6 used the fallback, so does this shot, with its label.
 [^yocto]: docs/judging.md, row "The app's NEAR key can only call `pay` and `record_proof`; rule changes need 1 yoctoNEAR, which that key can't attach". Sandbox tests `limited_key_cannot_change_rules`, `one_yocto_rule_holds_even_if_key_lists_owner_methods`.
 [^tagline]: README.md, the bold line under the title.
 [^built]: README.md says "Built for NEAR HACKATHON (1–14 Nov 2026)". Planning docs start on 24 Oct and code on 26 Oct, after the 19 Oct announcement; the FAQ counts code from then (Q-001; README.md, "Built with"). Victor to confirm "Built at" before recording.
