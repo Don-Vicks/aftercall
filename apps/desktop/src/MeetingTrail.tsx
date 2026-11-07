@@ -92,6 +92,19 @@ function Row({ entry: e }: { entry: TrailEntry }) {
         <span className="text-[12px] leading-4 text-muted">
           {e.who && <>Approved by: {e.who} · </>}
           Kept: {e.kept}
+          {e.link && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                onClick={() => (isDesktop ? openUrl(e.link!.url) : window.open(e.link!.url, "_blank", "noopener,noreferrer"))}
+                aria-label={`Open ${e.link.label}, the link the agent gave`}
+                className="font-mono text-verdigris hover:text-verdigris-hover"
+              >
+                {e.link.label}
+              </button>
+            </>
+          )}
           {e.tx && (
             <>
               {" · "}

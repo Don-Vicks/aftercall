@@ -34,6 +34,7 @@ import { parseUsdcInput } from "./WalletScreen";
 import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
 import { HAS_BACKEND } from "./backend";
+import { recapAgentWork } from "./RecapSettings";
 import { TimeChip } from "./Quote";
 
 /** Everything a follow-up row can ask the app to do. */
@@ -485,7 +486,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             )}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND })} />
+              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND, agentWork: recapAgentWork() })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
                 <Button variant="quiet" onClick={() => c.dismiss(f)}>
                   Dismiss

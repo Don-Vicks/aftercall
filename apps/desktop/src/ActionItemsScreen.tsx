@@ -24,6 +24,7 @@ import { AllDone, QuoteReveal, useAllDone, useQuoteReveal } from "./Quote";
 import { EditItemButton, EditedMark, ItemEditor, editButtonId, focusEditButton, type EditItem, type OriginalOf } from "./ActionItemEditor";
 import { Empty, Footnote, Page, PageHeader, rise } from "./PagePieces";
 import { HandToAgent } from "./HandToAgent";
+import { WorkLink } from "./WorkLink";
 import { ShortcutsHint, rovingRowClass, useRovingList } from "./primitives/useRovingList";
 import { plural } from "./library";
 
@@ -521,6 +522,12 @@ function ItemRow({
             {line && (tab === "agents" || tab === "mine") && (
               <>
                 <span className="font-medium text-verdigris">{line.lead}</span>
+                {a.done && a.completed?.link && (
+                  <>
+                    <span className="text-muted"> · </span>
+                    <WorkLink completion={a.completed} />
+                  </>
+                )}
                 <span className="text-muted">{line.rest}</span>
               </>
             )}

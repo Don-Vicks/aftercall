@@ -22,7 +22,7 @@ import {
 import { HAS_BACKEND, backend } from "./backend";
 import { contractFollowupId, near, oneClick, signInWallet, waitFor, VERIFY_URL, WEB_URL } from "./near";
 import type { SavedNotes } from "./nearai";
-import { senderName } from "./RecapSettings";
+import { recapAgentWork, senderName } from "./RecapSettings";
 
 /** A change to one follow-up; the app applies it and saves the meeting. */
 export type Patch = Partial<EmailFollowUp> | Partial<PaymentFollowUp>;
@@ -48,7 +48,7 @@ export function recapFacts(meeting: Meeting, saved?: SavedNotes) {
 
 /** Opens the recap as a draft in the person's own mail app. Nothing leaves the Mac. */
 export async function draftInMail(meeting: Meeting, f: EmailFollowUp, saved?: SavedNotes): Promise<void> {
-  await openUrl(mailtoLink(buildRecap(meeting, f, { sender: senderName() || undefined, facts: recapFacts(meeting, saved) })));
+  await openUrl(mailtoLink(buildRecap(meeting, f, { sender: senderName() || undefined, facts: recapFacts(meeting, saved), agentWork: recapAgentWork() })));
 }
 
 /**
@@ -63,7 +63,7 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
   try {
     const config = await near.getConfig();
     const name = senderName();
-    const recap = buildRecap(meeting, f, { sender: name || undefined, facts: recapFacts(meeting, saved) });
+    const recap = buildRecap(meeting, f, { sender: name || undefined, facts: recapFacts(meeting, saved), agentWork: recapAgentWork() });
     const { id } = await backend.sendRecap({ ...recap, senderName: name || config?.account });
     apply({ status: "sent", doneAt: hhmm(), ref: id });
   } catch (e) {

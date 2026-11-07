@@ -13,6 +13,7 @@ import { grow } from "./SettingsParts";
 import { freshKey, useFresh } from "./freshItems";
 import { MeetingTrail } from "./MeetingTrail";
 import { HandToAgent } from "./HandToAgent";
+import { WorkLink } from "./WorkLink";
 import type { SavedNotes } from "./nearai";
 // For the transcript's model-inferred speaker names.
 import { likelySpeakerAt } from "@aftercall/core";
@@ -531,6 +532,12 @@ function ActionRow({
     sub = (
       <>
         <span className="font-medium text-verdigris">Done by {item.completed.agent}</span>
+        {item.completed.link && (
+          <>
+            <span className="text-muted"> · </span>
+            <WorkLink completion={item.completed} />
+          </>
+        )}
         {item.completed.note && <span className="text-ink-2"> · “{item.completed.note}”</span>}
       </>
     );
