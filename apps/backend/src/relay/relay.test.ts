@@ -272,6 +272,29 @@ for (const [name, make] of stores) {
     }
   });
 
+  test(`[${name}] taps posted at the same moment never go over 50 waiting`, async () => {
+    const { store, done } = await make();
+    const { http, close } = await relayApp(store);
+    try {
+      const p = await pairThrough(http);
+      const idHash = relayHash(p.id);
+      // Straight to the store, so the taps really arrive together; again once its connections are open.
+      const add = () => store.addAction(idHash, "AAAA", T0, T0 - ACTION_TTL_MS, MAX_WAITING_ACTIONS);
+      for (let round = 0; round < 3; round++) {
+        await store.ack(idHash, Number.MAX_SAFE_INTEGER);
+        for (let i = 0; i < MAX_WAITING_ACTIONS - 5; i++) await add();
+        const seqs = await Promise.all(Array.from({ length: 20 }, add));
+        assert.deepEqual([seqs.filter((s) => typeof s === "number").length, seqs.filter((s) => s === "full").length], [5, 15]);
+        assert.equal((await store.actions(idHash, 0, 100)).length, MAX_WAITING_ACTIONS);
+      }
+      const full = await http().post(`/relay/pairings/${p.id}/actions`).set(bearer(p.phoneToken)).send({ box: "AAAA" });
+      assert.deepEqual([full.status, full.body.message], [429, "TOO_MANY_ACTIONS"]);
+    } finally {
+      await close();
+      await done();
+    }
+  });
+
   test(`[${name}] a tap posted as the pairing is deleted is NO_PAIRING, not a server error`, async () => {
     const { store, done } = await make();
     // Unpairing lands between the phone's token check and the insert.

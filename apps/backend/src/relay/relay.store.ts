@@ -192,9 +192,6 @@ const toPairing = (r: Row): RelayPairing => ({
   snapshotAt: r.snapshot_at === null ? null : Number(r.snapshot_at),
 });
 
-/** Postgres's error code for a row whose foreign key points nowhere. */
-const FOREIGN_KEY_VIOLATION = "23503";
-
 export class PgRelayStore implements RelayStore {
   constructor(private readonly pool: Pool) {}
 
@@ -244,18 +241,29 @@ export class PgRelayStore implements RelayStore {
     return r.rows[0] ? Number(r.rows[0].snapshot_version) : null;
   }
   async addAction(idHash: string, box: string, now: number, since: number, max: number) {
+    // Counted and inserted while holding the pairing's row: two taps at once can't both take
+    // the last place, and an unpair waits for the insert (or comes first, and the tap finds no
+    // pairing) instead of breaking the foreign key.
+    const client = await this.pool.connect();
     try {
-      const r = await this.pool.query<{ seq: string }>(
-        `INSERT INTO relay_actions (id_hash, box, posted_at)
-         SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
-         RETURNING seq`,
-        [idHash, box, now, since, max],
-      );
+      await client.query("BEGIN");
+      const pairing = await client.query("SELECT 1 FROM relay_pairings WHERE id_hash = $1 FOR UPDATE", [idHash]);
+      const r = pairing.rowCount
+        ? await client.query<{ seq: string }>(
+            `INSERT INTO relay_actions (id_hash, box, posted_at)
+             SELECT $1, $2, $3 WHERE (SELECT count(*) FROM relay_actions WHERE id_hash = $1 AND posted_at > $4) < $5
+             RETURNING seq`,
+            [idHash, box, now, since, max],
+          )
+        : null;
+      await client.query("COMMIT");
+      if (!r) return null;
       return r.rows[0] ? Number(r.rows[0].seq) : ("full" as const);
     } catch (e) {
-      // The pairing was deleted after the token check: as if it had never been there.
-      if ((e as { code?: string }).code === FOREIGN_KEY_VIOLATION) return null;
+      await client.query("ROLLBACK").catch(() => {});
       throw e;
+    } finally {
+      client.release();
     }
   }
   async actions(idHash: string, since: number, limit: number) {
