@@ -21,7 +21,7 @@ How to run every part of Aftercall locally, and what each check shows.
 ## Run it
 
 
-Needs Node 24, pnpm 10, Rust stable. Postgres for claim links (`DATABASE_URL`; kept in memory otherwise).
+Needs Node 24, pnpm 10, Rust stable. Postgres for claim links and the phone relay (`DATABASE_URL`; kept in memory otherwise).
 
 ```bash
 pnpm install
@@ -36,7 +36,7 @@ macOS grants system-audio capture only to a bundled app, so to record, build it 
 | --- | --- |
 | Desktop | Tauri v2, React, TypeScript, Tailwind; Rust Core Audio process tap (`cidre`), `cpal` microphone |
 | Shared core | TypeScript: notes pipeline, schema (zod), verification, owner actions, recap, autopilot, search |
-| Backend | NestJS + Postgres: NEP-413 sign-in, Resend email, claim links |
+| Backend | NestJS + Postgres: NEP-413 sign-in, Resend email, claim links, the phone relay (sealed boxes only) |
 | Web | Next.js: Verify, How a call is handled, sign and claim pages |
 | Contract | Rust, near-sdk 5.29, cargo-near, near-workspaces sandbox tests; Circle USDC |
 

@@ -52,7 +52,7 @@ Today a meeting never leaves the Mac except to NEAR AI's secure hardware. The ph
 | The quote behind a follow-up | Yes, end-to-end encrypted | It's what you're approving |
 | Summary, transcript, your notes | No | Not needed to approve anything |
 
-How it travels: the Mac and phone pair once with a QR code, which exchanges keys. The Mac encrypts each pending item to the phone's key and posts it to the backend as an opaque blob; the backend relays blobs it can't read and keeps them only until the phone collects them (the same rule as recaps: in memory or briefly, never readable). The phone's tap goes back the same way, and the Mac does the actual sending or paying, with the same limited NEAR key and the same caps. The phone never holds the app's NEAR key.
+How it travels: the Mac and phone pair once with a QR code, which exchanges keys. The Mac encrypts each pending item to the phone's key and posts it to the backend as an opaque blob; the backend relays blobs it can't read: it keeps only the latest one, replaced on each post, keeps the phone's taps until the Mac collects them or for a day, and forgets the pairing 30 days after the Mac last called (never readable; [phone-protocol.md](phone-protocol.md), "Keeping"). The phone's tap goes back the same way, and the Mac does the actual sending or paying, with the same limited NEAR key and the same caps. The phone never holds the app's NEAR key.
 
 ## What runs where
 
