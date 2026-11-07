@@ -782,7 +782,7 @@ function RecentPayments({
                   <span>
                     Paid{f.doneAt ? ` ${f.doneAt}` : ""}
                     {f.crossChain ? ` on ${CHAIN_NAME[f.crossChain.chain]}` : ""}
-                    {f.byAutopilot ? " by autopilot" : ""}
+                    {f.byAutopilot ? " by autopilot" : f.byPhone ? ", approved on your phone" : ""}
                   </span>
                   <span aria-hidden="true">·</span>
                   <button
