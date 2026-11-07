@@ -43,3 +43,5 @@ macOS grants system-audio capture only to a bundled app, so to record, build it 
 Repo layout: `apps/desktop`, `apps/backend`, `apps/web`, `apps/mcp`, `packages/core`, `packages/tokens` (design tokens as CSS for the web), `contracts/agent-wallet`, `crates/near-tx`, `scripts/`, `docs/` (rules, design source).
 
 Design: [Aftercall Screens](https://claude.ai/artifact/RXNzkVE5TXbVu2ynPKRScW) · [Design system](https://claude.ai/artifact/96RdBedZXsLxdXixzAdk6x) (private links for the team).
+
+To see a claim link from the payee's side without a NEAR sign-in, run `pnpm --filter @aftercall/backend claim:preview` (the real claims routes, an in-memory store, one link for a made-up owner; it prints the link) and the web app with `NEXT_PUBLIC_BACKEND_URL=http://localhost:3101 pnpm --filter @aftercall/web dev`. Set `WEB_URL` for the preview if the web app isn't on port 3000.
