@@ -21,6 +21,7 @@ import {
   routeText,
   startPhonePairing,
   takeSnapshot,
+  tapHolds,
   tapState,
   tapText,
   type PhonePairing,
@@ -192,6 +193,13 @@ test("a tap goes to the Mac sealed, with the next counter and the item's digest,
   assert.equal(tapText(tapState(phone, pay)!, false), "Your Mac is doing it now.");
   assert.equal(tapText(tapState(phone, item(email))!, false), "Your Mac didn't do it: It changed on your Mac since your phone showed it. Look again.");
   assert.equal(tapState(phone, { meetingId: "x", followUpId: "y" }), null);
+
+  assert.equal(tapHolds(tapState(phone, pay)), true, "approved on the Mac: nothing more to tap");
+  assert.equal(tapHolds(tapState(phone, item(email))), false, "refused: the card offers its buttons again");
+  assert.equal(tapHolds(null), false);
+  const undo = { sent: { n: 9, kind: "undo-autopilot" as const, meetingId: "m", followUpId: "f", at: NOW }, result: null };
+  assert.equal(tapHolds(undo), true, "an Undo on its way");
+  assert.equal(tapHolds({ ...undo, result: { n: 9, outcome: "accepted" as const } }), false, "a stopped countdown leaves the item to approve or dismiss");
 
   const lost = phoneAction(phone, "approve", pay, NOW);
   const forgotten = forgetTap(lost.pairing, lost.n);
