@@ -45,7 +45,7 @@ Planned, not built: paying for Aftercall's own inference with **Staking for NEAR
 
 1. **Records the call on your Mac,** from any app. No bot joins.
 2. **Makes the notes inside secure hardware:** NEAR AI Cloud's TEEs, checked every run, with the transcript encrypted to the attested model. Items without an exact quote from the call are dropped.
-3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. No public proof link yet ([Live today](#live-today)).
+3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. No public proof link yet ([Live today](#live-today)). **Share this line** sends one line of a meeting with a Merkle proof that it's in the transcript the proof commits to, and nothing else of the meeting (built and tested, not yet run live).
 4. **Does what the meeting decided.** Sends the recap, with a footer saying what was checked, and pays agreed USDC after one tap, or by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; over a cap waits for your wallet.
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting over Aftercall's local MCP server, claims an item, marks it done with a link, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
@@ -71,6 +71,7 @@ Guide for people and coding agents: [docs/judging.md](docs/judging.md). The 90-s
 | The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote | `packages/core/src/notes/build.ts`, `transcript.ts` | `build.test.ts`, `transcript.test.ts` |
 | The app's key can only `pay` and `record_proof`, within the caps; over a cap waits for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
 | Anyone can re-run a proof's checks in a browser | `apps/web/app/verify/` | `verify.test.ts`, `proof.test.ts` |
+| A shared line is checked against the transcript the proof on NEAR commits to; the link reveals no other line (not yet run live) | `packages/core/src/notes/lines.ts`, `disclosure.ts` | `lines.test.ts`, `disclosure.test.ts`, `packages/receipts` tests |
 | The backend keeps nothing about a recap; claim links keep only a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts`, `claims.test.ts` |
 | An agent's follow-up waits for your tap: never autopilot, never the phone, payments only to listed payees within your caps | `apps/desktop/src-tauri/src/agents.rs`, `autopilot.ts` | `agents.rs` tests, `autopilot.test.ts`, `apps/mcp/src/tools.test.ts` |
 | The phone sees only what approving needs, sealed so the relay can't read it; the Mac re-checks every tap | `packages/core/src/relay/`, `apps/backend/src/relay/` | `messages.test.ts`, `mac.test.ts`, `relay.test.ts` |
@@ -120,7 +121,7 @@ Besides [the newest](#built-on-nears-newest):
 
 ## More
 
-[judging.md](docs/judging.md) · [proven.md](docs/proven.md) · [how-it-works.md](docs/how-it-works.md) · [privacy.md](docs/privacy.md) · [development.md](docs/development.md) (run every part locally) · [demo-script.md](docs/demo-script.md) · [plan.md](docs/plan.md) · [agents-demo.md](docs/agents-demo.md) · [near-intents-1click.md](docs/near-intents-1click.md) · [staking-for-inference.md](docs/staking-for-inference.md) · designs for the [phone](docs/design/phone.md), its [protocol](docs/design/phone-protocol.md) and [agents](docs/design/agents.md)
+[judging.md](docs/judging.md) · [proven.md](docs/proven.md) · [how-it-works.md](docs/how-it-works.md) · [privacy.md](docs/privacy.md) · [development.md](docs/development.md) (run every part locally) · [demo-script.md](docs/demo-script.md) · [plan.md](docs/plan.md) · [agents-demo.md](docs/agents-demo.md) · [near-intents-1click.md](docs/near-intents-1click.md) · [staking-for-inference.md](docs/staking-for-inference.md) · [@aftercall/receipts](packages/receipts/README.md) (check proofs and shared lines from code) · designs for the [phone](docs/design/phone.md), its [protocol](docs/design/phone-protocol.md) and [agents](docs/design/agents.md)
 
 ## Built with
 
