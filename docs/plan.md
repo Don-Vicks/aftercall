@@ -21,7 +21,7 @@ A ticked box means built, with its tests in `pnpm verify`. What has also run liv
 - [x] Scaffold the pnpm monorepo (apps/desktop, apps/backend, apps/web, packages/core, contracts/agent-wallet) with a hello-world in each
 - [x] Desktop interface from the design on sample data: meeting page, follow-ups with "check before you approve", transcript with evidence links, recording panel with the consent tick, processing stages, light and dark
 - [x] Tauri app with menu bar item, consent tick and the Core Audio + mic recorder writing 5-minute 16 kHz WAV chunks (about 9.6 MB each, under NEAR AI's 25 MB limit). Checked on a real call: both stems carry sound, saved recordings reload after a restart
-- [x] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI (51 tests: 31 unit, 20 on a local NEAR node)
+- [x] Agent-wallet contract with daily cap, per-payment cap, payee list, pending approvals and proof registry; sandbox tests in CI (69 tests: 43 unit, 26 on a local NEAR node)
 - [x] NestJS backend with NEP-413 NEAR login and a JWT session
 - [ ] Silence watchdog: warn when system audio or the mic is exact zeros for 30 s, or the mic sends nothing for 10 s; the pill, the live page and a notification say which side. Built and unit-tested; still to see it fire live (record with System Audio Recording turned off, or switch AirPods mid-call)
 
