@@ -935,11 +935,12 @@ pub fn remember_claude(data_dir: &Path, outcome: &ClaudeOutcome) -> Result<(), S
 // isn't connected with the current token, the script also passes `--mcp-config` with the
 // same server "Connect Claude Code" adds, under its own name (`TASK_SERVER`); that file holds
 // the token, so it sits in the same private folder, which the script deletes when claude
-// exits (or the next Open does).
+// exits. If Terminal is closed first, the next Open deletes it, once the script has stopped:
+// while claude runs it may read the file again to reconnect to the server.
 
 /// The longest prompt passed to Claude Code, in bytes.
 const PROMPT_MAX: usize = 8 * 1024;
-/// A private folder older than this is left from an earlier Open whose claude has long read its files.
+/// A private folder older than this, whose script has stopped, is left from an earlier Open.
 const HANDOFF_STALE: Duration = Duration::from_secs(120);
 
 /// Where the private folders for Open in Claude Code go.
@@ -1006,6 +1007,8 @@ pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt
         lines.push(format!("PATH={}:\"$PATH\"; export PATH", path_dirs.iter().map(|d| q(d)).collect::<Vec<_>>().join(":")));
     }
     lines.push(format!("cd {} || exit 1", q(folder)));
+    // So the next Open leaves this folder, and the config in it, while this script runs.
+    lines.push(format!("echo $$ > {}", q(&private_dir.join("pid"))));
     lines.push(format!("prompt=$(cat {}) || exit 1", q(prompt_file)));
     lines.push(format!("rm -f {}", q(prompt_file)));
     // `--mcp-config` takes several files and would read the prompt as one more; after `--`
@@ -1034,6 +1037,24 @@ fn write_private(path: &Path, text: &str, exec: bool) -> Result<(), String> {
     f.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
+/// Whether a process with this id is running, through `kill -0`, which sends it nothing.
+fn running(pid: u32) -> bool {
+    Command::new("/bin/kill").args(["-0", &pid.to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|s| s.success())
+}
+
+/// Deletes the folders earlier Opens left: older than `stale`, and not one whose script is
+/// still running, by the process id it wrote there (Terminal closed, its claude gone).
+fn clear_handoffs(root: &Path, stale: Duration, running: &dyn Fn(u32) -> bool) -> Result<(), String> {
+    for e in std::fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > stale);
+        let pid = std::fs::read_to_string(e.path().join("pid")).ok().and_then(|s| s.trim().parse::<u32>().ok()).filter(|&p| p > 1);
+        if old && !pid.is_some_and(running) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    Ok(())
+}
+
 /// The private folder for one Open: the prompt, the MCP config when one is needed, and the script.
 pub struct Prepared {
     pub dir: PathBuf,
@@ -1049,12 +1070,7 @@ pub fn prepare_launch(data_dir: &Path, folder: &Path, prompt: &str, claude: &Pat
     for dir in [socket_dir(data_dir), root.clone()] {
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| e.to_string())?;
     }
-    for e in std::fs::read_dir(&root).map_err(|e| e.to_string())?.flatten() {
-        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > HANDOFF_STALE);
-        if old {
-            let _ = std::fs::remove_dir_all(e.path());
-        }
-    }
+    clear_handoffs(&root, HANDOFF_STALE, &running)?;
     let dir = root.join(&new_token()?[..16]);
     std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(|e| e.to_string())?;
     let prompt_file = dir.join("prompt.txt");
@@ -1946,6 +1962,51 @@ pwd >> {out}"#
         let connected = PathBuf::from(&opened.borrow()[0][2]);
         assert_eq!(run_script(&connected), ["--", prompt.trim_end_matches('\n')], "Connect's \"aftercall\", as the prompt says");
         assert_eq!(for_task_server("Claim a1"), "Claim a1", "another prompt is left as it is");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_later_open_keeps_the_folder_of_a_claude_still_running_and_clears_it_once_stopped() {
+        let dir = data_dir("launch-keep");
+        let folder = dir.join("code");
+        std::fs::create_dir_all(&folder).unwrap();
+        // A stand-in claude that runs until it is told to stop.
+        let go = dir.join("go");
+        let claude = dir.join("bin/claude");
+        script(&claude, &format!("while [ ! -f {} ]; do sleep 0.05; done", sh_quote(&go.display().to_string())));
+        let config = json!({ "mcpServers": {} });
+        let prepared = prepare_launch(&dir, &folder, "Claim a1", &claude, None, Some(&config)).unwrap();
+        let mut sh = Command::new("/bin/sh").arg(&prepared.script).spawn().unwrap();
+        let pid = prepared.dir.join("pid");
+        let until = Instant::now() + Duration::from_secs(10);
+        while !pid.exists() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(std::fs::read_to_string(&pid).unwrap().trim(), sh.id().to_string());
+
+        // However old it is, the running session's folder and its config stay.
+        let root = handoff_root(&dir);
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(prepared.dir.join("mcp.json").exists(), "claude may read it again to reconnect");
+        // A folder with no script running, or none ever started: cleared once old, not before.
+        let left = root.join("left");
+        std::fs::create_dir_all(&left).unwrap();
+        // Above the highest process id macOS gives.
+        std::fs::write(left.join("pid"), "999999").unwrap();
+        let unstarted = root.join("unstarted");
+        std::fs::create_dir_all(&unstarted).unwrap();
+        clear_handoffs(&root, Duration::from_secs(3600), &running).unwrap();
+        assert!(left.exists() && unstarted.exists());
+        std::thread::sleep(Duration::from_millis(20));
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(!left.exists() && !unstarted.exists() && prepared.dir.exists());
+
+        // Terminal closed: the script is gone without deleting its folder, so the next Open does.
+        sh.kill().unwrap();
+        sh.wait().unwrap();
+        clear_handoffs(&root, Duration::ZERO, &running).unwrap();
+        assert!(!prepared.dir.exists());
+        std::fs::write(&go, "").unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 
