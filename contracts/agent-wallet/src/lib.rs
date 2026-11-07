@@ -658,7 +658,7 @@ impl AgentWallet {
     /// from their own NEAR account before it is released. Same checks and caps as `pay`, and
     /// counted once, here: within the caps the money is set aside from the balance now; over
     /// a cap the escrow is parked for the owner's wallet (`approve_escrow`), like a payment.
-    /// `escrow_id` shares the follow-up ids' space, so a follow-up is paid or held, never both.
+    /// `escrow_id` shares the follow-up ids' space, so a follow-up is paid, parked or held, never two of them.
     /// The meeting's proof must already be on the contract; the escrow keeps its hash.
     pub fn open_escrow(
         &mut self,
@@ -1057,6 +1057,9 @@ impl AgentWallet {
         require!(followup_id.len() <= 64, "FOLLOWUP_ID_TOO_LONG");
         require!(!self.paid.contains(&(owner.clone(), followup_id.to_string())), "ALREADY_PAID");
         require!(escrows().get(&(owner.clone(), followup_id.to_string())).is_none(), "ESCROW_EXISTS");
+        // A parked payment keeps its id until the owner approves or declines it (approve_pending
+        // takes it off first), so the same follow-up can't also be paid under the caps meanwhile.
+        require!(self.pending.get(&(owner.clone(), followup_id.to_string())).is_none(), "ALREADY_PENDING");
         require!(self.is_listed(owner, payee), "UNKNOWN_PAYEE");
         // The balance is checked where money moves (pay under the caps, approve_pending), so a
         // payment over a cap is parked for the owner even when the wallet can't cover it yet.
@@ -2078,7 +2081,7 @@ mod tests {
     }
 
     #[test]
-    fn a_follow_up_is_paid_or_held_never_both() {
+    fn a_follow_up_is_paid_parked_or_held_never_two() {
         let (mut c, owner, payee) = with_proof(10);
         open(&mut c, &owner, &payee, 10, "f1", true, 10);
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
@@ -2090,6 +2093,18 @@ mod tests {
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         c.pay(payee.clone(), U128(500 * USDC), None, "f3".into(), None, None);
         assert!(panic_text(|| { c.open_escrow("f3".into(), payee.clone(), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("ALREADY_PENDING"));
+        // A parked payment can't also be paid under the caps, even once they'd allow it; approving it still pays.
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_cap(U128(10_000 * USDC));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), None, "f3".into(), None, None); }).contains("ALREADY_PENDING"));
+        assert!(panic_text(|| { c.pay(payee.clone(), U128(500 * USDC), None, "f3".into(), route(), None); }).contains("ALREADY_PENDING"));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.approve_pending("f3".into());
+        assert!(c.is_paid(owner.clone(), "f3".into()));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
+        c.set_cap(U128(200 * USDC));
+        testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(0), 10));
         // Unlisted payees and a paused wallet are refused, as for pay.
         assert!(panic_text(|| { c.open_escrow("f4".into(), accounts(4), U128(USDC), "m-1".into(), TERMS.into(), true); }).contains("UNKNOWN_PAYEE"));
         testing_env!(ctx(owner.clone(), NearToken::from_yoctonear(1), 10));
