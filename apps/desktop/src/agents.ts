@@ -147,8 +147,8 @@ export interface AgentActivity {
   at: string;
   /** What the agent calls itself. */
   agent: string;
-  /** "projects" and "access" are listed only when refused. */
-  op: "meetings" | "notes" | "claim" | "complete" | "projects" | "access" | "other";
+  /** "projects" and "access" are listed only when refused. "draft" is a proposed follow-up. */
+  op: "meetings" | "notes" | "claim" | "complete" | "draft" | "projects" | "access" | "other";
   meetingId?: string;
   itemId?: string;
   allowed: boolean;
@@ -162,7 +162,7 @@ export interface ActivityView {
   meeting?: Meeting;
   /** Why it was refused, for the second line. */
   detail?: string;
-  status: "claimed" | "done" | "read" | "refused";
+  status: "claimed" | "done" | "proposed" | "read" | "refused";
 }
 
 const REFUSED: Record<NonNullable<AgentActivity["refused"]>, string> = {
@@ -172,22 +172,21 @@ const REFUSED: Record<NonNullable<AgentActivity["refused"]>, string> = {
   rules: "Refused by Aftercall's rules",
 };
 
+/** What a request other than a claim or completion reads as. */
+const OP_WORDS: Record<Exclude<AgentActivity["op"], "claim" | "complete">, string> = {
+  draft: "Propose a follow-up",
+  meetings: "Read your meetings",
+  notes: "Read a meeting",
+  projects: "Read your projects",
+  access: "Check what agents may do",
+  other: "Unknown request",
+};
+
 /** How one activity entry reads on the screen. */
 export function describeActivity(a: AgentActivity, meetings: Meeting[]): ActivityView {
   const meeting = a.meetingId ? meetings.find((m) => m.id === a.meetingId) : undefined;
   const item = a.itemId ? meeting?.actionItems.find((i) => i.id === a.itemId) : undefined;
-  const what =
-    a.op === "claim" || a.op === "complete"
-      ? (item?.text ?? (a.op === "claim" ? "Claim an action item" : "Complete an action item"))
-      : a.op === "meetings"
-        ? "Read your meetings"
-        : a.op === "notes"
-          ? "Read a meeting"
-          : a.op === "projects"
-            ? "Read your projects"
-            : a.op === "access"
-              ? "Check what agents may do"
-              : "Unknown request";
-  const status = !a.allowed ? "refused" : a.op === "claim" ? "claimed" : a.op === "complete" ? "done" : "read";
+  const what = a.op === "claim" || a.op === "complete" ? (item?.text ?? (a.op === "claim" ? "Claim an action item" : "Complete an action item")) : OP_WORDS[a.op];
+  const status = !a.allowed ? "refused" : a.op === "claim" ? "claimed" : a.op === "complete" ? "done" : a.op === "draft" ? "proposed" : "read";
   return { what, meeting, detail: a.refused ? REFUSED[a.refused] : undefined, status };
 }

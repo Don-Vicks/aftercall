@@ -111,7 +111,7 @@ export function meetingTrail({ meeting, saved, network = null, now = Date.now() 
   return out;
 }
 
-const approver = (f: FollowUp) => (f.byAutopilot ? "Autopilot, under your rule" : "You");
+const approver = (f: FollowUp) => (f.byAutopilot ? "Autopilot, under your rule" : f.proposedBy ? `You, on ${f.proposedBy.agent}'s proposal` : "You");
 
 /** What one follow-up sent out, if anything. Proposed, sending and dismissed ones sent nothing. */
 function followUpEntries(f: FollowUp, network: Network | null): TrailEntry[] {

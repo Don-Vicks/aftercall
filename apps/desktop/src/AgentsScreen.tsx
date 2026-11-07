@@ -10,9 +10,14 @@ import { syncWithAda } from "./sample";
 import { Button, Card, Pill, SectionTitle, Toggle, enter, exit, springs } from "./ui";
 import { Snippet, Why, errorText, grow, rise } from "./SettingsParts";
 
-const CAN = ["Search and read your meetings", "Claim an action item, if you allow it", "Mark it done with a note, if you allow it"];
+const CAN = [
+  "Search and read your meetings",
+  "Claim an action item, if you allow it",
+  "Mark it done with a note and a link to the work, if you allow it",
+  "Propose a recap, or a payment to a listed payee within your caps, for you to approve, if you allow it",
+];
 const CANNOT = [
-  "Send email or recaps",
+  "Send email or recaps, or approve their own proposals",
   "Pay, or touch the agent wallet",
   "Record proofs on NEAR",
   "Change anything else in your notes, or delete them",
@@ -198,8 +203,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                       <span className="font-semibold text-ink">Let agents claim and complete action items</span>
                       <span className="text-[13px] leading-[19px] text-ink-2">
                         {info.allowWrites
-                          ? "On. Agents can mark an item as theirs and as done. They still can't send, pay or change your rules."
-                          : "Off. Agents can only read. On, they can mark an item as theirs and as done; they still can't send, pay or change your rules."}
+                          ? "On. Agents can mark an item as theirs and as done, and propose a follow-up that waits for your tap. They still can't send, pay or change your rules."
+                          : "Off. Agents can only read. On, they can mark an item as theirs and as done, and propose a follow-up that waits for your tap; they still can't send, pay or change your rules."}
                       </span>
                       {info.readOnlySinceUpdate && (
                         <span className="mt-1 text-[13px] leading-[19px] text-ink">
@@ -252,8 +257,8 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                 Recent agent activity
               </SectionTitle>
               <p className="m-0 text-[13px] leading-[19px] text-ink-2">
-                Each read, claim and completion, and every refused request, newest first, under the name the agent gives itself. The list holds times,
-                names and ids, never meeting content.
+                Each read, claim, completion and proposal, and every refused request, newest first, under the name the agent gives itself. The list
+                holds times, names and ids, never meeting content.
               </p>
             </div>
             {log.length === 0 ? (
@@ -305,6 +310,8 @@ function ActivityRow({ entry, meetings, onOpenMeeting }: { entry: AgentActivity;
         </Pill>
       ) : v.status === "claimed" ? (
         <Pill tone="muted">Claimed</Pill>
+      ) : v.status === "proposed" ? (
+        <Pill tone="muted">Proposed</Pill>
       ) : v.status === "refused" ? (
         <Pill tone="caution">Refused</Pill>
       ) : (
