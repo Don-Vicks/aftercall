@@ -4,14 +4,15 @@ One shared NEAR contract that holds each user's USDC under rules only the user's
 
 | Who | Can call |
 | --- | --- |
-| The desktop app (function-call key) | `pay`, `record_proof` |
-| The user's wallet (full-access key, 1 yoctoNEAR) | `set_cap`, `set_payment_cap`, `set_cross_chain_cap`, `set_paused`, `add_payee`, `remove_payee`, `set_payee_destination`, `withdraw`, `withdraw_storage_credit`, `approve_pending`, `cancel_pending` |
+| The desktop app (function-call key) | `pay`, `record_proof`, `open_escrow`, `release_escrow` (a key added before escrows: `pay`, `record_proof`) |
+| The user's wallet (full-access key, 1 yoctoNEAR) | `set_cap`, `set_payment_cap`, `set_cross_chain_cap`, `set_paused`, `add_payee`, `remove_payee`, `set_payee_destination`, `withdraw`, `withdraw_storage_credit`, `approve_pending`, `cancel_pending`, `approve_escrow`, `cancel_escrow` |
+| A payee's own account (full-access key, 1 yoctoNEAR) | `confirm_escrow`, `return_escrow` |
 | The user's wallet (full-access key, NEAR attached) | `register` (at least 0.05 NEAR), `add_storage_credit` |
 | Only the USDC contract | `ft_on_transfer` (deposits) |
-| Only this contract | `new` (in the deploy transaction), `on_pay_complete`, `on_deposit_address_registered`, `on_withdraw_complete` (refund a failed transfer) |
-| Anyone (view) | `get_wallet`, `get_payees`, `get_payee_label`, `get_payee_destinations`, `is_paid`, `get_pending`, `get_cross_chain_payment`, `get_proof`, `get_usdc`, `get_stats` |
+| Only this contract | `new` (in the deploy transaction), `on_pay_complete`, `on_deposit_address_registered`, `on_withdraw_complete` (refund a failed transfer), `on_escrow_released` |
+| Anyone (view) | `get_wallet`, `get_payees`, `get_payee_label`, `get_payee_destinations`, `is_paid`, `get_pending`, `get_cross_chain_payment`, `get_proof`, `get_payment_proof`, `get_escrow`, `get_usdc`, `get_stats` |
 
-`get_stats` returns counts across all users and nothing else: `{ "wallets", "proofs", "payments", "parked" }`. `payments` counts payments to payees that were sent and not refunded (withdrawals don't count); `parked` counts payments held over a cap. The counters live under their own storage key (`stats`), outside the contract's state struct, and the contract pays for their few bytes.
+`get_stats` returns counts across all users and nothing else: `{ "wallets", "proofs", "payments", "parked" }`. `payments` counts payments to payees that were sent and not refunded, escrow releases included (withdrawals don't count); `parked` counts payments and escrows held over a cap. The counters live under their own storage key (`stats`), outside the contract's state struct, and the contract pays for their few bytes.
 
 `pay` sends a payment only to a listed payee, within the daily cap and the per-payment cap. Anything over a cap is parked; only the owner's wallet can approve or decline it. Approving pays it once and still counts towards that day's spending. A payment is parked even when the balance can't cover it yet; the balance is checked when it is paid, so approving needs it. A per-payment cap of 0 means no per-payment limit. A memo is at most 256 bytes. A function-call key can't attach the 1 yoctoNEAR the owner methods require, so a stolen app key can't change the rules. There is no admin method that moves user funds.
 
@@ -21,7 +22,11 @@ One shared NEAR contract that holds each user's USDC under rules only the user's
 
 **Cross-chain payouts.** The owner can opt a payee in to being paid on Solana or Base (`set_payee_destination`). The app then calls the same `pay` with a `cross_chain` route, and the USDC goes to a NEAR Intents 1Click deposit address (a 64-hex implicit account) under the same caps and pause and under a separate cross-chain cap (`set_cross_chain_cap`, a UTC-day limit that every cross-chain payment must fit as well as the daily cap; `get_wallet` shows `cross_chain_daily_cap` and `cross_chain_spent_today`). The cross-chain cap starts at 0, which turns cross-chain payments off. Over any cap a cross-chain payment is refused (`OVER_PAYMENT_CAP`, `OVER_CAP` or `OVER_CROSS_CHAIN_CAP`), not parked, because the quote would expire before the owner could approve it. Each payment is recorded (`get_cross_chain_payment`). The contract registers the deposit address with USDC (0.00125 NEAR from the owner's storage credit) and then sends: if the registration fails, `on_deposit_address_registered` undoes the payment and puts the fee back on the credit; if the address registered but the transfer fails, the payment is undone and the fee stays spent (it registered the address). The contract can't verify that a deposit address pays the payee's address: whoever holds the app's key chooses the deposit address, so the cross-chain cap is what bounds a stolen key on this route. Keep it small. See [docs/near-intents-1click.md](../docs/near-intents-1click.md).
 
-Views give block timestamps (`Proof.recorded_at`, `CrossChainPayment.sent_at`) as decimal strings of nanoseconds, because they are above 2^53.
+**Handshake (escrow).** The app's key opens an escrow for a listed payee with `open_escrow`, under the same caps, pause and storage rules as `pay`: within the caps the amount leaves the balance and counts towards today once; over a cap it is parked for `approve_escrow` in the owner's wallet. Each escrow keeps the meeting's proof (it must already be recorded) and `terms_hash`, a salted sha256 of the terms; the terms themselves never go on chain. The payee confirms from their own account (`confirm_escrow`, which must name that hash); without a condition that also pays them. With one, the owner's account releases it (`release_escrow`: the app's key, or the wallet). The owner's wallet can cancel before the payee confirms, or 30 days after an unreleased confirmation; the payee can give it back at any time (`return_escrow`). Escrows pay NEAR accounts only. Rules, states and errors: [docs/handshake.md](../docs/handshake.md).
+
+**Payments point to their meeting.** `pay` takes an optional `meeting_id`; with it the proof must exist, and `get_payment_proof(owner, followup_id)` returns its meeting id and hash. The app passes it when the proof is on the same contract.
+
+Views give block timestamps (`Proof.recorded_at`, `CrossChainPayment.sent_at`, `Escrow.opened_at`, `Escrow.confirmed_at`) as decimal strings of nanoseconds, because they are above 2^53.
 
 ### Known limits (from the 3 Nov 2026 audit, not changed)
 
@@ -42,11 +47,37 @@ cargo test -p agent-wallet --lib                                  # unit tests
 cargo test -p agent-wallet --test sandbox -- --test-threads=1     # local NEAR node; needs cargo-near and the wasm32 target
 ```
 
-51 tests: 31 unit, 20 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token with two test switches (a Circle-style blocklist, and a raised minimum storage deposit), and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer and a failed withdrawal, the private callbacks and `new`, proof storage, storage credit running out and being topped up, the public counts, a locked contract (below), and cross-chain payouts (off until the cross-chain cap is set, sent to the deposit address within the caps, refunded when the registration or the transfer fails at exactly 70 TGas, refused for unlisted or not-opted-in payees, while paused, or for another caller). The unit tests add the audit's findings as regressions (a stolen key's cross-chain payment, storage charged for paid marks and the wallet record, a refund after midnight, a failed withdrawal next to a `withdraw-…` follow-up id, the registration fee, string timestamps, the memo cap, the gas floors). A refund landing after midnight is unit-tested only: a sandbox can't put a UTC day between a transfer and its callback.
+69 tests: 43 unit, 26 sandbox. The sandbox tests deploy the contract with `mock-ft`, a USDC-like token with two test switches (a Circle-style blocklist, and a raised minimum storage deposit), and cover deposits, the caps, parking and approving or declining payments, the limited key's limits, refunds on a failed transfer and a failed withdrawal, the private callbacks and `new`, proof storage, storage credit running out and being topped up, the public counts, a locked contract (below), and cross-chain payouts (off until the cross-chain cap is set, sent to the deposit address within the caps, refunded when the registration or the transfer fails at exactly 70 TGas, refused for unlisted or not-opted-in payees, while paused, or for another caller), escrows (opened within a cap, parked over one and approved by the owner's wallet, confirmed only by the payee and only for the terms they saw, released once by the app's key or the wallet and counted against the caps once, cancelled before but not after the payee confirms, given back by the payee, paid on confirmation without a condition, a bounced release kept confirmed, the proof hash stored, a key from before escrows refused them and updated in one transaction), and an upgrade in place from the code before escrows (`tests/fixtures/agent_wallet_6184cac.wasm`, the code `wallet.aftercall.testnet` runs) that keeps every record. The unit tests add the audit's findings as regressions (a stolen key's cross-chain payment, storage charged for paid marks and the wallet record, a refund after midnight, a failed withdrawal next to a `withdraw-…` follow-up id, the registration fee, string timestamps, the memo cap, the gas floors). A refund landing after midnight is unit-tested only: a sandbox can't put a UTC day between a transfer and its callback.
 
-One sandbox test drives the contract through `crates/near-tx`, the desktop app's own signer, over the node's JSON-RPC: the app's limited key records a proof, is refused a duplicate, pays a listed payee, and can't change a rule.
+One sandbox test drives the contract through `crates/near-tx`, the desktop app's own signer, over the node's JSON-RPC: the app's limited key records a proof, is refused a duplicate, pays a listed payee with the payment linked to the proof, opens and releases an escrow, and can't change a rule.
+
+## Upgrade testnet in place (Handshake)
+
+`wallet.aftercall.testnet` runs the code from before Handshake (sha256 `1fa7d6cb…`, the same bytes as `agent-wallet/tests/fixtures/agent_wallet_6184cac.wasm`) and holds state. Handshake adds no field to the contract's root state or to any stored record: escrows and payment links live in new maps (`StorageKey::Escrows`, `StorageKey::PaymentProofs`, appended), and `pay`'s new `meeting_id` argument is optional. So a plain redeploy keeps everything, with no migration call; the sandbox test `upgrade_from_the_code_before_handshake_keeps_state_and_adds_escrows` does exactly this. Not run on testnet yet. Victor signs; the contract account's full-access key is in his keychain:
+
+```bash
+# 1. Read-only: the counts before.
+near contract call-function as-read-only wallet.aftercall.testnet get_stats json-args '{}' network-config testnet now
+
+# 2. Build and deploy the new code over the old, without calling new.
+cd contracts/agent-wallet && cargo near build non-reproducible-wasm
+near contract deploy wallet.aftercall.testnet use-file ../target/near/agent_wallet/agent_wallet.wasm without-init-call network-config testnet sign-with-keychain send
+
+# 3. Read-only: the same counts, the same wallet, and the new view answers.
+near contract call-function as-read-only wallet.aftercall.testnet get_stats json-args '{}' network-config testnet now
+near contract call-function as-read-only wallet.aftercall.testnet get_escrow json-args '{"owner":"nov3.testnet","escrow_id":"x"}' network-config testnet now
+```
+
+Then each owner updates their Mac's key once, from their own wallet: the app shows "Update this Mac's key" in Agent wallet, and "Ask … to confirm" opens it too. On `/sign` it is one transaction on the owner's account that deletes the key and adds the same key back with `pay`, `record_proof`, `open_escrow` and `release_escrow`. Until then the old key keeps paying and recording proofs. With near-cli instead:
+
+```bash
+near account delete-keys <you>.testnet public-keys <the Mac's key> network-config testnet sign-with-keychain send
+near account add-key <you>.testnet grant-function-call-access --allowance '0.25 NEAR' --contract-account-id wallet.aftercall.testnet --function-names 'pay, record_proof, open_escrow, release_escrow' use-manually-provided-public-key <the Mac's key> network-config testnet sign-with-keychain send
+```
 
 ## Redeploy testnet fresh (after the 3 Nov 2026 audit fixes)
+
+Done on 3 Nov 2026 ([proven.md](../docs/proven.md)); kept for reference.
 
 `wallet.aftercall.testnet` runs the code from 2 Nov 2026. The audit fixes change the stored layout (the `Wallet` record has two new fields, and the proof and cross-chain timestamps changed type in the views), so redeploy it from scratch before anyone registers. On 3 Nov 2026 it held nothing (`get_stats` returned all zeros over read-only RPC), so nothing is lost. Victor signs each step; nothing here has been run.
 
@@ -105,7 +136,7 @@ near contract call-function as-transaction wallet.yourname.near set_cross_chain_
 The last step, which asks again (type `LOCK wallet.yourname.near`), deletes every full-access key on the contract account.
 
 - **What it means.** Nothing can be signed as the contract account any more. Nobody, us included, can redeploy or upgrade the code, call `new` again, delete the account or move the NEAR it holds. The code on chain is the code users checked.
-- **What still works.** Everything users do, because none of it is signed by the contract account: owners change rules from their own wallets with 1 yoctoNEAR, the app's limited key calls `pay` and `record_proof`, USDC transfers and their refund callback run, and owners can always `withdraw`. The sandbox test `locked_contract_still_serves_owners_and_the_app_key` proves each of these after deleting the keys.
+- **What still works.** Everything users do, because none of it is signed by the contract account: owners change rules from their own wallets with 1 yoctoNEAR, the app's limited key calls its methods (the test runs `pay` and `record_proof`), USDC transfers and their refund callback run, and owners can always `withdraw`. The sandbox test `locked_contract_still_serves_owners_and_the_app_key` proves each of these after deleting the keys.
 - **It is irreversible.** There is no way to add a key back. A bug can't be fixed in place: the fix is a new contract, and users withdraw and re-register there. Keep the caps small.
 - **How to check.** The account should list no `FullAccess` keys:
 
