@@ -154,7 +154,7 @@ export function Cant() {
           ))}
         </ol>
         <p className={l.cantFoot} data-reveal="">
-          Each of the four maps to tests listed in the README&apos;s What is proven table.
+          Each of the four maps to tests listed in the repolisted in the README&apos;s What is proven table.apos;s What is proven page.
           {REPO_PUBLIC ? (
             <>
               {" "}

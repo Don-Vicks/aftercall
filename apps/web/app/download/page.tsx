@@ -256,7 +256,7 @@ export default function Download() {
                     it makes.
                   </p>
                   <a href={`${REPO_URL}/blob/main/docs/development.md#run-it`} className="arrow-link" style={{ alignSelf: "flex-start" }}>
-                    Run it, in the README
+                    Run it from source
                     <Icon name="external" size={12} />
                   </a>
                 </>
