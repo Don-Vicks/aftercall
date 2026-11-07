@@ -1,22 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeftRight, Check, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { agentsApi, PREVIEW_INFO } from "./agents";
 import { isDesktop } from "./recorder";
 import { nearAiKey } from "./nearai";
+import { loadPhone, usePhone } from "./phone";
 import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
 import { ImportBackup } from "./RecoveryPhrase";
 import { deleteEverything, type Wiped } from "./library";
 import { Button, Dialog, Field, Input, Pill, SectionTitle, Spinner } from "./ui";
 import { Page, PageHeader, Why, rise } from "./PagePieces";
 
-/** The four Keychain items (service dev.aftercall.app); see src-tauri/src/wipe.rs. */
-const KEYCHAIN: { id: "nearai" | "near" | "data" | "backup"; name: string; does: string }[] = [
+/** The five Keychain items (service dev.aftercall.app); see src-tauri/src/wipe.rs. */
+const KEYCHAIN: { id: "nearai" | "near" | "data" | "backup" | "phone"; name: string; does: string }[] = [
   { id: "nearai", name: "NEAR AI key", does: "makes your notes" },
   { id: "near", name: "This Mac's NEAR key", does: "pays and records proofs, within your caps" },
   { id: "data", name: "Data key", does: "seals your meetings on disk" },
   { id: "backup", name: "Backup key", does: "opens backups, made from your phrase" },
+  { id: "phone", name: "Phone keys", does: "seal what your paired phone sees, and open its taps" },
 ];
 
 /** Every place data goes, from docs/privacy.md. */
@@ -39,8 +41,15 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
     icon: <Server size={14} strokeWidth={1.75} />,
     name: "Aftercall server",
     kind: "Only if you use it",
-    sees: "Recaps you send through Aftercall, for one request. Claim links you make.",
-    keeps: "A send count. Per claim link: token hash, amount, expiry, status, payee account.",
+    sees: "Recaps you send through Aftercall, for one request. Claim links you make. With a paired phone: sealed boxes it can't open, and when each side calls.",
+    keeps: "A send count. Per claim link: token hash, amount, expiry, status, payee account. For a paired phone: token hashes, the latest sealed snapshot, and taps until your Mac collects them (a day at most).",
+  },
+  {
+    icon: <Smartphone size={14} strokeWidth={1.75} />,
+    name: "Your paired phone",
+    kind: "Only if you pair one",
+    sees: "What waits for you: each recap's address and subject, each payment's payee, amount and the words it was heard as, the quote behind it, the meeting's title and time. Never the summary, transcript or your notes.",
+    keeps: "The latest snapshot, in the phone browser's storage for Aftercall's site, until you unpair.",
   },
   {
     icon: <FolderGit2 size={14} strokeWidth={1.75} />,
@@ -73,13 +82,25 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
       .info()
       .then((i) => setDataDir(i.dataDir))
       .catch(() => setDataDir(PREVIEW_INFO.dataDir));
+    void loadPhone();
     Promise.all([nearAiKey.has().catch(() => false), recovery.status()])
       .then(([nearai, r]) => setKeys({ nearai, recovery: r }))
       .catch(() => {});
   }, []);
 
+  const phone = usePhone();
   const missing = (id: (typeof KEYCHAIN)[number]["id"]) =>
-    !keys ? false : id === "nearai" ? !keys.nearai : id === "near" ? !keys.recovery.hasKey : id === "backup" ? !keys.recovery.fromPhrase : false;
+    id === "phone"
+      ? phone.loaded && !phone.paired
+      : !keys
+        ? false
+        : id === "nearai"
+          ? !keys.nearai
+          : id === "near"
+            ? !keys.recovery.hasKey
+            : id === "backup"
+              ? !keys.recovery.fromPhrase
+              : false;
 
   return (
     <Page width={840} className="gap-6">
@@ -130,7 +151,7 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
           </div>
         </div>
         <Why>
-          Audio is sealed about once a second while it records, and deleted with its chunk transcripts once your notes are saved. Notes, transcripts and projects are sealed with the data key. The four
+          Audio is sealed about once a second while it records, and deleted with its chunk transcripts once your notes are saved. Notes, transcripts and projects are sealed with the data key. The five
           Keychain items sit under <span className="font-mono text-ink">dev.aftercall.app</span>, and the NEAR AI key never reaches the app's window. This keeps other apps, and backup or sync tools,
           from reading your meetings. It doesn't protect against someone using your Mac while you're signed in, or software running as you that can open your Keychain.
         </Why>
@@ -283,7 +304,7 @@ function DeleteEverything() {
         Delete
       </SectionTitle>
       <div className="flex flex-col gap-3.5 rounded-md bg-elevated px-5 py-[18px] shadow-1">
-        <span className="text-ink-2">Removes every meeting, note, transcript and project here, and Aftercall's four Keychain items.</span>
+        <span className="text-ink-2">Removes every meeting, note, transcript and project here, and Aftercall's five Keychain items.</span>
         <Button variant="danger" className="self-start" icon={<Trash2 size={14} />} disabled={!isDesktop} onClick={() => setOpen(true)}>
           Delete everything on this Mac
         </Button>
@@ -335,7 +356,7 @@ function ConfirmDelete({ onClose }: { onClose: () => void }) {
       width={460}
       initialFocus={cancel}
       title={done ? "Deleted from this Mac" : "Delete everything on this Mac?"}
-      intro={done ? undefined : "Every meeting, note, transcript, project and setting here, and Aftercall's four Keychain items. There's no undo."}
+      intro={done ? undefined : "Every meeting, note, transcript, project and setting here, and Aftercall's five Keychain items. There's no undo."}
     >
       {done ? (
         <div className="flex flex-col gap-3">
