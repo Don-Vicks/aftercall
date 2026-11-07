@@ -222,6 +222,8 @@ CREATE TABLE IF NOT EXISTS relay_actions (
   posted_at bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS relay_actions_pairing ON relay_actions (id_hash, seq);
+CREATE INDEX IF NOT EXISTS relay_pairings_expires ON relay_pairings (expires_at);  -- for the sweep
+CREATE INDEX IF NOT EXISTS relay_actions_posted ON relay_actions (posted_at);
 ```
 
 A test checks the live tables have exactly these columns, as `CLAIM_COLUMNS` does for claims.

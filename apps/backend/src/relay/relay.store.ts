@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS relay_actions (
   posted_at bigint NOT NULL
 );
 CREATE INDEX IF NOT EXISTS relay_actions_pairing ON relay_actions (id_hash, seq);
+CREATE INDEX IF NOT EXISTS relay_pairings_expires ON relay_pairings (expires_at);
+CREATE INDEX IF NOT EXISTS relay_actions_posted ON relay_actions (posted_at);
 `;
 
 /** Every column of the relay's tables. A test checks the live tables have exactly these. */

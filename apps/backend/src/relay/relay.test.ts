@@ -558,4 +558,27 @@ if (process.env.DATABASE_URL) {
       await pool.end();
     }
   });
+
+  test("[postgres] the sweep finds expired pairings and old taps by index, not by reading every row", async () => {
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const schema = `relayidx_${process.pid}`;
+    try {
+      await pool.query(`CREATE SCHEMA ${schema}`);
+      const client = await pool.connect();
+      try {
+        await client.query(`SET search_path TO ${schema}`);
+        await new PgRelayStore(client as unknown as Pool).migrate();
+        // With sequential scans off, a plan that still reads the whole table has no index to use.
+        await client.query("SET enable_seqscan = off");
+        const plan = async (sql: string) => (await client.query<{ "QUERY PLAN": string }>(`EXPLAIN ${sql}`)).rows.map((r) => r["QUERY PLAN"]).join("\n");
+        assert.match(await plan("DELETE FROM relay_pairings WHERE expires_at <= 1"), /Index/);
+        assert.match(await plan("DELETE FROM relay_actions WHERE posted_at <= 1"), /Index/);
+      } finally {
+        client.release();
+      }
+    } finally {
+      await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      await pool.end();
+    }
+  });
 }
