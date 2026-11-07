@@ -73,12 +73,13 @@ export interface HandoffAccess {
 
 /**
  * Why a handed-over item would be refused, in plain words, for the button to show next
- * to the copied prompt. Empty when every switch the agent needs is on.
+ * to the copied prompt. Empty when every switch the agent needs is on. A project the user
+ * keeps from agents comes first and alone: the prompt carries the item's words, so the
+ * button offers no prompt there at all.
  */
 export function handoffBlockers(access: HandoffAccess, project: string): string[] {
+  if (!access.projectAllowed) return [`Agents can't reach meetings in ${project}, so there's no prompt to copy. Allow that project in Coding agents first.`];
   if (!access.enabled) return ["Coding agents is off, so no agent can reach this meeting. Turn it on in Coding agents."];
-  const out: string[] = [];
-  if (!access.projectAllowed) out.push(`Agents can't read meetings in ${project}. Allow that project in Coding agents.`);
-  if (!access.allowWrites) out.push("Agents can only read, so the claim will be refused. Turn on claiming in Coding agents.");
-  return out;
+  if (!access.allowWrites) return ["Agents can only read, so the claim will be refused. Turn on claiming in Coding agents."];
+  return [];
 }

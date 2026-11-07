@@ -51,5 +51,11 @@ test("the button says which switch would refuse the agent", () => {
   assert.match(handoffBlockers({ ...all, enabled: false }, "General").join(" "), /Coding agents is off/);
   assert.equal(handoffBlockers({ ...all, enabled: false, allowWrites: false }, "General").length, 1, "off says only that");
   assert.match(handoffBlockers({ ...all, allowWrites: false }, "General")[0], /can only read/);
-  assert.match(handoffBlockers({ ...all, projectAllowed: false }, "Clients")[0], /can't read meetings in Clients/);
+});
+
+test("a project kept from agents says only that, and that no prompt is offered, whatever else is off", () => {
+  const kept = { enabled: true, allowWrites: true, projectAllowed: false };
+  for (const access of [kept, { ...kept, enabled: false }, { ...kept, allowWrites: false }]) {
+    assert.deepEqual(handoffBlockers(access, "Clients"), ["Agents can't reach meetings in Clients, so there's no prompt to copy. Allow that project in Coding agents first."]);
+  }
 });

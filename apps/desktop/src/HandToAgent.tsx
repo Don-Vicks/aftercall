@@ -10,13 +10,16 @@ interface Access {
   blockers: string[];
   /** The project's code folder, where Open in Claude Code starts. */
   codeFolder?: string;
+  /** The meeting's project is one the user keeps from agents: no prompt is offered, as Open in Claude Code starts nothing. */
+  kept: boolean;
 }
 
 /** What the agent switches allow, from the app (the preview has no app, so agents read as off), and the project's code folder. */
 async function access(meeting: Pick<Meeting, "project">): Promise<Access> {
   const info: AgentsInfo = isDesktop ? await agentsApi.info().catch(() => PREVIEW_INFO) : PREVIEW_INFO;
   const project = (await projectsApi.list().catch(() => [])).find((p) => p.name === meeting.project);
-  return { blockers: handoffBlockers({ ...info, projectAllowed: reachesProject(info, project?.id) }, meeting.project), codeFolder: project?.codeFolder };
+  const projectAllowed = reachesProject(info, project?.id);
+  return { blockers: handoffBlockers({ ...info, projectAllowed }, meeting.project), codeFolder: project?.codeFolder, kept: !projectAllowed };
 }
 
 /** Copies the prompt and says, in the same toast, which switch would refuse the agent; `lead` says why it was copied, when it was a fallback. */
@@ -52,7 +55,8 @@ async function openClaude(meeting: Pick<Meeting, "id" | "title" | "project">, it
  * "Hand to an agent" on an open action item: a quiet button beside Edit that copies a
  * ready prompt for Claude Code or Codex (`handoffPrompt` in core). The prompt quotes the
  * item as data and asks the agent to claim it through Aftercall's MCP server and complete
- * it with a link to the work. The menu says which switches are off, if any.
+ * it with a link to the work. The menu says which switches are off, if any; in a project
+ * kept from agents its items are off and it says why.
  */
 export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "title" | "project">; item: ActionItem }) {
   const [state, setState] = useState<Access | null>(null);
@@ -63,8 +67,9 @@ export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "
     });
   const current = () => (state ? Promise.resolve(state) : refresh());
   const copy = (agent: HandoffAgent) => () => {
-    void current().then((a) => copyPrompt(meeting, item, agent, a.blockers));
+    void current().then((a) => (a.kept ? toast({ text: a.blockers[0], tone: "caution" }) : copyPrompt(meeting, item, agent, a.blockers)));
   };
+  const kept = state?.kept ?? false;
   const blockers = state?.blockers ?? null;
 
   return (
@@ -90,9 +95,9 @@ export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "
           </IconButton>
         )}
         items={[
-          ...(state?.codeFolder && isDesktop ? [{ label: "Open in Claude Code", onSelect: () => void current().then((a) => openClaude(meeting, item, a.blockers)) }, null] : []),
-          { label: "Copy prompt for Claude Code", onSelect: copy("Claude Code") },
-          { label: "Copy prompt for Codex", onSelect: copy("Codex") },
+          ...(state?.codeFolder && isDesktop ? [{ label: "Open in Claude Code", disabled: kept, onSelect: () => void current().then((a) => openClaude(meeting, item, a.blockers)) }, null] : []),
+          { label: "Copy prompt for Claude Code", disabled: kept, onSelect: copy("Claude Code") },
+          { label: "Copy prompt for Codex", disabled: kept, onSelect: copy("Codex") },
         ]}
         note={
           blockers === null

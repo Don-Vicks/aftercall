@@ -1107,14 +1107,15 @@ pub fn open_in_claude_code(
     let Some(folder) = crate::projects::code_folder(data_dir, project) else {
         return OpenOutcome::missing("folder", format!("{project} has no code folder. Choose one on its project page."));
     };
+    // A project the user keeps from agents: the prompt carries the item's words, so nothing
+    // starts, and nothing is copied either, even with agents off.
+    if !Scope::of(data_dir).allows(project) {
+        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
+    }
     let settings = load_settings(data_dir);
     let Some(token) = settings.token.clone().filter(|_| settings.enabled) else {
         return OpenOutcome::missing("agents", "Turn on \u{201c}Let agents read your meetings\u{201d} in Coding agents first, so Claude Code can reach this meeting.".into());
     };
-    // A project the user keeps from agents: the prompt carries the item's words, so nothing starts.
-    if !Scope::of(data_dir).allows(project) {
-        return OpenOutcome::missing("project", format!("Agents can't reach meetings in {project}, so Aftercall didn't start Claude Code. Allow that project in Coding agents first."));
-    }
     let Some(claude) = claude else {
         return OpenOutcome::missing("claude", "Aftercall couldn't find the claude command on this Mac, so it copied the prompt instead.".into());
     };
@@ -1969,6 +1970,9 @@ pwd >> {out}"#
         let kept = go(Some(&claude), Ok(claude.clone()));
         assert_eq!(kept.missing, Some("project"), "{}", kept.message);
         assert!(!handoff_root(&dir).exists(), "no prompt written for a project kept from agents");
+        // With agents off too, it still says "project", so the menu doesn't copy the prompt instead.
+        save_settings(&dir, &Settings { projects: Some(vec![]), ..Default::default() }).unwrap();
+        assert_eq!(go(Some(&claude), Ok(claude.clone())).missing, Some("project"));
         save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), projects: Some(vec!["general".into()]), ..Default::default() }).unwrap();
         assert_eq!(go(None, Ok(claude.clone())).missing, Some("claude"), "a chosen project goes on");
         save_settings(&dir, &Settings { enabled: true, token: Some("t0k3n".into()), ..Default::default() }).unwrap();
