@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { EmailFollowUp, FollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 import { decodeSignRequest } from "../wallet/actions.ts";
-import { deriveSession, newRelayKeys } from "./crypto.ts";
+import { decodePairing, deriveSession, newPairing, newRelayKeys, openHello, pairingIdText, pairingUrl, relayTokenHash, sealHello } from "./crypto.ts";
 import { itemDigest, openSnapshot, sealAction, sealSnapshot, signUrlsMatch, toPendingItem, type ActionResult, type PaymentItem, type PhoneAction } from "./messages.ts";
 import {
   MAX_RESULTS,
@@ -163,6 +163,105 @@ test("a payment held for the wallet, or already sending, can't be approved from 
   ]);
   assert.deepEqual(h.ran, []);
   assert.deepEqual(r.results.map((x) => x.reason), ["It's already on its way.", "It's held for your NEAR wallet: approve it there."]);
+});
+
+// ---------- the whole round trip, through a fake relay ----------
+
+/** The relay as docs/design/phone-protocol.md §4 describes it, in memory: it stores hashes and opaque boxes only. */
+function fakeRelay() {
+  type Row = { macTokenHash: string; phoneTokenHash?: string; hello?: string; snapshot?: string; version: number; actions: { seq: number; box: string }[] };
+  const rows = new Map<string, Row>();
+  let seq = 0;
+  const row = (id: string, token: string, who: "mac" | "phone"): Row => {
+    const p = rows.get(id);
+    if (!p) throw new Error("NO_PAIRING");
+    if (relayTokenHash(token) !== (who === "mac" ? p.macTokenHash : p.phoneTokenHash)) throw new Error("BAD_TOKEN");
+    return p;
+  };
+  return {
+    stored: () => JSON.stringify([...rows.values()]),
+    create: (id: string, macTokenHash: string) => void rows.set(id, { macTokenHash, version: 0, actions: [] }),
+    hello: (id: string, box: string) => {
+      const p = rows.get(id)!;
+      if (p.hello || p.phoneTokenHash) throw new Error("HELLO_TAKEN");
+      p.hello = box;
+    },
+    readHello: (id: string, macToken: string) => row(id, macToken, "mac").hello ?? null,
+    confirm: (id: string, macToken: string, phoneTokenHash: string) => {
+      const p = row(id, macToken, "mac");
+      p.phoneTokenHash = phoneTokenHash;
+      p.hello = undefined;
+    },
+    postSnapshot: (id: string, macToken: string, box: string) => {
+      const p = row(id, macToken, "mac");
+      p.snapshot = box;
+      p.version += 1;
+    },
+    readSnapshot: (id: string, phoneToken: string) => row(id, phoneToken, "phone").snapshot!,
+    postAction: (id: string, phoneToken: string, box: string) => void row(id, phoneToken, "phone").actions.push({ seq: ++seq, box }),
+    readActions: (id: string, macToken: string) => [...row(id, macToken, "mac").actions],
+    ack: (id: string, macToken: string, upTo: number) => {
+      const p = row(id, macToken, "mac");
+      p.actions = p.actions.filter((a) => a.seq > upTo);
+    },
+  };
+}
+
+test("pair, snapshot, tap and act, through a fake relay that holds only hashes and boxes", async () => {
+  const relay = fakeRelay();
+  // The Mac makes the QR code and registers the pairing by its hashes.
+  const { pairing, mac, macToken } = newPairing("https://api.example.com");
+  const id = pairingIdText(pairing);
+  relay.create(id, relayTokenHash(macToken));
+  const url = pairingUrl("https://getaftercall.vercel.app/phone", pairing);
+
+  // The phone scans it and posts its sealed hello; a second hello is refused.
+  const scanned = decodePairing(new URL(url).hash);
+  const phoneKeys = newRelayKeys();
+  relay.hello(id, sealHello(scanned, phoneKeys.publicKey, "iPhone · Safari"));
+  assert.throws(() => relay.hello(id, sealHello(scanned, newRelayKeys().publicKey, "Someone else")), /HELLO_TAKEN/);
+
+  // Both sides derive the session, and both screens show the same code.
+  const hello = openHello(pairing.pairingId, mac.secretKey, relay.readHello(id, macToken)!);
+  assert.equal(hello.device, "iPhone · Safari");
+  const common = { pairingId: pairing.pairingId, macPublicKey: pairing.macPublicKey, phonePublicKey: hello.phonePublicKey };
+  const macSession = deriveSession({ ...common, ourSecretKey: mac.secretKey, theirPublicKey: hello.phonePublicKey });
+  const phoneSession = deriveSession({ ...common, ourSecretKey: phoneKeys.secretKey, theirPublicKey: scanned.macPublicKey });
+  assert.equal(macSession.code, phoneSession.code);
+
+  // They match: the Mac confirms and posts its first snapshot.
+  relay.confirm(id, macToken, relayTokenHash(macSession.phoneToken));
+  const m = meeting("1762440000", "2026-11-06T14:02:00Z", [email, payment]);
+  relay.postSnapshot(id, macToken, sealSnapshot(macSession.key, 1, buildSnapshot({ at: NOW, network: "testnet", meetings: [{ meeting: m, options: opts }], results: [] })));
+
+  // The phone opens it and taps Approve on the payment.
+  const shown = openSnapshot(phoneSession.key, 0, relay.readSnapshot(id, phoneSession.phoneToken)).snapshot;
+  const pay = shown.items.find((i) => i.kind === "payment")!;
+  relay.postAction(id, phoneSession.phoneToken, sealAction(phoneSession.key, 1, { t: "action", kind: "approve", meetingId: pay.meetingId, followUpId: pay.followUpId, digest: itemDigest(pay), at: NOW }));
+
+  // The Mac reads it, re-checks it against the follow-up, runs it once and acknowledges it.
+  const ran: PhoneAction[] = [];
+  const done = await handlePhoneActions({
+    key: macSession.key,
+    lastN: 0,
+    actions: relay.readActions(id, macToken),
+    now: () => NOW,
+    target: (_meetingId, fuId) => {
+      const f = m.followUps.find((x) => x.id === fuId);
+      return { followUp: f, item: f ? toPendingItem(m, f, opts()) : null };
+    },
+    run: (a) => void ran.push(a),
+    save: () => {},
+  });
+  relay.ack(id, macToken, done.ackSeq!);
+  assert.deepEqual(ran.map((a) => [a.kind, a.followUpId]), [["approve", "f2"]]);
+  assert.deepEqual(relay.readActions(id, macToken), []);
+
+  // The relay held nothing readable: no names, amounts, quotes, addresses, labels or tokens.
+  const stored = relay.stored();
+  for (const plain of ["Kemi", "kemi.testnet", "20000000", "twenty dollars", "ada@example.com", "Meeting 1762440000", "iPhone", macToken, macSession.phoneToken]) {
+    assert.ok(!stored.includes(plain), plain);
+  }
 });
 
 test("if the app's own handler throws, the result says so and the counter still moves", async () => {
