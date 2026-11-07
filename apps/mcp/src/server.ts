@@ -136,7 +136,7 @@ export function createServer(channel: AppChannel): McpServer {
     "draft_follow_up",
     {
       title: "Propose a follow-up",
-      description: `Proposes one follow-up for a meeting: a recap email to an address (kind "email"), or a USDC payment (kind "payment") to a payee already on the user's list, within their per-payment cap and what's left today. It lands in Aftercall marked "Proposed by" your agent name, with your reason in place of a quote from the call, and waits for the user to approve or dismiss it: it never runs on autopilot, and this tool sends and pays nothing. At most 5 proposals wait per meeting. ${WRITES} ${READ_ONLY}`,
+      description: `Proposes one follow-up for a meeting: a recap email to an address (kind "email"), or a USDC payment (kind "payment") to a payee already on the user's list, within their per-payment cap and what's left today. It lands in Aftercall marked "Proposed by" your agent name, with your reason in place of a quote from the call, and waits for the user to approve or dismiss it: it never runs on autopilot, and this tool sends and pays nothing. At most 5 proposals wait per meeting, and a meeting keeps at most 20 from agents in all, dismissed ones included. ${WRITES} ${READ_ONLY}`,
       inputSchema: {
         meetingId: z.string().describe("Meeting id"),
         agent: agentArg,

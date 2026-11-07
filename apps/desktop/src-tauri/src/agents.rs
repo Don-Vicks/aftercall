@@ -476,6 +476,9 @@ fn complete(data_dir: &Path, meeting_id: &str, item_id: &str, agent: &str, note:
 const REASON_MAX: usize = 300;
 /// Proposals from agents waiting in one meeting at once.
 const PROPOSALS_MAX: usize = 5;
+/// Proposals from agents one meeting keeps in all. Dismissed ones stay in notes.json, so
+/// without this an agent could keep adding them for as long as the user keeps dismissing.
+const PROPOSALS_TOTAL_MAX: usize = 20;
 
 /// A payee on the owner's list, as the app read it from the contract.
 #[derive(Deserialize, Clone, Debug)]
@@ -590,7 +593,11 @@ fn draft(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value
     notes_file::try_update(&file, |notes| {
         let title = notes["meeting"]["title"].as_str().unwrap_or("Meeting").to_string();
         let list = notes["meeting"]["followUps"].as_array_mut().ok_or("This meeting's notes have no follow-ups list")?;
-        let waiting = list.iter().filter(|f| f.get("proposedBy").is_some() && f["status"] == "proposed").count();
+        let proposed = list.iter().filter(|f| f.get("proposedBy").is_some());
+        if proposed.clone().count() >= PROPOSALS_TOTAL_MAX {
+            return Err(format!("Agents have proposed {PROPOSALS_TOTAL_MAX} follow-ups in this meeting, the most one meeting keeps. Tell the user what you'd propose instead."));
+        }
+        let waiting = proposed.filter(|f| f["status"] == "proposed").count();
         if waiting >= PROPOSALS_MAX {
             return Err(format!("{PROPOSALS_MAX} proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first."));
         }
@@ -1291,6 +1298,38 @@ mod tests {
             dispatch_rw(&dir, &base, &at("t")).unwrap();
         }
         assert!(r(base.clone()).contains("already wait"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_meeting_keeps_at_most_20_proposals_dismissed_ones_included() {
+        let dir = data_dir("draft-cap");
+        let file = dir.join("recordings/1761000000/notes.json");
+        let req = json!({ "op": "draft", "meetingId": "1761000000", "agent": "Codex", "kind": "email", "to": "ada@example.com", "reason": "Ada asked" });
+        let dismiss_all = || {
+            notes_file::update(&file, |n| {
+                for f in n["meeting"]["followUps"].as_array_mut().unwrap() {
+                    if f["status"] == "proposed" {
+                        f["status"] = "dismissed".into();
+                    }
+                }
+            })
+            .unwrap()
+        };
+        // Five wait at once; dismissing makes room again, until 20 in all.
+        for round in 1..=4 {
+            for _ in 0..PROPOSALS_MAX {
+                dispatch_rw(&dir, &req, &at("t")).unwrap();
+            }
+            let err = dispatch_rw(&dir, &req, &at("t")).unwrap_err();
+            assert!(err.contains(if round < 4 { "already wait" } else { "proposed 20 follow-ups in this meeting" }), "{err}");
+            dismiss_all();
+        }
+        // All 20 dismissed, none waiting: still refused.
+        let err = dispatch_rw(&dir, &req, &at("t")).unwrap_err();
+        assert!(err.contains("proposed 20 follow-ups in this meeting") && err.contains("Tell the user"), "{err}");
+        let list = read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().clone();
+        assert_eq!(list.iter().filter(|f| f.get("proposedBy").is_some()).count(), PROPOSALS_TOTAL_MAX, "nothing more is kept");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

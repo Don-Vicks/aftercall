@@ -22,6 +22,8 @@ export interface FakeApp {
   setAllowWrites: (on: boolean) => void;
   /** The projects agents may reach, by id; null for every project (the default). */
   setProjects: (ids: string[] | null) => void;
+  /** The user dismissing a follow-up in the app: it stays in the notes, marked dismissed. */
+  dismiss: (meetingId: string, followUpId: string) => void;
   /** Stops listening and removes the temp dir. */
   close: () => Promise<void>;
 }
@@ -183,6 +185,8 @@ function handle(store: Map<string, NotesFile>, req: Req, allowWrites: boolean, s
         if (units > LEFT_TODAY) throw new Error("That's over what the user's agent wallet can still pay today, so agents can't propose it");
         followUp = { id: "", kind: "payment", status: "proposed", payeeName: payee.name, payeeAccount: payee.account, amount: { $bigint: String(units) } as unknown as bigint, heard: "", payeeListed: true, proposedBy };
       } else throw new Error('A follow-up is a recap (kind "email") or a payment (kind "payment")');
+      if (meeting.followUps.filter((f) => f.proposedBy).length >= 20)
+        throw new Error("Agents have proposed 20 follow-ups in this meeting, the most one meeting keeps. Tell the user what you'd propose instead.");
       if (meeting.followUps.filter((f) => f.proposedBy && f.status === "proposed").length >= 5)
         throw new Error("5 proposals from agents already wait in this meeting. Ask the user to approve or dismiss them first.");
       let n = 1;
@@ -261,6 +265,10 @@ export async function startFakeApp(opts: { now?: () => string; allowWrites?: boo
     },
     setProjects: (ids) => {
       scope = ids;
+    },
+    dismiss: (meetingId, followUpId) => {
+      const f = store.get(meetingId)!.meeting.followUps.find((x) => x.id === followUpId)!;
+      f.status = "dismissed";
     },
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
