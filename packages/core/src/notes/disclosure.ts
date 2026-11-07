@@ -125,4 +125,5 @@ export function recordingStartMs(meetingId: string): number | null {
 /** What a line link doesn't show, above the proof's own list (NOT_PROVEN). */
 export const LINE_NOT_PROVEN = [
   "That anyone else heard it: this shows the line is in the transcript the recorder's Mac committed to in its proof on NEAR, with that proof's checks, not that someone else heard it said.",
+  "That NEAR AI's model was given this exact line: the Mac commits to its transcript in the proof, and NEAR AI's signature covers the encrypted request as a whole, not each line.",
 ];
