@@ -48,7 +48,7 @@ export function useRecalledFigure(key: string | undefined, text: string): string
  * first render, unless `from` is given (or `remember` recalls a value): then it shows that
  * first and rolls to `value` after `delay` ms. `remember` keys a figure shown in more than
  * one place ("wallet-balance"), so a copy that mounts just after a change still rolls.
- * Screen readers get the final value once, not the columns. Inherits the font: use it
+ * Screen readers and page text get the final value once, not the columns. Inherits the font: use it
  * inside t-figure, t-figure-xl or t-mono. With reduced motion the digits change at once.
  */
 export function RollingNumber({
@@ -117,12 +117,11 @@ function Digit({ digit, arrive, duration }: { digit: number; arrive: boolean; du
   const ms = duration ? `${duration}ms` : "var(--dur-3)";
   return (
     <span className="relative inline-block h-[1lh] overflow-hidden" style={{ animation: rollIn ? `ac-roll ${ms} var(--ease)` : undefined }}>
-      <span className="invisible">0</span>
+      {/* The column's digits are CSS content, not text: page text and copy read only the value above. */}
+      <span className="invisible before:content-['0']" />
       <span className="absolute inset-x-0 top-0 flex flex-col transition-transform ease-calm" style={{ transform: `translateY(-${digit * 10}%)`, transitionDuration: ms }}>
         {DIGITS.map((n) => (
-          <span key={n} className="block h-[1lh] text-center">
-            {n}
-          </span>
+          <span key={n} data-digit={n} className="block h-[1lh] text-center before:content-[attr(data-digit)]" />
         ))}
       </span>
     </span>
