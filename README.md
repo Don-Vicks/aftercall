@@ -115,8 +115,8 @@ Running every part locally: [docs/development.md](docs/development.md).
 
 1. **Records the call on your Mac.** Your mic and the call's audio, from any app. No bot joins the call.
 2. **Makes the notes inside secure hardware.** Whisper and Qwen run in NEAR AI Cloud's TEEs, checked on every run; the transcript is encrypted so only the attested model can read it. Any item without an exact quote from the call is dropped.
-3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, and anyone you share the proof link with can re-run the checks in a browser at `/verify`.
-4. **Does what the meeting decided.** The recap goes out with a footer saying what was checked. An agreed USDC payment is made after one tap, within the caps of a NEAR contract; anything over a cap waits for your own wallet.
+3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, and anyone you share the proof link with can re-run the checks in a browser at `/verify`. No public proof link is published yet ([Live today](#live-today)).
+4. **Does what the meeting decided.** The recap goes out with a footer saying what was checked. An agreed USDC payment is made after one tap, or by autopilot if you turn it on (listed payees only, from verified notes, with a 60-second undo). A NEAR contract enforces the caps either way; anything over a cap waits for your own wallet.
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting through Aftercall's local MCP server, claims an item, marks it done with a link to the work, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
 <table>
