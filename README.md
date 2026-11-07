@@ -46,7 +46,7 @@ Planned, not built: paying for Aftercall's own inference with **Staking for NEAR
 1. **Records the call on your Mac,** from any app. No bot joins.
 2. **Makes the notes inside secure hardware:** NEAR AI Cloud's TEEs, checked every run, with the transcript encrypted to the attested model. Items without an exact quote from the call are dropped.
 3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. No public proof link yet ([Live today](#live-today)). **Share this line** sends one line of a meeting with a Merkle proof that it's in the transcript the proof commits to, and nothing else of the meeting (built and tested, not yet run live).
-4. **Does what the meeting decided.** Sends the recap, with a footer saying what was checked, and pays agreed USDC after one tap, or by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; over a cap waits for your wallet. A deal with a condition can be held in escrow until the payee confirms the terms from their own NEAR wallet and you release it ([Handshake](docs/handshake.md); built and tested on a local node, not yet deployed).
+4. **Does what the meeting decided.** Sends the recap, with a footer saying what was checked, and pays agreed USDC after one tap, or by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; over a cap waits for your wallet. A deal with a condition can be held in escrow until the payee confirms the terms from their own NEAR wallet and you release it ([Handshake](docs/handshake.md); on testnet since 7 Nov, not yet run live).
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting over Aftercall's local MCP server, claims an item, marks it done with a link, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
 <table>
@@ -70,7 +70,7 @@ Guide for people and coding agents: [docs/judging.md](docs/judging.md). The 90-s
 | Every reply's signature is checked against the attested key; notes that fail are marked unverified, and autopilot runs nothing from them | `pipeline.ts`, `packages/core/src/followups/autopilot.ts` | `pipeline.test.ts`, `autopilot.test.ts` |
 | The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote | `packages/core/src/notes/build.ts`, `transcript.ts` | `build.test.ts`, `transcript.test.ts` |
 | The app's key can only pay, record proofs and open or release escrows, within the caps; over a cap waits for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
-| An escrow pays only after the payee confirms the exact terms (a salted hash on chain) from their own account; not yet deployed | `lib.rs`, `packages/core/src/followups/deal.ts`, `apps/web/app/deal/` | `escrow_*` (sandbox), `deal.test.ts` |
+| An escrow pays only after the payee confirms the exact terms (a salted hash on chain) from their own account; on testnet, not yet run live | `lib.rs`, `packages/core/src/followups/deal.ts`, `apps/web/app/deal/` | `escrow_*` (sandbox), `deal.test.ts` |
 | Anyone can re-run a proof's checks in a browser | `apps/web/app/verify/` | `verify.test.ts`, `proof.test.ts` |
 | A shared line is checked against the transcript the proof on NEAR commits to; the link reveals no other line (not yet run live) | `packages/core/src/notes/lines.ts`, `disclosure.ts` | `lines.test.ts`, `disclosure.test.ts`, `packages/receipts` tests |
 | The backend keeps nothing about a recap; claim links keep only a token hash and an amount | `apps/backend/src/email/`, `apps/backend/src/claims/` | `email.test.ts`, `claims.test.ts` |
@@ -86,7 +86,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | Website, browser demo, install guide | https://getaftercall.vercel.app | Live |
 | Mac test build | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
 | Backend (sign-in, recap email, claim links, counts) | https://aftercall-api.vercel.app/health | Live, with Postgres |
-| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 1 proof, 0 payments |
+| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 1 proof, 0 payments. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
 | Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Done 3 Nov (private meeting) |
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |

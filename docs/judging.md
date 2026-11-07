@@ -149,7 +149,7 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 ## Known limits
 
 - Payments from the Mac app and the over-cap hold haven't run on testnet yet; they're tested on a local NEAR node.
-- Handshake (escrow, the `/deal` page, conditions on payments, payments linked to their proof) is built and tested on a local NEAR node, not yet deployed or run live: `wallet.aftercall.testnet` still runs the code from before it, and each owner will need to update the Mac's key once ([handshake.md](handshake.md)).
+- Handshake (escrow, the `/deal` page, conditions on payments, payments linked to their proof) is built and tested on a local NEAR node and on testnet since 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq), an in-place upgrade that kept every record), but not yet run live: no escrow has been opened, and each owner needs to update the Mac's key once ([handshake.md](handshake.md)).
 - The proof on testnet is from a private meeting, so its proof link isn't published. A sample meeting's link is still to come.
 - Mainnet: no deploy yet, and so no real 1Click payout (1Click has no testnet). Testnet is eligible under the rules (Q-010).
 - Test credits (a capped NEAR AI key for each tester) are built and tested against a stand-in for NEAR AI's API, and are off until Aftercall's own NEAR AI account exists.

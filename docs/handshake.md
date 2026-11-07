@@ -2,7 +2,7 @@
 
 A payment agreed on a call, held in escrow on the agent-wallet contract until it is released. The payee checks the terms against NEAR and confirms them from their own NEAR account; the money then waits for the payer to release it, or, with no condition, goes to the payee at once.
 
-**Status (7 Nov 2026):** built and tested on a local NEAR node, not yet deployed or run live. `wallet.aftercall.testnet` still runs the code from before Handshake; see [Deploying it](#deploying-it).
+**Status (7 Nov 2026):** built and tested on a local NEAR node, and on testnet: `wallet.aftercall.testnet` was upgraded in place on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq), code sha256 `ac6b02d2…`). Read back afterwards, its records were unchanged (1 wallet with its balance and caps, 1 proof) and `get_escrow` answers. Not yet run live: the key update in a real wallet, an escrow, `/deal` with a real wallet, and the confirm-link email.
 
 ## From the call to the deal
 
@@ -68,4 +68,4 @@ The app's limited key may now call `pay`, `record_proof`, `open_escrow` and `rel
 
 Plain redeploy over the running contract, no migration call. The contract's root state gains no field; escrows and payment links live in maps on new storage prefixes (`StorageKey::Escrows`, `StorageKey::PaymentProofs`, appended), built on the fly. The sandbox test `upgrade_from_the_code_before_handshake_keeps_state_and_adds_escrows` deploys the code from before Handshake (`contracts/agent-wallet/tests/fixtures/agent_wallet_6184cac.wasm`, built from commit 6184cac; its sha256 `1fa7d6cb…` is the code hash [proven.md](proven.md) records for `wallet.aftercall.testnet`), fills it (a wallet, a payee, a proof, a paid and a parked payment), redeploys this code over it, checks every view reads the same, approves the old parked payment, pays with the old key, and opens, confirms and releases an escrow linked to the old proof. Commands: [contracts/README.md](../contracts/README.md#upgrade-testnet-in-place-handshake). Then each owner updates the Mac's key once.
 
-Not run live: the redeploy, the key update in a real wallet, an escrow, `/deal` with a real wallet, and the confirm-link email.
+Done on testnet on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)). Not run live yet: the key update in a real wallet, an escrow, `/deal` with a real wallet, and the confirm-link email.
