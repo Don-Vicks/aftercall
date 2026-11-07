@@ -109,7 +109,8 @@ Running every part locally: [docs/development.md](docs/development.md).
 | **NEAR Intents 1Click API** | SDK first published 28 Mar 2025 ([npm](https://www.npmjs.com/package/@defuse-protocol/one-click-sdk-typescript)) | Paying a payee in USDC on Solana or Base from USDC on NEAR (quote, deposit address, status), under a cross-chain cap the contract enforces. Live dry quotes in `/demo`; a real payout needs mainnet, not yet deployed | `packages/core/src/intents/oneclick.ts`, `contracts/agent-wallet`, [docs](docs/near-intents-1click.md) |
 | **NEAR Connect 0.12.0** | Released 26 Oct 2026 ([release](https://github.com/azbang/near-connect/releases/tag/v0.12.0)) | Owner approvals on `/sign` from any NEAR wallet it supports | `apps/web/app/sign/` |
 | **near-sdk 5.29** | Released 13 Jul 2026 ([release](https://github.com/near/near-sdk-rs/releases/tag/near-sdk-v5.29.0)) | The agent-wallet contract: caps, payees, parked payments, the proof registry, per-user storage | `contracts/agent-wallet` |
-| **Staking for NEAR AI:** staking rewards become NEAR AI Cloud credits | Announced 30 Jul 2026 ([NEAR AI](https://near.ai/blog/staking-for-near-ai)) | How Aftercall's own inference is meant to be paid for. Documented only: nothing in the repo signs it, and it hasn't been done | [docs/staking-for-inference.md](docs/staking-for-inference.md) |
+
+Planned, not built: paying for Aftercall's own inference with **Staking for NEAR AI**, where staking rewards become NEAR AI Cloud credits (announced 30 Jul 2026, [NEAR AI](https://near.ai/blog/staking-for-near-ai)). It's written up in [docs/staking-for-inference.md](docs/staking-for-inference.md); nothing in the repo signs it, and it hasn't been done.
 
 ## What it does
 
