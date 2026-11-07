@@ -1,120 +1,105 @@
-# Demo video: the 90-second script
+# Demo video: the 1:45 script
 
-The hackathon demo for NEAR HACKATHON. It goes on the submission, on the public X post, and in front of the jury, so it has to show why someone would want Aftercall, not only what its screens are.
+The hackathon demo for NEAR HACKATHON. It goes on the submission, on the public X post, and in front of the jury, so it has to say why someone would want Aftercall and what the secure hardware, the proof on NEAR and the contract do for them, not only show its screens.
 
-Status (7 Nov 2026): a draft. Nothing is recorded or posted yet. The X post at the end is a DRAFT for Victor to approve before anything goes out.
+Status (7 Nov 2026): rewritten and approved by Victor; built as a review cut (`DemoReview` in `~/Developer/projects/aftercall-launch-video`). Nothing is posted yet. The X post at the end is a DRAFT for Victor to approve before anything goes out.
 
 ## What it has to sell
 
 - **Who it's for:** founders and freelancers who agree work and payments on calls (the landing page's own line, `apps/web/app/landing/Hero.tsx`).
-- **The one thing to remember:** you hang up, and the follow-ups are done: the recap sent, the agreed payment made within your caps, anything bigger waiting for you. Privately, with a proof anyone can check.
-- **Why believe it, shown not told:** the secure hardware is checked before anything is sent (beat 4); every item quotes the call (beat 4); money moves only within caps a NEAR contract enforces (beat 6).
-- **What to do next:** try it in the browser at getaftercall.vercel.app/demo, on screen at the close (beat 10).
-
-Every beat serves one of these. The order is the viewer's day: the problem, the call, the notes, the follow-ups, the payoff.
+- **The problem, felt:** a call holds private things (pay, a client's numbers, money promised); meeting notes apps send it to servers you can't check, and the follow-ups still wait on you.
+- **The one idea:** "Don't trust it. Check it." Private because the hardware is checked first; provable because a fingerprint goes on NEAR; done because the follow-ups run within limits a contract enforces.
+- **What to do next:** getaftercall.vercel.app, on screen at the close.
 
 ## Rules for this video
 
-- **Every spoken line is true today.** Each one has a footnote pointing to the doc that says it ([Sources](#sources)).
-- **Nothing is shown as live unless it ran live.** Beats marked **Live session** depend on things that haven't run live yet (a payment on testnet, the Mac app with a real phone, the Mac app with a real Claude Code session, a public proof link). If the session doesn't get the shot, use the fallback listed for that beat, with its label on screen.
-- **Samples say so.** Any made-up meeting on screen carries a label in the corner: "Sample meeting · browser demo" for `/demo`, "Sample call · made-up people" for the Mac app's samples.
-- **Test money says so.** Every shot from the Mac app carries "Mac test build · NEAR testnet · test USDC" in a corner.
+- **Every spoken line is true today.** Each one has a footnote pointing to the doc that says it ([Sources](#sources)). Never say the audio is end-to-end encrypted: the transcript is; the audio goes over TLS pinned to the attested gateway.
+- **Nothing is shown as live unless it ran live.** Shots that show an event (a payment, the hold, a proof, a phone tap, an agent's work in the app) are **live slots** (L1–L8 below), filled from the live session. Until a slot has its clip, the render is a review cut: the browser demo's footage stands in, a small dot and the slot id sit in the corner, and the cut is not posted.
+- **Interface shots that imply no event carry no label** (browsing notes, a quote, the transcript, the checks list). Explainer graphics show how it works, not a recorded run; where one shows real data (the 3 Nov `record_proof`), it says so.
+- **Test money says so.** The close carries "Mac test build · NEAR testnet".
 - **Waits are cut, not sped up.** NEAR AI, NEAR and the phone's 10-second check all take time; cut the wait and keep the UI at real speed.
-- **No numbers we can't source.** No user counts, downloads or traffic.
+- **No numbers we can't source,** no competitor names; "meeting note apps" stays generic.
 
 ## At a glance
 
-Voice-over: 193 words in 90 seconds, about 2.1 words a second (budget 2.3).
+Voice-over: 222 words in 1:45, about 2.1 a second (the problem beat runs quicker, 3.2). The captions are the voice-over, one idea at a time, so it works muted. `out/vo-script.txt` in the video project has every line with its start time, for recording to picture.
 
-| # | Time | Beat | Words | Capture |
-| --- | --- | --- | --- | --- |
-| 1 | 0:00–0:08 | The problem, felt | 18 | Today |
-| 2 | 0:08–0:13 | The promise | 10 | Today |
-| 3 | 0:13–0:21 | Record, no bot | 18 | Today; shoot in the live session so it's the same call |
-| 4 | 0:21–0:33 | Notes in secure hardware, with quotes | 27 | **Live session** |
-| 5 | 0:33–0:43 | A proof on NEAR, checked in a browser | 21 | **Live session** (the `/verify` shot) |
-| 6 | 0:43–0:59 | The follow-ups: recap, payment, hold | 36 | **Live session** |
-| 7 | 0:59–1:07 | Approve from your phone | 18 | **Live session** |
-| 8 | 1:07–1:15 | Hand an action item to Claude Code | 15 | **Live session** |
-| 9 | 1:15–1:24 | The payoff: hang up, it's done | 18 | Today, or from the live session |
-| 10 | 1:24–1:30 | Close | 12 | Today |
+| # | Time | Beat | Words |
+| --- | --- | --- | --- |
+| 1 | 0:00–0:06 | Hook: what was on your last call | 15 |
+| 2 | 0:06–0:16 | Problem: their servers, then the to-dos | 31 |
+| 3 | 0:16–0:21 | Promise: don't trust it, check it | 13 |
+| 4 | 0:21–0:28 | Record, no bot | 9 |
+| 5 | 0:28–0:42 | Why private: the sealed hardware | 37 |
+| 6 | 0:42–0:48 | Trust the notes: every item quotes the call | 12 |
+| 7 | 0:48–0:58 | Why NEAR: a fingerprint anyone can check | 27 |
+| 8 | 0:58–1:14 | Follow-ups, within the contract's limits | 37 |
+| 9 | 1:14–1:23 | Approve from your phone | 15 |
+| 10 | 1:23–1:33 | Hand a task to Claude Code | 18 |
+| 11 | 1:33–1:40 | Private. Provable. Done. | 3 |
+| 12 | 1:40–1:45 | Close | 5 |
 
 ## The script
 
-### 1. The problem, felt · 0:00–0:08 (8 s)
+### 1. Hook · 0:00–0:06
 
-- **On screen:** a video call in a grid of four people with an "Uploading your call…" bar filling, then a page of meeting notes whose items stay unticked, stamped "FRIDAY · STILL OPEN". These are the `Hook` and `Stale` scenes in `~/Developer/projects/aftercall-launch-video/src/Launch.tsx`, retimed to 8 s. They're drawn illustrations, not any real app.
-- **On-screen text:** "Your calls go to servers you can't check." then "The follow-ups still wait on you."
-- **Voice-over (18 words):** "Meeting notes apps send your calls to servers you can't check. Then the follow-ups still wait on you."[^problem]
-- **Capture:** today (render from the Remotion project with the new copy).
+- **On screen:** a video call, four tiles; three things said on it appear as speech over the tiles and light up: a salary, a client's numbers, a payment promised. Drawn, not any real call.
+- **Voice-over:** "Your last call had a salary in it. A client's numbers. A payment you promised."[^stakes]
 
-### 2. The promise · 0:08–0:13 (5 s)
+### 2. Problem · 0:06–0:16
 
-- **On screen:** the Aftercall icon and name on the dark ground, as in the Remotion `Mark` scene.
-- **On-screen text:** "Private calls. Follow-ups done."
-- **Voice-over (10 words):** "Aftercall keeps your calls private, then does what they agreed."[^promise]
-- **Capture:** today.
+- **On screen:** "Uploading your call…"; the audio flies to a generic server stack labelled "Their servers · “Trust us.”", a question mark on it; then the to-do card going stale, "FRIDAY · STILL OPEN". No brand names.
+- **Voice-over:** "Meeting note apps upload all of it to their servers. You're trusting a promise you can't check. And when the call ends, the work starts: the recap, the payment, the to-dos."[^problem]
 
-### 3. Record, no bot · 0:13–0:21 (8 s)
+### 3. Promise · 0:16–0:21
 
-- **On screen:** the Mac app's Home. Click Record; the record sheet with "I've told everyone on the call" ticked; then the recording screen beside the call window (FaceTime, Meet or Zoom), with no extra participant in the call's list.
-- **On-screen text:** "Records any call on your Mac. No bot joins."
-- **Voice-over (18 words):** "Hit record on any call. No bot joins.[^nobot] The audio is sealed on your Mac as it records."[^sealed]
-- **Capture:** today (recording needs no NEAR AI key), but shoot it in the live session (shot L3) so the call recorded here is the one beats 4 to 8 follow.
+- **On screen:** the icon and "Aftercall", "Private meeting notes that do the follow-ups."; then the big line "Don't trust it. Check it."
+- **Voice-over:** "Aftercall: private meeting notes that do the follow-ups.[^tagline] Don't trust it. Check it."[^verify]
 
-### 4. Notes in secure hardware, with quotes · 0:21–0:33 (12 s)
+### 4. Record · 0:21–0:28 · slot L3
 
-- **On screen:** Make notes. The processing screen ticks through its checks (Intel TDX quote, NVIDIA GPU evidence, signatures) and lands on "Verified"; then the meeting page: summary, decisions, action items, each with the quote from the call under it. Hover one quote so the transcript line lights up.
-- **On-screen text:** "Hardware checked first. Every item quotes the call."
-- **Voice-over (27 words):** "Aftercall checks NEAR AI's secure hardware first.[^attest] The transcript is encrypted to the attested model.[^e2ee] Every item carries an exact quote from the call, or it's dropped."[^quotes]
-- **Capture:** **Live session.** Making notes calls live NEAR AI with Victor's own key (it ran live on a real call on 3 Nov[^live3nov]).
-- **Fallback:** `/demo` → the sample meeting's processing walk-through and notes. The browser demo simulates the run on sample data, so the label reads "Sample meeting · browser demo · simulated run". Voice-over unchanged: it describes what the app does, not what this shot ran.
+- **On screen:** the app: Record → the sheet with "I've told everyone on the call" ticked → recording, notes typed.
+- **Voice-over:** "Record any call on your Mac. No bot joins."[^nobot]
 
-### 5. A proof on NEAR, checked in a browser · 0:33–0:43 (10 s)
+### 5. Why private: the sealed hardware · 0:28–0:42 · slot L4 for the footage
 
-- **On screen:** the Verify sheet in the Mac app → Copy proof link → a browser at `https://getaftercall.vercel.app/verify` with that link, the checks re-running; then the `record_proof` transaction on `testnet.nearblocks.io`.
-- **On-screen text:** "A proof on NEAR. Anyone with the link can re-check it."
-- **Voice-over (21 words):** "A proof goes on NEAR, with no meeting content.[^proof] Share the link, and anyone can re-run the checks in a browser."[^verify]
-- **Capture:** **Live session** for `/verify`: no public proof link exists yet[^nolink], and this test call can be the first. The nearblocks shot of the 3 Nov `record_proof` can be taken today.
-- **Fallback:** the `/demo` Verify sheet re-running the checks on a test proof, labelled "Browser demo · test proof", then the real 3 Nov [`record_proof`](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), labelled "First proof on NEAR testnet, 3 Nov 2026".
+- **On screen:** an explainer that builds with the line: your Mac and a sealed box, "Sealed hardware · TEE · NEAR AI Cloud", chips "Intel TDX" and "NVIDIA GPU"; a dashed line "Attestation: is this hardware genuine?" → the stamp "✓ Attestation checked"; then a locked "Transcript" packet, "encrypted to the attested model's key", into the box, and the notes back. Then the app's own checks ticking to "notes ready".
+- **Voice-over:** "The notes are made inside sealed hardware on NEAR AI Cloud. Before a word leaves your Mac, the app checks the hardware is genuine,[^attest] and the transcript is encrypted so only the model inside can read it."[^e2ee]
 
-### 6. The follow-ups · 0:43–0:59 (16 s)
+### 6. Trust the notes · 0:42–0:48 · slot L4b
 
-- **On screen:** the meeting's follow-ups. Recap → Send → the 5-second Undo empties → Sent. The designer's 5 USDC deposit → Approve → "Paying in…" → Paid, with the transaction hash. The 5,000 USDC payment shows "Held for your wallet"; click it and `/sign` opens in the browser (don't approve it).
-- **On-screen text:** "Recap sent." · "5 USDC paid, within your caps." · "5,000 USDC held for your wallet."
-- **Voice-over (36 words):** "It does what the call agreed, once you tap.[^tap] The recap goes out.[^recap] The deposit is paid in USDC, within caps a NEAR contract enforces.[^caps] Five thousand is over the cap: it waits for your wallet."[^hold]
-- **Capture:** **Live session.** The recap through Aftercall ran live on 6 Nov[^recap6nov]; a payment from the Mac app and the over-cap hold have never run on testnet[^nopay]. This would be the first.
-- **Fallback:** `/demo` → Sync with Ada's follow-ups: the designer's 50 USDC, the 5,000 held. The browser demo simulates the payment under the sample wallet's caps, so the label reads "Sample meeting · browser demo · simulated payment". If only the hold is missing (Qwen may not propose the 5,000), use the fallback for that shot alone.
+- **On screen:** hover an item: its quote opens under it; jump to the transcript line, lit.
+- **Voice-over:** "Every item quotes the call, word for word. No quote, no item."[^quotes]
 
-### 7. Approve from your phone · 0:59–1:07 (8 s)
+### 7. Why NEAR: a fingerprint · 0:48–0:58 · slot L5 for the footage
 
-- **On screen:** an iPhone on `getaftercall.vercel.app/phone`, paired with the Mac: "Needs you" → Pay Kemi, 5 USDC, with the words from the call and "What leaves" → Approve → the 5-second Undo → done. Cut to the Mac: Kemi's payment is Paid.
-- **On-screen text:** "Approve from your phone. Your Mac checks every tap."
-- **Voice-over (18 words):** "Away from your desk? Approve from your phone. The Mac checks every tap again under the same caps."[^phone]
-- **Capture:** **Live session.** The Mac app, the relay and a real phone haven't run together yet[^phonelive].
-- **Fallback:** a real iPhone opening the link from `pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app` (the deployed relay and page, with a stand-in Mac), labelled "Phone page · stand-in Mac · sample items". Cut to the terminal line where the stand-in accepts the tap, not to the Mac app.
+- **On screen:** an explainer: "Your notes" (they stay on your Mac) → a fingerprint, `8f19a214d417681e…` → "On NEAR": the real 3 Nov `record_proof` (block 276,039,504, its `meeting_id`, `proof_hash` and `model`), and "transcript · notes · audio: never on chain"; labelled "The first proof on NEAR testnet, 3 Nov 2026". Then the Verify sheet's checks, down to "Notes unchanged since signing".
+- **Voice-over:** "A fingerprint of the meeting goes on NEAR. Never the meeting itself.[^proof] Share the link, and anyone can check the notes were made privately and weren't changed."[^verify]
 
-### 8. Hand an action item to Claude Code · 1:07–1:15 (8 s)
+### 8. Follow-ups, within the contract's limits · 0:58–1:14 · slots L6, L6b, L1, L6h
 
-- **On screen:** the action item "Ship the API fix" → Hand to an agent → Open in Claude Code → Terminal opens in the project's code folder with `claude`, which claims the item; cut to the item showing it claimed, then "Done by Claude Code" with the link to the work.
-- **On-screen text:** "Hand a task to Claude Code. Agents never send or pay."
-- **Voice-over (15 words):** "Hand an action item to Claude Code. It claims it and links the finished work."[^agents]
-- **Capture:** **Live session.** Hand to an agent and Open in Claude Code haven't run with the Mac app and a real Claude Code session[^agentslive].
-- **Fallback:** a real Claude Code session against Aftercall's MCP server and its stand-in for the app, as recorded on 1 Nov[^agentsrun]: `node apps/mcp/scripts/demo.ts`, press Enter to allow claims, then `claude -p "List my Aftercall meetings, then claim the open action item about the API fix as Claude Code." --mcp-config <the config it prints> --strict-mcp-config --allowedTools "mcp__aftercall__*"`. Label: "Claude Code on Aftercall's MCP server · stand-in app · sample meetings". Voice-over unchanged.
+- **On screen:** the recap Sent, and the email as Ada receives it (Aftercall's recap template); Approve the deposit → Paying in… → Paid; the wallet's limits with a card "The NEAR contract enforces: Listed payees only · Daily cap · Per-payment cap · Only your own wallet can change them"; the 5,000 "Over your caps" → the wallet's "Waiting for you", with "Over a cap? It waits for your own wallet."
+- **Voice-over:** "Then it does what the call agreed.[^tap] The recap goes out.[^recap] Payments go out in USDC from a NEAR contract, within limits you set.[^caps] The app's key can't break them.[^yocto] Anything bigger waits for your own wallet."[^hold]
 
-### 9. The payoff: hang up, it's done · 1:15–1:24 (9 s)
+### 9. Approve from your phone · 1:14–1:23 · slots L7m, L7, L7b
 
-- **On screen:** the meeting's follow-ups at rest: the recap Sent, the deposit Paid, the 5,000 Held for your wallet. Then two quick holds that say why to trust it: the Verify sheet's list of checks, and the Wallet's limits (daily and per-payment cap).
-- **On-screen text:** "Recap sent · deposit paid · 5,000 waits for you." then "Attested every run.[^attest] Audio and text go only to the TEE.[^onlytee] The app's key can't change your caps."[^yocto]
-- **Voice-over (18 words):** "Hang up, and it's done: recap sent, deposit paid, the big one waiting for you.[^payoff] Private, and provable."[^verify]
-- **Capture:** the follow-ups from L6 if the live session got them, otherwise F3 with its label. The Verify sheet from this session's meeting if it was captured, otherwise the `/demo` Verify sheet labelled "Browser demo · test proof". Wallet from the Mac app on the testnet wallet set up on 3 Nov.
+- **On screen:** the Mac's Pair a phone (QR code); the iPhone opens it; the same six digits on both screens (one real pairing through the deployed relay); They match; Pay Kemi → Approve → the Undo; the Mac: "Paid Kemi · Approved on your phone".
+- **Voice-over:** "Away from your desk? Approve from your phone, end-to-end encrypted.[^phonee2ee] Your Mac checks every tap."[^phone]
 
-### 10. Close · 1:24–1:30 (6 s)
+### 10. Hand a task to Claude Code · 1:23–1:33 · slots L8, L8b
 
-- **On screen:** the icon and "Aftercall"; under it the tagline, the link, and the credit line.
-- **On-screen text:** "Aftercall" · "Private meeting notes that do the follow-ups." · "Try it in your browser: getaftercall.vercel.app/demo" · "Built at NEAR HACKATHON · @NEARProtocol" · small: "Mac test build · NEAR testnet"
-- **Voice-over (12 words):** "Aftercall. Private meeting notes that do the follow-ups.[^tagline] Built at NEAR HACKATHON."[^built]
-- **Capture:** today (the Remotion `Mark` scene with this copy; it currently reads "Built on NEAR AI · runs on NEAR testnet").
+- **On screen:** "Ship the API fix" → Hand to an agent; a terminal drawn from a real Claude Code run (7 Nov) on Aftercall's MCP server and its stand-in app: claim, read the code, fix, a refused command and the retry, a local commit, `complete_action_item` with the link, `draft_follow_up`; then the app: "Done by Claude Code" with the link, and the recap it proposed waiting for a tap.
+- **Voice-over:** "Hand a task to Claude Code. It does the work and links it.[^agents] Agents never send or pay."[^agentsnever]
+
+### 11. Private. Provable. Done. · 1:33–1:40
+
+- **On screen:** three words, each with its line: "Sealed hardware, checked every run." · "A proof on NEAR anyone can check." · "Follow-ups within limits a contract enforces."
+- **Voice-over:** "Private. Provable. Done."[^attest] [^verify] [^caps]
+
+### 12. Close · 1:40–1:45
+
+- **On screen:** the icon and "Aftercall", the tagline, getaftercall.vercel.app, "Built at NEAR HACKATHON · @NEARProtocol", small "Mac test build · NEAR testnet".
+- **Voice-over:** "Aftercall. Built at NEAR HACKATHON."[^built]
 
 ## Shot list for the recording session
 
@@ -147,38 +132,36 @@ Expect from the notes: an action item "Ship the API fix", a recap to [Name], a 5
 
 | Shot | Beat | What to capture | App state needed | Live? |
 | --- | --- | --- | --- | --- |
-| L1 | 9 | Wallet → limits showing 10 / 20 USDC | Payments set up (step 3) | Today |
-| L2 | 5 | nearblocks: the 3 Nov `record_proof` transaction | None | Today |
-| L3 | 3 | Home → Record → record sheet with the tick → recording screen beside the call; stop when the call ends | Call app open with [Name] | Today, in session |
-| L4 | 4 | Make notes → processing checks → Verified → meeting page; hover a quote | L3's recording; NEAR AI key | **Live** |
-| L5 | 5, 9 | Verify sheet (list of checks) → Copy proof link → paste in a browser at `/verify` → checks re-run; then that meeting's `record_proof` on nearblocks | L4's notes and proof | **Live** |
-| L6 | 6 | Follow-ups: Send recap (let the Undo run out) → Sent; Approve the 5 USDC deposit → Paid with hash; the 5,000 "Held for your wallet" → `/sign` opens (don't approve) | L4's follow-ups; 20 USDC deposited | **Live** |
-| L7 | 7 | iPhone: Needs you → Pay Kemi 5 USDC → Approve → Undo runs out; then the Mac's follow-up flips to Paid | Phone paired; Kemi's payment still waiting | **Live** |
-| L8 | 8 | "Ship the API fix" → Hand to an agent → Open in Claude Code → Terminal: Claude Code claims it, makes the fix, completes with the link → the item shows "Done by Claude Code" with the link | Agents on and connected; code folder set | **Live** |
+| L1 | 8 | Wallet → limits showing 10 / 20 USDC | Payments set up (step 3) | Today |
+| L2 | 7 | nearblocks: the 3 Nov `record_proof` transaction | None | Today |
+| L3 | 4 | Home → Record → record sheet with the tick → recording screen beside the call; stop when the call ends | Call app open with [Name] | Today, in session |
+| L4 | 5, 6 | Make notes → processing checks → Verified → meeting page; hover a quote | L3's recording; NEAR AI key | **Live** |
+| L5 | 7 | Verify sheet (list of checks) → Copy proof link → paste in a browser at `/verify` → checks re-run; then that meeting's `record_proof` on nearblocks | L4's notes and proof | **Live** |
+| L6 | 8 | Follow-ups: Send recap (let the Undo run out) → Sent; Approve the 5 USDC deposit → Paid with hash; the 5,000 "Held for your wallet" → `/sign` opens (don't approve) | L4's follow-ups; 20 USDC deposited | **Live** |
+| L7 | 9 | Settings → Your phone → Pair a phone (QR) → the iPhone opens it → the same six digits on both → They match; then the iPhone: Needs you → Pay Kemi 5 USDC → Approve → Undo runs out; then the Mac's follow-up flips to Paid | Phone paired; Kemi's payment still waiting | **Live** |
+| L8 | 10 | "Ship the API fix" → Hand to an agent → Open in Claude Code → Terminal: Claude Code claims it, makes the fix, completes with the link → the item shows "Done by Claude Code" with the link | Agents on and connected; code folder set | **Live** |
 
 ### Fallback shots (record today, as insurance)
 
 | Shot | For beat | What | Label on screen |
 | --- | --- | --- | --- |
-| F1 | 4 | `/demo`: the sample meeting's processing walk-through and notes, hover a quote | Sample meeting · browser demo · simulated run |
-| F2 | 5, 9 | `/demo`: the Verify sheet on the test proof | Browser demo · test proof |
-| F3 | 6 | `/demo`: Sync with Ada's follow-ups, the designer's 50 USDC approved, the 5,000 held | Sample meeting · browser demo · simulated payment |
-| F4 | 7 | A real iPhone on the `pnpm dev:phone -- --relay …` link: approve, dismiss, the held payment opening `/sign`; the terminal accepting the tap | Phone page · stand-in Mac · sample items |
-| F5 | 8 | Claude Code against `node apps/mcp/scripts/demo.ts`: read-only refusal, then the claim | Claude Code on Aftercall's MCP server · stand-in app · sample meetings |
+| F1 | 5, 6 | `/demo`: the sample meeting's processing walk-through and notes, hover a quote | Sample meeting · browser demo · simulated run |
+| F2 | 7 | `/demo`: the Verify sheet on the test proof | Browser demo · test proof |
+| F3 | 8 | `/demo`: Sync with Ada's follow-ups, the designer's 50 USDC approved, the 5,000 held | Sample meeting · browser demo · simulated payment |
+| F4 | 9 | A real iPhone on the `pnpm dev:phone -- --relay …` link: approve, dismiss, the held payment opening `/sign`; the terminal accepting the tap | Phone page · stand-in Mac · sample items |
+| F5 | 10 | Claude Code against `node apps/mcp/scripts/demo.ts`: done 7 Nov (`scripts/agents-run.sh` in the video project): claim, fix, local commit, complete with a link, a proposed recap | A real Claude Code run, 7 Nov · Aftercall's MCP server and its stand-in app |
 
 ## The 15-second cut for X
 
-Made from the same shots; it plays muted first, so the text carries it.
+The new opening and the three words; it plays muted first, so the text carries it.
 
 | Time | Shot | On-screen text |
 | --- | --- | --- |
-| 0:00–0:03 | Beat 1, the upload bar | "Your calls go to servers you can't check." |
-| 0:03–0:06 | L4 (or F1): Verified, then a quote under an item | "Notes made in NEAR AI's secure hardware. Every item quotes the call." |
-| 0:06–0:10 | L6 (or F3): Paid, then Held for your wallet | "Recap sent. USDC paid within your caps. Over the cap, it waits for you." |
-| 0:10–0:13 | L7 (or F4): Approve on the phone | "Approve from your phone." |
-| 0:13–0:15 | Close card | "Aftercall · getaftercall.vercel.app · Built at NEAR HACKATHON" |
+| 0:00–0:06 | Beat 1, the call and what was said on it | "Your last call had a salary in it." · "A client's numbers." · "A payment you promised." |
+| 0:06–0:12 | Beat 11 | "Private." "Sealed hardware, checked every run." · "Provable." "A proof on NEAR anyone can check." · "Done." "Follow-ups within limits a contract enforces." |
+| 0:12–0:15 | Close card | "Aftercall · getaftercall.vercel.app · Built at NEAR HACKATHON · @NEARProtocol" |
 
-Voice-over, if sound is on (25 words): "Meeting notes, made in NEAR AI's secure hardware. Then the follow-ups: recap sent, USDC paid within your caps, anything over held for your wallet. Aftercall."
+Voice-over, if sound is on (18 words): "Your last call had a salary in it. A client's numbers. A payment you promised. Private. Provable. Done."
 
 ## X post (DRAFT, for Victor to approve)
 
@@ -224,3 +207,6 @@ Every spoken claim, and where the repo says it.
 [^yocto]: docs/judging.md, row "The app's NEAR key can only call `pay`, `record_proof`, `open_escrow` and `release_escrow`; rule changes need 1 yoctoNEAR, which that key can't attach". Sandbox tests `limited_key_cannot_change_rules`, `one_yocto_rule_holds_even_if_key_lists_owner_methods`.
 [^tagline]: README.md, the bold line under the title.
 [^built]: README.md says "Built for NEAR HACKATHON (1–14 Nov 2026)". Planning docs start on 24 Oct and code on 26 Oct, after the 19 Oct announcement; the FAQ counts code from then (Q-001; README.md, "Built with"). Victor to confirm "Built at" before recording.
+[^stakes]: An illustration of what calls hold, not a claim about any product; the people and numbers are made up.
+[^phonee2ee]: README.md, "Claims, code and tests": "The phone sees only what approving needs, sealed so the relay can't read it"; the phone page itself: "What waits for you travels sealed between your Mac and this phone. Aftercall's relay passes the sealed boxes on and can't read them." Design: docs/design/phone-protocol.md.
+[^agentsnever]: README.md, "Claims, code and tests": an agent's follow-up "waits for your tap: never autopilot, never the phone"; the app's Coding agents screen: agents can't "Send email or recaps, or approve their own proposals" or "Pay, or touch the agent wallet". The 7 Nov run: `out/agents-run.jsonl` in the video project (claim, complete with a link, a proposed recap that waits for approval).
