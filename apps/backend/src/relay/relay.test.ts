@@ -226,6 +226,8 @@ for (const [name, make] of stores) {
     try {
       const waiting = await pairThrough(http, { confirm: false });
       const active = await pairThrough(http);
+      clock.now = T0 + PAIRING_WAIT_MS - 1;
+      assert.equal((await http().get(`/relay/pairings/${waiting.id}/hello`).set(bearer(waiting.macToken))).status, 200, "the Mac waiting for a hello doesn't keep it longer");
       clock.now = T0 + PAIRING_WAIT_MS;
       const gone = await http().get(`/relay/pairings/${waiting.id}/hello`).set(bearer(waiting.macToken));
       assert.deepEqual([gone.status, gone.body.message], [404, "NO_PAIRING"]);
@@ -293,6 +295,7 @@ for (const [name, make] of stores) {
       await done();
     }
   });
+
 }
 
 test("each side has its own token, and a wrong one is refused", async () => {
