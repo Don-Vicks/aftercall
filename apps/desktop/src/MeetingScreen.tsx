@@ -202,6 +202,7 @@ export function MeetingScreen({
                 autopilotOn={autopilotOn}
                 onOpenAgents={onOpenAgents}
                 onOpenAutopilot={onOpenAutopilot}
+                proofOnChain={!!saved?.onChain}
               />
             ) : (
               <Transcript meeting={meeting} others={others} target={target} onOpenFollowUp={openFollowUp} />
@@ -260,6 +261,7 @@ function Notes({
   autopilotOn,
   onOpenAgents,
   onOpenAutopilot,
+  proofOnChain,
 }: {
   meeting: Meeting;
   dropped: Dropped[];
@@ -275,6 +277,8 @@ function Notes({
   autopilotOn?: boolean;
   onOpenAgents?: () => void;
   onOpenAutopilot?: () => void;
+  /** The meeting's proof is on NEAR, so its payments point to it and a deal can be held. */
+  proofOnChain?: boolean;
 }) {
   const open = meeting.actionItems.filter((a) => !a.done).length;
   const agents = meeting.actionItems.some((a) => a.claimed || a.completed);
@@ -394,6 +398,7 @@ function Notes({
           invited={meeting.invited}
           autopilotOn={autopilotOn}
           onOpenAutopilot={onOpenAutopilot}
+          proofOnChain={proofOnChain}
           {...handlers}
         />
       </div>

@@ -25,7 +25,25 @@ import { SearchScreen } from "./SearchScreen";
 import { WalletScreen, type BlockedPayment } from "./WalletScreen";
 import { near } from "./near";
 import { recordingFiles } from "./nearai";
-import { claimedAccounts, confirmClaim, createClaim, draftInMail, latestPreview, pay, payCrossChain, previewCrossChain, sendRecap, waitingForClaims, type Patch } from "./followUpActions";
+import {
+  claimedAccounts,
+  confirmClaim,
+  createClaim,
+  draftInMail,
+  emailDealLink,
+  escrowInWallet,
+  holdInEscrow,
+  latestPreview,
+  pay,
+  payCrossChain,
+  previewCrossChain,
+  refreshEscrow,
+  releaseEscrow,
+  sendRecap,
+  waitingForClaims,
+  waitingOnEscrows,
+  type Patch,
+} from "./followUpActions";
 import { usePhoneSync } from "./phoneSync";
 import { dailyCap as sampleDailyCap, paidBySample, payees as samplePayees, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 import { deleteRecording, moveRecordings, projectId, projectsApi, type Project } from "./projects";
@@ -556,8 +574,8 @@ export default function App() {
           return;
         }
         if (f.kind === "email") sendRecap(meeting, f, apply(id), saved[meeting.id]);
-        else if (destinations[f.payeeAccount]) payCrossChain(meeting, f, destinations[f.payeeAccount], apply(id)).then(refreshWallet);
-        else pay(meeting, f, apply(id)).then(refreshWallet);
+        else if (destinations[f.payeeAccount]) payCrossChain(meeting, f, destinations[f.payeeAccount], apply(id), saved[meeting.id]).then(refreshWallet);
+        else pay(meeting, f, apply(id), saved[meeting.id]).then(refreshWallet);
       },
       routeFor: (f: FollowUp) => (f.kind !== "payment" ? null : ((sample ? sampleDestinations : destinations)[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
@@ -586,6 +604,24 @@ export default function App() {
       onConfirmClaim: (id: string) => {
         const f = find(id);
         if (f.kind === "payment") confirmClaim(f, apply(id)).then(refreshWallet);
+      },
+      onAskToConfirm: (id: string) => {
+        const f = find(id);
+        if (f.kind !== "payment") return;
+        if (sample || !isDesktop) return void toast({ text: "Holding a deal in escrow needs the Mac app and a meeting whose proof is on NEAR. The sample meeting has neither." });
+        holdInEscrow(meeting, f, apply(id), saved[meeting.id]).then(refreshWallet);
+      },
+      onReleaseEscrow: (id: string) => {
+        const f = find(id);
+        if (f.kind === "payment") releaseEscrow(f, apply(id)).then(refreshWallet);
+      },
+      onEscrowInWallet: (id: string, kind: "approve-escrow" | "cancel-escrow") => {
+        const f = find(id);
+        if (f.kind === "payment") escrowInWallet(f, kind, apply(id));
+      },
+      onEmailDeal: (id: string, to: string) => {
+        const f = find(id);
+        if (f.kind === "payment") emailDealLink(f, to, apply(id));
       },
     };
   };
@@ -623,7 +659,7 @@ export default function App() {
           // Marked as autopilot's only once it went out, so a later manual approval isn't credited to it.
           const apply = (patch: Patch) => patchFollowUp(m.id, f.id, patch.status === "sent" || patch.status === "paid" ? { ...patch, byAutopilot: true } : patch);
           if (f.kind === "email") sendRecap(m, f, apply, saved[m.id]);
-          else pay(m, f, apply).then(refreshWallet);
+          else pay(m, f, apply, saved[m.id]).then(refreshWallet);
         }
       }
     }, 1000);
@@ -642,6 +678,20 @@ export default function App() {
           if (f.kind === "payment" && f.claim && !f.claim.account && shared[f.claim.id]) {
             patchFollowUp(m.id, f.id, { claim: { ...f.claim, account: shared[f.claim.id] } });
           }
+        }
+      }
+    }, 15_000);
+    return () => clearInterval(t);
+  });
+
+  // While a deal waits on the payee or on you, read its escrow every 15 seconds.
+  const anyEscrow = waitingOnEscrows(meetingList);
+  useEffect(() => {
+    if (!anyEscrow || !isDesktop) return;
+    const t = setInterval(() => {
+      for (const m of Object.values(meetings)) {
+        for (const f of m.followUps) {
+          if (f.kind === "payment" && f.escrow) refreshEscrow(f, (patch) => patchFollowUp(m.id, f.id, patch)).catch(() => {});
         }
       }
     }, 15_000);

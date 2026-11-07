@@ -1,7 +1,13 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
+  buildDealEmail,
   buildRecap,
   CHAIN_NAME,
+  dealLink,
+  dealTermsFor,
+  dealTermsHash,
+  decodeDeal,
+  newDealSalt,
   crossChainCapRefusal,
   recapFactsFrom,
   claimLink,
@@ -13,6 +19,7 @@ import {
   waitForSettlement,
   type CrossChainPayout,
   type EmailFollowUp,
+  type EscrowFollowUp,
   type FollowUp,
   type Meeting,
   type PayeeDestination,
@@ -20,7 +27,7 @@ import {
   type PayoutPreview,
 } from "@aftercall/core";
 import { HAS_BACKEND, backend } from "./backend";
-import { contractFollowupId, near, oneClick, signInWallet, waitFor, VERIFY_URL, WEB_URL } from "./near";
+import { contractFollowupId, near, oneClick, signInWallet, waitFor, DEAL_URL, VERIFY_URL, WEB_URL, type NearConfig } from "./near";
 import type { SavedNotes } from "./nearai";
 import { recapAgentWork, senderName } from "./RecapSettings";
 
@@ -72,17 +79,29 @@ export async function sendRecap(meeting: Meeting, f: EmailFollowUp, apply: Apply
 }
 
 /**
+ * The meeting's proof as recorded on this network, contract and account, if it is: a payment
+ * or escrow there can point to it. A proof recorded elsewhere isn't on this contract.
+ */
+export function proofHere(saved: SavedNotes | undefined, config: NearConfig | null): { meetingId: string; proofHash: string } | null {
+  const on = saved?.onChain;
+  if (!on || !config || on.network !== config.network || on.contract !== config.contract || on.owner !== config.account) return null;
+  return { meetingId: saved.proof.meetingId, proofHash: on.proofHash };
+}
+
+/**
  * Pays through the agent-wallet contract with this Mac's limited key. The contract
  * decides: paid within the caps, blocked for the owner's wallet, or failed and
- * refunded if the transfer bounced.
+ * refunded if the transfer bounced. With the meeting's proof on this contract, the
+ * payment records which proof it came from.
  */
-export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): Promise<void> {
-  if (f.amount === null || !f.payeeListed) return;
+export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply, saved?: SavedNotes): Promise<void> {
+  if (f.amount === null || !f.payeeListed || f.escrow) return;
   apply({ status: "sending", error: undefined });
   try {
     // Kept on a held payment: only this contract and account can say it was declined (`heldPaymentOutcome`).
     const config = await near.getConfig();
-    const out = await near.pay(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id));
+    const proof = proofHere(saved, config);
+    const out = await near.pay(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id), proof?.meetingId);
     if (out.status === "paid") apply({ status: "paid", doneAt: hhmm(), ref: out.txHash });
     else if (out.status === "blocked") apply({ status: "blocked", ref: out.txHash, heldOn: config ? { network: config.network, contract: config.contract, account: config.account } : undefined });
     else apply({ status: "failed", ref: out.txHash, error: "The transfer bounced and the amount went back to your agent wallet. Check the payee can receive USDC." });
@@ -94,6 +113,8 @@ export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): P
 function plainPayError(e: unknown): string {
   const message = e instanceof Error ? e.message : String(e);
   if (message.includes("STORAGE_CREDIT_LOW")) return "Your agent wallet's storage credit has run out. Top it up from your NEAR wallet, then try again.";
+  if (message.includes("ESCROW_EXISTS")) return "This payment is held in escrow already. It's paid when you release it.";
+  if (message.includes("PROOF_NOT_FOUND")) return "This meeting's proof isn't on your agent wallet's contract. Record it from Verify, then try again.";
   return message.includes("NO_DESTINATION")
     ? "This payee isn't set up to be paid on another chain any more. Check them in your agent wallet."
     : message.includes("UNKNOWN_PAYEE")
@@ -149,8 +170,8 @@ const MAX_FEE_BPS = 300n;
  * then the contract's `pay` with that quote's deposit address (same limited key, same
  * caps), then 1Click's status until the USDC lands or is refunded. Never on autopilot.
  */
-export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: PayeeDestination, apply: Apply): Promise<void> {
-  if (f.amount === null || !f.payeeListed) return;
+export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: PayeeDestination, apply: Apply, saved?: SavedNotes): Promise<void> {
+  if (f.amount === null || !f.payeeListed || f.escrow) return;
   apply({ status: "sending", error: undefined });
   let route: CrossChainPayout;
   try {
@@ -160,7 +181,8 @@ export async function payCrossChain(meeting: Meeting, f: PaymentFollowUp, dest: 
     const p = previewOf(q);
     if (p.fee * 10_000n > f.amount * MAX_FEE_BPS) throw new Error(`NEAR Intents quoted ${formatUsdc(p.fee)} USDC in fees, over 3%. Nothing was sent.`);
     route = { chain: dest.chain, address: dest.address, depositAddress: q.quote.depositAddress!, quoteId: q.correlationId, amountOut: q.quote.amountOut, swapStatus: "PENDING_DEPOSIT" };
-    const out = await near.payCrossChain(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id), route.depositAddress, route.quoteId);
+    const proof = proofHere(saved, await near.getConfig());
+    const out = await near.payCrossChain(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id), route.depositAddress, route.quoteId, proof?.meetingId);
     if (out.status === "blocked") {
       // Nothing is parked: the quote would expire before the owner could approve it. The daily
       // cap says whether waiting for the next day could ever let it through.
@@ -244,4 +266,100 @@ export async function claimedAccounts(): Promise<Record<string, string>> {
 
 export function waitingForClaims(meetings: Meeting[]): boolean {
   return meetings.some((m) => m.followUps.some((f: FollowUp) => f.kind === "payment" && f.claim && !f.claim.account && !f.payeeListed));
+}
+
+// ---------- Handshake: a deal both sides confirm, held in escrow ----------
+
+/** Thrown when this Mac's key was added before escrows: the owner's wallet updates it once. */
+export class KeyNeedsUpdate extends Error {}
+
+/**
+ * Holds a payment in escrow for the payee to confirm, and copies their confirm link. The
+ * contract sets the money aside within the caps (or parks it for your wallet) and keeps the
+ * meeting's proof hash and a salted hash of the terms; the terms themselves ride in the link's
+ * #fragment. Needs the meeting's proof on this contract, and a key that may open escrows.
+ */
+export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: Apply, saved?: SavedNotes): Promise<void> {
+  if (f.amount === null || !f.payeeListed || f.escrow) return;
+  apply({ status: "sending", error: undefined });
+  try {
+    const config = await near.getConfig();
+    if (!config) throw new Error("Connect your NEAR account first.");
+    const proof = proofHere(saved, config);
+    if (!proof) throw new Error("Record this meeting's proof on NEAR first (Verify), so the deal points to it.");
+    const status = await near.status();
+    if (!status.keyEscrow) {
+      await signInWallet({ kind: "update-key", publicKey: status.publicKey });
+      throw new KeyNeedsUpdate("This Mac's key was added before deals in escrow. Approve the update in your wallet, then ask again.");
+    }
+    const escrowId = contractFollowupId(meeting.id, f.id);
+    const terms = dealTermsFor(meeting, f, { network: config.network, contract: config.contract, owner: config.account, escrowId, ...proof, salt: newDealSalt() });
+    if (!terms) throw new Error("This payment needs an amount and a listed payee first.");
+    const termsHash = dealTermsHash(terms);
+    const out = await near.openEscrow(escrowId, f.payeeAccount, f.amount, proof.meetingId, termsHash, terms.condition !== null);
+    const link = dealLink(DEAL_URL, terms);
+    const escrow: EscrowFollowUp = { id: escrowId, state: out.state, link, termsHash, on: { network: config.network, contract: config.contract, account: config.account }, ref: out.txHash };
+    apply({ status: "proposed", escrow, error: undefined, autopilotAt: undefined });
+    await navigator.clipboard.writeText(link).catch(() => {});
+  } catch (e) {
+    apply({ status: "proposed", error: e instanceof KeyNeedsUpdate ? e.message : plainPayError(e) });
+  }
+}
+
+/** The escrow's state as the contract has it now; released means paid. */
+export async function refreshEscrow(f: PaymentFollowUp, apply: Apply): Promise<void> {
+  if (!f.escrow) return;
+  const config = await near.getConfig().catch(() => null);
+  // Only the contract and account it was opened on know it.
+  if (!config || config.network !== f.escrow.on.network || config.contract !== f.escrow.on.contract || config.account !== f.escrow.on.account) return;
+  const view = await near.escrow(f.escrow.id).catch(() => null);
+  if (!view || view.state === f.escrow.state) return;
+  apply({ escrow: { ...f.escrow, state: view.state }, ...(view.state === "released" && f.status !== "paid" ? { status: "paid" as const, doneAt: hhmm() } : {}) });
+}
+
+/** Pays a confirmed escrow to the payee with this Mac's key. Its amount was counted against the caps when it was set aside. */
+export async function releaseEscrow(f: PaymentFollowUp, apply: Apply): Promise<void> {
+  if (!f.escrow || f.escrow.state !== "confirmed") return;
+  apply({ status: "sending", error: undefined });
+  try {
+    const out = await near.releaseEscrow(f.escrow.id);
+    if (out.state === "released") apply({ status: "paid", doneAt: hhmm(), ref: out.txHash, escrow: { ...f.escrow, state: "released", releasedRef: out.txHash } });
+    else apply({ status: "proposed", escrow: { ...f.escrow, state: out.state }, error: "The transfer bounced, so the money is still held. Check the payee can receive USDC, then release it again." });
+  } catch (e) {
+    apply({ status: "proposed", error: plainPayError(e) });
+  }
+}
+
+/** Opens your wallet to set aside a deal the contract parked over a cap, or to take one back. */
+export async function escrowInWallet(f: PaymentFollowUp, kind: "approve-escrow" | "cancel-escrow", apply: Apply): Promise<void> {
+  if (!f.escrow || f.amount === null) return;
+  try {
+    await signInWallet({ kind, escrowId: f.escrow.id, payee: f.payeeAccount, amount: f.amount.toString(), payeeName: f.payeeName });
+  } catch (e) {
+    apply({ error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
+ * Emails the confirm link through Aftercall's backend, the recap's way: in memory for one
+ * request, then Resend, under the same 50-a-day limit. The link carries the terms, quotes
+ * included, so they pass through both, as a recap's text does.
+ */
+export async function emailDealLink(f: PaymentFollowUp, to: string, apply: Apply): Promise<void> {
+  if (!f.escrow) return;
+  if (!HAS_BACKEND) return apply({ error: "Sending through Aftercall isn't available in this build. Copy the link instead." });
+  try {
+    const terms = decodeDeal(f.escrow.link.split("#")[1] ?? "");
+    const name = senderName();
+    const config = await near.getConfig();
+    const mail = buildDealEmail(terms, f.escrow.link, name || undefined);
+    await backend.sendRecap({ to: to.trim(), ...mail, senderName: name || config?.account });
+    apply({ escrow: { ...f.escrow, emailedAt: hhmm() }, error: undefined });
+  } catch (e) {
+    apply({ error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+export function waitingOnEscrows(meetings: Meeting[]): boolean {
+  return meetings.some((m) => m.followUps.some((f: FollowUp) => f.kind === "payment" && !!f.escrow && ["parked", "open", "confirmed"].includes(f.escrow.state)));
 }
