@@ -8,6 +8,9 @@ import { EmailService, resendMailer } from "./email/email.service";
 import { ClaimsController } from "./claims/claims.controller";
 import { ClaimsService } from "./claims/claims.service";
 import { MemoryClaimsStore, PgClaimsStore } from "./claims/claims.store";
+import { RelayController } from "./relay/relay.controller";
+import { RelayService } from "./relay/relay.service";
+import { MemoryRelayStore, PgRelayStore } from "./relay/relay.store";
 import { StatsController } from "./stats/stats.controller";
 import { StatsService, rpcChainStats } from "./stats/stats.service";
 import { MemoryCounters, PgCounters, type Counters } from "./stats/counters";
@@ -42,7 +45,7 @@ function nearAiAdmin() {
 const number = (value: string | undefined, fallback: number) => (value && Number.isFinite(Number(value)) ? Number(value) : fallback);
 
 @Module({
-  controllers: [HealthController, AuthController, EmailController, ClaimsController, StatsController, TesterKeysController],
+  controllers: [HealthController, AuthController, EmailController, ClaimsController, StatsController, TesterKeysController, RelayController],
   providers: [
     { provide: NEAR_ENV, useFactory: () => nearEnv() },
     {
@@ -50,7 +53,7 @@ const number = (value: string | undefined, fallback: number) => (value && Number
       useFactory: () => {
         if (process.env.DATABASE_URL) return new Pool({ connectionString: process.env.DATABASE_URL });
         if (process.env.NODE_ENV === "production") throw new Error("DATABASE_URL is required in production");
-        console.warn("DATABASE_URL not set; claim links and counters are kept in memory for this run");
+        console.warn("DATABASE_URL not set; claim links, counters and the phone relay are kept in memory for this run");
         return null;
       },
     },
@@ -116,6 +119,16 @@ const number = (value: string | undefined, fallback: number) => (value && Number
         const store = new PgClaimsStore(pool);
         await store.migrate();
         return new ClaimsService(store);
+      },
+    },
+    {
+      provide: RelayService,
+      inject: [PG_POOL, DAILY_COUNTS],
+      useFactory: async (pool: Pool | null, daily: DailyCounts) => {
+        if (!pool) return new RelayService(new MemoryRelayStore(), daily);
+        const store = new PgRelayStore(pool);
+        await store.migrate();
+        return new RelayService(store, daily);
       },
     },
     {
