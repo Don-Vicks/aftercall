@@ -501,8 +501,9 @@ export default function App() {
        */
       onApprove: (id: string, via?: "phone") => {
         const f = find(id);
+        // Set or cleared each time it goes out, so a recap sent again from the Mac isn't credited to the phone.
         const apply = (fuId: string) => (patch: Patch) =>
-          patchFollowUp(meeting.id, fuId, via === "phone" && (patch.status === "sent" || patch.status === "paid") ? { ...patch, byPhone: true } : patch);
+          patchFollowUp(meeting.id, fuId, patch.status === "sent" || patch.status === "paid" ? { ...patch, byPhone: via === "phone" || undefined } : patch);
         if (sample) {
           // The sample meeting only simulates the round trip, under the sample wallet's rules, as
           // the contract would: a payment over the per-payment cap or past today's cap waits for
