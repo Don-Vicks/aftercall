@@ -296,6 +296,42 @@ for (const [name, make] of stores) {
     }
   });
 
+  test(`[${name}] one pairing's tokens never reach another's boxes, and an ack clears only its own actions`, async () => {
+    const { store, done } = await make();
+    const { http, close } = await relayApp(store);
+    try {
+      const a = await pairThrough(http);
+      const b = await pairThrough(http);
+      await http().post(`/relay/pairings/${b.id}/snapshot`).set(bearer(b.macToken)).send({ box: "BBBB" });
+      const tapA = (await http().post(`/relay/pairings/${a.id}/actions`).set(bearer(a.phoneToken)).send({ box: "AAAA" })).body.seq;
+      const tapB = (await http().post(`/relay/pairings/${b.id}/actions`).set(bearer(b.phoneToken)).send({ box: "BBBB" })).body.seq;
+
+      // A's tokens on B's id are a stranger's tokens.
+      const cases = [
+        () => http().get(`/relay/pairings/${b.id}/actions`).set(bearer(a.macToken)),
+        () => http().get(`/relay/pairings/${b.id}/snapshot`).set(bearer(a.phoneToken)),
+        () => http().post(`/relay/pairings/${b.id}/snapshot`).set(bearer(a.macToken)).send({ box: "AAAA" }),
+        () => http().post(`/relay/pairings/${b.id}/actions`).set(bearer(a.phoneToken)).send({ box: "AAAA" }),
+        () => http().post(`/relay/pairings/${b.id}/ack`).set(bearer(a.macToken)).send({ seq: Number.MAX_SAFE_INTEGER }),
+        () => http().delete(`/relay/pairings/${b.id}`).set(bearer(a.phoneToken)),
+      ];
+      for (const req of cases) assert.equal((await req()).status, 401);
+
+      // A's Mac acknowledging past B's tap clears A's and leaves B's.
+      await http().post(`/relay/pairings/${a.id}/ack`).set(bearer(a.macToken)).send({ seq: Math.max(tapA, tapB) });
+      assert.deepEqual((await http().get(`/relay/pairings/${a.id}/actions`).set(bearer(a.macToken))).body, { actions: [] });
+      const left = await http().get(`/relay/pairings/${b.id}/actions`).set(bearer(b.macToken));
+      assert.deepEqual(
+        left.body.actions.map((x: { seq: number; box: string }) => [x.seq, x.box]),
+        [[tapB, "BBBB"]],
+      );
+      assert.equal((await http().get(`/relay/pairings/${b.id}/snapshot`).set(bearer(b.phoneToken))).body.box, "BBBB", "B's snapshot is untouched");
+      assert.equal((await http().get(`/relay/pairings/${a.id}/snapshot`).set(bearer(a.phoneToken))).body.version, 0, "and never became A's");
+    } finally {
+      await close();
+      await done();
+    }
+  });
 }
 
 test("each side has its own token, and a wrong one is refused", async () => {
