@@ -16,7 +16,8 @@ interface Access {
 
 /** What the agent switches allow, from the app (the preview has no app, so agents read as off), and the project's code folder. */
 async function access(meeting: Pick<Meeting, "project">): Promise<Access> {
-  const info: AgentsInfo = isDesktop ? await agentsApi.info().catch(() => PREVIEW_INFO) : PREVIEW_INFO;
+  // If the app can't say which projects agents reach, offer no prompt, as Open in Claude Code would.
+  const info: AgentsInfo = isDesktop ? await agentsApi.info().catch(() => ({ ...PREVIEW_INFO, projects: [] })) : PREVIEW_INFO;
   const project = (await projectsApi.list().catch(() => [])).find((p) => p.name === meeting.project);
   const projectAllowed = reachesProject(info, project?.id);
   return { blockers: handoffBlockers({ ...info, projectAllowed }, meeting.project), codeFolder: project?.codeFolder, kept: !projectAllowed };
