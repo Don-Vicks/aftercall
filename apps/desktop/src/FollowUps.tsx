@@ -634,7 +634,8 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
     });
   // A deal both sides confirm, held in escrow: NEAR payees only (a release can't take a NEAR Intents route).
   const escrowLive = !!f.escrow && (f.escrow.state === "parked" || f.escrow.state === "open" || f.escrow.state === "confirmed");
-  const canDeal = !!h.onAskToConfirm && f.payeeListed && f.amount !== null && !route && !f.escrow;
+  // Not with a condition the model heard but couldn't quote: held without one, the payee's confirmation would pay at once.
+  const canDeal = !!h.onAskToConfirm && f.payeeListed && f.amount !== null && !route && !f.escrow && !f.conditionDropped;
   const askToConfirm = canDeal && (
     <Button variant={f.condition ? "primary" : undefined} onClick={() => {
         setAsking(true);

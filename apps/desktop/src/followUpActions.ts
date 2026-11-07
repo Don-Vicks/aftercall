@@ -297,7 +297,12 @@ export async function holdInEscrow(meeting: Meeting, f: PaymentFollowUp, apply: 
     }
     const escrowId = contractFollowupId(meeting.id, f.id);
     const terms = dealTermsFor(meeting, f, { network: config.network, contract: config.contract, owner: config.account, escrowId, ...proof, salt: newDealSalt() });
-    if (!terms) throw new Error("This payment needs an amount and a listed payee first.");
+    if (!terms)
+      throw new Error(
+        f.conditionDropped
+          ? "The call may have set a condition that isn't in the transcript, so this can't be held as a deal without one: confirming would pay at once. Check the call, then pay it yourself when it's met."
+          : "This payment needs an amount and a listed payee first.",
+      );
     const termsHash = dealTermsHash(terms);
     const out = await near.openEscrow(escrowId, f.payeeAccount, f.amount, proof.meetingId, termsHash, terms.condition !== null);
     const link = dealLink(DEAL_URL, terms);

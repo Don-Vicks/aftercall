@@ -61,6 +61,8 @@ test("the terms are the amount, the words heard, the condition and both quotes, 
   // Not a deal yet: no amount, or a payee who isn't on the list.
   assert.equal(dealTermsFor({ title: "x" }, { ...payment, amount: null }, at), null);
   assert.equal(dealTermsFor({ title: "x" }, { ...payment, payeeListed: false }, at), null);
+  // The model heard a condition it couldn't quote: held without one, confirming would pay at once.
+  assert.equal(dealTermsFor({ title: "x" }, { ...payment, condition: undefined, conditionDropped: true }, at), null);
   const plain = dealTermsFor({ title: "x" }, { ...payment, condition: undefined }, at)!;
   assert.deepEqual([plain.condition, plain.conditionQuote], [null, null]);
 });

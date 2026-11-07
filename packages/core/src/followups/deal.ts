@@ -108,13 +108,17 @@ export function escrowStateText(state: EscrowState, payeeName: string): string {
   }
 }
 
-/** The terms of a payment follow-up, ready to hash and put in a link. Null when it can't be a deal yet. */
+/**
+ * The terms of a payment follow-up, ready to hash and put in a link. Null when it can't be a deal
+ * yet, and when the model heard a condition it couldn't quote (`conditionDropped`): held without
+ * one, the payee's confirmation would pay them at once, as if the call had set none.
+ */
 export function dealTermsFor(
   meeting: Pick<Meeting, "title">,
   f: PaymentFollowUp,
   at: { network: Network; contract: string; owner: string; escrowId: string; meetingId: string; proofHash: string; salt: string },
 ): DealTerms | null {
-  if (f.amount === null || !f.payeeListed || !f.payeeAccount || !f.evidence) return null;
+  if (f.amount === null || !f.payeeListed || !f.payeeAccount || !f.evidence || f.conditionDropped) return null;
   return {
     v: 1,
     network: at.network,
