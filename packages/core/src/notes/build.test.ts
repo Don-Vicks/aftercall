@@ -219,7 +219,7 @@ test("a Japanese meeting keeps its notes: quotes match with no spaces between wo
   assert.equal(meeting.actionItems.length, 1);
   const [digits, words] = meeting.followUps.filter((f) => f.kind === "payment");
   assert.ok(digits?.kind === "payment" && words?.kind === "payment");
-  assert.deepEqual([digits.amount, digits.evidence.quote], [usdc(500), "デザイナーに500ドルを今日払ってください"], "digits in the quote still match");
+  assert.deepEqual([digits.amount, digits.evidence?.quote], [usdc(500), "デザイナーに500ドルを今日払ってください"], "digits in the quote still match");
   assert.deepEqual([words.amount, words.amountProblem], [null, "unclear"], "五百 is a number word Aftercall doesn't read");
   assert.deepEqual(autopilotDecision(words, rules, limits).reasons, ["Amount unclear"], "the card says Amount unclear: enter it, and autopilot waits");
   assert.deepEqual(dropped.map((d) => d.text), ["Pay Designer 500 dollars"], "a translated quote isn't in the transcript");
@@ -258,7 +258,7 @@ test("Hindi, French and Spanish meetings keep quotes with their own spelling", (
   assert.deepEqual(dropped, []);
   assert.deepEqual(meeting.decisions, ["Deploy on Friday."]);
   assert.deepEqual(
-    meeting.followUps.map((f) => f.kind === "payment" && [f.evidence.quote, f.amount, f.amountProblem]),
+    meeting.followUps.map((f) => f.kind === "payment" && [f.evidence?.quote, f.amount, f.amountProblem]),
     [
       ["डिज़ाइनर को 500 डॉलर दे देना", usdc(500), undefined],
       ["pagar al diseñador quinientos dólares mañana", null, "unclear"],

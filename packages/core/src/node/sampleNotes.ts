@@ -69,7 +69,7 @@ export function formatSampleNotes(script: SampleScript, r: ProcessResult): strin
       f.kind === "email"
         ? `Recap email to ${f.toName || "someone"}: "${f.subject}"`
         : `Pay ${f.payeeName}${f.payeeListed ? ` (${f.payeeAccount})` : " (not a listed payee)"} ${f.amount === null ? `no amount (${amountNote(f)})` : `${formatUsdc(f.amount)} USDC`}, heard "${f.heard}"`;
-    out.push(`- ${what}`, `    [${formatClock(f.evidence.at)}] "${f.evidence.quote}"`);
+    out.push(`- ${what}`, f.evidence ? `    [${formatClock(f.evidence.at)}] "${f.evidence.quote}"` : `    proposed by ${f.proposedBy?.agent ?? "an agent"}: "${f.proposedBy?.reason ?? ""}"`);
   }
   if (r.dropped.length) out.push("", "## Dropped (quote not found in the transcript)", ...r.dropped.map((d) => `- ${d.kind}: ${d.text}`));
   out.push("", "## Transcript", ...m.transcript.map((l) => `[${formatClock(l.at)}] ${l.speaker === "you" ? "You" : "Others"}: ${l.text}`));

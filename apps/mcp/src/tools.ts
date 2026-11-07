@@ -52,7 +52,16 @@ function usdc(value: unknown): string | null {
 }
 
 function followUpView(f: FollowUp) {
-  const base = { id: f.id, kind: f.kind, status: f.status, quote: f.evidence.quote, doneAt: f.doneAt, error: f.error };
+  const base = {
+    id: f.id,
+    kind: f.kind,
+    status: f.status,
+    /** The words from the call behind it; null for one an agent proposed. */
+    quote: f.evidence?.quote ?? null,
+    ...(f.proposedBy ? { proposedBy: f.proposedBy } : {}),
+    doneAt: f.doneAt,
+    error: f.error,
+  };
   return f.kind === "email"
     ? { ...base, toName: f.toName, subject: f.subject }
     : { ...base, payeeName: f.payeeName, amountUsdc: usdc(f.amount), heard: f.heard, payeeListed: f.payeeListed };

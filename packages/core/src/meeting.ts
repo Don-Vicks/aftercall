@@ -63,6 +63,11 @@ export interface AgentCompletion extends AgentMark {
   link?: string;
 }
 
+/** A follow-up a coding agent proposed: who, when, and why in its own words. */
+export interface AgentProposal extends AgentMark {
+  reason: string;
+}
+
 /** Who did something to an action item through the MCP server, and when. */
 export interface AgentMark {
   /** The agent's name as it gave it, e.g. "Claude Code". */
@@ -76,7 +81,17 @@ export type FollowUpStatus = "proposed" | "sending" | "sent" | "paid" | "failed"
 interface FollowUpBase {
   id: string;
   status: FollowUpStatus;
-  evidence: Evidence;
+  /**
+   * The exact words from the transcript behind it. Absent only on a follow-up a coding
+   * agent proposed (`proposedBy`): those come from the agent, not the call.
+   */
+  evidence?: Evidence;
+  /**
+   * Set when a coding agent proposed it through the MCP server, rather than the meeting.
+   * Its reason shows in place of a quote, as the agent's words. It never runs on
+   * autopilot, and a payment goes only to a listed payee within your caps, after your tap.
+   */
+  proposedBy?: AgentProposal;
   /** Time the follow-up completed, as shown in its pill ("14:06"). */
   doneAt?: string;
   /** NEAR transaction (payments) or email id (recaps) once done. */

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTOPILOT_HELD, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot } from "./autopilot.ts";
+import { AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot } from "./autopilot.ts";
 import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 
 const usdc = (n: number) => BigInt(n) * 1_000_000n;
@@ -30,6 +30,18 @@ test("any failing rule leaves it for a person, and says why", () => {
   assert.deepEqual(autopilotDecision({ ...payment, amount: null }, on, limits).reasons, ["Amount unclear"]);
   assert.deepEqual(autopilotDecision(payment, on, { ...limits, perPaymentCap: 0n }).reasons, ["No per-payment cap set"]);
   assert.deepEqual(autopilotDecision(payment, on, null).reasons, ["Agent wallet not connected"]);
+});
+
+test("a follow-up a coding agent proposed never runs by itself, even when every rule passes", () => {
+  const proposedBy = { agent: "Codex", at: "2026-11-02T10:00:00.000Z", reason: "Olamide asked for the staging DNS" };
+  const { evidence: _e1, ...payNoQuote } = payment;
+  const { evidence: _e2, ...recapNoQuote } = recap;
+  assert.deepEqual(autopilotDecision({ ...payNoQuote, proposedBy }, on, limits), { run: false, reasons: [agentProposalReason("Codex")] });
+  assert.deepEqual(autopilotDecision({ ...recapNoQuote, proposedBy }, on, limits), { run: false, reasons: ["Proposed by Codex: what an agent proposes always waits for you"] });
+  // Not even with a quote attached, nor with no quote and no name.
+  assert.equal(autopilotDecision({ ...payment, proposedBy }, on, limits).run, false);
+  assert.equal(autopilotDecision(payNoQuote, on, limits).run, false);
+  assert.equal(autopilotDecision(payment, on, limits).run, true, "the same payment from the call still runs");
 });
 
 test("a queued follow-up read from disk at launch is held for you, never run", () => {

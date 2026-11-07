@@ -739,7 +739,7 @@ function Transcript({
                 )}
               </span>
               {turn.lines.map((line, i) => {
-                const evidence = live.filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
+                const evidence = live.filter(fromCall).filter((f) => f.evidence.at === line.at && line.text.includes(f.evidence.quote));
                 const isTarget = line.at === target?.at;
                 return (
                   <BubbleWithChips key={`${line.at}-${i}`} evidence={evidence} you={you} onOpenFollowUp={onOpenFollowUp}>
@@ -779,8 +779,11 @@ function OthersMark() {
   );
 }
 
+/** A follow-up the call proposed, with its words from the transcript (not one a coding agent proposed). */
+const fromCall = (f: FollowUp): f is FollowUp & { evidence: Evidence } => Boolean(f.evidence);
+
 /** A bubble, and under it a chip for each follow-up it is the evidence for. */
-function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence: FollowUp[]; you: boolean; onOpenFollowUp: (id: string) => void; children: ReactNode }) {
+function BubbleWithChips({ evidence, you, onOpenFollowUp, children }: { evidence: (FollowUp & { evidence: Evidence })[]; you: boolean; onOpenFollowUp: (id: string) => void; children: ReactNode }) {
   if (evidence.length === 0) return <>{children}</>;
   return (
     <>
