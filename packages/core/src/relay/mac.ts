@@ -1,4 +1,4 @@
-import type { FollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
+import type { FollowUp, Meeting, NearPlace, PaymentFollowUp } from "../meeting.ts";
 import type { Network } from "../network.ts";
 import { formatUsdc } from "../money.ts";
 import { meetingLabel } from "../when.ts";
@@ -31,6 +31,50 @@ export const SNAPSHOT_MIN_GAP_MS = 5_000;
 export const SNAPSHOT_REFRESH_MS = 5 * 60_000;
 /** Results of the phone's actions a snapshot carries, newest first. */
 export const MAX_RESULTS = 20;
+
+/** The Mac asks the relay for the phone's hello this often while the QR code shows. */
+export const HELLO_POLL_MS = 2_000;
+
+/**
+ * Waits for the phone's sealed hello: `ask` every `HELLO_POLL_MS` until it returns a box,
+ * the pairing runs out at `until` (null) or `signal` aborts (null). An ask that fails in
+ * a way `transient` allows (the relay unreachable, a server error) is asked again at the
+ * next interval, and `onReach` says whether the last ask got through; any other failure
+ * is the relay's definite answer, such as the pairing gone or expired, and ends the wait.
+ */
+export async function pollHello(args: {
+  ask: () => Promise<string | null>;
+  until: number;
+  signal: AbortSignal;
+  transient: (e: unknown) => boolean;
+  onReach?: (reached: boolean) => void;
+  now?: () => number;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+}): Promise<string | null> {
+  const now = args.now ?? Date.now;
+  const sleep = args.sleep ?? pause;
+  while (!args.signal.aborted && now() < args.until) {
+    let box: string | null = null;
+    try {
+      box = await args.ask();
+      args.onReach?.(true);
+    } catch (e) {
+      if (!args.transient(e)) throw e;
+      args.onReach?.(false);
+    }
+    if (box) return box;
+    await sleep(HELLO_POLL_MS, args.signal);
+  }
+  return null;
+}
+
+/** Resolves after `ms`, or at once when `signal` aborts. */
+function pause(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => (clearTimeout(t), resolve()), { once: true });
+  });
+}
 
 /** The follow-up's id on the agent-wallet contract: "<meeting>-<follow-up>". */
 export const contractFollowupId = (meetingId: string, followupId: string) => `${meetingId}-${followupId}`;
@@ -72,6 +116,31 @@ export function heldPaymentSignUrls(signPage: string, owner: Omit<SignRequest, "
   return { approve: link(actions.approve), decline: link(actions.cancel) };
 }
 
+/**
+ * Whether a held payment was parked on another network, contract or NEAR account than
+ * the one the app uses now (`heldOn`). The contract here has never heard of it: its
+ * `get_pending` answers null, and that must not read as declined. False when the app
+ * didn't keep where it was held.
+ */
+export function heldElsewhere(f: PaymentFollowUp, here: NearPlace): boolean {
+  const at = f.heldOn;
+  return !!at && (at.network !== here.network || at.contract !== here.contract || at.account !== here.account);
+}
+
+/**
+ * What became of a held payment, from the contract the app uses now (`is_paid` and
+ * `get_pending` for that follow-up): paid, dismissed, or null while it still waits or
+ * the answer can't be trusted. The contract keeps no record of a decline: a payment
+ * neither paid nor pending was declined only if it was parked on this very contract and
+ * account. So a payment held elsewhere is never decided here, and one held before
+ * `heldOn` was kept is marked only once it's paid.
+ */
+export function heldPaymentOutcome(f: PaymentFollowUp, here: NearPlace, state: { paid: boolean; pending: boolean }): "paid" | "dismissed" | null {
+  if (heldElsewhere(f, here)) return null;
+  if (state.paid) return "paid";
+  return f.heldOn && !state.pending ? "dismissed" : null;
+}
+
 /** One meeting as the snapshot reads it, with the options its follow-up cards use. */
 export interface SnapshotMeeting {
   meeting: Meeting;
@@ -109,8 +178,9 @@ export function buildSnapshot(args: { at: number; network: Network; meetings: Sn
 /** What a snapshot says, without its time: when this changes, the phone needs a new one. */
 export const snapshotKey = (s: Snapshot) => JSON.stringify({ ...s, at: 0 });
 
-/** New results first, then the older ones, at most `MAX_RESULTS`. */
-export const mergeResults = (newestFirst: ActionResult[], older: ActionResult[]): ActionResult[] => [...newestFirst, ...older].slice(0, MAX_RESULTS);
+/** New results first, then the older ones, at most `MAX_RESULTS`. A new result for the same counter replaces the older one. */
+export const mergeResults = (newestFirst: ActionResult[], older: ActionResult[]): ActionResult[] =>
+  [...newestFirst, ...older.filter((r) => !newestFirst.some((x) => x.n === r.n))].slice(0, MAX_RESULTS);
 
 /** Why an approval from the phone is refused while autopilot counts down on the follow-up. */
 export const AUTOPILOT_COUNTING = "Autopilot is counting down on it. Let it run, or undo autopilot first.";
@@ -146,8 +216,11 @@ export interface HandledActions {
  * a counter not above the last accepted one, is skipped and nothing runs. An action that
  * opens is checked against the follow-up as it is now (`checkPhoneAction`); only if it
  * passes does `run` do what the app's own button does. `save` keeps the new counter and
- * the result before the next action is read, so a restart never runs a box twice. A
- * follow-up gets at most one action per batch: the app's state catches up between batches.
+ * the result before `run` starts: if saving fails, nothing has run and the box is read
+ * again next time; once it's saved, the box can't open again (REPLAY), so a failed save
+ * or Aftercall stopping mid-run can never run it twice. If `run` then throws, the result
+ * is saved again as refused. A follow-up gets at most one action per batch: the app's
+ * state catches up between batches.
  */
 export async function handlePhoneActions(args: {
   key: Uint8Array;
@@ -183,21 +256,19 @@ export async function handlePhoneActions(args: {
           action.kind === "approve" && t.followUp?.autopilotAt
           ? { ok: false as const, reason: AUTOPILOT_COUNTING }
           : checkPhoneAction(action, t.followUp, t.item, args.now());
-    let result: ActionResult;
-    if (check.ok) {
-      acted.add(id);
-      try {
-        await args.run(action);
-        result = { n, outcome: "accepted" };
-      } catch {
-        result = { n, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." };
-      }
-    } else {
-      result = { n, outcome: "refused", reason: check.reason };
-    }
+    const result: ActionResult = check.ok ? { n, outcome: "accepted" } : { n, outcome: "refused", reason: check.reason };
+    // Consumed before it runs, never after: see above.
+    await args.save(n, result);
     lastN = n;
     results.unshift(result);
-    await args.save(lastN, result);
+    if (!check.ok) continue;
+    acted.add(id);
+    try {
+      await args.run(action);
+    } catch {
+      results[0] = { n, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." };
+      await args.save(n, results[0]);
+    }
   }
   return { lastN, ackSeq, results, skipped };
 }

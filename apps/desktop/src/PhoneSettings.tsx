@@ -6,7 +6,7 @@ import { clockTime, longDate } from "@aftercall/core";
 import { cancelPairing, confirmPairing, loadPhone, pairingProblem, startPairing, unpair, usePhone, waitForHello, type PendingPairing, type PhoneHello } from "./phone";
 import { CheckCircle } from "./primitives/Check";
 import { CardRow, IconDisc, Pop, Why } from "./SettingsParts";
-import { Button, Card, Dialog, Pill, SectionTitle, Spinner, toast, useConfirm } from "./ui";
+import { Button, Card, Dialog, Pill, SectionTitle, Spinner, cx, toast, useConfirm } from "./ui";
 
 /**
  * "Your phone" in Settings: pair a phone with a QR code and a 6-digit code to compare,
@@ -91,7 +91,7 @@ export function PhoneSettings() {
 
 type Step =
   | { name: "starting" }
-  | { name: "qr"; p: PendingPairing }
+  | { name: "qr"; p: PendingPairing; unreachable?: boolean }
   | { name: "code"; p: PendingPairing; hello: PhoneHello; confirming?: boolean }
   | { name: "paired"; device: string }
   | { name: "expired" }
@@ -123,7 +123,9 @@ function PairSheet({ onClose }: { onClose: () => void }) {
         if (!live) return cancelPairing(p);
         open.current = p;
         setStep({ name: "qr", p });
-        const hello = await waitForHello(p, stop.signal);
+        // A lost connection while waiting is asked again; only the relay saying the code is gone ends it.
+        const reach = (reached: boolean) => live && setStep((s) => (s.name === "qr" && Boolean(s.unreachable) === reached ? { ...s, unreachable: !reached } : s));
+        const hello = await waitForHello(p, stop.signal, reach);
         if (!live) return;
         if (!hello) {
           drop();
@@ -185,8 +187,10 @@ function PairSheet({ onClose }: { onClose: () => void }) {
         {step.name === "qr" && (
           <>
             <QrCode text={step.p.url} label="Pairing code for your phone's camera" />
-            <p className="m-0 text-center text-[13px] leading-[19px] text-ink-2" role="status">
-              Waiting for your phone. This code works until {clockTime(step.p.expiresAt)}.
+            <p className={cx("m-0 text-center text-[13px] leading-[19px]", step.unreachable ? "text-caution" : "text-ink-2")} role="status">
+              {step.unreachable
+                ? `Can't reach Aftercall's relay. Still trying until ${clockTime(step.p.expiresAt)}.`
+                : `Waiting for your phone. This code works until ${clockTime(step.p.expiresAt)}.`}
             </p>
           </>
         )}

@@ -6,13 +6,17 @@ import { decodePairing, deriveSession, newPairing, newRelayKeys, openHello, pair
 import { itemDigest, openSnapshot, sealAction, sealSnapshot, signUrlsMatch, toPendingItem, type ActionResult, type PaymentItem, type PhoneAction } from "./messages.ts";
 import {
   AUTOPILOT_COUNTING,
+  HELLO_POLL_MS,
   MAX_RESULTS,
   buildSnapshot,
   contractFollowupId,
   handlePhoneActions,
+  heldElsewhere,
   heldPaymentActions,
+  heldPaymentOutcome,
   heldPaymentSignUrls,
   mergeResults,
+  pollHello,
   snapshotKey,
   type ActionTarget,
   type SnapshotMeeting,
@@ -79,6 +83,29 @@ test("a held payment a coding agent proposed says so on its approve page, in pla
   assert.equal(heard.kind === "approve" && "proposedBy" in (heard.context ?? {}), false);
 });
 
+test("a held payment is marked declined only by the contract it was parked on, never after a network or account switch", () => {
+  const here = { network: "testnet" as const, contract: "wallet.aftercall.testnet", account: "victor.testnet" };
+  const held: PaymentFollowUp = { ...payment, status: "blocked", heldOn: here };
+  const gone = { paid: false, pending: false };
+  assert.equal(heldPaymentOutcome(held, here, gone), "dismissed", "neither paid nor pending where it was parked: declined");
+  assert.equal(heldPaymentOutcome(held, here, { paid: true, pending: false }), "paid");
+  assert.equal(heldPaymentOutcome(held, here, { paid: false, pending: true }), null, "still waits");
+  for (const elsewhere of [
+    { ...here, network: "mainnet" as const, contract: "wallet.aftercall.near", account: "victor.near" },
+    { ...here, account: "ada.testnet" },
+    { ...here, contract: "my-own.testnet" },
+  ]) {
+    assert.ok(heldElsewhere(held, elsewhere));
+    assert.equal(heldPaymentOutcome(held, elsewhere, gone), null, `${elsewhere.network} ${elsewhere.contract} ${elsewhere.account} never heard of it`);
+    assert.equal(heldPaymentOutcome(held, elsewhere, { paid: true, pending: false }), null);
+  }
+  // Held before the app kept where: only a payment the contract says is paid is decided.
+  const unknown: PaymentFollowUp = { ...payment, status: "blocked" };
+  assert.equal(heldElsewhere(unknown, here), false);
+  assert.equal(heldPaymentOutcome(unknown, here, gone), null);
+  assert.equal(heldPaymentOutcome(unknown, here, { paid: true, pending: false }), "paid");
+});
+
 test("an item the schema refuses is left out and counted, and the rest still go", () => {
   const odd = meeting("1762440000", "2026-11-06T14:02:00Z", [email, { ...payment, id: "f2 with spaces" }]);
   const s = buildSnapshot({ at: NOW, network: "testnet", meetings: [{ meeting: odd, options: opts }], results: [] });
@@ -93,6 +120,61 @@ test("results keep the newest twenty", () => {
   const merged = mergeResults([{ n: 22, outcome: "refused", reason: "x" }, { n: 21, outcome: "accepted" }], old);
   assert.equal(merged.length, MAX_RESULTS);
   assert.deepEqual(merged.slice(0, 3).map((r) => r.n), [22, 21, 20]);
+});
+
+// ---------- waiting for the hello ----------
+
+/** A clock that moves only when the poll sleeps, and the relay's answers in order. */
+function helloPoll(answers: (string | null | Error)[], until = NOW + 10 * 60_000) {
+  let t = NOW;
+  const slept: number[] = [];
+  const reach: boolean[] = [];
+  const stop = new AbortController();
+  const asked = { n: 0 };
+  const run = () =>
+    pollHello({
+      ask: async () => {
+        const a = answers[Math.min(asked.n++, answers.length - 1)];
+        if (a instanceof Error) throw a;
+        return a;
+      },
+      until,
+      signal: stop.signal,
+      transient: (e) => e instanceof Error && e.message === "offline",
+      onReach: (r) => void reach.push(r),
+      now: () => t,
+      sleep: async (ms) => {
+        slept.push(ms);
+        t += ms;
+      },
+    });
+  return { run, slept, reach, stop, asked };
+}
+
+test("waiting for the hello rides out a lost connection at the usual interval, until the hello comes", async () => {
+  const offline = new Error("offline");
+  const p = helloPoll([null, offline, offline, null, "the hello box"]);
+  assert.equal(await p.run(), "the hello box");
+  assert.equal(p.asked.n, 5);
+  assert.deepEqual(p.slept, [HELLO_POLL_MS, HELLO_POLL_MS, HELLO_POLL_MS, HELLO_POLL_MS]);
+  assert.deepEqual(p.reach, [true, false, false, true, true]);
+});
+
+test("waiting for the hello ends at the pairing's own time or on Cancel, however often the relay can't be reached", async () => {
+  const expired = helloPoll([new Error("offline")], NOW + 10 * HELLO_POLL_MS);
+  assert.equal(await expired.run(), null);
+  assert.equal(expired.asked.n, 10, "asked until the code ran out, not stopped by the first failure");
+
+  const cancelled = helloPoll([new Error("offline")]);
+  cancelled.stop.abort();
+  assert.equal(await cancelled.run(), null);
+  assert.equal(cancelled.asked.n, 0);
+});
+
+test("the relay's definite answer ends the wait: a pairing gone or expired isn't asked again", async () => {
+  const gone = helloPoll([null, new Error("NO_PAIRING"), "never read"]);
+  await assert.rejects(gone.run(), /NO_PAIRING/);
+  assert.equal(gone.asked.n, 2);
 });
 
 // ---------- actions ----------
@@ -171,6 +253,19 @@ test("an action is refused when the follow-up changed, is gone, is too old, or t
     ["It changed on your Mac since your phone showed it. Look again.", "This follow-up isn't on your Mac any more.", "Too old: tapped more than a day ago.", "Your Mac is counting down on it. Undo it there first."],
   );
   assert.equal(r.lastN, 4, "refused actions still move the counter on");
+});
+
+test("a dismissal from the phone passes the same checks as an approval: digest, age, still waiting", async () => {
+  const h = harness([email, payment, { ...payment, id: "f3", status: "dismissed" }]);
+  const changed = { ...h.tap("f2", "dismiss"), digest: "0".repeat(64) };
+  const stale = h.tap("f1", "dismiss", NOW - 25 * 3_600_000);
+  const done = { ...h.tap("f2", "dismiss"), followUpId: "f3" };
+  const r = await h.handle([changed, stale, done, h.tap("f1", "dismiss")].map((a, i) => ({ seq: i + 1, box: sealAction(h.phone.key, i + 1, a) })));
+  assert.deepEqual(h.ran.map((a) => `${a.kind}:${a.followUpId}`), ["dismiss:f1"], "only the one that matches what the phone showed");
+  assert.deepEqual(
+    r.results.reverse().map((x) => x.reason ?? x.outcome),
+    ["It changed on your Mac since your phone showed it. Look again.", "Too old: tapped more than a day ago.", "Nothing waits on it: it's dismissed on your Mac.", "accepted"],
+  );
 });
 
 test("a payment held for the wallet, or already sending, can't be approved from the phone", async () => {
@@ -299,4 +394,45 @@ test("if the app's own handler throws, the result says so and the counter still 
   });
   assert.equal(r.results[0].outcome, "refused");
   assert.equal(r.lastN, 1);
+  assert.deepEqual(h.saved, [1, 1], "saved once before it ran, then again as refused");
+});
+
+test("an action's counter is saved before it runs, so a failed save never lets it run twice", async () => {
+  const { mac, phone } = session();
+  const m = meeting("1762440000", "2026-11-06T14:02:00Z", [email]);
+  const box = sealAction(phone.key, 1, { t: "action", kind: "approve", meetingId: m.id, followUpId: "f1", digest: itemDigest(toPendingItem(m, email, opts())!), at: NOW });
+  // The follow-up still waits each time it's read, as it would if the Mac's send failed and put it back.
+  const target = (_m: string, fuId: string): ActionTarget => (fuId === "f1" ? { followUp: email, item: toPendingItem(m, email, opts()) } : { followUp: undefined, item: null });
+  const events: string[] = [];
+  let kept = 0;
+  const handle = (save: (n: number, result: ActionResult) => void) =>
+    handlePhoneActions({ key: mac.key, lastN: kept, actions: [{ seq: 1, box }], now: () => NOW, target, run: () => void events.push("run"), save });
+
+  // phone.json can't be written: nothing runs, and the box waits on the relay.
+  await assert.rejects(
+    handle(() => {
+      events.push("save failed");
+      throw new Error("disk full");
+    }),
+    /disk full/,
+  );
+  assert.deepEqual(events, ["save failed"]);
+
+  // Read again: saved first, then run, once.
+  const r = await handle((n) => {
+    events.push("saved");
+    kept = n;
+  });
+  assert.deepEqual(events, ["save failed", "saved", "run"]);
+  assert.equal(r.lastN, 1);
+
+  // And never again, whatever happens to its result after.
+  const again = await handle(() => void events.push("saved"));
+  assert.equal(again.skipped, 1);
+  assert.deepEqual(events, ["save failed", "saved", "run"]);
+});
+
+test("a result saved again for the same action replaces the first", () => {
+  const merged = mergeResults([{ n: 4, outcome: "refused", reason: "Your Mac couldn't start it. Look on your Mac." }], [{ n: 4, outcome: "accepted" }, { n: 3, outcome: "accepted" }]);
+  assert.deepEqual(merged.map((r) => [r.n, r.outcome]), [[4, "refused"], [3, "accepted"]]);
 });

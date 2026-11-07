@@ -53,7 +53,8 @@ export const near = {
   wallet: () => invoke<WalletView>("near_wallet"),
   checkPayee: (account: string) => invoke<{ exists: boolean; usdcReady: boolean }>("near_check_payee", { account }),
   ownerUsdc: () => invoke<string>("near_owner_usdc"),
-  paymentState: (followupId: string) => invoke<{ paid: boolean; pending: boolean }>("near_payment_state", { followupId }),
+  /** `asked`: the network, contract and account that answered, read with the answer. */
+  paymentState: (followupId: string) => invoke<{ paid: boolean; pending: boolean; asked: NearConfig }>("near_payment_state", { followupId }),
 };
 
 export interface PayOutcome {

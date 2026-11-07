@@ -5,6 +5,7 @@
  */
 
 import type { Attendee } from "./calendar.ts";
+import type { Network } from "./network.ts";
 
 export type Speaker = "you" | "others";
 
@@ -107,7 +108,10 @@ interface FollowUpBase {
   autopilotHeld?: boolean;
   /** Set when autopilot sent or paid it, rather than a person approving it. */
   byAutopilot?: boolean;
-  /** Set when you approved it on your paired phone and the Mac sent or paid it (docs/design/phone-protocol.md). */
+  /**
+   * Set when you approved it on your paired phone and the Mac sent or paid it, or you
+   * dismissed it there (docs/design/phone-protocol.md). `phoneDecision` labels it.
+   */
   byPhone?: boolean;
 }
 
@@ -142,6 +146,19 @@ export interface PaymentFollowUp extends FollowUpBase {
    * read as one amount). Absent on meetings made before it existed; read null as unclear.
    */
   amountProblem?: AmountProblemKind;
+  /**
+   * Where the contract parked it, set when it's held for your wallet: the network,
+   * contract and NEAR account the app paid from then. Only that contract knows what
+   * became of it. Absent on payments held before it was kept.
+   */
+  heldOn?: NearPlace;
+}
+
+/** A NEAR network, agent-wallet contract and owner account, as the app's NEAR settings name them. */
+export interface NearPlace {
+  network: Network;
+  contract: string;
+  account: string;
 }
 
 export type AmountProblemKind = "not-in-quote" | "not-usdc" | "unclear";
@@ -225,6 +242,17 @@ export interface Meeting {
   attendees?: Attendee[];
   /** The invited people who have an email address: where a recap can go. */
   invited?: Attendee[];
+}
+
+/**
+ * How the Mac labels a follow-up you decided on your paired phone: "Approved on your
+ * phone" once it was sent or paid, "Dismissed on your phone" once dismissed there. Null
+ * when the phone didn't decide it, or what it approved hasn't gone out.
+ */
+export function phoneDecision(f: Pick<FollowUp, "status" | "byPhone">): "Approved on your phone" | "Dismissed on your phone" | null {
+  if (!f.byPhone) return null;
+  if (f.status === "dismissed") return "Dismissed on your phone";
+  return f.status === "sent" || f.status === "paid" ? "Approved on your phone" : null;
 }
 
 /**

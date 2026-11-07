@@ -15,6 +15,7 @@ import {
   formatClock,
   formatUsdc,
   paymentWhatLeaves,
+  phoneDecision,
   routeLabel,
   type AmountProblemKind,
   type Attendee,
@@ -101,7 +102,8 @@ export function FollowUps({
   onOpenAutopilot?: () => void;
 } & FollowUpHandlers) {
   const network = useNetwork();
-  const visible = followUps.filter((f) => f.status !== "dismissed");
+  // One dismissed on your phone stays, labelled, as one approved there does; one dismissed here goes.
+  const visible = followUps.filter((f) => f.status !== "dismissed" || phoneDecision(f));
   // Kept while every row is dismissed, so the last one can collapse and its Undo still has a place to return to.
   if (followUps.length === 0) return null;
   const anyAutopilot = autopilotOn || followUps.some((f) => f.autopilotAt || f.byAutopilot);
@@ -143,7 +145,7 @@ export function FollowUps({
                 exit={{ opacity: 0, scale: 0.98, transition: exit }}
                 className="scroll-mt-16"
               >
-                {f.kind === "email" ? <EmailRow f={f} c={ctx} /> : <PaymentRow f={f} c={ctx} />}
+                {f.status === "dismissed" ? <PhoneDismissedRow f={f} /> : f.kind === "email" ? <EmailRow f={f} c={ctx} /> : <PaymentRow f={f} c={ctx} />}
               </m.div>
             ))}
           </AnimatePresence>
@@ -219,6 +221,19 @@ function Head({ name, title, sub, clip, children }: { name: string; title: React
       </span>
       {children}
     </div>
+  );
+}
+
+/** A follow-up you dismissed on your paired phone. Nothing went out. */
+function PhoneDismissedRow({ f }: { f: FollowUp }) {
+  return (
+    <Card pad="none" className="px-5 py-3.5">
+      <Head
+        name={f.kind === "email" ? f.toName || "someone" : f.payeeName}
+        title={followUpTitle(f)}
+        sub={`${phoneDecision(f)} · nothing was ${f.kind === "email" ? "sent" : "paid"}`}
+      />
+    </Card>
   );
 }
 

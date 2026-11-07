@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MAC_POLL_MS,
   SNAPSHOT_MIN_GAP_MS,
@@ -6,7 +6,9 @@ import {
   buildSnapshot,
   contractFollowupId,
   handlePhoneActions,
+  heldElsewhere,
   heldPaymentActions,
+  heldPaymentOutcome,
   heldPaymentSignUrls,
   mergeResults,
   snapshotKey,
@@ -33,11 +35,11 @@ export interface PhoneSyncInput {
   ready: boolean;
   /** Your NEAR account, so the /sign links follow a change of account. */
   account: string | null;
-  /** Every meeting not waiting out its delete Undo. */
+  /** Every meeting not waiting out its delete Undo. Kept between renders: a new array means a meeting changed. */
   meetings: Meeting[];
-  /** The options the meeting's own follow-up cards use: backend, claim links, route, quote, sample. */
+  /** The options the meeting's own follow-up cards use: backend, claim links, route, quote, sample. Kept between renders too. */
   options: (m: Meeting, f: FollowUp) => ItemOptions;
-  /** What's left today and the daily cap, for a held payment's /sign context; null until the wallet is read. */
+  /** What's left today and the daily cap, for a held payment's /sign context; null until the wallet is read. Kept between renders too. */
   wallet: { leftToday: bigint; dailyCap: bigint } | null;
   /** Exactly what the app's own buttons run: onApprove, onDismiss or onUndoAutopilot. */
   run: (action: PhoneAction) => void;
@@ -68,11 +70,15 @@ export function usePhoneSync(input: PhoneSyncInput) {
     near.getConfig().then(setConfig).catch(() => setConfig(null));
   }, [pairedId, input.account]);
 
-  /** Options as the cards use them, plus /sign links for a payment held for the wallet. */
+  /**
+   * Options as the cards use them, plus /sign links for a payment held for the wallet,
+   * unless it was held on another network or account: those links would ask a contract
+   * that never parked it, so the phone says to review it on the Mac.
+   */
   const optionsFor = (m: Meeting) => (f: FollowUp): ItemOptions => {
     const base = latest.current.options(m, f);
     const wallet = latest.current.wallet;
-    if (f.kind !== "payment" || f.status !== "blocked" || base.sample || !config || !wallet) return base;
+    if (f.kind !== "payment" || f.status !== "blocked" || base.sample || !config || !wallet || heldElsewhere(f, config)) return base;
     const signUrls = heldPaymentSignUrls(SIGN_URL, { network: config.network, contract: config.contract, owner: config.account }, heldPaymentActions(m, f, wallet));
     return { ...base, signUrls };
   };
@@ -95,11 +101,10 @@ export function usePhoneSync(input: PhoneSyncInput) {
       posted.current.at = Date.now();
       await postSnapshot(s);
     }).catch(() => {
-      // Offline, or the relay forgot the pairing (phone.ts says so): try again on the next change or tick.
+      // Offline, or the relay forgot the pairing (phone.ts says so): try again on the next change,
+      // once the relay answers again, or at the 5-minute refresh.
       posted.current.key = "";
     });
-  const buildRef = useRef(build);
-  buildRef.current = build;
   const postRef = useRef(post);
   postRef.current = post;
 
@@ -114,16 +119,27 @@ export function usePhoneSync(input: PhoneSyncInput) {
     };
   }, [pairedId]);
 
+  // What the phone should see, rebuilt only when what goes into it changes, not on every
+  // render: while you record, the app renders every second.
+  const results = phone.paired?.results;
+  const wanted = useMemo(
+    () => (pairedId ? snapshotKey(build()) : ""),
+    // `build` reads these through `latest` and `config`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pairedId, input.meetings, input.options, input.wallet, config, results],
+  );
+
+  // Also when the relay can be reached again (`problem` clears), after a post that failed.
   useEffect(() => {
     if (!pairedId) return;
     const p = posted.current;
-    if (p.timer || snapshotKey(buildRef.current()) === p.key) return;
+    if (p.timer || wanted === p.key) return;
     const wait = Math.max(0, p.at + SNAPSHOT_MIN_GAP_MS - Date.now());
     p.timer = window.setTimeout(() => {
       p.timer = 0;
       void postRef.current();
     }, wait);
-  });
+  }, [pairedId, wanted, phone.problem]);
 
   // Actions: every 10 s, in relay order, each re-checked against the follow-up as it is now.
   useEffect(() => {
@@ -161,16 +177,20 @@ export function usePhoneSync(input: PhoneSyncInput) {
     // `optionsFor` reads the latest input through the ref; `config` changes the /sign links.
   }, [pairedId, config]);
 
-  // Held payments: the phone opens the wallet directly, so the Mac asks NEAR what became of them.
+  // Held payments: the phone opens the wallet directly, so the Mac asks NEAR what became of them,
+  // on the contract and account it uses now; one held on another is left as it is (`heldPaymentOutcome`).
   useEffect(() => {
     if (!pairedId || !config) return;
     const check = async () => {
+      const here = await near.getConfig().catch(() => null);
+      if (!here) return;
       for (const m of latest.current.meetings) {
         for (const f of m.followUps) {
-          if (f.kind !== "payment" || f.status !== "blocked" || latest.current.options(m, f).sample) continue;
+          if (f.kind !== "payment" || f.status !== "blocked" || latest.current.options(m, f).sample || heldElsewhere(f, here)) continue;
           const state = await near.paymentState(contractFollowupId(m.id, f.id)).catch(() => null);
-          if (state?.paid) latest.current.onHeldResolved(m.id, f.id, "paid");
-          else if (state && !state.pending) latest.current.onHeldResolved(m.id, f.id, "dismissed");
+          // Judged by where the answer came from, not `here`: a switch mid-check asks the new contract.
+          const outcome = state && heldPaymentOutcome(f, state.asked, state);
+          if (outcome) latest.current.onHeldResolved(m.id, f.id, outcome);
         }
       }
     };

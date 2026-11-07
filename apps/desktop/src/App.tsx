@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, applyItemEdit, autopilotDecision, holdInterruptedAutopilot, originalItem, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -544,7 +544,8 @@ export default function App() {
       routeFor: (f: FollowUp) => (f.kind !== "payment" ? null : ((sample ? sampleDestinations : destinations)[f.payeeAccount] ?? null)),
       previewRoute: previewCrossChain,
       // A held item keeps its flag, so Undo brings back why it waits; it shows only while proposed.
-      onDismiss: (id: string) => apply(id)({ status: "dismissed", autopilotAt: undefined }),
+      // `via` "phone": dismissed on your paired phone, and labelled so on the card and the trail.
+      onDismiss: (id: string, via?: "phone") => apply(id)({ status: "dismissed", autopilotAt: undefined, byPhone: via === "phone" || undefined }),
       onRestore: (id: string, status: FollowUp["status"]) => apply(id)({ status }),
       onUndoAutopilot: (id: string) => apply(id)({ autopilotAt: undefined }),
       onSetAmount: (id: string, amount: bigint) => apply(id)({ amount, autopilotAt: undefined, autopilotHeld: undefined, error: undefined }),
@@ -679,7 +680,8 @@ export default function App() {
   const meetingTitles = Object.fromEntries(Object.values(meetings).map((m) => [m.id, m.title]));
   const meeting = selectedMeetingId ? meetings[selectedMeetingId] : undefined;
   // Everything on screen leaves out meetings that are waiting out their delete Undo.
-  const shownMeetings = meetingList.filter((m) => !hidden[m.id]);
+  // Kept between renders, so a paired phone's snapshot is rebuilt only when a meeting changes.
+  const shownMeetings = useMemo(() => Object.values(meetings).filter((m) => !hidden[m.id]), [meetings, hidden]);
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
   const rules = loadRules();
   const autopilotOn = rules.payments || rules.recapDomains.length > 0;
@@ -703,9 +705,26 @@ export default function App() {
 
   /** A held payment your wallet paid or declined: from the wallet screen, or found on NEAR while a phone is paired. */
   const resolveHeld = (meetingId: string, fuId: string, status: "paid" | "dismissed") => {
-    patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined });
+    // Decided in your wallet, not on the phone: no "on your phone" label.
+    patchFollowUp(meetingId, fuId, { status, doneAt: status === "paid" ? nowHHMM() : undefined, byPhone: undefined });
     refreshWallet();
   };
+
+  /**
+   * The options the follow-up cards use, for a paired phone's snapshot. Kept between
+   * renders: `routeFor` reads only `destinations`. A newer preview quote rides along
+   * with the next snapshot.
+   */
+  const phoneOptions = useCallback(
+    (m: Meeting, f: FollowUp): ItemOptions => {
+      const route = handlersFor(m).routeFor(f);
+      const quoted = route && f.kind === "payment" ? latestPreview(f, route) : undefined;
+      return { backend: HAS_BACKEND, claimLinks: HAS_BACKEND, route, ...(quoted ? { quoted } : {}), ...(m.id === syncWithAda.id ? { sample: true } : {}) };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [destinations],
+  );
+  const phoneWallet = useMemo(() => (limits && dailyCap !== null ? { leftToday: limits.leftToday, dailyCap } : null), [limits?.leftToday, dailyCap]);
 
   // A paired phone sees what waits (the same items the cards show, built with the same
   // options) and sends back taps, which run through these same handlers once re-checked.
@@ -713,18 +732,14 @@ export default function App() {
     ready: libraryLoaded && walletChecked,
     account,
     meetings: shownMeetings,
-    options: (m, f) => {
-      const route = handlersFor(m).routeFor(f);
-      const quoted = route && f.kind === "payment" ? latestPreview(f, route) : undefined;
-      return { backend: HAS_BACKEND, claimLinks: HAS_BACKEND, route, ...(quoted ? { quoted } : {}), ...(m.id === syncWithAda.id ? { sample: true } : {}) };
-    },
-    wallet: limits && dailyCap !== null ? { leftToday: limits.leftToday, dailyCap } : null,
+    options: phoneOptions,
+    wallet: phoneWallet,
     run: (a) => {
       const m = meetings[a.meetingId];
       if (!m) return;
       const h = handlersFor(m);
       if (a.kind === "approve") h.onApprove(a.followUpId, "phone");
-      else if (a.kind === "dismiss") h.onDismiss(a.followUpId);
+      else if (a.kind === "dismiss") h.onDismiss(a.followUpId, "phone");
       else h.onUndoAutopilot(a.followUpId);
     },
     onHeldResolved: resolveHeld,

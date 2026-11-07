@@ -413,7 +413,13 @@ pub async fn payment_state(config: &NearConfig, followup_id: &str) -> Result<Val
     let args = json!({ "owner": config.account, "followup_id": followup_id });
     let paid = rpc.view(&config.contract, "is_paid", &args).await.map_err(|e| plain(config, e))?;
     let pending = rpc.view(&config.contract, "get_pending", &args).await.map_err(|e| plain(config, e))?;
-    Ok(json!({ "paid": paid, "pending": !pending.is_null() }))
+    Ok(payment_state_answer(config, paid, &pending))
+}
+
+/// The answer, with the network, contract and account that gave it: a payment parked on
+/// another one isn't pending here either, so only these say whether it was declined.
+fn payment_state_answer(config: &NearConfig, paid: Value, pending: &Value) -> Value {
+    json!({ "paid": paid, "pending": !pending.is_null(), "asked": config })
 }
 
 /// Circle USDC on NEAR.
@@ -489,6 +495,14 @@ mod tests {
         assert_eq!(plain(&c, r#"RPC error INVALID_TRANSACTION {"NotEnoughAllowance":{}}"#.into()), "Authorise this Mac again: its key ran out of allowance.");
         // The contract's own reasons pass through: the interface matches on them.
         assert_eq!(plain(&c, "Transaction failed: LOW_BALANCE".into()), "Transaction failed: LOW_BALANCE");
+    }
+
+    #[test]
+    fn a_payment_state_says_which_network_contract_and_account_answered() {
+        let c = NearConfig { network: "testnet".into(), account: "victor.testnet".into(), contract: "wallet.aftercall.testnet".into() };
+        let asked = json!({ "network": "testnet", "account": "victor.testnet", "contract": "wallet.aftercall.testnet" });
+        assert_eq!(payment_state_answer(&c, json!(false), &Value::Null), json!({ "paid": false, "pending": false, "asked": asked }));
+        assert_eq!(payment_state_answer(&c, json!(false), &json!({ "amount": "5000000000" }))["pending"], true);
     }
 
     /// Read-only calls to testnet's RPC: `cargo test -- --ignored check_setup`.
