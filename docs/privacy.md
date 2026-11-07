@@ -109,7 +109,7 @@ Off by default. While on, agents reach meetings only through the running app's o
 ### Claim links: only what the link needs
 
 - Stored: a sha256 of the token, the owner, the amount, created and expiry times, the status and the account the payee shared: schema at `apps/backend/src/claims/claims.store.ts:61`; reasoning at `apps/backend/src/claims/claims.service.ts:11`.
-- Not stored: the payee's name, a memo and the meeting title. The controller reads only `amount` from the request (`apps/backend/src/claims/claims.controller.ts:17`). The app puts the details in the link's `#fragment` (`packages/core/src/followups/claimLink.ts:27`, called from `apps/desktop/src/followUpActions.ts:212`), which browsers never send to any server; the claim page reads them in the payee's browser (`apps/web/app/claim/ClaimClient.tsx:38`). The amount shown always comes from the server, so editing the fragment can't change it.
+- Not stored: the payee's name, a memo and the meeting title. The controller reads only `amount` from the request (`apps/backend/src/claims/claims.controller.ts:17`). The app puts the details in the link's `#fragment` (`packages/core/src/followups/claimLink.ts:27`, called from `apps/desktop/src/followUpActions.ts:214`), which browsers never send to any server; the claim page reads them in the payee's browser (`apps/web/app/claim/ClaimClient.tsx:38`). The amount shown always comes from the server, so editing the fragment can't change it.
 - Older databases are migrated on start: the `payee_name`, `memo` and `meeting` columns are dropped with their contents (`claims.store.ts:76`).
 - How long: links expire after 7 days (`claims.service.ts:33`). Expired and used rows are kept for the owner's list and the claim totals in `/stats`; they hold no names or meeting text.
 - Tested: `apps/backend/src/claims/claims.test.ts:45` (details sent by an older app are not kept, in memory and in Postgres) and `claims.test.ts:106` (the live Postgres table has exactly the allowed columns, including after migrating an old table with data in it).
@@ -117,7 +117,7 @@ Off by default. While on, agents reach meetings only through the running app's o
 
 ### Phone relay: sealed boxes only
 
-- Stored, if you pair a phone: sha256 hashes of the pairing id and of the Mac's and the phone's tokens, the sealed hello until the Mac confirms it, the latest sealed snapshot (replaced on each post) and the phone's sealed taps, with their times and the time the Mac last called: tables at `apps/backend/src/relay/relay.store.ts:128`. No key, so it can't open or forge a box.
+- Stored, if you pair a phone: sha256 hashes of the pairing id and of the Mac's and the phone's tokens, the sealed hello until the Mac confirms it, the latest sealed snapshot (replaced on each post) and the phone's sealed taps, with their times and the time the Mac last called: tables at `apps/backend/src/relay/relay.store.ts:129`. No key, so it can't open or forge a box.
 - How long: a pairing not confirmed within 10 minutes is gone, a confirmed one 30 days after the Mac last called; a tap until the Mac acknowledges it, 24 hours at most (`PAIRING_WAIT_MS`, `PAIRING_IDLE_MS`, `ACTION_TTL_MS`, `apps/backend/src/relay/relay.service.ts:21`). Unpairing from either side deletes all of it.
 - Limits are counted like the recap limit, under a hashed key: pairings and hellos per IP a day, snapshots and taps per pairing a day (`RELAY_DAILY`, `relay.service.ts:29`).
 - Tested: `apps/backend/src/relay/relay.test.ts`: "nothing readable is stored: only hashes of the id and tokens, and the sealed boxes as posted", "unpairing, by either side, deletes the pairing, its snapshot and its actions", and, against Postgres, "the relay's tables have exactly the columns in the protocol".
@@ -142,7 +142,7 @@ The protocol is [docs/design/phone-protocol.md](design/phone-protocol.md).
 ## NEAR blockchain (public, permanent)
 
 - `record_proof(meeting_id, proof_hash, model)`: `apps/desktop/src-tauri/src/near.rs:206`. The meeting id is the recording's start time in Unix seconds. The hash covers the proof bundle; no transcript or notes are on-chain. The public Verify page reads only this from NEAR RPC (`apps/web/app/verify/VerifyClient.tsx:44`); the bundle itself travels in the proof link's fragment.
-- `pay(payee, amount, memo, followup_id)`: `apps/desktop/src-tauri/src/near.rs:342`. The memo is the fixed text `Aftercall payment` (`PAY_MEMO`, `packages/core/src/followups/boundaries.ts:11`), so nothing about the meeting goes on chain; the follow-up id is `<recording id>-<follow-up id>` (`contractFollowupId`, `packages/core/src/relay/mac.ts:36`), and the recording id is its start time in Unix seconds, so the chain shows when a paid meeting started.
+- `pay(payee, amount, memo, followup_id)`: `apps/desktop/src-tauri/src/near.rs:342`. The memo is the fixed text `Aftercall payment` (`PAY_MEMO`, `packages/core/src/followups/boundaries.ts:11`), so nothing about the meeting goes on chain; the follow-up id is `<recording id>-<follow-up id>` (`contractFollowupId`, `packages/core/src/relay/mac.ts:80`), and the recording id is its start time in Unix seconds, so the chain shows when a paid meeting started.
 
 ## Other services
 
