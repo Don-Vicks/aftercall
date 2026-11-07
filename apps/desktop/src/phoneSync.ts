@@ -6,7 +6,9 @@ import {
   buildSnapshot,
   contractFollowupId,
   handlePhoneActions,
+  heldElsewhere,
   heldPaymentActions,
+  heldPaymentOutcome,
   heldPaymentSignUrls,
   mergeResults,
   snapshotKey,
@@ -68,11 +70,15 @@ export function usePhoneSync(input: PhoneSyncInput) {
     near.getConfig().then(setConfig).catch(() => setConfig(null));
   }, [pairedId, input.account]);
 
-  /** Options as the cards use them, plus /sign links for a payment held for the wallet. */
+  /**
+   * Options as the cards use them, plus /sign links for a payment held for the wallet,
+   * unless it was held on another network or account: those links would ask a contract
+   * that never parked it, so the phone says to review it on the Mac.
+   */
   const optionsFor = (m: Meeting) => (f: FollowUp): ItemOptions => {
     const base = latest.current.options(m, f);
     const wallet = latest.current.wallet;
-    if (f.kind !== "payment" || f.status !== "blocked" || base.sample || !config || !wallet) return base;
+    if (f.kind !== "payment" || f.status !== "blocked" || base.sample || !config || !wallet || heldElsewhere(f, config)) return base;
     const signUrls = heldPaymentSignUrls(SIGN_URL, { network: config.network, contract: config.contract, owner: config.account }, heldPaymentActions(m, f, wallet));
     return { ...base, signUrls };
   };
@@ -161,16 +167,19 @@ export function usePhoneSync(input: PhoneSyncInput) {
     // `optionsFor` reads the latest input through the ref; `config` changes the /sign links.
   }, [pairedId, config]);
 
-  // Held payments: the phone opens the wallet directly, so the Mac asks NEAR what became of them.
+  // Held payments: the phone opens the wallet directly, so the Mac asks NEAR what became of them,
+  // on the contract and account it uses now; one held on another is left as it is (`heldPaymentOutcome`).
   useEffect(() => {
     if (!pairedId || !config) return;
     const check = async () => {
+      const here = await near.getConfig().catch(() => null);
+      if (!here) return;
       for (const m of latest.current.meetings) {
         for (const f of m.followUps) {
-          if (f.kind !== "payment" || f.status !== "blocked" || latest.current.options(m, f).sample) continue;
+          if (f.kind !== "payment" || f.status !== "blocked" || latest.current.options(m, f).sample || heldElsewhere(f, here)) continue;
           const state = await near.paymentState(contractFollowupId(m.id, f.id)).catch(() => null);
-          if (state?.paid) latest.current.onHeldResolved(m.id, f.id, "paid");
-          else if (state && !state.pending) latest.current.onHeldResolved(m.id, f.id, "dismissed");
+          const outcome = state && heldPaymentOutcome(f, here, state);
+          if (outcome) latest.current.onHeldResolved(m.id, f.id, outcome);
         }
       }
     };

@@ -10,7 +10,9 @@ import {
   buildSnapshot,
   contractFollowupId,
   handlePhoneActions,
+  heldElsewhere,
   heldPaymentActions,
+  heldPaymentOutcome,
   heldPaymentSignUrls,
   mergeResults,
   snapshotKey,
@@ -77,6 +79,29 @@ test("a held payment a coding agent proposed says so on its approve page, in pla
   assert.equal(approve.kind === "approve" && approve.context?.proposedBy, "Codex: “The deposit agreed in the call”");
   const { approve: heard } = heldPaymentActions(older, older.followUps[0] as PaymentFollowUp, { leftToday: 5_000_000n, dailyCap: 50_000_000n }, NOW);
   assert.equal(heard.kind === "approve" && "proposedBy" in (heard.context ?? {}), false);
+});
+
+test("a held payment is marked declined only by the contract it was parked on, never after a network or account switch", () => {
+  const here = { network: "testnet" as const, contract: "wallet.aftercall.testnet", account: "victor.testnet" };
+  const held: PaymentFollowUp = { ...payment, status: "blocked", heldOn: here };
+  const gone = { paid: false, pending: false };
+  assert.equal(heldPaymentOutcome(held, here, gone), "dismissed", "neither paid nor pending where it was parked: declined");
+  assert.equal(heldPaymentOutcome(held, here, { paid: true, pending: false }), "paid");
+  assert.equal(heldPaymentOutcome(held, here, { paid: false, pending: true }), null, "still waits");
+  for (const elsewhere of [
+    { ...here, network: "mainnet" as const, contract: "wallet.aftercall.near", account: "victor.near" },
+    { ...here, account: "ada.testnet" },
+    { ...here, contract: "my-own.testnet" },
+  ]) {
+    assert.ok(heldElsewhere(held, elsewhere));
+    assert.equal(heldPaymentOutcome(held, elsewhere, gone), null, `${elsewhere.network} ${elsewhere.contract} ${elsewhere.account} never heard of it`);
+    assert.equal(heldPaymentOutcome(held, elsewhere, { paid: true, pending: false }), null);
+  }
+  // Held before the app kept where: only a payment the contract says is paid is decided.
+  const unknown: PaymentFollowUp = { ...payment, status: "blocked" };
+  assert.equal(heldElsewhere(unknown, here), false);
+  assert.equal(heldPaymentOutcome(unknown, here, gone), null);
+  assert.equal(heldPaymentOutcome(unknown, here, { paid: true, pending: false }), "paid");
 });
 
 test("an item the schema refuses is left out and counted, and the rest still go", () => {

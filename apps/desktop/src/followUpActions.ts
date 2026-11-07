@@ -80,9 +80,11 @@ export async function pay(meeting: Meeting, f: PaymentFollowUp, apply: Apply): P
   if (f.amount === null || !f.payeeListed) return;
   apply({ status: "sending", error: undefined });
   try {
+    // Kept on a held payment: only this contract and account can say it was declined (`heldPaymentOutcome`).
+    const config = await near.getConfig();
     const out = await near.pay(f.payeeAccount, f.amount, PAY_MEMO, contractFollowupId(meeting.id, f.id));
     if (out.status === "paid") apply({ status: "paid", doneAt: hhmm(), ref: out.txHash });
-    else if (out.status === "blocked") apply({ status: "blocked", ref: out.txHash });
+    else if (out.status === "blocked") apply({ status: "blocked", ref: out.txHash, heldOn: config ? { network: config.network, contract: config.contract, account: config.account } : undefined });
     else apply({ status: "failed", ref: out.txHash, error: "The transfer bounced and the amount went back to your agent wallet. Check the payee can receive USDC." });
   } catch (e) {
     apply({ status: "proposed", error: plainPayError(e) });

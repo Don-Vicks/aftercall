@@ -1,4 +1,4 @@
-import type { FollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
+import type { FollowUp, Meeting, NearPlace, PaymentFollowUp } from "../meeting.ts";
 import type { Network } from "../network.ts";
 import { formatUsdc } from "../money.ts";
 import { meetingLabel } from "../when.ts";
@@ -70,6 +70,31 @@ export function heldPaymentActions(
 export function heldPaymentSignUrls(signPage: string, owner: Omit<SignRequest, "action">, actions: { approve: OwnerAction; cancel: OwnerAction }): { approve: string; decline: string } {
   const link = (action: OwnerAction) => `${signPage}#${encodeSignRequest({ ...owner, action })}`;
   return { approve: link(actions.approve), decline: link(actions.cancel) };
+}
+
+/**
+ * Whether a held payment was parked on another network, contract or NEAR account than
+ * the one the app uses now (`heldOn`). The contract here has never heard of it: its
+ * `get_pending` answers null, and that must not read as declined. False when the app
+ * didn't keep where it was held.
+ */
+export function heldElsewhere(f: PaymentFollowUp, here: NearPlace): boolean {
+  const at = f.heldOn;
+  return !!at && (at.network !== here.network || at.contract !== here.contract || at.account !== here.account);
+}
+
+/**
+ * What became of a held payment, from the contract the app uses now (`is_paid` and
+ * `get_pending` for that follow-up): paid, dismissed, or null while it still waits or
+ * the answer can't be trusted. The contract keeps no record of a decline: a payment
+ * neither paid nor pending was declined only if it was parked on this very contract and
+ * account. So a payment held elsewhere is never decided here, and one held before
+ * `heldOn` was kept is marked only once it's paid.
+ */
+export function heldPaymentOutcome(f: PaymentFollowUp, here: NearPlace, state: { paid: boolean; pending: boolean }): "paid" | "dismissed" | null {
+  if (heldElsewhere(f, here)) return null;
+  if (state.paid) return "paid";
+  return f.heldOn && !state.pending ? "dismissed" : null;
 }
 
 /** One meeting as the snapshot reads it, with the options its follow-up cards use. */

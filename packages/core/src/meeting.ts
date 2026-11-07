@@ -5,6 +5,7 @@
  */
 
 import type { Attendee } from "./calendar.ts";
+import type { Network } from "./network.ts";
 
 export type Speaker = "you" | "others";
 
@@ -142,6 +143,19 @@ export interface PaymentFollowUp extends FollowUpBase {
    * read as one amount). Absent on meetings made before it existed; read null as unclear.
    */
   amountProblem?: AmountProblemKind;
+  /**
+   * Where the contract parked it, set when it's held for your wallet: the network,
+   * contract and NEAR account the app paid from then. Only that contract knows what
+   * became of it. Absent on payments held before it was kept.
+   */
+  heldOn?: NearPlace;
+}
+
+/** A NEAR network, agent-wallet contract and owner account, as the app's NEAR settings name them. */
+export interface NearPlace {
+  network: Network;
+  contract: string;
+  account: string;
 }
 
 export type AmountProblemKind = "not-in-quote" | "not-usdc" | "unclear";
