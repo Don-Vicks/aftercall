@@ -1,6 +1,6 @@
 # Design: Aftercall on a phone
 
-Status: a design, not built. Nothing here is in the app yet.
+Status: a design, not built. Nothing here is in the app yet. The exact protocol between the Mac, the relay and the phone is [phone-protocol.md](phone-protocol.md); version 1 has no push notifications yet: the phone checks for news while it's open.
 
 ## The idea
 
