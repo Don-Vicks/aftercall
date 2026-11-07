@@ -74,15 +74,23 @@ async fn pay(e: &Env, signer: &Account, amount: u128, followup_id: &str) -> anyh
         .transact().await?)
 }
 
-/// Adds a function-call key to Victor's account that may only call pay and record_proof,
+/// The methods the desktop app's key may call (packages/core `APP_KEY_METHODS`).
+const APP_KEY_METHODS: [&str; 4] = ["pay", "record_proof", "open_escrow", "release_escrow"];
+/// What a key added before Handshake may call.
+const OLD_KEY_METHODS: [&str; 2] = ["pay", "record_proof"];
+
+/// Adds a function-call key to Victor's account that may only call the app's methods,
 /// and returns Victor's account signing with that limited key (what the desktop app holds).
 async fn limited_key(e: &Env) -> anyhow::Result<Account> {
+    key_for(&e.worker, &e.victor, &e.wallet, &APP_KEY_METHODS).await
+}
+
+async fn key_for(worker: &Worker<Sandbox>, owner: &Account, wallet: &Contract, methods: &[&str]) -> anyhow::Result<Account> {
     let sk = SecretKey::from_random(near_workspaces::types::KeyType::ED25519);
-    e.victor.batch(e.victor.id())
-        .add_key(sk.public_key(), AccessKey::function_call_access(
-            e.wallet.id(), &["pay", "record_proof"], Some(NearToken::from_millinear(250))))
+    owner.batch(owner.id())
+        .add_key(sk.public_key(), AccessKey::function_call_access(wallet.id(), methods, Some(NearToken::from_millinear(250))))
         .transact().await?.into_result()?;
-    Ok(Account::from_secret_key(e.victor.id().clone(), sk, &e.worker))
+    Ok(Account::from_secret_key(owner.id().clone(), sk, worker))
 }
 
 #[tokio::test]
@@ -163,6 +171,8 @@ async fn limited_key_cannot_change_rules() -> anyhow::Result<()> {
         ("add_payee", json!({ "payee": "attacker.near", "label": "x" })),
         ("withdraw", json!({ "amount": (300 * USDC).to_string() })),
         ("set_paused", json!({ "paused": false })),
+        ("approve_escrow", json!({ "escrow_id": "e-1" })),
+        ("cancel_escrow", json!({ "escrow_id": "e-1" })),
     ] {
         // Outside the key's method list: rejected before it runs.
         let r = app.call(e.wallet.id(), method).args_json(args.clone()).deposit(NearToken::from_yoctonear(1)).transact().await;
@@ -228,6 +238,7 @@ async fn callbacks_and_init_are_private() -> anyhow::Result<()> {
         ("on_pay_complete", json!({ "owner": e.victor.id(), "followup_id": "x", "amount": amount, "day": 0, "cross_chain": false })),
         ("on_withdraw_complete", json!({ "owner": e.victor.id(), "amount": amount })),
         ("on_deposit_address_registered", json!({ "owner": e.victor.id(), "followup_id": "x", "amount": amount, "day": 0, "deposit_address": DEPOSIT })),
+        ("on_escrow_released", json!({ "owner": e.victor.id(), "escrow_id": "x" })),
     ] {
         let r = e.victor.call(e.wallet.id(), method).args_json(args).max_gas().transact().await?;
         assert!(r.is_failure(), "anyone calling {method} must fail");
@@ -342,7 +353,7 @@ async fn app_signer_records_proofs_and_pays_over_rpc() -> anyhow::Result<()> {
     let app_key = near_tx::KeyPair::generate();
     let pk: near_workspaces::types::PublicKey = app_key.public_key().parse()?;
     e.victor.batch(e.victor.id())
-        .add_key(pk, AccessKey::function_call_access(e.wallet.id(), &["pay", "record_proof"], Some(NearToken::from_millinear(250))))
+        .add_key(pk, AccessKey::function_call_access(e.wallet.id(), &APP_KEY_METHODS, Some(NearToken::from_millinear(250))))
         .transact().await?.into_result()?;
 
     let rpc = near_tx::Client::new(e.worker.rpc_addr());
@@ -371,12 +382,33 @@ async fn app_signer_records_proofs_and_pays_over_rpc() -> anyhow::Result<()> {
 
     let paid = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
         method_name: "pay".into(),
-        args: json!({ "payee": e.designer.id(), "amount": (50 * USDC).to_string(), "memo": "deposit", "followup_id": "f-app" }).to_string().into_bytes(),
+        args: json!({ "payee": e.designer.id(), "amount": (50 * USDC).to_string(), "memo": "deposit", "followup_id": "f-app", "meeting_id": "1793006441" }).to_string().into_bytes(),
         gas: 100_000_000_000_000,
         deposit: 0,
     }).await.map_err(anyhow::Error::msg)?;
     assert_eq!(paid.value.unwrap()["status"], "sending");
     assert_eq!(ft_balance(&e, &e.designer).await?, 50 * USDC);
+    // Anyone can go from the payment to the meeting's proof.
+    let link = rpc.view(wallet, "get_payment_proof", &json!({ "owner": victor, "followup_id": "f-app" })).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(link, json!({ "meeting_id": "1793006441", "proof_hash": "ab".repeat(32) }));
+
+    // The same key opens an escrow and, once the payee confirms, releases it.
+    let terms = "7e".repeat(32);
+    let opened = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "open_escrow".into(),
+        args: json!({ "escrow_id": "f-deal", "payee": e.designer.id(), "amount": (20 * USDC).to_string(), "meeting_id": "1793006441", "terms_hash": terms, "has_condition": true }).to_string().into_bytes(),
+        gas,
+        deposit: 0,
+    }).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(opened.value.unwrap()["state"], "open");
+    confirm(&e, &e.designer, "f-deal", &terms).await?.into_result()?;
+    rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
+        method_name: "release_escrow".into(),
+        args: json!({ "escrow_id": "f-deal" }).to_string().into_bytes(),
+        gas: 100_000_000_000_000,
+        deposit: 0,
+    }).await.map_err(anyhow::Error::msg)?;
+    assert_eq!(ft_balance(&e, &e.designer).await?, 70 * USDC);
 
     // Anything else is refused by the protocol before the contract runs.
     let rules = rpc.call(victor, &app_key, wallet, near_tx::FunctionCall {
@@ -716,5 +748,220 @@ async fn setup_registers_and_sets_the_cap_in_one_transaction() -> anyhow::Result
         .transact().await?;
     assert!(again.is_failure());
     assert_eq!(wallet_field(&e, "daily_cap").await?, 200 * USDC);
+    Ok(())
+}
+
+// ---------- Handshake: escrow ----------
+
+const TERMS: &str = "5f7c1d0e9a3b2c4d6e8f00112233445566778899aabbccddeeff001122334455";
+
+async fn record_proof(e: &Env, app: &Account, meeting_id: &str) -> anyhow::Result<()> {
+    app.call(e.wallet.id(), "record_proof")
+        .args_json(json!({ "meeting_id": meeting_id, "proof_hash": "ab".repeat(32), "model": "Qwen/Qwen3.8-27B" }))
+        .transact().await?.into_result()?;
+    Ok(())
+}
+
+async fn open_escrow(e: &Env, signer: &Account, amount: u128, escrow_id: &str, has_condition: bool) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(signer.call(e.wallet.id(), "open_escrow")
+        .args_json(json!({ "escrow_id": escrow_id, "payee": e.designer.id(), "amount": amount.to_string(), "meeting_id": "m-1", "terms_hash": TERMS, "has_condition": has_condition }))
+        .transact().await?)
+}
+
+/// The payee confirms from their own account, with the 1 yoctoNEAR a full-access key attaches.
+async fn confirm(e: &Env, payee: &Account, escrow_id: &str, terms_hash: &str) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(payee.call(e.wallet.id(), "confirm_escrow")
+        .args_json(json!({ "owner": e.victor.id(), "escrow_id": escrow_id, "terms_hash": terms_hash }))
+        .deposit(NearToken::from_yoctonear(1))
+        .gas(near_workspaces::types::Gas::from_tgas(100))
+        .transact().await?)
+}
+
+async fn release(e: &Env, signer: &Account, escrow_id: &str) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(signer.call(e.wallet.id(), "release_escrow")
+        .args_json(json!({ "escrow_id": escrow_id }))
+        .gas(near_workspaces::types::Gas::from_tgas(100))
+        .transact().await?)
+}
+
+async fn owner_escrow_call(e: &Env, method: &str, escrow_id: &str) -> anyhow::Result<near_workspaces::result::ExecutionFinalResult> {
+    Ok(e.victor.call(e.wallet.id(), method)
+        .args_json(json!({ "escrow_id": escrow_id }))
+        .deposit(NearToken::from_yoctonear(1))
+        .gas(near_workspaces::types::Gas::from_tgas(100))
+        .transact().await?)
+}
+
+async fn escrow(e: &Env, escrow_id: &str) -> anyhow::Result<serde_json::Value> {
+    Ok(e.wallet.view("get_escrow").args_json(json!({ "owner": e.victor.id(), "escrow_id": escrow_id })).await?.json()?)
+}
+
+fn refused(r: near_workspaces::result::ExecutionFinalResult, why: &str) -> bool {
+    format!("{:?}", r.into_result().unwrap_err()).contains(why)
+}
+
+/// Opened within the caps by the app's key, with the meeting's proof hash; only the payee can
+/// confirm, and only the terms they saw; release waits for that, pays once, and the caps
+/// count it once, when it was set aside.
+#[tokio::test]
+async fn escrow_within_cap_is_confirmed_by_the_payee_and_released_by_the_app_key() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    record_proof(&e, &app, "m-1").await?;
+
+    // No proof under that meeting id: refused.
+    let no_proof = app.call(e.wallet.id(), "open_escrow")
+        .args_json(json!({ "escrow_id": "e-0", "payee": e.designer.id(), "amount": USDC.to_string(), "meeting_id": "m-2", "terms_hash": TERMS, "has_condition": true }))
+        .transact().await?;
+    assert!(refused(no_proof, "PROOF_NOT_FOUND"));
+
+    let r = open_escrow(&e, &app, 150 * USDC, "e-1", true).await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    assert_eq!(r.json::<serde_json::Value>()?, json!({ "state": "open", "reason": null, "left_today": (50 * USDC).to_string() }));
+    assert_eq!((wallet_field(&e, "balance").await?, wallet_field(&e, "spent_today").await?), (150 * USDC, 150 * USDC));
+    let opened = escrow(&e, "e-1").await?;
+    assert_eq!(opened["proof"], json!({ "meeting_id": "m-1", "proof_hash": "ab".repeat(32) }), "the meeting's proof, as recorded");
+    assert_eq!((opened["terms_hash"].as_str(), opened["state"].as_str()), (Some(TERMS), Some("open")));
+
+    // Before the payee confirms, the app's key can't release it.
+    assert!(refused(release(&e, &app, "e-1").await?, "NOT_CONFIRMED"));
+    // Only the payee confirms: not the owner, not another account, and not other terms.
+    let root = e.worker.root_account()?;
+    let stranger = root.create_subaccount("stranger").initial_balance(NearToken::from_near(2)).transact().await?.into_result()?;
+    assert!(refused(confirm(&e, &stranger, "e-1", TERMS).await?, "NOT_THE_PAYEE"));
+    assert!(refused(confirm(&e, &e.victor, "e-1", TERMS).await?, "NOT_THE_PAYEE"));
+    assert!(refused(confirm(&e, &e.designer, "e-1", &"00".repeat(32)).await?, "TERMS_DIFFER"));
+    let ok = confirm(&e, &e.designer, "e-1", TERMS).await?;
+    assert!(ok.is_success(), "{:?}", ok.failures());
+    assert_eq!(ok.json::<String>()?, "confirmed", "with a condition, it waits for the owner");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 0);
+
+    // Released by the app's key: paid once, and not counted against the caps again.
+    let paid = release(&e, &app, "e-1").await?;
+    assert!(paid.is_success(), "{:?}", paid.failures());
+    assert_eq!(ft_balance(&e, &e.designer).await?, 150 * USDC);
+    assert_eq!(escrow(&e, "e-1").await?["state"], "released");
+    assert_eq!((wallet_field(&e, "balance").await?, wallet_field(&e, "spent_today").await?), (150 * USDC, 150 * USDC));
+    assert!(refused(release(&e, &app, "e-1").await?, "ESCROW_CLOSED"));
+    assert_eq!(ft_balance(&e, &e.designer).await?, 150 * USDC);
+    // 50 left today, for escrows and payments together.
+    assert_eq!(open_escrow(&e, &app, 60 * USDC, "e-2", true).await?.json::<serde_json::Value>()?["state"], "parked");
+    let stats: serde_json::Value = e.wallet.view("get_stats").await?.json()?;
+    assert_eq!((stats["payments"].as_u64(), stats["parked"].as_u64()), (Some(1), Some(1)));
+    Ok(())
+}
+
+/// Over a cap the escrow is parked, nothing is set aside, and only the owner's wallet can
+/// approve it; then the payee confirms and the owner's wallet releases it.
+#[tokio::test]
+async fn escrow_over_cap_is_parked_until_the_owner_wallet_approves() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    record_proof(&e, &app, "m-1").await?;
+    let r = open_escrow(&e, &app, 250 * USDC, "e-big", true).await?;
+    assert_eq!(r.json::<serde_json::Value>()?["reason"], "OVER_CAP");
+    assert_eq!(escrow(&e, "e-big").await?["state"], "parked");
+    assert_eq!((wallet_field(&e, "balance").await?, wallet_field(&e, "spent_today").await?), (300 * USDC, 0));
+    assert!(refused(confirm(&e, &e.designer, "e-big", TERMS).await?, "NOT_OPEN_YET"));
+
+    // The app's key can't approve it: the method isn't on its list, and it can't attach 1 yocto.
+    let by_app = app.call(e.wallet.id(), "approve_escrow").args_json(json!({ "escrow_id": "e-big" }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await;
+    assert!(by_app.is_err() || by_app.unwrap().is_failure());
+    owner_escrow_call(&e, "approve_escrow", "e-big").await?.into_result()?;
+    assert_eq!((wallet_field(&e, "balance").await?, wallet_field(&e, "spent_today").await?), (50 * USDC, 250 * USDC));
+
+    confirm(&e, &e.designer, "e-big", TERMS).await?.into_result()?;
+    // The owner's wallet can release too (it signs as the same account).
+    release(&e, &e.victor, "e-big").await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.designer).await?, 250 * USDC);
+    assert_eq!(wallet_field(&e, "spent_today").await?, 250 * USDC, "counted once, when approved");
+    Ok(())
+}
+
+/// The owner's wallet can take an escrow back before the payee confirms, not after (until 30
+/// days pass; unit-tested). After, the payee can give it back. The app's key can't cancel.
+#[tokio::test]
+async fn owner_cancels_an_escrow_only_before_the_payee_confirms() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    record_proof(&e, &app, "m-1").await?;
+    open_escrow(&e, &app, 100 * USDC, "e-1", true).await?.into_result()?;
+    let by_app = app.call(e.wallet.id(), "cancel_escrow").args_json(json!({ "escrow_id": "e-1" })).transact().await;
+    assert!(by_app.is_err() || by_app.unwrap().is_failure());
+    owner_escrow_call(&e, "cancel_escrow", "e-1").await?.into_result()?;
+    assert_eq!(escrow(&e, "e-1").await?["state"], "cancelled");
+    assert_eq!((wallet_field(&e, "balance").await?, wallet_field(&e, "spent_today").await?), (300 * USDC, 0));
+    assert!(refused(confirm(&e, &e.designer, "e-1", TERMS).await?, "ESCROW_CLOSED"));
+
+    open_escrow(&e, &app, 100 * USDC, "e-2", true).await?.into_result()?;
+    confirm(&e, &e.designer, "e-2", TERMS).await?.into_result()?;
+    assert!(refused(owner_escrow_call(&e, "cancel_escrow", "e-2").await?, "PAYEE_CONFIRMED"));
+    // Both agree to call it off: the payee gives it back.
+    e.designer.call(e.wallet.id(), "return_escrow").args_json(json!({ "owner": e.victor.id(), "escrow_id": "e-2" }))
+        .deposit(NearToken::from_yoctonear(1)).transact().await?.into_result()?;
+    assert_eq!(escrow(&e, "e-2").await?["state"], "returned");
+    assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
+    assert_eq!(ft_balance(&e, &e.designer).await?, 0);
+    Ok(())
+}
+
+/// Without a condition, the payee's confirmation pays them in the same transaction. If the
+/// transfer bounces, the escrow is confirmed again with its money still set aside.
+#[tokio::test]
+async fn escrow_without_a_condition_is_released_by_the_payees_confirmation() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let app = limited_key(&e).await?;
+    record_proof(&e, &app, "m-1").await?;
+    open_escrow(&e, &app, 40 * USDC, "e-now", false).await?.into_result()?;
+    let r = confirm(&e, &e.designer, "e-now", TERMS).await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    assert_eq!(r.json::<String>()?, "released");
+    assert_eq!(ft_balance(&e, &e.designer).await?, 40 * USDC);
+    assert_eq!(escrow(&e, "e-now").await?["state"], "released");
+
+    // A payee the token refuses: the release fails and is undone.
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": e.designer.id(), "blocked": true })).await?;
+    open_escrow(&e, &app, 30 * USDC, "e-bounce", false).await?.into_result()?;
+    let r = confirm(&e, &e.designer, "e-bounce", TERMS).await?;
+    assert!(r.logs().iter().any(|l| l.contains("ESCROW_RELEASE_FAILED")), "logs: {:?}", r.logs());
+    assert_eq!(escrow(&e, "e-bounce").await?["state"], "confirmed");
+    assert_eq!(wallet_field(&e, "balance").await?, 230 * USDC, "still set aside");
+    let stats: serde_json::Value = e.wallet.view("get_stats").await?.json()?;
+    assert_eq!(stats["payments"], 1, "the bounced release isn't counted");
+    usdc_owner_call(&e, "set_blocked", json!({ "account_id": e.designer.id(), "blocked": false })).await?;
+    release(&e, &app, "e-bounce").await?.into_result()?;
+    assert_eq!(ft_balance(&e, &e.designer).await?, 70 * USDC);
+    Ok(())
+}
+
+/// A key added before Handshake (pay and record_proof only) still pays, but the protocol
+/// refuses it an escrow method. The owner's wallet updates it in one transaction (delete the
+/// key and add it back with today's methods, as packages/core `update-key` builds it), and the
+/// same key then opens escrows.
+#[tokio::test]
+async fn a_key_from_before_escrows_pays_and_is_updated_in_one_transaction() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let sk = SecretKey::from_random(near_workspaces::types::KeyType::ED25519);
+    let allowance = Some(NearToken::from_millinear(250));
+    e.victor.batch(e.victor.id())
+        .add_key(sk.public_key(), AccessKey::function_call_access(e.wallet.id(), &OLD_KEY_METHODS, allowance))
+        .transact().await?.into_result()?;
+    let old = Account::from_secret_key(e.victor.id().clone(), sk.clone(), &e.worker);
+    record_proof(&e, &old, "m-1").await?;
+    assert_eq!(pay(&e, &old, 10 * USDC, "f-1").await?.json::<serde_json::Value>()?["status"], "sending");
+    let r = open_escrow(&e, &old, 10 * USDC, "e-1", true).await;
+    assert!(r.is_err() || r.unwrap().is_failure(), "open_escrow isn't on the old key's list");
+    let none: Option<serde_json::Value> = e.wallet.view("get_escrow").args_json(json!({ "owner": e.victor.id(), "escrow_id": "e-1" })).await?.json()?;
+    assert!(none.is_none());
+
+    e.victor.batch(e.victor.id())
+        .delete_key(sk.public_key())
+        .add_key(sk.public_key(), AccessKey::function_call_access(e.wallet.id(), &APP_KEY_METHODS, allowance))
+        .transact().await?.into_result()?;
+    let updated = Account::from_secret_key(e.victor.id().clone(), sk, &e.worker);
+    let r = open_escrow(&e, &updated, 10 * USDC, "e-1", true).await?;
+    assert!(r.is_success(), "{:?}", r.failures());
+    assert_eq!(pay(&e, &updated, 10 * USDC, "f-2").await?.json::<serde_json::Value>()?["status"], "sending", "it still pays");
     Ok(())
 }
