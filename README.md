@@ -1,16 +1,100 @@
 # Aftercall
 
-**Private meeting notes that do the follow-ups.** A Mac app: the notes are made inside NEAR AI Cloud's secure hardware, anyone can check the proof on NEAR, and the meeting sends its own recap and pays what was agreed, within limits a NEAR contract enforces.
+Meeting notes apps send your calls to servers you can't check, and the recap and payments a call agrees on still wait on you.
+
+**Aftercall is private meeting notes that do the follow-ups.** A Mac app: NEAR AI Cloud's secure hardware makes the notes once the app has checked it, a proof goes on NEAR that anyone with the link can re-check, and the recap and the agreed USDC payment go out once you approve, within caps a NEAR contract enforces.
 
 [![Download for Mac](https://img.shields.io/badge/Download-Mac%20test%20build-2f7d6d)](https://getaftercall.vercel.app/download)
 [![Try it in your browser](https://img.shields.io/badge/Try%20it-in%20your%20browser-2f7d6d)](https://getaftercall.vercel.app/demo)
-[![NEAR testnet](https://img.shields.io/badge/NEAR-testnet%20contract%20live-111)](#for-judges)
+[![NEAR testnet](https://img.shields.io/badge/NEAR-testnet%20contract%20live-111)](#how-to-test)
 [![CI](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml/badge.svg)](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-555)](LICENSE)
 
-Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, business, realworld. The test build is live for Apple silicon and Intel Macs, and has made notes from real calls on live NEAR AI since 3 Nov 2026.
+Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, business, realworld. The Mac test build (Apple silicon and Intel) runs on NEAR testnet. On 3 Nov 2026 it made notes from a real call on live NEAR AI and recorded the proof on NEAR.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="apps/web/public/landing/meeting-dark.webp"><img src="apps/web/public/landing/meeting-light.webp" alt="A meeting in Aftercall: verified notes with decisions, action items and follow-ups, each backed by a quote from the call" width="100%"></picture>
+
+## How to test
+
+Pick by the time you have. Only making notes in the Mac app needs a NEAR AI key.
+
+### 1 minute: the contract and the first proof on NEAR testnet
+
+The contract is `wallet.aftercall.testnet`:
+
+- [register](https://testnet.nearblocks.io/txns/64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz) and [set_cap](https://testnet.nearblocks.io/txns/GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo), signed in the owner's own NEAR wallet (3 Nov 2026).
+- [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after it made notes from a real call on live NEAR AI (3 Nov 2026). That call was a private meeting, so its proof link isn't published. A sample meeting's proof link to open at `/verify` is still to come; until then `/verify` only explains what a proof link is.
+- https://getaftercall.vercel.app/stats: counts read live from the contract and the backend.
+
+Without a browser (nearblocks refuses scripted requests), the same facts from NEAR's RPC:
+
+```bash
+curl -s https://archival-rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tx","params":{"tx_hash":"2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro","sender_account_id":"nov3.testnet","wait_until":"FINAL"}}'
+```
+
+shows `nov3.testnet` calling `record_proof` on `wallet.aftercall.testnet` with status `SuccessValue`, and
+
+```bash
+curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"call_function","finality":"final","account_id":"wallet.aftercall.testnet","method_name":"get_stats","args_base64":"e30="}}'
+```
+
+returns the contract's counts as bytes of JSON, `{"wallets":1,"proofs":1,"payments":0,"parked":0}` on 6 Nov.
+
+### 2 minutes: the app in your browser
+
+Open https://getaftercall.vercel.app/demo. It is the Mac app's own interface on made-up meetings. You'll see the notes with the quote behind each item, the Verify sheet re-running the checks on a test proof, the follow-ups, a $5,000 payment the contract holds for the owner's wallet, and Pay Kemi on Solana with a live NEAR Intents quote fetched from 1Click as the page loads (a dry quote: nothing is sent). Recording, notes and payments need the Mac app.
+
+### 5 minutes: approve from your own phone
+
+Needs a clone of this repo, Node 24 and pnpm 10. A made-up Mac pairs with the live `/phone` page through the deployed relay:
+
+```bash
+pnpm install
+pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app
+```
+
+Open the link it prints on your phone. You'll see the six-digit code, then what needs you: a recap and payments, each with What leaves; Approve and Dismiss behind a 5-second Undo; a recap on an autopilot countdown you can undo; a $5,000 payment over the cap that opens your NEAR wallet on `/sign`; a payee not on the list, which you can only dismiss. The terminal logs each tap the made-up Mac accepts or refuses. The relay only passes sealed boxes. There are no push notifications yet: the page checks every 10 s. This hasn't run with the Mac app yet.
+
+### 10 minutes: the Mac app
+
+macOS 14.2 or later, Apple silicon or Intel. It's an unsigned test build on NEAR testnet.
+
+```bash
+curl -fsSL https://getaftercall.vercel.app/install.sh | sh
+```
+
+The script checks the DMG's SHA-256, copies Aftercall into Applications and opens it. Installed this way, macOS shows no warning: you trust this script instead of Apple's notarization, which the build doesn't have yet. From https://getaftercall.vercel.app/download instead, open it once, click Done (not Move to Bin) when macOS says it "could not verify" Aftercall, then click Open Anyway in System Settings › Privacy & Security. Allow Microphone and Screen & System Audio Recording when asked.
+
+- **Without a NEAR AI key** you can record a call (no bot joins it; the audio stays sealed on the Mac), open the two made-up sample recordings on Home, and set up payments.
+- **Making notes needs your own NEAR AI API key** from https://cloud.near.ai. Onboarding asks for it (Skip for now works; add it later in Settings). Nothing is sent unless NEAR AI's attestation passes. Test credits (a capped key from Aftercall for each tester) are built and tested, but off until Aftercall's own NEAR AI account is set up, so the app shows only the key field.
+
+### Full: a payment on testnet
+
+In the Mac app, Settings → Set up payments (about 3 minutes, 0.35 test NEAR):
+
+1. **A testnet account.** The app makes `<name>.testnet` for you through NEAR's testnet helper, which funds it. Or choose "I already have an account" and get test NEAR from [NEAR's faucet](https://docs.near.org/getting-started/faucet), or with [near-cli-rs](https://github.com/near/near-cli-rs): `near account create-account sponsor-by-faucet-service <name>.testnet autogenerate-new-keypair save-to-keychain network-config testnet create`.
+2. **One approval in your wallet.** The app opens https://getaftercall.vercel.app/sign in any NEAR wallet through NEAR Connect, with one signing request: `register` and `set_cap` on the contract, this Mac's limited key, and your USDC registration.
+3. **Test USDC.** [Circle's faucet](https://faucet.circle.com): pick Near Testnet (20 USDC per address every 2 hours, checked 3 Nov 2026). Then Deposit and Add payee on the Ready to pay card, each one approval on `/sign`.
+4. **A payment.** Record a call where you agree to pay that payee less than your daily cap, make notes and tap Approve. Over a cap, the payment waits for your wallet on `/sign`.
+
+Not yet run live: the batched approval in a real wallet (on 3 Nov `register` and `set_cap` were signed separately), and any payment from the Mac app on testnet. The same contract paths are tested on a local NEAR node.
+
+### From source: `pnpm verify`
+
+Needs Node 24, pnpm 10 and stable Rust.
+
+```bash
+pnpm install && pnpm verify --quick
+```
+
+You should see a ✓ line for each step and exit code 0: typecheck, unit tests (core, backend, MCP server), the web build, the NEAR signer, the desktop Rust tests (macOS only; listed as skipped on Linux) and the contract's unit tests. It takes a few minutes, longer on a machine's first Rust build. `pnpm verify` also runs the contract on a local NEAR node (20 sandbox tests, about 8 minutes more) and needs:
+
+```bash
+rustup target add wasm32-unknown-unknown
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+```
+
+Running every part locally: [docs/development.md](docs/development.md).
 
 ## What it does
 
@@ -31,35 +115,9 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 </tr>
 </table>
 
-## Try it
-
-- **On a Mac:** https://getaftercall.vercel.app/download, or in Terminal: `curl -fsSL https://getaftercall.vercel.app/install.sh | sh`. It's an unsigned test build on NEAR testnet, macOS 14.2 or later; the page shows the one Gatekeeper step.
-- **In a browser:** https://getaftercall.vercel.app/demo, the app's interface on sample meetings.
-- **From source:** [docs/development.md](docs/development.md).
-
-**Judging?** The full guide, for people and coding agents: [docs/judging.md](docs/judging.md). The short version follows.
-
 ## For judges
 
-**What it is:** a Mac app that records a call, has NEAR AI Cloud's secure hardware (TEEs) write the notes, and records a proof of that on NEAR that anyone can check in a browser. Then it does what the meeting decided: it sends the recap and pays the agreed USDC from a NEAR contract that caps what the app can spend.
-
-**Three checks, no Mac and no keys needed:**
-
-1. **Run the tests.** `pnpm install && pnpm verify --quick` (Node 24, pnpm 10, stable Rust). You should see a summary of ✓ lines and exit code 0. `pnpm verify` also runs the contract on a local NEAR node (about 8 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). On Linux the desktop Rust tests are listed as skipped; they need macOS.
-2. **Try the app in a browser.** https://getaftercall.vercel.app/demo is the Mac app's own interface on sample meetings: the notes with their quotes, the Verify sheet, the follow-ups, the $5,000 payment the contract holds for the owner's wallet, and a payment to Kemi on Solana with a live NEAR Intents quote, fetched from 1Click as the page loads. Recording, notes and payments need the Mac app.
-3. **See it on NEAR testnet.** The contract is `wallet.aftercall.testnet`. Its history shows the setup and the app's first proof:
-   - [register](https://testnet.nearblocks.io/txns/64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz) and [set_cap](https://testnet.nearblocks.io/txns/GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo), signed in the owner's own NEAR wallet (3 Nov 2026);
-   - [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after making notes from a real call on live NEAR AI (3 Nov 2026). That call was a private meeting, so its proof link isn't published; a sample meeting's link for you to open is still to come.
-   - Live counts from the contract and the backend: https://getaftercall.vercel.app/stats
-   - Without a browser (nearblocks refuses scripted requests), the same facts from NEAR's RPC:
-     ```bash
-     curl -s https://archival-rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tx","params":{"tx_hash":"2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro","sender_account_id":"nov3.testnet","wait_until":"FINAL"}}'
-     ```
-     shows `nov3.testnet` calling `record_proof` on `wallet.aftercall.testnet` with status `SuccessValue`, and
-     ```bash
-     curl -s https://rpc.testnet.fastnear.com -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"query","params":{"request_type":"call_function","finality":"final","account_id":"wallet.aftercall.testnet","method_name":"get_stats","args_base64":"e30="}}'
-     ```
-     returns the contract's counts as bytes of JSON, `{"wallets":1,"proofs":1,"payments":0,"parked":0}` on 6 Nov.
+The checks are under [How to test](#how-to-test). The full guide, for people and coding agents: [docs/judging.md](docs/judging.md).
 
 **Where each claim lives:**
 
