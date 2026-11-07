@@ -1,6 +1,6 @@
 /**
  * The phone page without a Mac or a backend, for development: an in-memory relay on
- * http://localhost:3101 (the routes in docs/design/phone-protocol.md) and a made-up Mac
+ * http://localhost:3102 (the routes in docs/design/phone-protocol.md) and a made-up Mac
  * that pairs with the page, posts sealed snapshots of a few follow-ups, and does what
  * the phone taps. It confirms the code on its own, as if you pressed They match.
  *
@@ -22,7 +22,7 @@ const arg = (name: string, fallback: string) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
-const PORT = Number(arg("port", "3101"));
+const PORT = Number(arg("port", "3102"));
 const WEB = arg("web", "http://localhost:3000");
 const OFFLINE_AFTER_S = Number(arg("offline-after", "0"));
 const CONFIRM_AFTER_S = Number(arg("confirm-after", "0"));
