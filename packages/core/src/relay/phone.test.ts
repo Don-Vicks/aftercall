@@ -6,6 +6,8 @@ import { MAC_OFFLINE_AFTER_MS, checkPhoneAction, itemDigest, toPendingItem, type
 import {
   RelayHttpError,
   afterHello,
+  forgetTap,
+  helloAttempt,
   countdownText,
   deviceLabel,
   groupCode,
@@ -52,7 +54,7 @@ function replyOf(poll: SnapshotPoll): SnapshotReply {
 async function paired() {
   const relay = fakeRelay(() => NOW);
   const mac = await fakeMac(relay.fetch, BACKEND);
-  let phone = startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW);
+  let phone = helloAttempt(startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW));
   const api = phoneRelay(phone, relay.fetch);
   const hello = afterHello(phone, await api.hello(phone.hello));
   assert.ok("pairing" in hello);
@@ -112,13 +114,14 @@ test("someone else's hello first: the phone says so; a retry of its own lost hel
   const relay = fakeRelay(() => NOW);
   const mac = await fakeMac(relay.fetch, BACKEND);
   const thief = startPhonePairing(new URL(mac.url).hash, "Thief", NOW);
-  const phone = startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW);
+  const phone = helloAttempt(startPhonePairing(new URL(mac.url).hash, "iPhone · Safari", NOW));
+  assert.equal(phone.helloTries, 1);
   assert.equal(await phoneRelay(thief, relay.fetch).hello(thief.hello), "ok");
   const answer = await phoneRelay(phone, relay.fetch).hello(phone.hello);
   assert.equal(answer, "taken");
   assert.deepEqual(afterHello(phone, answer), { problem: "taken" });
   assert.notEqual(await mac.takeHello(), phone.code, "the Mac shows a code this phone doesn't");
-  assert.equal("pairing" in afterHello({ ...phone, helloTries: 1 }, "taken"), true, "after a try with no answer, taken is most likely our own");
+  assert.equal("pairing" in afterHello(helloAttempt(phone), "taken"), true, "on a later try, taken is most likely our own earlier hello");
 
   await mac.unpair();
   assert.equal(await phoneRelay(phone, relay.fetch).hello(phone.hello), "gone");
@@ -189,6 +192,11 @@ test("a tap goes to the Mac sealed, with the next counter and the item's digest,
   assert.equal(tapText(tapState(phone, pay)!, false), "Your Mac is doing it now.");
   assert.equal(tapText(tapState(phone, item(email))!, false), "Your Mac didn't do it: It changed on your Mac since your phone showed it. Look again.");
   assert.equal(tapState(phone, { meetingId: "x", followUpId: "y" }), null);
+
+  const lost = phoneAction(phone, "approve", pay, NOW);
+  const forgotten = forgetTap(lost.pairing, lost.n);
+  assert.equal(tapState(forgotten, pay)?.sent.n, 1, "a tap the relay never took no longer says Sent");
+  assert.equal(forgotten.actionN, lost.n, "and its counter isn't used again");
 });
 
 test("the relay's answers the page acts on: gone after unpairing, full at 50 waiting, errors otherwise", async () => {

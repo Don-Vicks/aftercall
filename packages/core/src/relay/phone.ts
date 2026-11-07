@@ -224,14 +224,17 @@ export function phoneRelay(p: Pick<PhonePairing, "backend" | "id" | "phoneToken"
 
 // ---------- pairing steps ----------
 
+/** Counts a hello post. The page saves this before posting, so a try whose answer never arrived (page closed, network gone) is remembered. */
+export const helloAttempt = (p: PhonePairing): PhonePairing => ({ ...p, helloTries: p.helloTries + 1 });
+
 /**
- * What to do with the relay's answer to the hello. A first "taken" means someone else
- * posted a hello with this QR first. "taken" after a try whose answer never arrived is
- * most likely our own hello, so the phone shows its code: if the Mac shows another, you
- * press Cancel there, as for any other mismatch.
+ * What to do with the relay's answer to the hello (after `helloAttempt`). "taken" on the
+ * first try means someone else posted a hello with this QR first. "taken" on a later try
+ * is most likely our own earlier hello, so the phone shows its code: if the Mac shows
+ * another, you press Cancel there, as for any other mismatch.
  */
 export function afterHello(p: PhonePairing, answer: HelloAnswer): { pairing: PhonePairing } | { problem: "taken" | "gone" } {
-  if (answer === "ok" || (answer === "taken" && p.helloTries > 0)) return { pairing: { ...p, state: "confirming" } };
+  if (answer === "ok" || (answer === "taken" && p.helloTries > 1)) return { pairing: { ...p, state: "confirming" } };
   return { problem: answer };
 }
 
@@ -315,6 +318,9 @@ export function phoneAction(p: PhonePairing, kind: PhoneAction["kind"], item: Pe
   const sent = [{ n, kind, meetingId: item.meetingId, followUpId: item.followUpId, at: now }, ...p.sent].slice(0, SENT_KEPT);
   return { pairing: { ...p, actionN: n, sent }, box, n };
 }
+
+/** Forgets a tap the relay never took (offline, refused), so its card doesn't say "Sent". The counter stays used. */
+export const forgetTap = (p: PhonePairing, n: number): PhonePairing => ({ ...p, sent: p.sent.filter((s) => s.n !== n) });
 
 export type TapState = { sent: SentAction; result: ActionResult | null };
 
