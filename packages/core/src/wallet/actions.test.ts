@@ -78,6 +78,13 @@ test("the approve page shows the amount, payee, meeting and the words heard", ()
   assert.match(d.intro, /Approving pays it once over your caps, and it counts towards today's spending\./);
 });
 
+test("a payment a coding agent proposed shows who proposed it and why, not empty words heard", () => {
+  const context = { payeeName: "Designer", meeting: "Sync with Ada", heard: "", leftToday: "150.00 of 200.00", proposedBy: "Codex: “The deposit agreed in the call”" };
+  const d = describe({ ...base, action: { kind: "approve", followupId: "m1-agent-1", payee: "designer.testnet", amount: "20000000", context } });
+  assert.deepEqual(d.rows[3], { label: "Proposed by", value: "Codex: “The deposit agreed in the call”" });
+  assert.equal(d.rows.some((r) => r.label === "Heard"), false);
+});
+
 test("links round-trip, and tampered or malformed requests are refused", () => {
   const r: SignRequest = { ...base, action: { kind: "set-cap", dailyCap: "200000000" } };
   assert.deepEqual(decodeSignRequest(`#${encodeSignRequest(r)}`), r);

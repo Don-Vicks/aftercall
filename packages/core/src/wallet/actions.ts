@@ -70,6 +70,11 @@ export interface PaymentContext {
   meeting: string;
   heard: string;
   leftToday: string;
+  /**
+   * Set when a coding agent proposed the payment rather than the call: the agent and its
+   * reason. Shown in place of the words heard, which such a payment has none of.
+   */
+  proposedBy?: string;
 }
 
 export interface SignRequest {
@@ -316,7 +321,7 @@ export function describe(r: SignRequest): Description {
           ...(a.context
             ? [
                 { label: "From", value: a.context.meeting },
-                { label: "Heard", value: `“${a.context.heard}”` },
+                a.context.proposedBy ? { label: "Proposed by", value: a.context.proposedBy } : { label: "Heard", value: `“${a.context.heard}”` },
                 { label: "Left today", value: `${a.context.leftToday} USDC`, mono: true },
               ]
             : []),

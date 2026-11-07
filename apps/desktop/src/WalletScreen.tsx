@@ -317,7 +317,7 @@ export function WalletScreen({
                           followupId: id,
                           payee: f.payeeAccount,
                           amount: String(f.amount ?? 0n),
-                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}` },
+                          context: { payeeName: f.payeeName, meeting: `${meeting.title} · ${meetingLabel(meeting)}`, heard: f.heard, leftToday: `${formatUsdc(left)} of ${formatUsdc(cap)}`, ...(f.proposedBy ? { proposedBy: `${f.proposedBy.agent}: “${f.proposedBy.reason}”` } : {}) },
                         },
                         async () => (await near.paymentState(id)).paid,
                         () => `Paid ${f.payeeName} ${amount} USDC`,
