@@ -18,7 +18,9 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 
 ## How to test
 
-Pick by the time you have. Only making notes in the Mac app needs a NEAR AI key.
+Pick by the time you have. Only making notes in the Mac app needs a NEAR AI key. The code: `git clone https://github.com/Don-Vicks/aftercall`.
+
+`/stats`, `/verify`, `/phone` and `/demo` render with JavaScript, so open them in a browser: a plain fetch sees only their loading text.
 
 ### 1 minute: the contract and the first proof on NEAR testnet
 
@@ -26,7 +28,7 @@ The contract is `wallet.aftercall.testnet`:
 
 - [register](https://testnet.nearblocks.io/txns/64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz) and [set_cap](https://testnet.nearblocks.io/txns/GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo), signed in the owner's own NEAR wallet (3 Nov 2026).
 - [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after it made notes from a real call on live NEAR AI (3 Nov 2026). That call was a private meeting, so its proof link isn't published. A sample meeting's proof link to open at `/verify` is still to come; until then `/verify` only explains what a proof link is.
-- https://getaftercall.vercel.app/stats: counts read live from the contract and the backend.
+- https://getaftercall.vercel.app/stats: counts read live from the contract and the backend. The backend's counts as JSON: `curl -s https://aftercall-api.vercel.app/stats`.
 
 Without a browser (nearblocks refuses scripted requests), the same facts from NEAR's RPC:
 
@@ -44,18 +46,18 @@ returns the contract's counts as bytes of JSON, `{"wallets":1,"proofs":1,"paymen
 
 ### 2 minutes: the app in your browser
 
-Open https://getaftercall.vercel.app/demo, the Mac app's own interface on made-up meetings. You'll see the notes with the quote behind each item, the Verify sheet re-running the checks on a test proof, the follow-ups, a $5,000 payment the contract holds for the owner's wallet, and Pay Kemi on Solana with a live NEAR Intents quote from 1Click (a dry quote: nothing is sent).
+Open https://getaftercall.vercel.app/demo, the Mac app's own interface on made-up meetings. It opens on the sample meeting Sync with Ada; if you land on Home, click Sync with Ada under Sample in the sidebar (the two sample recordings on Home need the Mac app to make notes). You'll see the notes with the quote behind each item, the Verify sheet re-running the checks on a test proof, the follow-ups, a $5,000 payment the contract holds for the owner's wallet, and Pay Kemi on Solana with a live NEAR Intents quote from 1Click (a dry quote: nothing is sent).
 
 ### 5 minutes: approve from your own phone
 
-Needs a clone of this repo, Node 24 and pnpm 10. A made-up Mac pairs with the live `/phone` page through the deployed relay:
+Needs a clone of this repo (`git clone https://github.com/Don-Vicks/aftercall && cd aftercall`), Node 24 and pnpm 10. A made-up Mac pairs with the live `/phone` page through the deployed relay:
 
 ```bash
 pnpm install
 pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app
 ```
 
-Open the link it prints on your phone. You'll see the six-digit code, then what needs you: a recap and payments, each with What leaves; Approve and Dismiss behind a 5-second Undo; a recap on an autopilot countdown; a $5,000 payment over the cap that opens your NEAR wallet on `/sign`; a payee not on the list, which you can only dismiss. The terminal logs each tap the made-up Mac accepts or refuses; the relay only passes sealed boxes. No push notifications yet: the page checks every 10 s.
+Open the link it prints on your phone. You'll see the six-digit code (in a browser that paired before, the page first asks "Pair with a different Mac?": tap Pair again), then what needs you: a recap and payments, each with What leaves; Approve and Dismiss behind a 5-second Undo; a recap on an autopilot countdown; a $5,000 payment over the cap that opens your NEAR wallet on `/sign`; a payee not on the list, which you can only dismiss. The terminal logs each tap the made-up Mac accepts or refuses; the relay only passes sealed boxes. No push notifications yet: the page checks every 10 s.
 
 ### 10 minutes: the Mac app
 
