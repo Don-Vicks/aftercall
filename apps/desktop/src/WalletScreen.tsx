@@ -4,7 +4,7 @@ import * as m from "motion/react-m";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Check, ExternalLink, Pause, Play, Plus, RefreshCw } from "lucide-react";
 import { CHAIN_NAME, exampleAccount, formatClock, formatUsdc, heldPaymentActions, isValidPayoutAddress, meetingTime, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
-import { SignPageDown, contractFollowupId, explorerTx, near, signInWallet, waitFor, type WalletView } from "./near";
+import { KEY_METHODS_TEXT, SignPageDown, contractFollowupId, explorerTx, near, signInWallet, waitFor, type WalletView } from "./near";
 import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast, useRecalledFigure } from "./ui";
 import { isDesktop } from "./recorder";
 import { dailyCap as sampleDailyCap, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
@@ -411,9 +411,10 @@ export function WalletScreen({
           <div className="flex flex-col gap-2 border-t border-hairline pt-3.5">
             <span className="font-semibold">Limited key, in your Keychain</span>
             <span className="text-ink-2">
-              Can call only <span className="font-mono text-[13px] text-ink">pay</span> and <span className="font-mono text-[13px] text-ink">record_proof</span>. It can't raise a cap, add payees or
-              withdraw.
+              Can call only <span className="font-mono text-[13px] text-ink">{KEY_METHODS_TEXT}</span>. It can't raise a cap, add payees, withdraw or take back a deal held in
+              escrow.
             </span>
+            <KeyUpdateNote />
             {w.paused && <span className="text-caution">Aftercall can't pay anyone until you resume.</span>}
             <Button
               size="sm"
@@ -1105,5 +1106,50 @@ export function PayeeSheet({
         </Button>
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * A key added before deals in escrow existed still pays and records proofs, but can't hold a
+ * deal for the payee to confirm. The owner's wallet updates it once: the same key, deleted and
+ * added back with today's methods in one transaction (core `update-key`).
+ */
+function KeyUpdateNote() {
+  const [status, setStatus] = useState<{ publicKey: string; old: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!isDesktop) return;
+    let live = true;
+    near
+      .status()
+      .then((s) => live && setStatus({ publicKey: s.publicKey, old: s.keyAdded && !s.keyEscrow }))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!status?.old) return null;
+  const update = async () => {
+    setBusy(true);
+    try {
+      await signInWallet({ kind: "update-key", publicKey: status.publicKey });
+      const ok = await waitFor(async () => (await near.status()).keyEscrow);
+      if (ok) {
+        setStatus({ ...status, old: false });
+        toast({ text: "This Mac can now hold deals in escrow", tone: "verdigris" });
+      } else toast({ text: "Didn't see the updated key on NEAR yet. If you signed, it shows up in a moment.", tone: "caution" });
+    } catch (e) {
+      toast({ text: e instanceof Error ? e.message : String(e), tone: e instanceof SignPageDown ? "caution" : "record" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="flex flex-col items-start gap-1.5 text-caution">
+      This key was added before deals in escrow, so it pays but can't hold a deal for a payee to confirm. Update it once in your wallet.
+      <Button size="sm" disabled={busy} onClick={update}>
+        Update this Mac's key
+      </Button>
+    </span>
   );
 }
