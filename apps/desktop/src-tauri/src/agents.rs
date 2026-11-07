@@ -982,8 +982,10 @@ pub fn launch_script(folder: &Path, claude: &Path, path_dirs: &[PathBuf], prompt
     lines.push(format!("cd {} || exit 1", q(folder)));
     lines.push(format!("prompt=$(cat {}) || exit 1", q(prompt_file)));
     lines.push(format!("rm -f {}", q(prompt_file)));
+    // `--mcp-config` takes several files and would read the prompt as one more; after `--`
+    // the prompt is always the one message, never a file or an option.
     let config = mcp.map(|c| format!(" --mcp-config {}", q(c))).unwrap_or_default();
-    lines.push(format!("{}{config} \"$prompt\"", q(claude)));
+    lines.push(format!("{}{config} -- \"$prompt\"", q(claude)));
     lines.push("status=$?".into());
     lines.push(format!("rm -rf {}", q(private_dir)));
     lines.push("exit $status".into());
@@ -1773,10 +1775,33 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    /// A stand-in `claude` that writes each argument it gets on its own line, as `\0`-ended records.
+    /// A stand-in `claude` that writes each argument it gets as a `\0`-ended record, then the
+    /// folder it ran in. It reads `--mcp-config` the way the real one does: every argument
+    /// after it, up to the next option or `--`, is one more config file, and one that isn't a
+    /// file stops it with the real one's error.
     fn fake_claude(dir: &Path, out: &Path) -> PathBuf {
         let claude = dir.join("bin/claude");
-        script(&claude, &format!("for a in \"$@\"; do printf '%s\\0' \"$a\"; done > {}\npwd >> {}", sh_quote(&out.display().to_string()), sh_quote(&out.display().to_string())));
+        let out = sh_quote(&out.display().to_string());
+        script(
+            &claude,
+            &format!(
+                r#"for a in "$@"; do printf '%s\0' "$a"; done > {out}
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) break ;;
+    --mcp-config)
+      shift
+      while [ $# -gt 0 ]; do
+        case "$1" in -*) break ;; esac
+        [ -f "$1" ] || {{ echo "MCP config file not found: $1" >&2; exit 1; }}
+        shift
+      done ;;
+    *) shift ;;
+  esac
+done
+pwd >> {out}"#
+            ),
+        );
         claude
     }
 
@@ -1820,17 +1845,42 @@ mod tests {
         assert_eq!(config["mcpServers"]["aftercall"]["args"][0], server.display().to_string());
 
         // Run the script as Terminal would, against the stand-in claude.
-        let run = Command::new("/bin/sh").arg(&script_path).env("HOME", &dir).output().unwrap();
-        assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
-        let got = std::fs::read_to_string(&out).unwrap();
-        let (records, cwd) = got.rsplit_once('\0').unwrap();
-        let received: Vec<&str> = records.split('\0').collect();
-        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), prompt.trim_end_matches('\n')]);
-        assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+        let run_script = |script_path: &Path| {
+            let run = Command::new("/bin/sh").arg(script_path).env("HOME", &dir).output().unwrap();
+            assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+            let got = std::fs::read_to_string(&out).unwrap();
+            let (records, cwd) = got.rsplit_once('\0').unwrap();
+            assert_eq!(cwd.trim(), folder.canonicalize().unwrap().display().to_string());
+            records.split('\0').map(String::from).collect::<Vec<_>>()
+        };
+        // The prompt comes after `--`, so `--mcp-config`, which takes several files, never reads it as one.
+        let received = run_script(&script_path);
+        assert_eq!(received, ["--mcp-config", &private.join("mcp.json").display().to_string(), "--", prompt.trim_end_matches('\n')]);
         for planted in ["pwned", "pwned2"] {
             assert!(!folder.join(planted).exists() && !dir.join(planted).exists(), "{planted} was run");
         }
         assert!(!private.exists(), "the private folder goes when claude exits");
+
+        // Without the config file (the old line), the stand-in fails as the real claude did.
+        let old_line = launch_script(&folder, &claude, &[], &dir.join("p"), Some(&dir.join("mcp.json")), &dir.join("x")).replace(" -- \"$prompt\"", " \"$prompt\"");
+        std::fs::write(dir.join("mcp.json"), "{}").unwrap();
+        std::fs::write(dir.join("p"), "Claim a1").unwrap();
+        std::fs::write(dir.join("old.command"), old_line).unwrap();
+        let old = Command::new("/bin/sh").arg(dir.join("old.command")).output().unwrap();
+        assert!(!old.status.success() && String::from_utf8_lossy(&old.stderr).contains("MCP config file not found: Claim a1"));
+
+        // Connected with this token: no config, and the prompt still after `--`.
+        let mut s = load_settings(&dir);
+        s.claude_code = Some(fingerprint("t0k3n"));
+        save_settings(&dir, &s).unwrap();
+        opened.borrow_mut().clear();
+        assert!(open_in_claude_code(&dir, "General", prompt, &server, Some(&claude), Ok(node.clone()), &|args| {
+            opened.borrow_mut().push(args.to_vec());
+            Ok(())
+        })
+        .ok);
+        let connected = PathBuf::from(&opened.borrow()[0][2]);
+        assert_eq!(run_script(&connected), ["--", prompt.trim_end_matches('\n')]);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
