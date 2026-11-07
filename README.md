@@ -45,7 +45,7 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 **Three checks, no Mac and no keys needed:**
 
 1. **Run the tests.** `pnpm install && pnpm verify --quick` (Node 24, pnpm 10, stable Rust). You should see a summary of ✓ lines and exit code 0. `pnpm verify` also runs the contract on a local NEAR node (about 8 minutes; needs `cargo-near` and the `wasm32-unknown-unknown` target). On Linux the desktop Rust tests are listed as skipped; they need macOS.
-2. **Try the app in a browser.** https://getaftercall.vercel.app/demo is the Mac app's own interface on sample meetings: the notes with their quotes, the Verify sheet, the follow-ups, and the $5,000 payment the contract holds for the owner's wallet. Recording, notes and payments need the Mac app.
+2. **Try the app in a browser.** https://getaftercall.vercel.app/demo is the Mac app's own interface on sample meetings: the notes with their quotes, the Verify sheet, the follow-ups, the $5,000 payment the contract holds for the owner's wallet, and a payment to Kemi on Solana with a live NEAR Intents quote, fetched from 1Click as the page loads. Recording, notes and payments need the Mac app.
 3. **See it on NEAR testnet.** The contract is `wallet.aftercall.testnet`. Its history shows the setup and the app's first proof:
    - [register](https://testnet.nearblocks.io/txns/64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz) and [set_cap](https://testnet.nearblocks.io/txns/GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo), signed in the owner's own NEAR wallet (3 Nov 2026);
    - [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after making notes from a real call on live NEAR AI (3 Nov 2026). That call was a private meeting, so its proof link isn't published; a sample meeting's link for you to open is still to come.
@@ -86,6 +86,7 @@ Every claim with its exact test names: [What is proven](docs/proven.md). What ha
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
 | A sample meeting's public proof link for judges | README | Not yet |
 | Test credits (a capped NEAR AI key per tester) | backend | Built and tested, off until Aftercall's NEAR AI account is set up |
+| Live NEAR Intents quote for a payment to Solana or Base | Browser demo, and the Mac app | Live (a dry quote: nothing is sent) |
 | Mainnet: contract, 1Click payout to Solana or Base | | Not yet; testnet is eligible (rules, Q-010) |
 
 
