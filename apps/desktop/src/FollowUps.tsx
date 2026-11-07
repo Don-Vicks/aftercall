@@ -57,8 +57,11 @@ export interface FollowUpHandlers {
   /** The payee's address outside NEAR, when the owner opted them in to NEAR Intents. */
   routeFor?: (f: PaymentFollowUp) => PayeeDestination | null;
   /** A dry NEAR Intents quote for that route. */
-  previewRoute?: (f: PaymentFollowUp, dest: PayeeDestination) => Promise<PayoutPreview>;
+  previewRoute?: (f: PaymentFollowUp, dest: PayeeDestination) => Promise<RouteQuote>;
 }
+
+/** A live NEAR Intents quote; `quoteOnly` when this agent wallet can't send it (it isn't on mainnet). */
+type RouteQuote = PayoutPreview & { quoteOnly?: boolean };
 
 /** The grace period before an approved payment, send or wallet confirmation runs. */
 const GRACE_MS = 5000;
@@ -802,8 +805,8 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
 }
 
 /** The route and a dry quote, so the person sees what the payee gets before approving. */
-function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDestination; preview: (f: PaymentFollowUp, d: PayeeDestination) => Promise<PayoutPreview> }) {
-  const [quote, setQuote] = useState<PayoutPreview | null>(null);
+function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDestination; preview: (f: PaymentFollowUp, d: PayeeDestination) => Promise<RouteQuote> }) {
+  const [quote, setQuote] = useState<RouteQuote | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -842,6 +845,9 @@ function RoutePreview({ f, dest, preview }: { f: PaymentFollowUp; dest: PayeeDes
         </span>
       </span>
       <span className="selectable font-mono text-[12px] break-all text-muted">To {dest.address} · quote from NEAR Intents, not checked on chain</span>
+      {quote?.quoteOnly && (
+        <span className="text-[12px] text-muted">A live quote from NEAR Intents, which runs on mainnet. This agent wallet isn't on mainnet, so it can show the quote but not send it.</span>
+      )}
     </div>
   );
 }

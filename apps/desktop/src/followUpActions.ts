@@ -113,11 +113,24 @@ async function intentsOwner(): Promise<string> {
   return config.account;
 }
 
+/**
+ * 1Click quotes only with a refund account that exists on NEAR mainnet. A dry quote creates
+ * no deposit address and never refunds anything, so off mainnet (testnet, or the browser
+ * preview) it asks with the `near` account in that place; the amounts don't depend on it.
+ */
+const DRY_QUOTE_REFUND = "near";
+
+/** A live quote; `quoteOnly` when this agent wallet can't send it (not on mainnet). */
+export type RoutePreview = PayoutPreview & { quoteOnly?: boolean };
+
 /** A dry 1Click quote: what the payee would get, without creating a deposit address. */
-export async function previewCrossChain(f: PaymentFollowUp, dest: PayeeDestination): Promise<PayoutPreview> {
+export async function previewCrossChain(f: PaymentFollowUp, dest: PayeeDestination): Promise<RoutePreview> {
   if (f.amount === null) throw new Error("Amount unclear");
-  const owner = await intentsOwner();
-  return previewOf(await oneClick.quote({ amount: f.amount, chain: dest.chain, recipient: dest.address, refundTo: owner, dry: true }));
+  const config = await near.getConfig().catch(() => null);
+  const mainnet = config?.network === "mainnet";
+  const refundTo = mainnet && config ? config.account : DRY_QUOTE_REFUND;
+  const preview = previewOf(await oneClick.quote({ amount: f.amount, chain: dest.chain, recipient: dest.address, refundTo, dry: true }));
+  return mainnet ? preview : { ...preview, quoteOnly: true };
 }
 
 /** Refuse a quote that keeps more than 3% of the amount (USDC to USDC should cost cents). */
