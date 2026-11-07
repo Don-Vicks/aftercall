@@ -47,7 +47,7 @@ Access per project: "Let agents read: General, Fundraise" in place of all meetin
 
 Size: medium (settings, the Rust checks, tests).
 
-Built as Coding agents → "Projects agents can reach": every project (the default) or the ones you tick. One difference: a request for a meeting in another project is refused without naming its project, so the refusal doesn't tell an agent what exists. Open in Claude Code starts nothing for such a meeting, and Hand to an agent offers no prompt for it.
+Built as Coding agents → "Projects agents can reach": every project (the default) or the ones you tick. One difference: a request for a meeting in another project is refused without naming its project, so the refusal doesn't tell an agent what exists. Open in Claude Code starts nothing for such a meeting, and Hand to an agent offers no prompt for it. Deleting a project kept from agents moves its meetings only to a project kept from them, keeping General from agents when it has to take them.
 
 ### 5. Paid work for agents (later; not built)
 
