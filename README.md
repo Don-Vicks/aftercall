@@ -96,6 +96,17 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/release
 
 Running every part locally: [docs/development.md](docs/development.md).
 
+## Built on NEAR's newest
+
+| NEAR launch | When | What Aftercall does with it | Code |
+| --- | --- | --- | --- |
+| **NEAR AI Cloud:** private inference in TEEs (Intel TDX, NVIDIA confidential GPUs) with attestation reports | Launched 3 Dec 2025 ([NEAR AI](https://near.ai/blog/introducing-near-ai-cloud-private-chat)) | Whisper and Qwen3.8-27B make the notes. The app checks the attestation itself before sending anything, as [the verification docs](https://docs.near.ai/cloud/verification) and the [reference verifier](https://github.com/nearai/nearai-cloud-verifier) describe: TDX quotes with dcap-qvl, GPU evidence through NVIDIA NRAS, the key and nonce bindings, and a signature on every reply from the attested key | `packages/core/src/tee/`, `packages/core/src/notes/pipeline.ts`, `apps/desktop/src-tauri/src/attest.rs` |
+| **End-to-end encrypted chat, v2** (Ed25519 keys, XChaCha20-Poly1305) | Documented Mar 2026 ([guide](https://docs.near.ai/cloud/guides/e2ee-chat-completions), [docs commit](https://github.com/nearai/docs/commit/8a285bf49bf6f502b02cb61d956c5508d4ba292b)) | Aftercall's own v2 client: a fresh key for each request, and the transcript encrypted to the attested model's key, or not sent | `packages/core/src/tee/e2ee.ts`, `apps/desktop/src-tauri/src/nearai.rs` |
+| **NEAR Intents 1Click API** | SDK first published 28 Mar 2025 ([npm](https://www.npmjs.com/package/@defuse-protocol/one-click-sdk-typescript)) | Paying a payee in USDC on Solana or Base from USDC on NEAR (quote, deposit address, status), under a cross-chain cap the contract enforces. Live dry quotes in `/demo`; a real payout needs mainnet, not yet deployed | `packages/core/src/intents/oneclick.ts`, `contracts/agent-wallet`, [docs](docs/near-intents-1click.md) |
+| **NEAR Connect 0.12.0** | Released 26 Oct 2026 ([release](https://github.com/azbang/near-connect/releases/tag/v0.12.0)) | Owner approvals on `/sign` from any NEAR wallet it supports | `apps/web/app/sign/` |
+| **near-sdk 5.29** | Released 13 Jul 2026 ([release](https://github.com/near/near-sdk-rs/releases/tag/near-sdk-v5.29.0)) | The agent-wallet contract: caps, payees, parked payments, the proof registry, per-user storage | `contracts/agent-wallet` |
+| **Staking for NEAR AI:** staking rewards become NEAR AI Cloud credits | Announced 30 Jul 2026 ([NEAR AI](https://near.ai/blog/staking-for-near-ai)) | How Aftercall's own inference is meant to be paid for. Documented only: nothing in the repo signs it, and it hasn't been done | [docs/staking-for-inference.md](docs/staking-for-inference.md) |
+
 ## What it does
 
 1. **Records the call on your Mac.** Your mic and the call's audio, from any app. No bot joins the call.
@@ -186,18 +197,15 @@ Every meeting also leaves a proof on NEAR, for good: the recording's start time,
 
 ## NEAR pieces used
 
+The newest are under [Built on NEAR's newest](#built-on-nears-newest). The rest:
+
 | Piece | Where |
 | --- | --- |
-| NEAR AI Cloud: Confidential TEE models (Whisper, Qwen3.8-27B) through the OpenAI-compatible API; attestation reports verified the way [the verification docs](https://docs.near.ai/cloud/verification) and NEAR's [reference verifier](https://github.com/nearai/nearai-cloud-verifier) describe; response signatures; end-to-end encrypted chat | `packages/core/src/tee/` (checks, NVIDIA, E2EE), `packages/core/src/notes/pipeline.ts`; Rust `apps/desktop/src-tauri/src/attest.rs` (TDX quotes with dcap-qvl, NRAS) and `nearai.rs` |
-| A NEAR smart contract (near-sdk 5.29): caps, payees, parked payments, proof registry, per-user storage | `contracts/agent-wallet` |
-| Function-call access keys as the app's limited authority; the 1-yocto rule for owner methods | `crates/near-tx`, `contracts/agent-wallet` |
+| Function-call access keys as the app's limited authority (`pay` and `record_proof` only); the 1-yocto rule for owner methods | `crates/near-tx`, `contracts/agent-wallet` |
 | NEP-141 (Circle USDC): `ft_transfer_call` deposits, payee registration with `storage_deposit` | `contracts/agent-wallet`, `packages/core/src/wallet/actions.ts` |
 | NEP-413 sign-in, signed by the app's key in Rust and verified in TypeScript | `crates/near-tx`, `apps/backend/src/auth` |
-| NEAR Connect, for owner signatures in any wallet (Meteor, Intear, Ledger, NEAR CLI…) | `apps/web/app/sign` |
 | JSON-RPC: views, `send_tx`, access-key checks | `crates/near-tx`, `apps/web/app/verify` |
-| NEAR Intents 1Click: quotes and deposit addresses for paying a payee in USDC on Solana or Base | `packages/core/src/intents/oneclick.ts`, `contracts/agent-wallet` (`pay` with `cross_chain`), [docs](docs/near-intents-1click.md) |
 | Testnet and mainnet from one network config (FastNEAR RPC, Circle USDC ids, explorers) | `packages/core/src/network.ts`, `crates/near-tx` |
-
 
 ## More
 
