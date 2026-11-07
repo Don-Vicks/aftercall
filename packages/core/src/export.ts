@@ -109,7 +109,7 @@ function itemOf(a: ActionItem, me: readonly string[]): ExportItem {
 /** Where a follow-up stands, as the page would say it. Dismissed ones aren't on the page, so they aren't here. */
 function followUpOf(f: FollowUp): ExportFollowUp {
   const at = (verb: string) => (f.doneAt ? `${verb} at ${f.doneAt}` : verb);
-  const auto = f.byAutopilot ? " by autopilot" : "";
+  const auto = f.byAutopilot ? " by autopilot" : f.byPhone ? ", approved on your phone" : "";
   if (f.kind === "email") {
     const title = `Recap to ${f.toName || "someone"}`;
     if (f.status === "sent") return { title, status: `${at("Sent")}${auto}` };

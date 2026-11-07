@@ -141,6 +141,7 @@ test("follow-up statuses read in plain words", () => {
   const status = (f: Meeting["followUps"][number]) => meetingExport({ ...meeting, followUps: [f] }, { now }).followUps[0];
   assert.equal(status({ ...email, status: "sent", doneAt: "14:10" }).status, "Sent at 14:10");
   assert.equal(status({ ...email, status: "sent", doneAt: "14:10", byAutopilot: true }).status, "Sent at 14:10 by autopilot");
+  assert.equal(status({ ...email, status: "sent", doneAt: "14:10", byPhone: true }).status, "Sent at 14:10, approved on your phone");
   assert.equal(status({ ...email, status: "failed" }).status, "Didn't send");
   assert.match(status({ ...email, draftedAt: "14:08" }).status, /Opened as a draft in Mail at 14:08\. Aftercall can't tell whether it was sent/);
   assert.equal(status({ ...email, toName: "" }).title, "Recap to someone");
