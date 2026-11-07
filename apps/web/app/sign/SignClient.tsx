@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { NETWORK_CONFIG, decodeSignRequest, describe, explorerTxUrl, plainNearError, toTransactions, type Network, type SignRequest } from "@aftercall/core";
+import { decodeSignRequest, describe, explorerTxUrl, plainNearError, toTransactions, type SignRequest } from "@aftercall/core";
 import { AppHeader, Avatar, Pill, Tick } from "../ui";
 import g from "./sign.module.css";
-
-type Connector = import("@hot-labs/near-connect").NearConnector;
-type Wallet = Awaited<ReturnType<Connector["connect"]>>;
+import { OTHER, WalletButton, choices, ensureConnector, type Choice, type Connector, type Wallet } from "./wallets";
 
 type Step =
   | { kind: "ready" }
@@ -15,46 +13,6 @@ type Step =
   | { kind: "signing"; account: string; via: string }
   | { kind: "done"; txHashes: string[] }
   | { kind: "failed"; message: string };
-
-/** A wallet from NEAR Connect's list, offered as a one-click choice. */
-interface Choice {
-  id: string;
-  name: string;
-  short: string;
-}
-
-const OTHER = "other";
-/** Offered first when NEAR Connect lists them; any others fill up to four. */
-const PREFERRED = [/meteor/i, /intear/i, /hot/i, /ledger/i];
-
-/** One NEAR Connect for the page, loaded on first use (the page's first wallet list, or the first click). */
-function ensureConnector(ref: { current: Promise<Connector> | null }, network: Network): Promise<Connector> {
-  ref.current ??= import("@hot-labs/near-connect").then(
-    ({ NearConnector }) =>
-      new NearConnector({
-        network,
-        providers: { mainnet: [NETWORK_CONFIG.mainnet.rpcUrl], testnet: [NETWORK_CONFIG.testnet.rpcUrl] },
-      }),
-  );
-  return ref.current;
-}
-
-function choices(c: Connector): Choice[] {
-  const usable = c.availableWallets.filter((w) => w.manifest.features?.signAndSendTransactions);
-  const picked: typeof usable = [];
-  for (const re of PREFERRED) {
-    const w = usable.find((x) => re.test(x.manifest.name) && !picked.includes(x));
-    if (w) picked.push(w);
-  }
-  for (const w of usable) if (picked.length < 4 && !picked.includes(w)) picked.push(w);
-  return picked.slice(0, 4).map((w) => ({ id: w.manifest.id, name: w.manifest.name, short: shortName(w.manifest.name) }));
-}
-
-/** "Meteor Wallet" reads as "Meteor"; "HOT Wallet" keeps its word. */
-function shortName(name: string): string {
-  const s = name.replace(/\s+wallet$/i, "");
-  return s.length > 3 ? s : name;
-}
 
 /**
  * Signs one owner action from the Aftercall app with the user's own NEAR wallet.
@@ -171,6 +129,7 @@ export function SignClient() {
           <section aria-labelledby="ah" className={`${g.intro} enter`}>
             {a.kind === "approve" && <Pill tone="caution">Over your caps</Pill>}
             {a.kind === "cancel" && <Pill tone="muted">Decline</Pill>}
+            {a.kind === "approve-escrow" && <Pill tone="caution">Over your caps</Pill>}
             <h1 id="ah" className="t-display">
               {d.title}
             </h1>
@@ -260,18 +219,6 @@ export function SignClient() {
         </div>
       </main>
     </>
-  );
-}
-
-function WalletButton({ mark, label, busy, disabled, onClick }: { mark: string; label: string; busy: boolean; disabled: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} aria-busy={busy || undefined} className={`${g.wallet}${busy ? ` ${g.walletBusy}` : ""} press`}>
-      <span aria-hidden="true" className={g.mark}>
-        {mark}
-      </span>
-      {label}
-      {busy && <span aria-hidden="true" className="spinner" style={{ width: 12, height: 12 }} />}
-    </button>
   );
 }
 
