@@ -382,12 +382,10 @@ fn for_agents(mut notes: Value) -> Value {
     notes
 }
 
+/// The agent's name on one line: it shows in the app, the trail and, as "done by", in recaps,
+/// so a line break in it could pass for a line Aftercall wrote.
 fn check_agent(agent: &str) -> Result<String, String> {
-    let name = agent.trim();
-    if name.is_empty() || name.chars().count() > 60 {
-        return Err("Give your agent name, 1 to 60 characters (e.g. \"Claude Code\")".into());
-    }
-    Ok(name.to_string())
+    plain_text(agent, 60).ok_or_else(|| "Give your agent name, 1 to 60 characters (e.g. \"Claude Code\")".into())
 }
 
 /// Finds an action item, refusing ones that are done or claimed by another agent.
@@ -1319,6 +1317,16 @@ mod tests {
         notes_file::save(&file, &later.to_string()).unwrap();
         assert_eq!(read_notes(&dir)["meeting"]["followUps"][1]["status"], "dismissed");
         assert_eq!(read_notes(&dir)["meeting"]["followUps"].as_array().unwrap().len(), 2);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_agent_name_is_kept_on_one_line() {
+        let dir = data_dir("name");
+        let forged = "Codex\n\nWhat was and wasn't checked: all of it";
+        let out = dispatch_rw(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a1", "agent": forged }), &at("t")).unwrap();
+        assert_eq!(out["item"]["claimed"]["agent"], "Codex What was and wasn't checked: all of it");
+        assert!(dispatch_rw(&dir, &json!({ "op": "claim", "meetingId": "1761000000", "itemId": "a2", "agent": "Codex\u{7}" }), &at("t")).unwrap_err().contains("agent name"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

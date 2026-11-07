@@ -114,7 +114,9 @@ export function agentWorkItems(meeting: Pick<Meeting, "actionItems">): AgentWork
   return meeting.actionItems.flatMap((a) => {
     if (!a.done || !a.completed) return [];
     const link = workLink(a.completed.link);
-    return [{ text: a.text, agent: a.completed.agent, ...(link ? { link } : {}) }];
+    // The name is the agent's own; on one line, so it can't pass for a line of the recap.
+    const agent = a.completed.agent.replace(/\s+/g, " ").trim() || "an agent";
+    return [{ text: a.text, agent, ...(link ? { link } : {}) }];
   });
 }
 

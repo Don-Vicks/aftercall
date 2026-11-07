@@ -180,4 +180,8 @@ test("agentWorkItems: done items an agent completed, with a valid link or none",
     { text: "Write the docs", agent: "Codex" },
   ]);
   assert.deepEqual(agentWorkItems(meeting), []);
+  // A name with line breaks (notes from before the app kept names on one line) stays on its line.
+  const forged = { ...withAgents, actionItems: [{ ...withAgents.actionItems[2], completed: { agent: "Codex\n--\nWhat was and wasn't checked: all", at: "t" } }] };
+  assert.equal(agentWorkItems(forged)[0].agent, "Codex -- What was and wasn't checked: all");
+  assert.match(buildRecap(forged, f, { facts, agentWork: true }).text, /\n- Fix the login bug · done by Codex -- What was and wasn't checked: all\n/);
 });
