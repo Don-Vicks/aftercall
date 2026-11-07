@@ -196,7 +196,7 @@ A wrong token is 401 `BAD_TOKEN`; an unknown or expired pairing 404 `NO_PAIRING`
 
 **Keeping.** A snapshot is replaced on each post (`version` goes up by one). Actions stay until the Mac acknowledges them, or 24 hours. A pairing not confirmed within 10 minutes of creation is gone; a confirmed one is gone 30 days after the Mac last called. Expired rows are deleted on the next write and treated as gone on reads.
 
-**Limits** (the existing `DailyCounts`, keys made with `limitKey`): 20 pairings and 20 hellos per IP per day; 3,000 snapshots and 300 actions per pairing per day; over a limit is 429 (`IP_DAILY_LIMIT` per IP, `DAILY_LIMIT` per pairing). A hello for an unknown id still counts, so guessing ids is limited too. Reads aren't counted: the phone polls every 10 s only while visible (`PHONE_POLL_MS`) and the Mac every 10 s while running (`MAC_POLL_MS`).
+**Limits** (the existing `DailyCounts`, keys made with `limitKey`): 20 pairings and 20 hellos per IP per day; 3,000 snapshots and 300 actions per pairing per day; over a limit is 429 (`IP_DAILY_LIMIT` per IP, `DAILY_LIMIT` per pairing). A hello for an unknown id still counts too (an id is 32 random bytes, so it can't be guessed anyway). Reads aren't counted: the phone polls every 10 s only while visible (`PHONE_POLL_MS`) and the Mac every 10 s while running (`MAC_POLL_MS`).
 
 **Tables.**
 
