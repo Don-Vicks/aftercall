@@ -575,7 +575,11 @@ fn draft(data_dir: &Path, req: &Value, now: &dyn Fn() -> String) -> Result<Value
                 .ok_or("Agents can only propose payments to payees already on the user's list. Use the payee's name or NEAR account as listed.")?;
             let cap: u128 = wallet.per_payment_cap.parse().unwrap_or(0);
             let left: u128 = wallet.left_today.parse().unwrap_or(0);
-            if cap == 0 || units > cap {
+            // 0 is no per-payment cap on the contract; agents then propose no payment at all.
+            if cap == 0 {
+                return Err("The user hasn't set a per-payment cap, so agents can't propose payments".into());
+            }
+            if units > cap {
                 return Err("That's over the user's per-payment cap, so agents can't propose it".into());
             }
             if units > left {
@@ -1290,7 +1294,7 @@ mod tests {
         );
         // A per-payment cap of 0 means none set: nothing is proposed.
         set_wallet(&dir, WalletSnapshot { payees: vec![Payee { name: "Designer".into(), account: "designer.testnet".into() }], per_payment_cap: "0".into(), left_today: "99000000".into() });
-        assert!(pay("Designer", "1").unwrap_err().contains("per-payment cap"));
+        assert!(pay("Designer", "1").unwrap_err().contains("hasn't set a per-payment cap"));
         assert_eq!(usdc_units("12.50"), Some(12_500_000));
         assert_eq!(usdc_units("7"), Some(7_000_000));
         std::fs::remove_dir_all(dir).unwrap();
