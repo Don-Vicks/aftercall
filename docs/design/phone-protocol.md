@@ -102,7 +102,7 @@ On They match the Mac posts `relayTokenHash(session.phoneToken)` to `/confirm` a
 
 One phone per Mac in version 1. Pairing again replaces the old pairing: the Mac deletes the old one on the relay first.
 
-On the phone, a link for a different pairing asks "Pair with a different Mac?" before it replaces the one it keeps, while that one is paired or still in progress: a link anyone sends you can't drop your pairing, or the code your Mac is showing, on its own. An unfinished pairing over 10 minutes old (`PAIRING_WAIT_MS`) is replaced without asking, because the relay has forgotten it (`pairingLinkStep`).
+On the phone, a link for a different pairing asks "Pair with a different Mac?" before it replaces the one it keeps, while that one is paired or still in progress: a link anyone sends you can't drop your pairing, or the code your Mac is showing, on its own. An unfinished pairing 10 minutes old or more (`PAIRING_WAIT_MS`) has a code that has run out, but your Mac may have said They match while the page was closed, so the phone asks the relay (`pairingLinkStep`, `checkPairingLink`): gone, and the new code takes over without asking; still there, or no answer, and it asks. Pair again unpairs the old one on the relay, which works only if your Mac confirmed it; one it didn't runs out on its own.
 
 ## 2. Envelopes
 
