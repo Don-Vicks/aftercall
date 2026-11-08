@@ -12,7 +12,7 @@ Meeting notes apps send your calls to servers you can't check, and the recap and
 [![CI](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml/badge.svg)](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-555)](LICENSE)
 
-Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, business, realworld. The Mac test build (Apple silicon and Intel) runs on NEAR testnet. On 3 Nov 2026 it made notes from a real call on live NEAR AI and recorded the proof on NEAR.
+Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, business, realworld. The Mac test build (Apple silicon and Intel) runs on NEAR testnet. It made notes from a real call on live NEAR AI on 2 Nov 2026 and recorded the proof on NEAR on 3 Nov, and did the same for a sample call on 8 Nov.
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="apps/web/public/landing/meeting-dark.webp"><img src="apps/web/public/landing/meeting-light.webp" alt="A meeting in Aftercall: verified notes, each item backed by a quote from the call" width="100%"></picture>
 
@@ -23,7 +23,7 @@ Pick by the time you have. Every command, link and expected result: [How to test
 `/stats`, `/verify`, `/phone` and `/demo` render with JavaScript, so open them in a browser: a plain fetch sees only their loading text.
 
 - **1 minute, a real proof.** Open the link in [docs/proof-sample.txt](docs/proof-sample.txt) in a browser: a made-up call (two computer voices, fictional names) recorded in the Mac app on 8 Nov, its notes made on live NEAR AI, its proof on NEAR. `/verify` re-checks it in your browser, 8 of 8.
-- **1 minute, the contract on NEAR testnet.** [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro) on `wallet.aftercall.testnet`, sent by the Mac app after notes from a real call on 3 Nov. Its proof link (hashes, nonces and signatures, never what was said) is in [docs/proof-3-nov.txt](docs/proof-3-nov.txt): open it in a browser and `/verify` re-checks it against NEAR. Live counts at https://getaftercall.vercel.app/stats. The owner's transactions and `curl` checks: [step by step](docs/judging.md#1-minute-the-contract-and-the-first-proof-on-near-testnet).
+- **1 minute, the contract on NEAR testnet.** [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro) on `wallet.aftercall.testnet`, sent by the Mac app on 3 Nov for notes it made from a real call on 2 Nov. Its proof link (hashes, nonces and signatures, never what was said) is in [docs/proof-3-nov.txt](docs/proof-3-nov.txt): open it in a browser and `/verify` re-checks it against NEAR. Live counts at https://getaftercall.vercel.app/stats. The owner's transactions and `curl` checks: [step by step](docs/judging.md#1-minute-the-contract-and-the-first-proof-on-near-testnet).
 - **2 minutes, the app in your browser.** https://getaftercall.vercel.app/demo opens on the sample meeting Sync with Ada: notes with their quotes, the Verify sheet, follow-ups, a $5,000 payment held for the owner's wallet, a live NEAR Intents quote (dry: nothing sent). [More](docs/judging.md#2-minutes-the-app-in-your-browser).
 - **5 minutes, approve from your own phone.** From a clone (Node 24, pnpm 10), `pnpm install && pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app` pairs a made-up Mac with your phone; approve or dismiss what it sends. [More](docs/judging.md#5-minutes-approve-from-your-own-phone).
 - **10 minutes, the Mac app.** `curl -fsSL https://getaftercall.vercel.app/install.sh | sh` (macOS 14.2+, unsigned test build). [More](docs/judging.md#10-minutes-the-mac-app).
@@ -101,7 +101,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | Mac test build | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
 | Backend (sign-in, recap email, claim links, counts) | https://aftercall-api.vercel.app/health | Live, with Postgres |
 | Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 2 proofs, 0 payments. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
-| Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Done 3 Nov (private meeting) |
+| Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Notes 2 Nov, proof on NEAR 3 Nov (private meeting) |
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
 | A sample call, end to end in the Mac app: notes on live NEAR AI, proof on NEAR, public link | [docs/proof-sample.txt](docs/proof-sample.txt) | Done 8 Nov; `/verify` passes 8 of 8 |
