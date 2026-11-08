@@ -361,7 +361,8 @@ pub fn seal_with(key: &[u8; 32], data_dir: &Path, local: BTreeMap<String, String
     encrypt(key, &plaintext)
 }
 
-/// A backup file's bytes, sealed with the Keychain's backup key: what Export backup writes.
+/// A backup file's bytes, sealed with the Keychain's backup key: what Export backup
+/// and automatic backups (`auto_backup.rs`) write.
 pub fn seal(data_dir: &Path, local: BTreeMap<String, String>, now: u64) -> Result<Vec<u8>, String> {
     let key = stored_backup_key()?;
     seal_with(&key, data_dir, local, now)

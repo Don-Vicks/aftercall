@@ -1,6 +1,7 @@
 mod agents;
 mod at_rest;
 mod attest;
+mod auto_backup;
 mod calendar;
 mod capture;
 mod github;
@@ -1169,6 +1170,42 @@ fn backup_import(app: AppHandle, file: String) -> Result<recovery::Restored, Str
     recovery::import(&data_dir(&app)?, &bytes)
 }
 
+/// Automatic backups to iCloud Drive: the switch, the last run and whether iCloud Drive is on (auto_backup.rs).
+#[tauri::command]
+fn auto_backup_status(app: AppHandle) -> Result<auto_backup::Status, String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    Ok(auto_backup::status(&data_dir(&app)?, &home))
+}
+
+/// Backups → "Back up automatically to iCloud Drive". On needs iCloud Drive and makes its Aftercall folder.
+#[tauri::command]
+fn auto_backup_set(app: AppHandle, on: bool) -> Result<auto_backup::Status, String> {
+    let (dir, home) = (data_dir(&app)?, app.path().home_dir().map_err(|e| e.to_string())?);
+    auto_backup::set_enabled(&dir, &home, on)?;
+    Ok(auto_backup::status(&dir, &home))
+}
+
+/// Writes today's automatic backup when the switch is on and the backup key came from a
+/// recovery phrase: after a meeting's notes are saved, and at launch (`launch`) only when the
+/// newest is over a day old. Off the main thread. A failure is logged and kept in the status,
+/// never returned, so it can't touch the notes.
+#[tauri::command]
+async fn auto_backup_run(app: AppHandle, local: std::collections::BTreeMap<String, String>, launch: bool) -> Result<auto_backup::Status, String> {
+    let (dir, home) = (data_dir(&app)?, app.path().home_dir().map_err(|e| e.to_string())?);
+    tauri::async_runtime::spawn_blocking(move || {
+        let now = recovery::now_secs()?;
+        auto_backup::run(&dir, &home, now, launch, |now| {
+            if !recovery::status()?.from_phrase {
+                return Err("Backups are sealed with a key made from your recovery phrase, so make one first.".into());
+            }
+            recovery::seal(&dir, local, now)
+        });
+        Ok(auto_backup::status(&dir, &home))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// The user's projects, with their briefs and where each brief came from. A first run starts with one, "General".
 #[tauri::command]
 fn list_projects(app: AppHandle) -> Result<Vec<projects::Entry>, String> {
@@ -1372,6 +1409,9 @@ pub fn run() {
             recovery_save_kit,
             backup_export,
             backup_import,
+            auto_backup_status,
+            auto_backup_set,
+            auto_backup_run,
             delete_all_data
         ])
         .setup(|app| {
