@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildMeeting } from "./build.ts";
 import { rematchPayees } from "./rematch.ts";
+import { matchPayee, payeeLabel } from "./build.ts";
 import { notesSchema } from "./schema.ts";
 import type { FollowUp, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 
@@ -83,4 +84,17 @@ test("only proposed payments change: sending, paid, blocked, failed and dismisse
 test("a payment autopilot has queued keeps what it had", () => {
   const m = withPayment(rematchPayees(heardFirst(), [designer]), { autopilotAt: Date.now() + 10_000 });
   assert.equal(rematchPayees(m, []), m);
+});
+
+test("a name given back as the model saw it, \"Label (account)\", still means that payee", () => {
+  const kemi = { name: "Kemi", account: "kemi-ac.testnet" };
+  const relabelled = { name: "Kemi (kemi-ac.testnet)", account: "kemi-ac.testnet" };
+  assert.equal(matchPayee([kemi], "Kemi (kemi-ac.testnet)"), kemi, "the account in brackets decides");
+  assert.equal(matchPayee([kemi], "kemi (KEMI-AC.TESTNET)"), kemi);
+  assert.equal(matchPayee([relabelled], "Kemi"), relabelled, "a label saved as \"Kemi (kemi-ac.testnet)\" answers to \"Kemi\"");
+  assert.equal(matchPayee([relabelled], "Kemi (kemi-ac.testnet)"), relabelled);
+  assert.equal(matchPayee([kemi], "Kemi (other.testnet)"), kemi, "an unknown account falls back to the label");
+  assert.equal(matchPayee([kemi], "Ada (ada.testnet)"), undefined);
+  assert.equal(payeeLabel("Kemi (kemi-ac.testnet)"), "Kemi");
+  assert.equal(payeeLabel(" Kemi "), "Kemi");
 });

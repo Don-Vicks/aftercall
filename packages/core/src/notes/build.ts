@@ -28,11 +28,31 @@ export interface Dropped {
   reason: "QUOTE_NOT_IN_TRANSCRIPT";
 }
 
-/** The payee a name means: the same label or the same NEAR account, ignoring case. */
+/**
+ * The payee a name means: the same label or the same NEAR account, ignoring case. The model
+ * is shown payees as "Label (account)" (`summaryRequestText`) and can give a name back in that
+ * form; then the account in brackets decides, else the label before it. A label saved in that
+ * form (by a claim link before 8 Nov) also answers to its plain name.
+ */
 export function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
   if (!name) return undefined;
+  const same = (s: string) => payees.find((p) => p.name.toLowerCase() === s || payeeLabel(p.name).toLowerCase() === s || p.account.toLowerCase() === s);
   const n = name.trim().toLowerCase();
-  return payees.find((p) => p.name.toLowerCase() === n || p.account.toLowerCase() === n);
+  const exact = same(n);
+  if (exact) return exact;
+  const parts = labelAndAccount(n);
+  return parts ? (same(parts.account) ?? same(parts.label)) : undefined;
+}
+
+/** "Kemi (kemi.testnet)" → its label and account; null for a plain name. */
+function labelAndAccount(name: string): { label: string; account: string } | null {
+  const m = /^(.+?)\s*\(([^()]+)\)$/.exec(name.trim());
+  return m ? { label: m[1].trim(), account: m[2].trim() } : null;
+}
+
+/** A payee name to show and to label a new payee with: the label alone, without "(account)". */
+export function payeeLabel(name: string): string {
+  return labelAndAccount(name)?.label ?? name.trim();
 }
 
 /**
@@ -151,7 +171,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
         kind: "payment",
         status: "proposed",
         evidence,
-        payeeName: payee?.name ?? f.payee_name ?? "Unknown payee",
+        payeeName: payee?.name ?? (f.payee_name ? payeeLabel(f.payee_name) : "Unknown payee"),
         payeeAccount: payee?.account ?? "",
         payeeListed: !!payee,
         ...checkedAmount(f.amount_words, quote.text),
