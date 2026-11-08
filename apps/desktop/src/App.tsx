@@ -63,6 +63,7 @@ import { MeetingsScreen } from "./MeetingsScreen";
 import { ActionItemsScreen } from "./ActionItemsScreen";
 import { PrivacyScreen } from "./PrivacyScreen";
 import { libraryMeetings } from "./library";
+import { autoBackup } from "./recovery";
 
 type View =
   | { name: "home" }
@@ -384,6 +385,11 @@ export default function App() {
 
   /** True once saved recordings are read from disk; a paired phone's snapshots and taps wait for it. */
   const [libraryLoaded, setLibraryLoaded] = useState(!isDesktop);
+
+  // With the switch on, an automatic backup when the newest is over a day old. It never throws.
+  useEffect(() => {
+    if (isDesktop) void autoBackup.run(true);
+  }, []);
 
   // Saved recordings from earlier sessions.
   useEffect(() => {
@@ -724,6 +730,8 @@ export default function App() {
     addProcessed([updated]);
     const processed = parseNotes(notes).meeting;
     setTimeout(() => scheduleAutopilot(processed), 0);
+    // With the switch on, the new notes go into today's automatic backup. It never throws.
+    void autoBackup.run(false);
   };
 
   // However a recording stops (pill, floating recorder, menu bar), its page opens.
