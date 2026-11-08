@@ -84,6 +84,7 @@ function installId(): string {
  * it to one key per install, a few per network a day and a fixed number in all.
  */
 export const testCredits = {
-  status: () => call<{ available: boolean; spendLimitUsd: number }>("/nearai/test-credits", {}, false),
+  /** `shared`: every install gets one key, capped only by the limit on it in NEAR AI's dashboard. */
+  status: () => call<{ available: boolean; spendLimitUsd: number; shared?: boolean }>("/nearai/test-credits", {}, false),
   key: () => call<{ key: string; spendLimitUsd: number }>("/nearai/test-key", { method: "POST", body: JSON.stringify({ installId: installId() }) }, false),
 };

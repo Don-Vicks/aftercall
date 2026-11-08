@@ -31,14 +31,14 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
     setHint(h);
     onChange?.(Boolean(h));
   };
-  /** Each test key's spend limit when Aftercall's test credits are on; null when they're off or unknown. */
-  const [credits, setCredits] = useState<number | null>(null);
+  /** Aftercall's test credits when they're on (each key's spend limit, or one shared key); null when they're off or unknown. */
+  const [credits, setCredits] = useState<{ limitUsd: number; shared: boolean } | null>(null);
   useEffect(() => {
     refresh();
     if (HAS_BACKEND && isDesktop)
       testCredits
         .status()
-        .then((s) => setCredits(s.available ? s.spendLimitUsd : null))
+        .then((s) => setCredits(s.available ? { limitUsd: s.spendLimitUsd, shared: !!s.shared } : null))
         .catch(() => setCredits(null));
   }, []);
 
@@ -200,9 +200,15 @@ export function NearAiConnect({ onConnected, onChange, compact }: { onConnected?
           <span className="flex min-w-0 flex-[1_1_240px] flex-col gap-px">
             <span className="t-section text-ink">No NEAR AI account?</span>
             <span className="text-[13px] leading-[18px] text-ink-2">
-              Use Aftercall's test credits: a key with up to ${credits.toFixed(2)} on Aftercall's NEAR AI account, about{" "}
-              {Math.floor(credits / (typicalMeetingCost(30).usd ?? credits))} half-hour meetings. Notes are still made inside NEAR AI's secure hardware, and the key stays in your
-              Keychain.
+              {credits.shared ? (
+                <>Use Aftercall's test credits: a test key shared by everyone trying the app, paid from Aftercall's NEAR AI account. </>
+              ) : (
+                <>
+                  Use Aftercall's test credits: a key with up to ${credits.limitUsd.toFixed(2)} on Aftercall's NEAR AI account, about{" "}
+                  {Math.floor(credits.limitUsd / (typicalMeetingCost(30).usd ?? credits.limitUsd))} half-hour meetings.{" "}
+                </>
+              )}
+              Notes are still made inside NEAR AI's secure hardware, and the key stays in your Keychain.
             </span>
           </span>
           <Button variant="secondary" loading={state === "saving"} disabled={busy} onClick={useCredits}>
