@@ -8,7 +8,7 @@ This is a guide for reviewing this repository, written for people and for coding
 
 - **What it is:** a Mac app for meeting notes. The call is transcribed and summarised inside NEAR AI Cloud's secure hardware (TEEs), checked by attestation on every run, and a proof of that goes on NEAR that anyone can re-check in a browser.
 - **What it does next:** the meeting's follow-ups. The recap email, and USDC payments to people the meeting agreed to pay, from a NEAR contract whose caps the app can't get around.
-- **Where it stands (7 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. Payments from the app haven't run on testnet yet. The newest parts, more for coding agents and approvals on a phone, are built and tested; the phone relay and page are deployed and ran end to end with a stand-in Mac, but not yet with the Mac app.
+- **Where it stands (7 Nov 2026):** a test build is live for Apple silicon and Intel Macs, on NEAR testnet. It has made notes from a real call on live NEAR AI, recorded the proof on NEAR, and sent a recap. On 8 Nov it paid 5 USDC agreed on a call to `kemi-ac.testnet` on testnet ([`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH), the app's limited key); the over-cap hold hasn't run on testnet yet. The newest parts, more for coding agents and approvals on a phone, are built and tested; the phone relay and page are deployed and ran end to end with a stand-in Mac, but not yet with the Mac app.
 
 ## Checks to run
 
@@ -149,7 +149,7 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 
 ## Known limits
 
-- Payments from the Mac app and the over-cap hold haven't run on testnet yet; they're tested on a local NEAR node.
+- One payment from the Mac app has run on testnet (8 Nov, [`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH): `pay` 5 USDC to `kemi-ac.testnet`, signed by the app's function-call key, `meeting_id` linking the meeting's proof). The over-cap hold and autopilot payments haven't run on testnet yet; they're tested on a local NEAR node. On the way, the app first offered a claim link because it hadn't yet read the newly added payee; the claim link took the payment through.
 - Handshake (escrow, the `/deal` page, conditions on payments, payments linked to their proof) is built and tested on a local NEAR node and on testnet since 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq), an in-place upgrade that kept every record), but not yet run live: no escrow has been opened, and each owner needs to update the Mac's key once ([handshake.md](handshake.md)).
 - The public proof ([proof-3-nov.txt](proof-3-nov.txt)) is from a real meeting that stays private, so its notes aren't shown: "Notes unchanged since signing" needs them and runs only in the app that holds them.
 - Mainnet: no deploy yet, and so no real 1Click payout (1Click has no testnet). Testnet is eligible under the rules (Q-010).
