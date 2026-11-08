@@ -147,7 +147,7 @@ export default function HowItWorks() {
               </div>
               <div>
                 <dt>Stays local</dt>
-                <dd>Search, calendar lookups, backups, and the server agents use to read meetings.</dd>
+                <dd>Search, calendar lookups, backups you export, and the server agents use to read meetings. Automatic backups go to iCloud Drive, encrypted, only if you turn them on.</dd>
               </div>
               <div>
                 <dt>The limit</dt>
