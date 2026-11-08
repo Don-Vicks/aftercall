@@ -138,6 +138,15 @@ function followUpEntries(f: FollowUp, network: Network | null): TrailEntry[] {
         who: "You, if you send it from Mail",
         kept: "Your mail provider, once sent",
       });
+    if (f.slackPostedAt)
+      out.push({
+        id: `${f.id}-slack`,
+        what: `Recap${f.toName ? ` for ${f.toName}` : ""} posted to Slack`,
+        detail: "To the channel your webhook was made for",
+        when: f.slackPostedAt,
+        who: f.proposedBy ? `You, on ${f.proposedBy.agent}'s proposal` : "You",
+        kept: "Slack, in that channel, under your workspace's settings",
+      });
     if (f.status === "sent")
       out.push({
         id: `${f.id}-sent`,

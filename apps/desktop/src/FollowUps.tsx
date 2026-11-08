@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { Copy, Handshake, Link2, Mail } from "lucide-react";
@@ -18,6 +18,7 @@ import {
   paymentWhatLeaves,
   phoneDecision,
   routeLabel,
+  SLACK_WHAT_LEAVES,
   type AmountProblemKind,
   type Attendee,
   type EmailFollowUp,
@@ -37,6 +38,7 @@ import { explorerTx, near } from "./near";
 import { isDesktop } from "./recorder";
 import { HAS_BACKEND } from "./backend";
 import { recapAgentWork } from "./RecapSettings";
+import { useSlackConnected } from "./slack";
 import { TimeChip } from "./Quote";
 
 /** Everything a follow-up row can ask the app to do. */
@@ -50,6 +52,8 @@ export interface FollowUpHandlers {
   onJumpTo: (at: number, quote: string, focusId?: string) => void;
   onReviewBlocked: (id: string) => void;
   onDraft: (id: string) => void;
+  /** Posts a recap to the Slack channel the webhook in Settings was made for. Rejects with plain words. The rows wait out a 5-second Undo before calling it. */
+  onPostToSlack?: (id: string) => Promise<void>;
   onSetEmail: (id: string, email: string) => void;
   onClaimLink: (id: string) => void;
   /** Opens the wallet to add the shared account. The rows wait out a 5-second Undo before calling it. */
@@ -114,6 +118,7 @@ export function FollowUps({
   proofOnChain?: boolean;
 } & FollowUpHandlers) {
   const network = useNetwork();
+  const slack = useSlackConnected() === true;
   // One dismissed on your phone stays, labelled, as one approved there does; one dismissed here goes.
   const visible = followUps.filter((f) => f.status !== "dismissed" || phoneDecision(f));
   // Kept while every row is dismissed, so the last one can collapse and its Undo still has a place to return to.
@@ -129,7 +134,7 @@ export function FollowUps({
       undo: () => h.onRestore(f.id, before),
     });
   };
-  const ctx: RowContext = { meetingId, meeting, h, limits, invited, network, dismiss, proofOnChain };
+  const ctx: RowContext = { meetingId, meeting, h, limits, invited, network, dismiss, proofOnChain, slack };
 
   return (
     <section aria-labelledby="followups" className="flex flex-col gap-3">
@@ -177,6 +182,8 @@ interface RowContext {
   network: "testnet" | "mainnet" | null;
   dismiss: (f: FollowUp) => void;
   proofOnChain: boolean;
+  /** A Slack webhook is saved, so recaps offer Post to Slack. */
+  slack: boolean;
 }
 
 /** The NEAR network, for transaction links (desktop only). */
@@ -197,7 +204,7 @@ function useNetwork(): RowContext["network"] {
 }
 
 /** The id of a follow-up's pending deferred action, per kind. */
-const graceId = (kind: "pay" | "send" | "claim" | "release", meetingId: string, fuId: string) => `${kind}:${meetingId}:${fuId}`;
+const graceId = (kind: "pay" | "send" | "slack" | "claim" | "release", meetingId: string, fuId: string) => `${kind}:${meetingId}:${fuId}`;
 
 /** The time, refreshed every 250 ms, for countdowns. */
 function useNow(): number {
@@ -393,6 +400,18 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
   const pending = useDeferred(graceId("send", c.meetingId, f.id));
   const sentNow = useChanged(f.status);
   const draftedNow = useChanged(f.draftedAt);
+  const slackPending = useDeferred(graceId("slack", c.meetingId, f.id));
+  const postedNow = useChanged(f.slackPostedAt);
+  const [posting, setPosting] = useState(false);
+  const [slackError, setSlackError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const canPost = c.slack && !!h.onPostToSlack;
   const [held, setHeld] = useState(false);
   const [email, setEmail] = useState("");
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -409,7 +428,37 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
       run: () => h.onApprove(f.id),
     });
 
+  /** Posts to Slack after the same 5-second Undo as a send. An error shows on the card, or as a toast once you've left it. */
+  const post = () =>
+    deferred({
+      id: graceId("slack", c.meetingId, f.id),
+      quiet: true,
+      ms: GRACE_MS,
+      text: (s) => `Posting the recap to Slack in ${s}…`,
+      run: async () => {
+        setSlackError(null);
+        setPosting(true);
+        try {
+          await h.onPostToSlack?.(f.id);
+        } catch (e) {
+          if (!mounted.current) throw e;
+          setSlackError(e instanceof Error ? e.message : String(e));
+        } finally {
+          if (mounted.current) setPosting(false);
+        }
+      },
+    });
+
   const confirm = useConfirm();
+  /** A posted recap again, as it reads now; the first post stays in Slack. */
+  const postAgain = async () => {
+    const ok = await confirm({
+      title: "Post this recap to Slack again?",
+      body: "It goes to the same channel as it reads now, so action items you've changed since are in it, marked as edited. The first post stays in Slack.",
+      confirmLabel: "Post again",
+    });
+    if (ok) post();
+  };
   /** A sent recap again, as it reads now: edits made since are in it, marked. Same undo window as the first send. */
   const sendAgain = async () => {
     const ok = await confirm({
@@ -422,19 +471,41 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
 
   const state = pending
     ? "countdown"
-    : f.status === "sending"
-      ? "sending"
-      : f.status === "sent"
-        ? "sent"
-        : f.autopilotAt
-          ? "autopilot"
-          : open && f.draftedAt
-            ? "drafted"
-            : "open";
+    : slackPending
+      ? "slack-countdown"
+      : posting
+        ? "posting"
+        : f.status === "sending"
+          ? "sending"
+          : f.status === "sent"
+            ? "sent"
+            : f.autopilotAt
+              ? "autopilot"
+              : open && f.slackPostedAt
+                ? "posted"
+                : open && f.draftedAt
+                  ? "drafted"
+                  : "open";
+  const done = state === "sent" || state === "drafted" || state === "posted";
+  /** Under a done card's head, so its title keeps its room: Post to Slack, or when it was posted and Post again. */
+  const slackRow = done && (canPost || (state === "sent" && f.slackPostedAt)) && (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+      <span className="text-[13px] leading-[19px] text-ink-2">
+        {state === "posted" ? "Posted to the Slack channel your webhook was made for." : f.slackPostedAt ? `Also posted to Slack at ${f.slackPostedAt}.` : "Slack is connected: post this recap to its channel too."}
+      </span>
+      {canPost && (
+        <Button variant="quiet" size="sm" onClick={f.slackPostedAt ? postAgain : post}>
+          {f.slackPostedAt ? "Post again" : "Post to Slack"}
+        </Button>
+      )}
+    </div>
+  );
 
   let sub: ReactNode;
   if (state === "sent") sub = f.byAutopilot ? "Sent by autopilot · every rule passed" : f.byPhone ? `Approved on your phone · ${f.to}` : `Sent through Aftercall · ${f.to}`;
   else if (state === "sending") sub = `To ${f.to}`;
+  else if (state === "slack-countdown" || state === "posting") sub = "To the Slack channel your webhook was made for";
+  else if (state === "posted") sub = `Posted to Slack · “${f.subject}”`;
   else if (state === "drafted") sub = `Opened as a draft in your Mail · “${f.subject}”`;
   else if (!f.to)
     sub = (
@@ -445,7 +516,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
   else sub = fromCalendar ? `${f.to} · from your calendar` : `${f.to} · “${f.subject}”`;
 
   return (
-    <Card pad="none" className={cx("lift px-5", state === "sent" || state === "drafted" ? "py-3.5" : "py-4")}>
+    <Card pad="none" className={cx("lift px-5", done ? "py-3.5" : "py-4")}>
       <Head name={name} title={`Recap to ${name}`} sub={sub} clip>
         {state === "sent" && (
           <>
@@ -472,6 +543,16 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             </DonePill>
           </>
         )}
+        {state === "posted" && (
+          <>
+            <Button variant="quiet" size="sm" onClick={() => h.onDraft(f.id)}>
+              {f.draftedAt ? "Draft again" : "Draft in Mail"}
+            </Button>
+            <DonePill play={postedNow} upper>
+              Posted {f.slackPostedAt}
+            </DonePill>
+          </>
+        )}
         {state === "open" && <span className="t-eyebrow shrink-0 text-muted">{f.proposedBy ? `Proposed by ${f.proposedBy.agent}` : "Proposed"}</span>}
       </Head>
       <AnimatePresence initial={false} mode="wait">
@@ -485,9 +566,23 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             <Spinner size={14} /> Sending through Aftercall…
           </Body>
         )}
-        {state === "sent" && f.error && (
-          <Body key="sent-error">
-            <p className="selectable m-0 text-record">Sending it again didn't work: {f.error}</p>
+        {state === "slack-countdown" && slackPending && (
+          <Body key="slack-countdown">
+            <Countdown verb="Posting to Slack" startedAt={slackPending.startedAt} endsAt={slackPending.endsAt} onUndo={slackPending.cancel} />
+            {/* Said again here, since a sent or drafted card has no What leaves line of its own. */}
+            <p className="m-0 text-[13px] leading-[19px] text-ink-2">{SLACK_WHAT_LEAVES}</p>
+          </Body>
+        )}
+        {state === "posting" && (
+          <Body key="posting" className="flex-row items-center gap-2.5 text-ink-2">
+            <Spinner size={14} /> Posting to Slack…
+          </Body>
+        )}
+        {done && (slackRow || slackError || (state === "sent" && f.error)) && (
+          <Body key="done">
+            {state === "sent" && f.error && <p className="selectable m-0 text-record">Sending it again didn't work: {f.error}</p>}
+            {slackRow}
+            {slackError && <p className="selectable m-0 text-record">{slackError}</p>}
           </Body>
         )}
         {state === "autopilot" && f.autopilotAt && (
@@ -535,8 +630,9 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
               </div>
             )}
             {f.error && <p className="selectable m-0 text-record">{f.error}</p>}
+            {slackError && <p className="selectable m-0 text-record">{slackError}</p>}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND, agentWork: recapAgentWork() })} />
+              <WhatLeavesNote w={emailWhatLeaves(c.meeting, f, { backend: HAS_BACKEND, agentWork: recapAgentWork(), slack: canPost })} />
               <span className="ml-auto flex flex-wrap justify-end gap-2">
                 <Button variant="quiet" onClick={() => c.dismiss(f)}>
                   Dismiss
@@ -544,6 +640,12 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
                 {HAS_BACKEND && (
                   <Button variant="quiet" onClick={send} disabled={!f.to}>
                     Send through Aftercall
+                  </Button>
+                )}
+                {/* To the channel of the webhook in Settings; it needs no address. */}
+                {canPost && (
+                  <Button variant="quiet" onClick={post}>
+                    Post to Slack
                   </Button>
                 )}
                 {/* The private default: the recap opens in your own mail app and no Aftercall server sees it. */}

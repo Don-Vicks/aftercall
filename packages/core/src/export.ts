@@ -112,10 +112,12 @@ function followUpOf(f: FollowUp): ExportFollowUp {
   const auto = f.byAutopilot ? " by autopilot" : f.byPhone ? ", approved on your phone" : "";
   if (f.kind === "email") {
     const title = `Recap to ${f.toName || "someone"}`;
-    if (f.status === "sent") return { title, status: `${at("Sent")}${auto}` };
+    const slack = f.slackPostedAt ? `Posted to Slack at ${f.slackPostedAt}` : "";
+    if (f.status === "sent") return { title, status: `${at("Sent")}${auto}${slack ? `. ${slack}` : ""}` };
     if (f.status === "sending") return { title, status: "Sending" };
-    if (f.status === "failed") return { title, status: "Didn't send" };
+    if (f.status === "failed") return { title, status: `Didn't send${slack ? `. ${slack}` : ""}` };
     if (f.autopilotAt) return { title, status: "Waiting for autopilot to send it" };
+    if (slack) return { title, status: slack };
     if (f.draftedAt) return { title, status: `Opened as a draft in Mail at ${f.draftedAt}. Aftercall can't tell whether it was sent` };
     return { title, status: "Proposed, not sent" };
   }

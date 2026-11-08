@@ -15,6 +15,7 @@ mod recorder;
 mod recovery;
 mod recovery_kit;
 mod samples;
+mod slack;
 mod wipe;
 mod your_notes;
 
@@ -935,6 +936,28 @@ fn nearai_clear_key() -> Result<(), String> {
     nearai::clear_key()
 }
 
+/// Saves the Slack webhook in the Keychain once it checks out as Slack's own. The window never gets it back.
+#[tauri::command]
+fn slack_set_webhook(url: String) -> Result<(), String> {
+    slack::set_webhook(&url)
+}
+
+#[tauri::command]
+fn slack_has_webhook() -> bool {
+    slack::has_webhook()
+}
+
+#[tauri::command]
+fn slack_clear_webhook() -> Result<(), String> {
+    slack::clear_webhook()
+}
+
+/// Posts a recap's text to the webhook's channel. Only a recap card's Post to Slack button calls it.
+#[tauri::command]
+async fn slack_post_recap(text: String) -> Result<(), String> {
+    slack::post_recap(&text).await
+}
+
 /// `tls_pin`: the gateway's attested TLS key fingerprint; the upload goes only to a certificate carrying it.
 #[tauri::command]
 async fn nearai_transcribe(app: AppHandle, path: String, model: String, prompt: String, tls_pin: String) -> Result<String, String> {
@@ -1364,6 +1387,10 @@ pub fn run() {
             nearai_clear_key,
             nearai_key_hint,
             nearai_check_key,
+            slack_set_webhook,
+            slack_has_webhook,
+            slack_clear_webhook,
+            slack_post_recap,
             nearai_transcribe,
             nearai_chat,
             nearai_chat_stream,

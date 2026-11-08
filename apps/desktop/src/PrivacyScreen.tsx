@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeftRight, Check, Cloud, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Cloud, Cpu, ExternalLink, FolderGit2, HardDrive, Hash, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { agentsApi, PREVIEW_INFO } from "./agents";
 import { isDesktop } from "./recorder";
@@ -9,16 +9,18 @@ import { loadPhone, usePhone } from "./phone";
 import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
 import { AutoBackup, ImportBackup } from "./RecoveryPhrase";
 import { deleteEverything, type Wiped } from "./library";
+import { slackWebhook } from "./slack";
 import { Button, Dialog, Field, Input, Pill, SectionTitle, Spinner } from "./ui";
 import { Page, PageHeader, Why, rise } from "./PagePieces";
 
-/** The five Keychain items (service dev.aftercall.app); see src-tauri/src/wipe.rs. */
-const KEYCHAIN: { id: "nearai" | "near" | "data" | "backup" | "phone"; name: string; does: string }[] = [
+/** The six Keychain items (service dev.aftercall.app); see src-tauri/src/wipe.rs. */
+const KEYCHAIN: { id: "nearai" | "near" | "data" | "backup" | "phone" | "slack"; name: string; does: string }[] = [
   { id: "nearai", name: "NEAR AI key", does: "makes your notes" },
   { id: "near", name: "This Mac's NEAR key", does: "pays and records proofs, within your caps" },
   { id: "data", name: "Data key", does: "seals your meetings on disk" },
   { id: "backup", name: "Backup key", does: "opens backups, made from your phrase" },
   { id: "phone", name: "Phone keys", does: "seal what your paired phone sees, and open its taps" },
+  { id: "slack", name: "Slack webhook", does: "posts a recap to one channel, when you tap Post" },
 ];
 
 /** Every place data goes, from docs/privacy.md. */
@@ -67,6 +69,13 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
   },
   { icon: <Mail size={14} strokeWidth={1.75} />, name: "Resend", kind: "Recap email", sees: "Recaps you send through Aftercall.", keeps: "Sent mail, under Resend's own policy." },
   {
+    icon: <Hash size={14} strokeWidth={1.75} />,
+    name: "Slack",
+    kind: "Only if you connect it",
+    sees: "Recaps you post to Slack, in the channel your webhook was made for: the summary, decisions, action items and footer. Never the transcript or the audio.",
+    keeps: "The posts, in that channel, under your workspace's settings.",
+  },
+  {
     icon: <ArrowLeftRight size={14} strokeWidth={1.75} />,
     name: "1Click",
     kind: "Solana and Base payees",
@@ -81,7 +90,7 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
  */
 export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; onOpenSettings: () => void }) {
   const [dataDir, setDataDir] = useState<string>(isDesktop ? "" : PREVIEW_INFO.dataDir);
-  const [keys, setKeys] = useState<{ nearai: boolean; recovery: RecoveryStatus } | null>(null);
+  const [keys, setKeys] = useState<{ nearai: boolean; recovery: RecoveryStatus; slack: boolean } | null>(null);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -90,8 +99,8 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
       .then((i) => setDataDir(i.dataDir))
       .catch(() => setDataDir(PREVIEW_INFO.dataDir));
     void loadPhone();
-    Promise.all([nearAiKey.has().catch(() => false), recovery.status()])
-      .then(([nearai, r]) => setKeys({ nearai, recovery: r }))
+    Promise.all([nearAiKey.has().catch(() => false), recovery.status(), slackWebhook.has().catch(() => false)])
+      .then(([nearai, r, slack]) => setKeys({ nearai, recovery: r, slack }))
       .catch(() => {});
   }, []);
 
@@ -107,7 +116,9 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
             ? !keys.recovery.hasKey
             : id === "backup"
               ? !keys.recovery.fromPhrase
-              : false;
+              : id === "slack"
+                ? !keys.slack
+                : false;
 
   return (
     <Page width={840} className="gap-6">
@@ -158,8 +169,8 @@ export function PrivacyScreen({ onBack, onOpenSettings }: { onBack: () => void; 
           </div>
         </div>
         <Why>
-          Audio is sealed about once a second while it records, and deleted with its chunk transcripts once your notes are saved. Notes, transcripts and projects are sealed with the data key. The five
-          Keychain items sit under <span className="font-mono text-ink">dev.aftercall.app</span>, and the NEAR AI key never reaches the app's window. This keeps other apps, and backup or sync tools,
+          Audio is sealed about once a second while it records, and deleted with its chunk transcripts once your notes are saved. Notes, transcripts and projects are sealed with the data key. The six
+          Keychain items sit under <span className="font-mono text-ink">dev.aftercall.app</span>, and the NEAR AI key and the Slack webhook never reach the app's window. This keeps other apps, and backup or sync tools,
           from reading your meetings. It doesn't protect against someone using your Mac while you're signed in, or software running as you that can open your Keychain.
         </Why>
       </section>
@@ -312,7 +323,7 @@ function DeleteEverything() {
         Delete
       </SectionTitle>
       <div className="flex flex-col gap-3.5 rounded-md bg-elevated px-5 py-[18px] shadow-1">
-        <span className="text-ink-2">Removes every meeting, note, transcript and project here, and Aftercall's five Keychain items.</span>
+        <span className="text-ink-2">Removes every meeting, note, transcript and project here, and Aftercall's six Keychain items.</span>
         <Button variant="danger" className="self-start" icon={<Trash2 size={14} />} disabled={!isDesktop} onClick={() => setOpen(true)}>
           Delete everything on this Mac
         </Button>
@@ -364,7 +375,7 @@ function ConfirmDelete({ onClose }: { onClose: () => void }) {
       width={460}
       initialFocus={cancel}
       title={done ? "Deleted from this Mac" : "Delete everything on this Mac?"}
-      intro={done ? undefined : "Every meeting, note, transcript, project and setting here, and Aftercall's five Keychain items. There's no undo."}
+      intro={done ? undefined : "Every meeting, note, transcript, project and setting here, and Aftercall's six Keychain items. There's no undo."}
     >
       {done ? (
         <div className="flex flex-col gap-3">

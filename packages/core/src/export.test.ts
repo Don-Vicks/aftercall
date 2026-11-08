@@ -144,6 +144,9 @@ test("follow-up statuses read in plain words", () => {
   assert.equal(status({ ...email, status: "sent", doneAt: "14:10", byPhone: true }).status, "Sent at 14:10, approved on your phone");
   assert.equal(status({ ...email, status: "failed" }).status, "Didn't send");
   assert.match(status({ ...email, draftedAt: "14:08" }).status, /Opened as a draft in Mail at 14:08\. Aftercall can't tell whether it was sent/);
+  assert.equal(status({ ...email, slackPostedAt: "14:09" }).status, "Posted to Slack at 14:09");
+  assert.equal(status({ ...email, draftedAt: "14:08", slackPostedAt: "14:09" }).status, "Posted to Slack at 14:09", "a post is known to have gone; a draft isn't");
+  assert.equal(status({ ...email, status: "sent", doneAt: "14:10", slackPostedAt: "14:12" }).status, "Sent at 14:10. Posted to Slack at 14:12");
   assert.equal(status({ ...email, toName: "" }).title, "Recap to someone");
   assert.equal(status({ ...pay, status: "proposed" }).status, "Proposed, not paid");
   assert.equal(status({ ...pay, status: "blocked" }).status, "Over your caps, waiting for your wallet");

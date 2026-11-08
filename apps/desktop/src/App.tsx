@@ -36,6 +36,7 @@ import {
   latestPreview,
   pay,
   payCrossChain,
+  postToSlack,
   previewCrossChain,
   refreshEscrow,
   releaseEscrow,
@@ -601,6 +602,16 @@ export default function App() {
         draftInMail(meeting, f, saved[meeting.id])
           .then(() => apply(id)({ draftedAt: nowHHMM(), autopilotAt: undefined, autopilotHeld: undefined }))
           .catch((e) => toast({ text: `Couldn't open Mail: ${e instanceof Error ? e.message : String(e)}`, tone: "record" }));
+      },
+      // Your tap only: autopilot and the phone go through onApprove, which never posts to Slack.
+      // It rejects with plain words for the card to show; posted, it's marked like a draft.
+      onPostToSlack: async (id: string) => {
+        const f = find(id);
+        if (f.kind !== "email") return;
+        // The sample never went to NEAR AI, so a footer about checks and deleted audio would be untrue.
+        if (sample) return void toast({ text: "The sample meeting is made up, so it has no recap to post. Record a call to post one to Slack." });
+        await postToSlack(meeting, f, saved[meeting.id]);
+        apply(id)({ slackPostedAt: nowHHMM(), autopilotAt: undefined, autopilotHeld: undefined });
       },
       onSetEmail: (id: string, email: string) => apply(id)({ to: email, error: undefined }),
       onClaimLink: (id: string) => {

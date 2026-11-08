@@ -1,6 +1,9 @@
 import type { AmountProblemKind, FollowUp, Meeting } from "../meeting.ts";
 
-/** What the person allows to happen without a tap. Off unless they turn it on. */
+/**
+ * What the person allows to happen without a tap. Off unless they turn it on. There is no
+ * rule for Slack: a recap goes to Slack only from its Post to Slack button.
+ */
 export interface AutopilotRules {
   /** Pay listed payees within the per-payment cap and what's left today. With no per-payment cap set, nothing is paid. */
   payments: boolean;

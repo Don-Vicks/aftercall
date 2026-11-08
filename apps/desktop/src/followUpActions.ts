@@ -18,6 +18,7 @@ import {
   mailtoLink,
   PAY_MEMO,
   previewOf,
+  slackRecapText,
   waitForSettlement,
   type CrossChainPayout,
   type EmailFollowUp,
@@ -32,6 +33,7 @@ import { HAS_BACKEND, backend } from "./backend";
 import { builtInContract, contractFollowupId, near, oneClick, signInWallet, waitFor, DEAL_URL, VERIFY_URL, WEB_URL, type NearConfig } from "./near";
 import type { SavedNotes } from "./nearai";
 import { recapAgentWork, senderName } from "./RecapSettings";
+import { slackWebhook } from "./slack";
 
 /** A change to one follow-up; the app applies it and saves the meeting. */
 export type Patch = Partial<EmailFollowUp> | Partial<PaymentFollowUp>;
@@ -58,6 +60,17 @@ export function recapFacts(meeting: Meeting, saved?: SavedNotes) {
 /** Opens the recap as a draft in the person's own mail app. Nothing leaves the Mac. */
 export async function draftInMail(meeting: Meeting, f: EmailFollowUp, saved?: SavedNotes): Promise<void> {
   await openUrl(mailtoLink(buildRecap(meeting, f, { sender: senderName() || undefined, facts: recapFacts(meeting, saved), agentWork: recapAgentWork() })));
+}
+
+/**
+ * Posts the recap to the Slack channel the webhook in Settings was made for: the same recap
+ * Draft in Mail opens, footer included, as a Slack message. Rust holds the webhook and posts
+ * it, and rejects with plain words. Only a tap on Post to Slack calls this; autopilot and the
+ * phone run `sendRecap`, never this.
+ */
+export async function postToSlack(meeting: Meeting, f: EmailFollowUp, saved?: SavedNotes): Promise<void> {
+  const recap = buildRecap(meeting, f, { sender: senderName() || undefined, facts: recapFacts(meeting, saved), agentWork: recapAgentWork() });
+  await slackWebhook.post(slackRecapText(recap));
 }
 
 /**
