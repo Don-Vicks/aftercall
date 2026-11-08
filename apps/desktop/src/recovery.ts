@@ -50,6 +50,9 @@ export interface AutoBackupStatus {
 }
 
 const autoBackupListeners = new Set<(s: AutoBackupStatus) => void>();
+let soonTimer: ReturnType<typeof setTimeout> | undefined;
+/** How long `soon` waits after the last change, so a run of ticks and edits makes one backup. */
+export const AUTO_BACKUP_AFTER_EDIT_MS = 60_000;
 const tell = (s: AutoBackupStatus) => {
   autoBackupListeners.forEach((f) => f(s));
   return s;
@@ -73,6 +76,15 @@ export const autoBackup = {
             return null;
           })
       : Promise.resolve(null),
+  /**
+   * After a change to saved notes (a tick, an edit, a follow-up sent or dismissed): one run a
+   * minute after the last change, into today's file. A no-op with the switch off.
+   */
+  soon: () => {
+    if (!isDesktop) return;
+    clearTimeout(soonTimer);
+    soonTimer = setTimeout(() => void autoBackup.run(false), AUTO_BACKUP_AFTER_EDIT_MS);
+  },
   /** Calls `f` with each new status, from runs anywhere in the app. Returns the unsubscribe. */
   onChange: (f: (s: AutoBackupStatus) => void) => {
     autoBackupListeners.add(f);

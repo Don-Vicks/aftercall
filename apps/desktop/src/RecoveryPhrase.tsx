@@ -796,7 +796,7 @@ export function AutoBackup({ className }: { className?: string }) {
           <span className="text-[13px] leading-[19px] text-ink-2">
             {on
               ? "After each meeting's notes are saved, and when Aftercall opens if the last one is over a day old. One file a day in iCloud Drive → Aftercall; the 7 newest stay."
-              : "Off. On, the same encrypted file goes to iCloud Drive → Aftercall after each meeting: one a day, the 7 newest kept."}
+              : "Off. On, the same encrypted file goes to iCloud Drive → Aftercall after each meeting and each change to your notes: one a day, the 7 newest kept."}
           </span>
         </span>
         <Toggle aria-label="Back up automatically to iCloud Drive" checked={on} disabled={!isDesktop || !status || busy} onChange={flip} />

@@ -350,6 +350,8 @@ export default function App() {
     const text = serializeNotes(notes);
     diskNotes.current[id] = text;
     notesSaves.current[id] = (notesSaves.current[id] ?? Promise.resolve()).then(() => recordingFiles.saveNotes(id, text)).catch(() => {});
+    // With the switch on, the change reaches today's automatic backup a minute later.
+    autoBackup.soon();
   };
 
   // Recordings that have notes open as meetings. Autopilot queued before this launch

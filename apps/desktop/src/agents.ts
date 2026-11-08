@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { AgentWalletSnapshot, ItemFields, Meeting } from "@aftercall/core";
+import { autoBackup } from "./recovery";
 
 /** Coding agents (MCP) state and paths, from the Mac app (`agents_info`, apps/desktop/src-tauri/src/agents.rs). */
 export interface AgentsInfo {
@@ -68,11 +69,17 @@ export const agentsApi = {
   /** The newest 20 agent requests, newest first. */
   activity: () => invoke<AgentActivity[]>("agents_activity"),
   /** Ticks or unticks an action item in notes.json; returns the saved notes. */
-  setItemDone: (id: string, itemId: string, done: boolean) => invoke<string>("set_action_item_done", { id, itemId, done }),
+  setItemDone: (id: string, itemId: string, done: boolean) => invoke<string>("set_action_item_done", { id, itemId, done }).then(backedUpSoon),
   /** Saves your edit of one action item in notes.json, or with null puts back what the model signed; returns the saved notes. */
   editItem: (id: string, itemId: string, fields: ItemFields | null) =>
-    invoke<string>("edit_action_item", { id, itemId, text: fields?.text ?? "", owner: fields?.owner ?? "", due: fields?.due ?? null, restore: fields === null }),
+    invoke<string>("edit_action_item", { id, itemId, text: fields?.text ?? "", owner: fields?.owner ?? "", due: fields?.due ?? null, restore: fields === null }).then(backedUpSoon),
 };
+
+/** A tick or an edit reaches today's automatic backup a minute later, when the switch is on. */
+function backedUpSoon<T>(saved: T): T {
+  autoBackup.soon();
+  return saved;
+}
 
 /** Shown in the browser preview, where the app can't read its own paths. */
 export const PREVIEW_INFO: AgentsInfo = {
