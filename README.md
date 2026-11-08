@@ -100,7 +100,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | Website, browser demo, install guide | https://getaftercall.vercel.app | Live |
 | Mac test build | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
 | Backend (sign-in, recap email, claim links, counts) | https://aftercall-api.vercel.app/health | Live, with Postgres |
-| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 1 proof, 0 payments. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
+| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 2 proofs, 0 payments. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
 | Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Done 3 Nov (private meeting) |
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
