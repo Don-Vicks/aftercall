@@ -89,7 +89,7 @@ Built and tested, not yet run live ([Live today](#live-today) says how far each 
 
 Guide for people and coding agents: [docs/judging.md](docs/judging.md). Threat model for the app's key and the contract: [docs/threat-model.md](docs/threat-model.md).
 
-**The demo video** (1:30) is [posted on X](https://x.com/VictorShallang/status/2119497823976894691). Its app shots use the browser demo's sample meetings, so the payments, the $5,000 hold and the phone's items there are sample data. Two shots are real: the `/verify` page checking the 8 Nov sample call's proof on the live site, and the Claude Code terminal, a real run against a stand-in for the app. Every spoken line has a source in its [script](docs/demo-script.md).
+**The demo video** (1:30) is [posted on X](https://x.com/VictorShallang/status/2119529850646020401). It is real footage only: the Mac app, screen-recorded during the 8 Nov testnet run, and the live `/verify` page. It shows the consent tick, the secure-hardware checks, the notes with their quotes, a recap emailed through Aftercall, the 5 USDC payment ([`6jK1mauq…`](https://testnet.nearblocks.io/txns/6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN)), the $5,000 held for the owner's wallet ([`6jHzBdiT…`](https://testnet.nearblocks.io/txns/6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou)), the agent wallet, and that call's proof passing 8 of 8. The recap's email address is blurred.
 
 | Claim | Code | Tests |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ Running, and checkable from this page (8 Nov 2026):
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | Test credits: no NEAR AI account needed to make notes | Backend, Mac app | On since 8 Nov: one shared NEAR AI key on Aftercall's credit, up to 30 installs ([details](docs/judging.md)) |
 | NEAR Intents quote for a payment to Solana or Base | Browser demo, Mac app | Live (dry quote: nothing sent) |
-| Demo video, 1:30 | [X post](https://x.com/VictorShallang/status/2119497823976894691) | Posted 8 Nov |
+| Demo video, 1:30 | [X post](https://x.com/VictorShallang/status/2119529850646020401) | Posted 8 Nov, real footage |
 
 Built and tested, not yet run live:
 

@@ -20,7 +20,7 @@ This is a guide for reviewing this repository, written for people and for coding
 | 4 | The `curl` commands under [1 minute](#1-minute-the-contract-and-the-first-proof-on-near-testnet) below | `nov3.testnet` calling `record_proof` on `wallet.aftercall.testnet`, status `SuccessValue`; the contract's counts | 1 minute |
 | 5 | Open https://getaftercall.vercel.app/stats | The same counts, read live from the contract and the backend | 1 minute |
 
-The 90-second demo video isn't recorded yet (7 Nov); its script and shot list, with a source for every spoken line, are in [demo-script.md](demo-script.md).
+The 90-second demo video is [posted on X](https://x.com/VictorShallang/status/2119529850646020401) (8 Nov). It is real footage of the Mac app on NEAR testnet and of the live `/verify` page; the first draft's script and shot list are in [demo-script.md](demo-script.md).
 
 `pnpm verify` is `scripts/verify.sh`; CI runs the same steps (`.github/workflows/ci.yml`). The same checks by the time you have, plus your own phone, the Mac app and a testnet payment: [How to test, step by step](#how-to-test-step-by-step).
 
