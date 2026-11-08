@@ -16,6 +16,10 @@ export interface WhatLeaves {
   details: string[];
 }
 
+/** What Post to Slack sends, and where; a recap card says it before anything goes. */
+export const SLACK_WHAT_LEAVES =
+  "Post to Slack sends the same recap text (the summary, decisions, action items and footer) from this Mac to Slack, into the channel your webhook was made for. Slack keeps it there under your workspace's settings. The transcript and the audio don't go to Slack.";
+
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -42,10 +46,7 @@ export function emailWhatLeaves(
     "Draft in Mail opens it in your own mail app; Aftercall's servers never see it.",
   ];
   if (opts.backend) details.push("Send through Aftercall passes it through Aftercall's backend, in memory for this one request, then Resend, which keeps sent mail under its own policy.");
-  if (opts.slack)
-    details.push(
-      "Post to Slack sends the same recap text (the summary, decisions, action items and footer) from this Mac to Slack, into the channel your webhook was made for. Slack keeps it there under your workspace's settings. The transcript and the audio don't go to Slack.",
-    );
+  if (opts.slack) details.push(SLACK_WHAT_LEAVES);
   return { summary: "Draft in Mail keeps it on this Mac.", details };
 }
 

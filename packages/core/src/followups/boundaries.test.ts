@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PAY_MEMO, emailWhatLeaves, participantNotice, paymentWhatLeaves } from "./boundaries.ts";
+import { PAY_MEMO, SLACK_WHAT_LEAVES, emailWhatLeaves, participantNotice, paymentWhatLeaves } from "./boundaries.ts";
 import { buildRecap, recapFooter, type RecapFacts } from "./recap.ts";
 import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
 
@@ -51,9 +51,9 @@ test("Draft in Mail stays off Aftercall's servers; Send through Aftercall names 
 
 test("with Slack connected, a recap's what-leaves says the recap text goes to the webhook's channel, and the transcript and audio don't", () => {
   const w = emailWhatLeaves(meeting, email, { backend: false, slack: true });
-  const slack = w.details.find((d) => d.startsWith("Post to Slack"));
+  assert.ok(w.details.includes(SLACK_WHAT_LEAVES));
   assert.equal(
-    slack,
+    SLACK_WHAT_LEAVES,
     "Post to Slack sends the same recap text (the summary, decisions, action items and footer) from this Mac to Slack, into the channel your webhook was made for. Slack keeps it there under your workspace's settings. The transcript and the audio don't go to Slack.",
   );
   assert.equal(w.summary, "Draft in Mail keeps it on this Mac.");
