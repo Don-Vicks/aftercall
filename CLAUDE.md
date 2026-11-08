@@ -30,8 +30,8 @@ Stop and ask when a task needs a decision, a new dependency outside the stack, m
 - End-to-end encryption or nothing (Victor's decision, 1 Nov 2026): the transcript, your notes and Ask excerpts go to NEAR AI only end-to-end encrypted to an attested model key, through transports that refuse a request without keys. No TLS fallback, and no downgrade to an older encryption version when a request fails; if encryption isn't available, stop with a plain error and send nothing more. Audio is the one exception, because NEAR AI has no E2EE for transcription: it goes over TLS to the gateway, pinned to the TLS key the gateway's attestation binds, and every page says so. Move to encryption v3 only when the attested model deployment supports it, choosing the version before sending, never by retrying.
 - Verify claims only what is proven. Transcription has no per-response signature on NEAR AI; say so.
 - Consent: recording can't start until the consent box is ticked, every time.
-- Follow-ups: only recap email and USDC payment. Every proposed item needs an exact quote from the transcript. Payments go only to listed payees, show the heard words next to the parsed amount, and never run under autopilot unless every rule passes.
-- Contract: limited key may call only `pay` and `record_proof`; every rule change is 1-yocto; no admin method can move user funds; callbacks are `#[private]`; users pay their own storage.
+- Follow-ups: only a recap (by email, or posted to Slack on your tap, never by autopilot) and a USDC payment, which may be held in escrow (Handshake). Every proposed item needs an exact quote from the transcript. Payments go only to listed payees, show the heard words next to the parsed amount, and never run under autopilot unless every rule passes.
+- Contract: limited key may call only `pay`, `record_proof`, `open_escrow` and `release_escrow` (`KEY_METHODS`, `apps/desktop/src-tauri/src/near.rs`); every rule change is 1-yocto; no admin method can move user funds; callbacks are `#[private]`; users pay their own storage.
 - Secrets live in env vars and the macOS Keychain, never in the repo.
 
 ## Design
