@@ -6,7 +6,8 @@ import type { Counters } from "../stats/counters";
 
 /*
  * Test credits: one capped NEAR AI key per install of the Mac app, paid from
- * Aftercall's own NEAR AI workspace. The key goes back to the app once, which keeps
+ * Aftercall's own NEAR AI workspace; or, with only NEARAI_TESTER_KEY set, one shared key
+ * every install gets, capped only by the spend limit set on it in NEAR AI's dashboard. The key goes back to the app once, which keeps
  * it in the Keychain; this server never stores it. What stays is a hash of the
  * install id, NEAR AI's id for the key and when it was made, so the same install
  * isn't given a second key, plus per-IP daily counts under a hashed key.
@@ -19,6 +20,8 @@ export interface TesterKeyOptions {
   maxKeys: number;
   /** Keys a single IP address may get in a day. */
   perIpPerDay: number;
+  /** Every install gets the same key (`sharedKeyAdmin`): no per-tester cap, only the key's own. */
+  shared?: boolean;
 }
 
 export interface IssuedKeys {
@@ -71,12 +74,16 @@ export class TesterKeys {
   ) {}
 
   /** What the app shows before asking: whether test credits are on, and each key's limit. */
-  async status(): Promise<{ available: boolean; spendLimitUsd: number }> {
+  async status(): Promise<{ available: boolean; spendLimitUsd: number; shared?: true }> {
     const available = this.admin !== null && (await this.issued.count()) < this.options.maxKeys;
-    return { available, spendLimitUsd: this.options.spendLimitUsd };
+    return { available, spendLimitUsd: this.options.spendLimitUsd, ...this.sharedFlag() };
   }
 
-  async issue(installId: unknown, ip: string): Promise<{ key: string; spendLimitUsd: number }> {
+  private sharedFlag(): { shared?: true } {
+    return this.options.shared ? { shared: true } : {};
+  }
+
+  async issue(installId: unknown, ip: string): Promise<{ key: string; spendLimitUsd: number; shared?: true }> {
     if (!this.admin) throw new HttpException("TEST_CREDITS_OFF", HttpStatus.SERVICE_UNAVAILABLE);
     if (typeof installId !== "string" || !INSTALL_ID.test(installId)) throw new HttpException("BAD_INSTALL_ID", HttpStatus.BAD_REQUEST);
     const install = limitKey("install", installId);
@@ -97,6 +104,6 @@ export class TesterKeys {
     await this.issued.insert(install, made.id, this.now());
     await this.daily.increment(ipKey, day).catch(() => {});
     await this.counters?.increment("tester_keys").catch(() => {});
-    return { key: made.key, spendLimitUsd: this.options.spendLimitUsd };
+    return { key: made.key, spendLimitUsd: this.options.spendLimitUsd, ...this.sharedFlag() };
   }
 }

@@ -15,7 +15,7 @@ import { StatsController } from "./stats/stats.controller";
 import { StatsService, rpcChainStats } from "./stats/stats.service";
 import { MemoryCounters, PgCounters, type Counters } from "./stats/counters";
 import { MemoryDailyCounts, PgDailyCounts, type DailyCounts } from "./limits";
-import { cloudApiAdmin } from "./nearai/admin";
+import { cloudApiAdmin, sharedKeyAdmin } from "./nearai/admin";
 import { MemoryIssuedKeys, PgIssuedKeys, TesterKeys } from "./nearai/testerKeys";
 import { TesterKeysController } from "./nearai/testerKeys.controller";
 import { nearEnv } from "./network";
@@ -35,10 +35,14 @@ function jwtSecret(): string {
   return randomBytes(32).toString("hex");
 }
 
-/** Aftercall's NEAR AI account for test credits, or null when it isn't set up (the app then asks for your own key). */
+/**
+ * Aftercall's NEAR AI account for test credits: a capped key per tester when the admin
+ * account is set up, else one shared key (NEARAI_TESTER_KEY), else null (the app then asks
+ * for your own key).
+ */
 function nearAiAdmin() {
-  const { NEARAI_ADMIN_ACCOUNT: accountId, NEARAI_ADMIN_KEY: secretKey, NEARAI_WORKSPACE_ID: workspaceId } = process.env;
-  if (!accountId || !secretKey || !workspaceId) return null;
+  const { NEARAI_ADMIN_ACCOUNT: accountId, NEARAI_ADMIN_KEY: secretKey, NEARAI_WORKSPACE_ID: workspaceId, NEARAI_TESTER_KEY: shared } = process.env;
+  if (!accountId || !secretKey || !workspaceId) return shared ? sharedKeyAdmin(shared) : null;
   return cloudApiAdmin({ baseUrl: process.env.NEARAI_CLOUD_URL ?? "https://cloud-api.near.ai", accountId, secretKey, workspaceId });
 }
 
@@ -95,6 +99,7 @@ const number = (value: string | undefined, fallback: number) => (value && Number
           spendLimitUsd: number(process.env.TESTER_KEY_LIMIT_USD, 0.25),
           maxKeys: number(process.env.TESTER_KEYS_MAX, 30),
           perIpPerDay: number(process.env.TESTER_KEYS_PER_IP_PER_DAY, 3),
+          shared: !(process.env.NEARAI_ADMIN_ACCOUNT && process.env.NEARAI_ADMIN_KEY && process.env.NEARAI_WORKSPACE_ID) && !!process.env.NEARAI_TESTER_KEY,
         };
         return new TesterKeys(nearAiAdmin(), issued, daily, options, Date.now, counters);
       },

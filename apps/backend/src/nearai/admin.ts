@@ -56,6 +56,20 @@ export function loginNonce(now: number): Uint8Array {
   return nonce;
 }
 
+/**
+ * Test credits from one shared NEAR AI key instead: every install gets the same key, which
+ * Aftercall's owner made in their NEAR AI dashboard. NEAR AI can't cap each tester, so the
+ * spend limit set on that key in the dashboard is the only cap; the server's install, total
+ * and per-IP limits still apply to who gets it.
+ */
+export function sharedKeyAdmin(key: string): NearAiAdmin {
+  return {
+    async createKey() {
+      return { id: "shared", key };
+    },
+  };
+}
+
 export function cloudApiAdmin(config: CloudAdminConfig, fetchImpl: typeof fetch = fetch, now: () => number = Date.now): NearAiAdmin {
   const { seed, publicKey } = nearKeyPair(config.secretKey);
   const base = config.baseUrl.replace(/\/+$/, "");

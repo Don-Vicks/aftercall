@@ -5,7 +5,7 @@ import { Test } from "@nestjs/testing";
 import request from "supertest";
 import { ed25519 } from "@noble/curves/ed25519";
 import { base58, base64 } from "@scure/base";
-import { cloudApiAdmin, loginNonce, nearKeyPair, type NearAiAdmin } from "./admin";
+import { cloudApiAdmin, loginNonce, nearKeyPair, sharedKeyAdmin, type NearAiAdmin } from "./admin";
 import { MemoryIssuedKeys, TesterKeys } from "./testerKeys";
 import { TesterKeysController } from "./testerKeys.controller";
 import { MemoryDailyCounts } from "../limits";
@@ -120,4 +120,14 @@ test("login nonces are 32 bytes and never repeat", () => {
   const a = loginNonce(1), b = loginNonce(1);
   assert.equal(a.length, 32);
   assert.notDeepEqual(a, b);
+});
+
+test("one shared key: every install gets the same key, and the install, total and per-IP limits still hold", async () => {
+  const keys = new TesterKeys(sharedKeyAdmin("sk-shared"), new MemoryIssuedKeys(), new MemoryDailyCounts(), { ...OPTIONS, shared: true });
+  assert.deepEqual(await keys.status(), { available: true, spendLimitUsd: 0.25, shared: true });
+  assert.deepEqual(await keys.issue(INSTALL, "1.2.3.4"), { key: "sk-shared", spendLimitUsd: 0.25, shared: true });
+  assert.equal((await keys.issue("install-fedcba9876543210", "5.6.7.8")).key, "sk-shared");
+  await assert.rejects(keys.issue(INSTALL, "9.9.9.9"), /ALREADY_ISSUED/);
+  await keys.issue("install-aaaaaaaaaaaaaaaa", "5.6.7.8");
+  assert.deepEqual(await keys.status(), { available: false, spendLimitUsd: 0.25, shared: true }, "all three handed out");
 });
