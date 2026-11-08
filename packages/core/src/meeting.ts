@@ -123,6 +123,8 @@ export interface EmailFollowUp extends FollowUpBase {
   subject: string;
   /** When the recap was last opened as a draft in your own mail app ("14:06"). Aftercall can't tell whether you sent it. */
   draftedAt?: string;
+  /** When the recap was last posted to Slack through the webhook in Settings ("14:06"). Only your tap posts it. */
+  slackPostedAt?: string;
 }
 
 export interface PaymentFollowUp extends FollowUpBase {
