@@ -354,13 +354,27 @@ pub fn apply(data_dir: &Path, backup: Backup) -> Result<Restored, String> {
     Ok(Restored { meetings, skipped, projects, local })
 }
 
-/// Encrypts the backup with the Keychain's backup key and writes it to `folder`.
-pub fn export(data_dir: &Path, folder: &Path, local: BTreeMap<String, String>) -> Result<String, String> {
-    let key = stored_backup_key()?;
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+/// A backup file's bytes: the backup collected at `now`, encrypted with `key`.
+pub fn seal_with(key: &[u8; 32], data_dir: &Path, local: BTreeMap<String, String>, now: u64) -> Result<Vec<u8>, String> {
     let backup = collect(data_dir, local, now);
     let plaintext = Zeroizing::new(serde_json::to_vec(&backup).map_err(|e| e.to_string())?);
-    let file = encrypt(&key, &plaintext)?;
+    encrypt(key, &plaintext)
+}
+
+/// A backup file's bytes, sealed with the Keychain's backup key: what Export backup writes.
+pub fn seal(data_dir: &Path, local: BTreeMap<String, String>, now: u64) -> Result<Vec<u8>, String> {
+    let key = stored_backup_key()?;
+    seal_with(&key, data_dir, local, now)
+}
+
+pub fn now_secs() -> Result<u64, String> {
+    Ok(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs())
+}
+
+/// Encrypts the backup with the Keychain's backup key and writes it to `folder`.
+pub fn export(data_dir: &Path, folder: &Path, local: BTreeMap<String, String>) -> Result<String, String> {
+    let now = now_secs()?;
+    let file = seal(data_dir, local, now)?;
     let (y, m, d) = civil_date(now);
     let mut path = folder.join(format!("Aftercall backup {y:04}-{m:02}-{d:02}.aftercall"));
     for n in 2.. {
