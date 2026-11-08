@@ -18,7 +18,7 @@ Built for NEAR HACKATHON (1–14 Nov 2026), tracks: privacy, security, agents, b
 
 ## How to test
 
-Pick by the time you have. Every command, link and expected result: [How to test, step by step](docs/judging.md#how-to-test-step-by-step). Only making notes in the Mac app needs a NEAR AI key. The code: `git clone https://github.com/Don-Vicks/aftercall`.
+Pick by the time you have. Every command, link and expected result: [How to test, step by step](docs/judging.md#how-to-test-step-by-step). Only making notes in the Mac app needs a NEAR AI key, and the app offers Aftercall's test credits if you have none. The code: `git clone https://github.com/Don-Vicks/aftercall`.
 
 `/stats`, `/verify`, `/phone` and `/demo` render with JavaScript, so open them in a browser: a plain fetch sees only their loading text.
 
@@ -105,7 +105,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
 | The 3 Nov proof's public link | [docs/proof-3-nov.txt](docs/proof-3-nov.txt) | Published 8 Nov; `/verify` passes 7 of 7 |
 | 90-second demo video | README | Not yet; [script](docs/demo-script.md) |
-| Test credits (a capped NEAR AI key per tester) | Backend | Built and tested; off until Aftercall's NEAR AI account is set up |
+| Test credits: no NEAR AI account needed to make notes | Backend, Mac app | On since 8 Nov: one shared NEAR AI key on Aftercall's credit, up to 30 installs ([details](docs/judging.md)) |
 | NEAR Intents quote for a payment to Solana or Base | Browser demo, Mac app | Live (dry quote: nothing sent) |
 | Coding agents: Connect Claude Code, Hand to an agent, done with a link, proposed follow-ups | Mac app, MCP server | Built and tested. Claude Code ran on the MCP server and a stand-in app on 1 Nov ([recorded](docs/agents-demo.md)), before most of these; not yet with the Mac app. Codex not yet |
 | Phone approvals: `/phone`, the relay, Settings → Your phone | Web, backend, Mac app | Deployed 7 Nov; run with a stand-in Mac in a phone-sized browser. Not yet with the Mac app or a real phone |

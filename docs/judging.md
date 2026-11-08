@@ -78,7 +78,7 @@ curl -fsSL https://getaftercall.vercel.app/install.sh | sh
 It checks the DMG's SHA-256, copies Aftercall into Applications and opens it with no macOS warning: you trust this script instead of Apple's notarization, which the build doesn't have yet. From https://getaftercall.vercel.app/download instead, open it once, click Done (not Move to Bin) when macOS says it "could not verify" Aftercall, then Open Anyway in System Settings › Privacy & Security. Allow Microphone and Screen & System Audio Recording.
 
 - **Without a NEAR AI key** you can record a call (no bot joins it; the audio stays sealed on the Mac), open the two made-up sample recordings on Home, and set up payments.
-- **Making notes needs your own NEAR AI API key** from https://cloud.near.ai: onboarding asks (Skip for now works; add it later in Settings). Test credits (a capped key from Aftercall for each tester) are built and tested but off until Aftercall's own NEAR AI account is set up, so the app shows only the key field.
+- **Making notes needs a NEAR AI API key.** No account? Onboarding and Settings offer **Use test credits**: since 8 Nov the backend hands every install one shared NEAR AI key, paid from Aftercall's NEAR AI credit (up to 30 installs, 3 per network address a day; `GET https://aftercall-api.vercel.app/nearai/test-credits` says whether any are left). Or paste your own key from https://cloud.near.ai. Either way the notes are made inside NEAR AI's secure hardware.
 
 ### Full: a payment on testnet
 
@@ -152,7 +152,7 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 - Handshake (escrow, the `/deal` page, conditions on payments, payments linked to their proof) is built and tested on a local NEAR node and on testnet since 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq), an in-place upgrade that kept every record), but not yet run live: no escrow has been opened, and each owner needs to update the Mac's key once ([handshake.md](handshake.md)).
 - The public proof ([proof-3-nov.txt](proof-3-nov.txt)) is from a real meeting that stays private, so its notes aren't shown: "Notes unchanged since signing" needs them and runs only in the app that holds them.
 - Mainnet: no deploy yet, and so no real 1Click payout (1Click has no testnet). Testnet is eligible under the rules (Q-010).
-- Test credits (a capped NEAR AI key for each tester) are built and tested against a stand-in for NEAR AI's API, and are off until Aftercall's own NEAR AI account exists.
+- Test credits are one shared NEAR AI key (on since 8 Nov), so NEAR AI can't cap each tester: the key's own limit is the cap, and when the credit runs out notes need your own key. The per-tester mode (a capped key minted for each install) is built and tested against a stand-in for NEAR AI's API, and waits on a NEAR account for Aftercall's NEAR AI workspace.
 - The Mac app is an unsigned test build; macOS asks once to open it.
 - Audio isn't end-to-end encrypted, because NEAR AI has none for transcription. It goes over TLS pinned to the key the gateway's attestation binds.
 - Coding agents: Claude Code was recorded against the MCP server and a stand-in for the app ([agents-demo.md](agents-demo.md)), before Hand to an agent, Open in Claude Code, links, proposals and projects existed. None of those has run with the Mac app and a real Claude Code session yet, and Codex hasn't run at all.
