@@ -379,7 +379,7 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
           <span>{recorded.length} checks</span>
         </div>
         <div className={v.whyLine}>
-          <span>Your browser can&apos;t repeat the Intel quote check, so these are shown as the app ran them.</span>
+          <span>Your browser can&apos;t repeat the Intel quote check, nor NVIDIA&apos;s once NVIDIA retires the key that signed it (it keeps them about two days), so these are shown as the app ran them.</span>
           <details className="why">
             <summary>Why?</summary>
             <span className="why-body" style={{ display: "block", marginTop: 6 }}>
