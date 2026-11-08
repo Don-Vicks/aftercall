@@ -60,6 +60,7 @@ Planned, not built: paying for Aftercall's own inference with **Staking for NEAR
 3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. The 3 Nov proof's link is public: [docs/proof-3-nov.txt](docs/proof-3-nov.txt). **Share this line** sends one line of a meeting with a Merkle proof that it's in the transcript the proof commits to, and nothing else of the meeting (built and tested, not yet run live).
 4. **Does what the meeting decided.** Sends the recap, with a footer saying what was checked, and pays agreed USDC after one tap, or by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; over a cap waits for your wallet. A deal with a condition can be held in escrow until the payee confirms the terms from their own NEAR wallet and you release it ([Handshake](docs/handshake.md); on testnet since 7 Nov, not yet run live).
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting over Aftercall's local MCP server, claims an item, marks it done with a link, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
+6. **Keeps your notes yours, and safe.** Meetings stay on your Mac, sealed. Export backup writes one encrypted file; turn on **Back up automatically to iCloud Drive** and the same file goes there after each meeting (one a day, the 7 newest kept). Apple gets only the encrypted file, never the key, which comes from your recovery phrase (built and tested, not yet run with real iCloud Drive).
 
 <table>
 <tr>
@@ -108,6 +109,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | NEAR Intents quote for a payment to Solana or Base | Browser demo, Mac app | Live (dry quote: nothing sent) |
 | Coding agents: Connect Claude Code, Hand to an agent, done with a link, proposed follow-ups | Mac app, MCP server | Built and tested. Claude Code ran on the MCP server and a stand-in app on 1 Nov ([recorded](docs/agents-demo.md)), before most of these; not yet with the Mac app. Codex not yet |
 | Phone approvals: `/phone`, the relay, Settings → Your phone | Web, backend, Mac app | Deployed 7 Nov; run with a stand-in Mac in a phone-sized browser. Not yet with the Mac app or a real phone |
+| Automatic encrypted backup to iCloud Drive | Mac app | Built and tested 8 Nov; not yet run with real iCloud Drive |
 | Mainnet: contract, 1Click payout | | Not yet; testnet is eligible (rules, Q-010) |
 
 **Platforms:** macOS 14.2+ (Apple silicon, Intel) now; Windows next (WASAPI loopback in place of the Core Audio tap). Phones can't record another app's call, so a phone handles approvals at `/phone` (paired by QR code in Settings → Your phone), a held payment's wallet approval and a payee's claim link; recording in the room on a phone comes later.
