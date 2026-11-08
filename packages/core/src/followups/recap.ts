@@ -79,10 +79,10 @@ export function recapFactsFrom(meeting: Meeting, proof: ProofBundle | undefined,
   };
 }
 
-/** A recap's subject says it's a recap, so it reads as one in the inbox. */
+/** A recap's subject says it's a recap, once, so it reads as one in the inbox ("Kickoff Recap" stays as it is). */
 export function recapSubject(subject: string): string {
   const s = subject.trim();
-  return /^recap\b/i.test(s) ? s : `Recap: ${s}`;
+  return /^recap\b|\brecap$/i.test(s) ? s : `Recap: ${s}`;
 }
 
 /**

@@ -107,6 +107,8 @@ test("the subject says it's a recap, once", () => {
   assert.equal(recapSubject("New staging endpoints"), "Recap: New staging endpoints");
   assert.equal(recapSubject("Recap: API fix"), "Recap: API fix");
   assert.equal(recapSubject("recap of Monday"), "recap of Monday");
+  assert.equal(recapSubject("Lantern Loop Kickoff Recap"), "Lantern Loop Kickoff Recap");
+  assert.equal(recapSubject("Recaps due"), "Recap: Recaps due");
   assert.equal(buildRecap(meeting, { ...f, subject: "New staging endpoints" }, { facts }).subject, "Recap: New staging endpoints");
 });
 
