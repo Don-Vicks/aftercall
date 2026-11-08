@@ -62,11 +62,11 @@ Running today, each with something you can open or check:
 2. **Makes the notes inside secure hardware:** NEAR AI Cloud's TEEs, checked every run, with the transcript encrypted to the attested model. Items without an exact quote from the call are dropped.
 3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain, never the meeting; anyone with the proof link re-runs the checks at `/verify`. Two public proofs: a sample call ([docs/proof-sample.txt](docs/proof-sample.txt), 8 Nov) and a real call ([docs/proof-3-nov.txt](docs/proof-3-nov.txt), notes 2 Nov, proof 3 Nov).
 4. **Sends the recap** through Aftercall, with a footer saying what was checked (sent live on 6 Nov).
-5. **Pays what the call agreed,** in USDC from the agent-wallet contract on NEAR, after one tap: on 8 Nov a call promised Kemi 5 dollars, and the app paid 5 USDC to `kemi-ac.testnet` on testnet ([`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH)), signed by its limited key, which may call only `pay` and `record_proof`, and linked to that meeting's proof.
+5. **Pays what the call agreed,** in USDC from the agent-wallet contract on NEAR, after one tap: on 8 Nov a call promised Kemi 5 dollars, and the app paid 5 USDC to `kemi-ac.testnet` on testnet ([`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH)), signed by its limited key, which may call only `pay` and `record_proof`, and linked to that meeting's proof. The same call's 5,000 was over the 10 USDC per-payment cap: the contract answered `blocked` (`OVER_PAYMENT_CAP`) and parked it for the owner's wallet, moving nothing ([`B8xV41mT…`](https://testnet.nearblocks.io/txns/B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE)).
 
 Built and tested, not yet run live ([Live today](#live-today) says how far each has run):
 
-- **Holds what's over a cap for your wallet,** and pays by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; both are tested on a local NEAR node.
+- **Pays by autopilot,** if you turn it on (listed payees, verified notes, 60-second undo), within the same caps; tested on a local NEAR node.
 - **Handshake** holds a deal in escrow until the payee confirms the terms from their own NEAR wallet and you release it ([docs/handshake.md](docs/handshake.md); on testnet since 7 Nov).
 - **Hands action items to coding agents,** when you allow it: Claude Code or Codex claims an item over Aftercall's local MCP server, marks it done with a link, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 - **Approvals from your phone,** sealed end to end through a relay that can't read them.
@@ -115,11 +115,12 @@ Running, and checkable from this page (8 Nov 2026):
 | Website, browser demo, install guide | https://getaftercall.vercel.app | Live |
 | Mac test build | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
 | Backend (sign-in, recap email, claim links, counts) | https://aftercall-api.vercel.app/health | Live, with Postgres |
-| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 4 proofs, 1 payment. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
+| Contract | `wallet.aftercall.testnet` | Testnet: 1 wallet, 4 proofs, 1 payment, 1 parked. Upgraded in place to Handshake on 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq)), every record kept |
 | A sample call, end to end in the Mac app: notes on live NEAR AI, proof on NEAR, public link | [docs/proof-sample.txt](docs/proof-sample.txt) | Done 8 Nov; `/verify` passes 8 of 8 |
 | Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Notes 2 Nov, proof on NEAR 3 Nov (private meeting) |
 | The 3 Nov proof's public link | [docs/proof-3-nov.txt](docs/proof-3-nov.txt) | Published 8 Nov; `/verify` passes 7 of 7 |
 | A payment from the Mac app: 5 USDC to `kemi-ac.testnet`, agreed on a call | [`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH) | Done 8 Nov, signed by the app's limited key |
+| The same call's 5,000 USDC, over the cap: parked for the owner's wallet | [`B8xV41mT…`](https://testnet.nearblocks.io/txns/B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE) | Done 8 Nov: `blocked`, `OVER_PAYMENT_CAP`, nothing moved |
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | Test credits: no NEAR AI account needed to make notes | Backend, Mac app | On since 8 Nov: one shared NEAR AI key on Aftercall's credit, up to 30 installs ([details](docs/judging.md)) |
 | NEAR Intents quote for a payment to Solana or Base | Browser demo, Mac app | Live (dry quote: nothing sent) |
@@ -129,7 +130,7 @@ Built and tested, not yet run live:
 
 | What | Where | Status |
 | --- | --- | --- |
-| The $5,000 over-cap hold, and autopilot payments, on testnet | Mac app | Not yet; tested on a local NEAR node |
+| Autopilot payments, and approving a parked payment from the owner's wallet, on testnet | Mac app, `/sign` | Not yet; tested on a local NEAR node |
 | Handshake escrow: open, payee confirms, release | Mac app, `/deal` | On testnet since 7 Nov; not yet run with a real wallet |
 | Coding agents: Connect Claude Code, Hand to an agent, done with a link, proposed follow-ups | Mac app, MCP server | Built and tested. Claude Code ran on the MCP server and a stand-in app on 1 Nov ([recorded](docs/agents-demo.md)), before most of these; not yet with the Mac app. Codex not yet |
 | Phone approvals: `/phone`, the relay, Settings → Your phone | Web, backend, Mac app | Deployed 7 Nov; run with a stand-in Mac in a phone-sized browser. Not yet with the Mac app or a real phone |
