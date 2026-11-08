@@ -1,11 +1,11 @@
 //! "Delete everything on this Mac": the app's data folder (meetings, notes,
 //! transcripts, audio, projects and their briefs, NEAR settings, the agents socket, settings and
-//! activity list, the paired phone's phone.json) and the Keychain items Aftercall keeps under the service
-//! `dev.aftercall.app`.
+//! activity list, the paired phone's phone.json, the automatic-backup switch in auto-backup.json)
+//! and the Keychain items Aftercall keeps under the service `dev.aftercall.app`.
 //!
 //! What it can't touch is said in the interface: proofs and payments on NEAR,
-//! this Mac's key on the user's NEAR account, the agent wallet's balance, and
-//! backup files the user exported.
+//! this Mac's key on the user's NEAR account, the agent wallet's balance, backup
+//! files the user exported, and automatic backups in iCloud Drive.
 
 use std::path::Path;
 

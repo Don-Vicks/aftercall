@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "motion/react";
-import { ArrowLeftRight, Check, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, Cloud, Cpu, ExternalLink, FolderGit2, HardDrive, Info, KeyRound, Link2, Lock, Mail, Server, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { agentsApi, PREVIEW_INFO } from "./agents";
 import { isDesktop } from "./recorder";
@@ -57,6 +57,13 @@ const PLACES: { icon: ReactNode; name: string; kind: string; sees: string; keeps
     kind: "Only if you fill a brief from a repo",
     sees: "Which repo you looked up, from this Mac (through gh, with your own GitHub sign-in). Nothing from your meetings.",
     keeps: "Set by GitHub's policy.",
+  },
+  {
+    icon: <Cloud size={14} strokeWidth={1.75} />,
+    name: "iCloud Drive",
+    kind: "Only if you turn on automatic backup",
+    sees: "One encrypted backup file a day: notes, projects, NEAR settings and autopilot rules, sealed with a key made from your recovery phrase. Never audio, the NEAR AI key or the key that opens it.",
+    keeps: "The 7 newest automatic backups; Aftercall deletes older ones. What iCloud keeps after a delete is Apple's policy.",
   },
   { icon: <Mail size={14} strokeWidth={1.75} />, name: "Resend", kind: "Recap email", sees: "Recaps you send through Aftercall.", keeps: "Sent mail, under Resend's own policy." },
   {
@@ -317,7 +324,7 @@ function DeleteEverything() {
       </div>
       <Why>
         Payments on NEAR stay too. This Mac's NEAR key stays authorised on your account until you remove it in your wallet, and your agent wallet keeps its balance on NEAR; withdraw it first if you're
-        leaving. Backups you exported, and meetings you copied or printed, stay where you put them.
+        leaving. Backups you exported, automatic backups in iCloud Drive, and meetings you copied or printed stay where they are.
       </Why>
       <AnimatePresence>{open && <ConfirmDelete key="confirm-delete" onClose={() => setOpen(false)} />}</AnimatePresence>
     </section>
