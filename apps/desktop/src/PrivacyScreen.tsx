@@ -7,7 +7,7 @@ import { isDesktop } from "./recorder";
 import { nearAiKey } from "./nearai";
 import { loadPhone, usePhone } from "./phone";
 import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
-import { ImportBackup } from "./RecoveryPhrase";
+import { AutoBackup, ImportBackup } from "./RecoveryPhrase";
 import { deleteEverything, type Wiped } from "./library";
 import { Button, Dialog, Field, Input, Pill, SectionTitle, Spinner } from "./ui";
 import { Page, PageHeader, Why, rise } from "./PagePieces";
@@ -288,6 +288,7 @@ function Backups({ status, onOpenSettings }: { status: RecoveryStatus | null; on
             {error && <span className="selectable text-record">{error}</span>}
           </span>
         )}
+        {ready && <AutoBackup className="border-t border-hairline pt-3.5" />}
       </div>
       <Why>Only the key made from your recovery phrase opens a backup. On a new Mac, restore your phrase first, then import.</Why>
     </section>

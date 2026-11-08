@@ -4,11 +4,12 @@ import { AnimatePresence, type Variant } from "motion/react";
 import * as m from "motion/react-m";
 import { Archive, ArrowRight, Check, Copy, Download, KeyRound, Printer, ShieldAlert, Wallet, X } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { recovery, restoredSummary, type RecoveryStatus, type Restored } from "./recovery";
+import { autoBackup, recovery, restoredSummary, type AutoBackupStatus, type RecoveryStatus, type Restored } from "./recovery";
+import { ago } from "./agents";
 import { KIT_KEEP, SCREEN_KEEP, appKit, kitDate, kitText, saveKit, syncedFolder, usePhraseClipboard, type KitAbout } from "./recoveryKit";
 import { isDesktop } from "./recorder";
 import { CheckCircle } from "./primitives/Check";
-import { Button, Card, Dialog, Input, Pill, SectionTitle, Spinner, cx, exit, springs, toast, useConfirm } from "./ui";
+import { Button, Card, Dialog, Input, Pill, SectionTitle, Spinner, Toggle, cx, exit, springs, toast, useConfirm } from "./ui";
 import { CardRow, IconDisc, Why, errorText, rise } from "./SettingsParts";
 import { QuietAction, StepActions } from "./Flow";
 import { AssistantStep, BackButton } from "./SetupAssistant";
@@ -751,6 +752,80 @@ export function ImportBackup({ onRestored, label = "Import backup", disabled }: 
   );
 }
 
+/**
+ * "Back up automatically to iCloud Drive", in Backups and in Settings: the switch, the last
+ * automatic backup or why it failed, and what iCloud gets. Off until turned on; turning it
+ * on writes the first one at once.
+ */
+export function AutoBackup({ className }: { className?: string }) {
+  const [status, setStatus] = useState<AutoBackupStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    autoBackup
+      .status()
+      .then(setStatus)
+      .catch((e) => setError(errorText(e)));
+    return autoBackup.onChange(setStatus);
+  }, []);
+
+  const flip = async (on: boolean) => {
+    setError(null);
+    setBusy(true);
+    try {
+      setStatus(await autoBackup.set(on));
+      if (on) await autoBackup.run(false);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const on = Boolean(status?.enabled);
+  const when = (unix: number) => ago(new Date(unix * 1000).toISOString(), Date.now());
+  const problem = error ?? status?.error ?? (status && !status.icloudOn ? "iCloud Drive is off on this Mac. Turn on iCloud Drive in System Settings." : null);
+
+  return (
+    <div className={cx("flex flex-col gap-2", className)}>
+      <div className="flex items-center gap-4">
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-semibold text-ink">Back up automatically to iCloud Drive</span>
+          <span className="text-[13px] leading-[19px] text-ink-2">
+            {on
+              ? "After each meeting's notes are saved, and when Aftercall opens if the last one is over a day old. One file a day in iCloud Drive → Aftercall; the 7 newest stay."
+              : "Off. On, the same encrypted file goes to iCloud Drive → Aftercall after each meeting: one a day, the 7 newest kept."}
+          </span>
+        </span>
+        <Toggle aria-label="Back up automatically to iCloud Drive" checked={on} disabled={!isDesktop || !status || busy} onChange={flip} />
+      </div>
+      {(status?.lastAt || problem) && (
+        <span className="flex flex-col gap-0.5 text-[13px] leading-[19px]">
+          {status?.lastAt && status.lastFile && (
+            <span>
+              <span className="text-muted">Last automatic backup {when(status.lastAt)}</span> ·{" "}
+              <button
+                type="button"
+                onClick={() => revealItemInDir(`${status.folder}/${status.lastFile}`).catch(() => {})}
+                className="rounded-sm font-semibold text-verdigris hover:text-verdigris-hover"
+              >
+                Show in Finder
+              </button>
+            </span>
+          )}
+          {problem && <span className="selectable text-record">{problem}</span>}
+        </span>
+      )}
+      <span className="text-[13px] leading-[19px] text-ink-2">
+        iCloud gets only the encrypted file. The key that opens it is made from your recovery phrase and kept in this Mac's Keychain; Aftercall never uploads it, so
+        Apple can't read the file. Restore one with Import backup, once your phrase is restored.
+      </span>
+    </div>
+  );
+}
+
 /** Settings: where this Mac's key comes from, the phrase, and encrypted backups. */
 export function RecoverySettings({
   status,
@@ -848,6 +923,7 @@ export function RecoverySettings({
             }
             title="Backup"
             detail="Notes, projects and settings, encrypted with your phrase."
+            divider
           >
             <span className="flex items-start gap-1.5">
               <ImportBackup label="Import" onRestored={restored} />
@@ -857,6 +933,7 @@ export function RecoverySettings({
             </span>
           </CardRow>
         )}
+        {fromPhrase && <AutoBackup className="px-5 py-4" />}
       </Card>
 
       <AnimatePresence initial={false}>

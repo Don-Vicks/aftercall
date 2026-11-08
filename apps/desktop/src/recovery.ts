@@ -34,6 +34,54 @@ export const recovery = {
   },
 };
 
+/** Automatic backups to iCloud Drive (src-tauri/src/auto_backup.rs). */
+export interface AutoBackupStatus {
+  enabled: boolean;
+  /** Unix seconds of the last automatic backup this Mac wrote, and its file name. */
+  lastAt: number | null;
+  lastFile: string | null;
+  /** Why the last run failed, until one works. */
+  error: string | null;
+  errorAt: number | null;
+  /** iCloud Drive's folder is there. */
+  icloudOn: boolean;
+  /** Where automatic backups go: iCloud Drive's Aftercall folder. */
+  folder: string;
+}
+
+const autoBackupListeners = new Set<(s: AutoBackupStatus) => void>();
+const tell = (s: AutoBackupStatus) => {
+  autoBackupListeners.forEach((f) => f(s));
+  return s;
+};
+
+export const autoBackup = {
+  status: () => invoke<AutoBackupStatus>("auto_backup_status"),
+  /** The switch. On fails with a reason when iCloud Drive is off. */
+  set: (on: boolean) => invoke<AutoBackupStatus>("auto_backup_set", { on }).then(tell),
+  /**
+   * Writes today's automatic backup when the switch is on: `launch` only when the newest is
+   * over a day old. Never throws, so it can't get in the way of the notes: the app logs a
+   * failed run and Backups shows it.
+   */
+  run: (launch: boolean): Promise<AutoBackupStatus | null> =>
+    isDesktop
+      ? invoke<AutoBackupStatus>("auto_backup_run", { local: localSettings(), launch })
+          .then(tell)
+          .catch((e) => {
+            console.error("auto backup:", e);
+            return null;
+          })
+      : Promise.resolve(null),
+  /** Calls `f` with each new status, from runs anywhere in the app. Returns the unsubscribe. */
+  onChange: (f: (s: AutoBackupStatus) => void) => {
+    autoBackupListeners.add(f);
+    return () => {
+      autoBackupListeners.delete(f);
+    };
+  },
+};
+
 /** The app's own localStorage entries (autopilot rules and the like). */
 function localSettings(): Record<string, string> {
   const out: Record<string, string> = {};
