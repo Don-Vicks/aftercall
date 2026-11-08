@@ -29,6 +29,18 @@ Pick by the time you have. Every command, link and expected result: [How to test
 - **Full, a payment on testnet.** In the Mac app, Settings → Set up payments (about 3 minutes, 0.35 test NEAR), then approve a payment agreed on a call. Not yet run live from the Mac app. [Steps and faucets](docs/judging.md#full-a-payment-on-testnet).
 - **From source.** `pnpm install && pnpm verify --quick` (Node 24, pnpm 10, stable Rust): a ✓ line per step, exit code 0. [Full `pnpm verify`](docs/judging.md#from-source-pnpm-verify).
 
+## Tracks
+
+Entered in five tracks. What answers each, with files and tests: [judging.md](docs/judging.md#tracks).
+
+| Track | In Aftercall |
+| --- | --- |
+| Privacy & Private AI | Notes made inside NEAR AI's TEEs after the app checks their attestation; the transcript end-to-end encrypted to the attested model; a public proof on NEAR with no meeting content |
+| Real-World Money | Invoices and contractor payouts from your meetings: pay a freelancer the amount agreed on a call in USDC, under caps a NEAR contract enforces, or hold it in escrow until they confirm the terms (Handshake) |
+| AI Security & Defense | The agent-wallet contract: a function-call key that can only pay listed payees within daily and per-payment caps; anything bigger waits for the owner's own wallet |
+| Agent Economy | The meeting's model proposes payments and the app's agent wallet pays them in USDC within the contract's caps. Coding agents claim and finish action items over MCP and can propose a payment to a listed payee, which waits for the owner's tap. Payees on Solana or Base through NEAR Intents 1Click: live quotes; a payout needs mainnet |
+| Autonomous Business | Autopilot: the owner sets caps, payees and team domains once, and recaps and payments that pass every rule run on their own, with an undo |
+
 ## Built on NEAR's newest
 
 | NEAR launch | When | What Aftercall does with it | Code |

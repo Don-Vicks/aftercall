@@ -142,9 +142,9 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 | --- | --- | --- |
 | Privacy & Private AI | AI that protects sensitive data; TEEs, NEAR AI Cloud | The whole notes pipeline: attestation on every run, end-to-end encryption to the attested model, notes sealed on the Mac, a public proof without content |
 | AI Security & Defense | Spending limits, policy engines, sandboxed wallets; function-call keys, TEE attestation | The agent-wallet contract: a function-call key limited to paying, recording proofs and holding deals, caps, a payee list, parked payments, the 1-yocto rule; quotes required before anything is proposed |
-| Agent Economy | Agents that spend and pay, directly or through NEAR Intents | The meeting proposes payments and the app pays them in USDC under autopilot rules; payees on other chains through 1Click; coding agents work action items over MCP |
+| Agent Economy | Agents that spend and pay, directly or through NEAR Intents | The meeting proposes payments and the app pays them in USDC under autopilot rules; payees on other chains through 1Click; coding agents work action items over MCP and can propose a payment to a listed payee within the caps, which waits for the owner's tap; 1Click payouts are dry quotes until mainnet |
 | Autonomous Business | AI-native operations where humans only set the constraints | Autopilot: the owner sets the caps, payees and team domains once, and recaps and payments that pass every rule run on their own, with an undo |
-| Real-World Money | Payments and stablecoin rails a normal company could use tomorrow | Paying a freelancer the amount agreed on a call, in Circle USDC, with a single-use claim link for a new payee to say where to be paid; or holding it in escrow until the freelancer confirms the terms and the work is done (Handshake, built, not yet deployed) |
+| Real-World Money | Payments and stablecoin rails a normal company could use tomorrow | Invoices and contractor payouts from your meetings: paying a freelancer the amount agreed on a call, in Circle USDC, with a single-use claim link for a new payee to say where to be paid; or holding it in escrow until the freelancer confirms the terms and the work is done (Handshake, on testnet since 7 Nov, not yet run live) |
 
 ## Known limits
 
