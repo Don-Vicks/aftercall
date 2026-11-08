@@ -22,9 +22,14 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
  * What a recap shares before you send it. The counts are read the way `buildRecap` reads
  * them (every decision, the action items not done, and with `agentWork` the items coding
  * agents marked done), so they match the recap that goes. `backend` is whether this build
- * offers Send through Aftercall.
+ * offers Send through Aftercall; `slack` is whether a Slack webhook is connected, so the
+ * card offers Post to Slack.
  */
-export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItems">, f: Pick<EmailFollowUp, "to">, opts: { backend: boolean; agentWork?: boolean }): WhatLeaves {
+export function emailWhatLeaves(
+  meeting: Pick<Meeting, "decisions" | "actionItems">,
+  f: Pick<EmailFollowUp, "to">,
+  opts: { backend: boolean; agentWork?: boolean; slack?: boolean },
+): WhatLeaves {
   const open = meeting.actionItems.filter((a) => !a.done).length;
   const work = opts.agentWork ? agentWorkItems(meeting) : [];
   const to = f.to.trim() ? `to ${f.to.trim()}` : "to the address you add";
@@ -37,6 +42,10 @@ export function emailWhatLeaves(meeting: Pick<Meeting, "decisions" | "actionItem
     "Draft in Mail opens it in your own mail app; Aftercall's servers never see it.",
   ];
   if (opts.backend) details.push("Send through Aftercall passes it through Aftercall's backend, in memory for this one request, then Resend, which keeps sent mail under its own policy.");
+  if (opts.slack)
+    details.push(
+      "Post to Slack sends the same recap text (the summary, decisions, action items and footer) from this Mac to Slack, into the channel your webhook was made for. Slack keeps it there under your workspace's settings. The transcript and the audio don't go to Slack.",
+    );
   return { summary: "Draft in Mail keeps it on this Mac.", details };
 }
 
