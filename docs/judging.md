@@ -35,7 +35,7 @@ The README's [How to test](../README.md#how-to-test) in full. Pick by the time y
 The contract is `wallet.aftercall.testnet`:
 
 - [register](https://testnet.nearblocks.io/txns/64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz) and [set_cap](https://testnet.nearblocks.io/txns/GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo), signed in the owner's own NEAR wallet (3 Nov 2026).
-- [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after it made notes from a real call on live NEAR AI (3 Nov 2026). That call was a private meeting, so its proof link isn't published. A sample meeting's proof link to open at `/verify` is still to come; until then `/verify` only explains what a proof link is.
+- [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro), sent by the Mac app with its limited key after it made notes from a real call on live NEAR AI (3 Nov 2026). Its proof link is in [proof-3-nov.txt](proof-3-nov.txt): hashes, nonces and signatures, never what was said. Open it in a browser and `/verify` reads the proof's hash from NEAR and re-checks it (7 of 7 pass); the 29 checks the app ran when it made the notes, Intel's and NVIDIA's attestation among them, are shown as the app recorded them. From code, `verifyProofLink` in [packages/receipts](../packages/receipts) answers `Checks out` for it.
 - https://getaftercall.vercel.app/stats: counts read live from the contract and the backend. The backend's counts as JSON: `curl -s https://aftercall-api.vercel.app/stats`.
 
 Without a browser (nearblocks refuses scripted requests), the same facts from NEAR's RPC:
@@ -150,7 +150,7 @@ Aftercall is entered in five tracks. What each track asks, and the part of After
 
 - Payments from the Mac app and the over-cap hold haven't run on testnet yet; they're tested on a local NEAR node.
 - Handshake (escrow, the `/deal` page, conditions on payments, payments linked to their proof) is built and tested on a local NEAR node and on testnet since 7 Nov ([`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq), an in-place upgrade that kept every record), but not yet run live: no escrow has been opened, and each owner needs to update the Mac's key once ([handshake.md](handshake.md)).
-- The proof on testnet is from a private meeting, so its proof link isn't published. A sample meeting's link is still to come.
+- The public proof ([proof-3-nov.txt](proof-3-nov.txt)) is from a real meeting that stays private, so its notes aren't shown: "Notes unchanged since signing" needs them and runs only in the app that holds them.
 - Mainnet: no deploy yet, and so no real 1Click payout (1Click has no testnet). Testnet is eligible under the rules (Q-010).
 - Test credits (a capped NEAR AI key for each tester) are built and tested against a stand-in for NEAR AI's API, and are off until Aftercall's own NEAR AI account exists.
 - The Mac app is an unsigned test build; macOS asks once to open it.

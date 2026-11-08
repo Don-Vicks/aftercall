@@ -6,7 +6,7 @@ The build plan, milestone by milestone, and the submission checklist.
 
 
 - [x] Record a real call on macOS (system audio + mic, consent tick) and get a private, signed summary with decisions, action items and evidence quotes. Done on 3 Nov 2026 on live NEAR AI (a private meeting)
-- [ ] Record the proof on NEAR and show it on a public Verify page anyone can open without installing. The proof is on NEAR (3 Nov, [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro)); a sample meeting's public link for judges is still to come
+- [x] Record the proof on NEAR and show it on a public Verify page anyone can open without installing. The proof is on NEAR (3 Nov, [record_proof](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro)); its public link is [proof-3-nov.txt](proof-3-nov.txt) (8 Nov)
 - [x] Send the recap email with its footer (what was checked, and the notice you logged), through Aftercall or as a draft in your own Mail app. Sent through Aftercall on 6 Nov 2026
 - [ ] Pay a listed payee in USDC under the contract's caps, and block a $5,000 over-cap payment until your wallet approves it
 - [ ] Let a new freelancer share where to be paid with a single-use claim link
