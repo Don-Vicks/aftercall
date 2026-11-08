@@ -333,6 +333,20 @@ export default function App() {
   useEffect(() => {
     if (view.name === "wallet") void refreshWallet();
   }, [view.name, refreshWallet]);
+  // Coming back to the window reads it again too: a payee, cap or key changed by signing on
+  // /sign in the browser is then on the list before the next call's notes are made. At most
+  // once every 10 s, since each read is two RPC calls.
+  useEffect(() => {
+    if (!isDesktop) return;
+    let last = 0;
+    const onFocus = () => {
+      if (Date.now() - last < 10_000) return;
+      last = Date.now();
+      void refreshWallet();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refreshWallet]);
 
   /** Follow-ups autopilot queued since this launch, as "meeting:follow-up". Only these keep a countdown read from disk. */
   const queuedHere = useRef(new Set<string>());
