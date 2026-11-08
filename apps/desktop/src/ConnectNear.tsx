@@ -3,6 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { Check, ChevronRight, ShieldCheck, Wallet } from "lucide-react";
 import { AutopilotSettings } from "./AutopilotSettings";
 import { RecapSettings } from "./RecapSettings";
+import { SlackSettings } from "./SlackSettings";
 import { CalendarSettings } from "./CalendarSettings";
 import { ShortcutSettings } from "./ShortcutSettings";
 import type { CalendarStatus } from "./calendar";
@@ -31,6 +32,7 @@ export function ConnectNear({ onOpenPrivacy, onWalletChanged, spend, spendIsSamp
   const phone = usePhone();
   const [nearAi, setNearAi] = useState(false);
   const [calendar, setCalendar] = useState<CalendarStatus | null>(null);
+  const [slack, setSlack] = useState(false);
   /** Set up payments, open at a step ("auto": the first one not done). */
   const [setup, setSetup] = useState<SetupStep | "auto" | null>(null);
 
@@ -42,6 +44,7 @@ export function ConnectNear({ onOpenPrivacy, onWalletChanged, spend, spendIsSamp
     { id: "settings-calendar", label: "Calendar", done: calendar === "granted" },
     { id: "settings-shortcut", label: "Shortcut" },
     { id: "settings-recaps", label: "Recaps" },
+    { id: "settings-slack", label: "Slack", done: slack },
     { id: "settings-autopilot", label: "Autopilot" },
     ...(CAN_PAIR ? [{ id: "settings-phone", label: "Your phone", done: Boolean(phone.paired) }] : []),
   ];
@@ -122,6 +125,10 @@ export function ConnectNear({ onOpenPrivacy, onWalletChanged, spend, spendIsSamp
 
           <div id="settings-recaps" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>
             <RecapSettings />
+          </div>
+
+          <div id="settings-slack" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>
+            <SlackSettings onChange={setSlack} />
           </div>
 
           <div id="settings-autopilot" tabIndex={-1} className="scroll-mt-12 outline-none" style={rise(8)}>
