@@ -57,7 +57,7 @@ Planned, not built: paying for Aftercall's own inference with **Staking for NEAR
 
 1. **Records the call on your Mac,** from any app. No bot joins.
 2. **Makes the notes inside secure hardware:** NEAR AI Cloud's TEEs, checked every run, with the transcript encrypted to the attested model. Items without an exact quote from the call are dropped.
-3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. No public proof link yet ([Live today](#live-today)). **Share this line** sends one line of a meeting with a Merkle proof that it's in the transcript the proof commits to, and nothing else of the meeting (built and tested, not yet run live).
+3. **Proves it on NEAR.** A hash of the meeting's proof goes on chain; anyone with the proof link can re-run the checks at `/verify`. The 3 Nov proof's link is public: [docs/proof-3-nov.txt](docs/proof-3-nov.txt). **Share this line** sends one line of a meeting with a Merkle proof that it's in the transcript the proof commits to, and nothing else of the meeting (built and tested, not yet run live).
 4. **Does what the meeting decided.** Sends the recap, with a footer saying what was checked, and pays agreed USDC after one tap, or by autopilot if you turn it on (listed payees, verified notes, 60-second undo). The contract enforces the caps; over a cap waits for your wallet. A deal with a condition can be held in escrow until the payee confirms the terms from their own NEAR wallet and you release it ([Handshake](docs/handshake.md); on testnet since 7 Nov, not yet run live).
 5. **Hands action items to coding agents, when you allow it.** Claude Code or Codex reads the meeting over Aftercall's local MCP server, claims an item, marks it done with a link, and can propose a follow-up that waits for your tap. Agents never send or pay on their own.
 
@@ -93,7 +93,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 
 ## Live today
 
-| What | Where | Status (7 Nov 2026) |
+| What | Where | Status (8 Nov 2026) |
 | --- | --- | --- |
 | Website, browser demo, install guide | https://getaftercall.vercel.app | Live |
 | Mac test build | https://getaftercall.vercel.app/download | Live, unsigned, NEAR testnet |
@@ -102,7 +102,7 @@ Every claim with its exact test names: [docs/proven.md](docs/proven.md).
 | Notes from a real call on live NEAR AI, proof on NEAR | Mac app | Done 3 Nov (private meeting) |
 | Recap email through Aftercall (Resend) | Mac app → backend | Done 6 Nov |
 | A payment, and the $5,000 hold, on testnet | Mac app | Not yet |
-| A sample meeting's public proof link | README | Not yet |
+| The 3 Nov proof's public link | [docs/proof-3-nov.txt](docs/proof-3-nov.txt) | Published 8 Nov; `/verify` passes 7 of 7 |
 | 90-second demo video | README | Not yet; [script](docs/demo-script.md) |
 | Test credits (a capped NEAR AI key per tester) | Backend | Built and tested; off until Aftercall's NEAR AI account is set up |
 | NEAR Intents quote for a payment to Solana or Base | Browser demo, Mac app | Live (dry quote: nothing sent) |
