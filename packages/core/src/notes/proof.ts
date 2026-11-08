@@ -6,7 +6,7 @@ import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
 import { bindsIdentity, expectedMrConfig, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
 import type { TeeEvidence } from "../tee/attest.ts";
-import { verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
+import { decodeJwt, verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
 
 /**
  * The proof on NEAR is the sha256 of the proof bundle in canonical JSON (keys
@@ -298,16 +298,26 @@ function signatureChecksV3(bundle: ProofBundleV3): Check[] {
 }
 
 /**
+ * NVIDIA publishes each signing key for about two days (8 Nov 2026: the keys served
+ * went back to 6 Nov), so a token older than this whose key is gone can't be re-checked.
+ */
+export const NVIDIA_KEYS_KEPT_S = 24 * 3600;
+
+/**
  * Re-checks NVIDIA's platform token kept in a v2 proof against NVIDIA's keys
  * (fetched by the caller; NVIDIA serves them to browsers). Not expiry: the token
  * expired an hour after the meeting, but it is still NVIDIA's signed statement.
+ * Null when there is nothing to re-check, or when NVIDIA has retired the key of a
+ * token older than a day: then only the app's own NRAS check, recorded in the proof,
+ * speaks for the GPUs, as for Intel's quote. A recent token with an unknown key fails.
  */
-export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null): Promise<Check | null> {
+export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null, now = Date.now() / 1000): Promise<Check | null> {
   if (!hasFullChecks(bundle)) return null;
   const tee = bundle.evidence.find((e) => e.nvidiaToken);
   if (!tee?.nvidiaToken) return null;
   const label = "NVIDIA attested the signer's GPUs";
   if (!jwks) return { id: "gpu", label, ok: false, detail: "Couldn't get NVIDIA's signing keys" };
+  if (keyRetired(tee.nvidiaToken, jwks, now)) return null;
   const v = await verifyNrasJwt(tee.nvidiaToken, jwks);
   if (!v.ok) return { id: "gpu", label, ok: false, detail: `NVIDIA's token didn't verify: ${v.error}` };
   const fresh = strip0x(String(v.claims.eat_nonce ?? "")) === tee.nonce;
@@ -319,6 +329,17 @@ export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null): Pr
     ok: fresh && passed,
     detail: `Token signed by NVIDIA at ${at} UTC; ${passed ? "overall result pass" : "overall result fail"}; ${fresh ? "carries this meeting's nonce" : "nonce doesn't match"}`,
   };
+}
+
+/** NVIDIA no longer serves the key named by this token, and the token is older than NVIDIA keeps keys. */
+function keyRetired(token: string, jwks: Jwks, now: number): boolean {
+  try {
+    const kid = (JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))) as { kid?: string }).kid;
+    const iat = decodeJwt(token)?.iat;
+    return !!kid && !jwks.keys.some((k) => k.kid === kid) && typeof iat === "number" && now - iat > NVIDIA_KEYS_KEPT_S;
+  } catch {
+    return false;
+  }
 }
 
 /** The app's own checks from a v2 or v3 proof, as recorded when the meeting was processed. */

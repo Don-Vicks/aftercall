@@ -162,6 +162,10 @@ test("a v2 proof re-checks its Ed25519 signature, key binding, compose and E2EE 
   ]);
   assert.equal((await verifyProofGpu(bundle, jwks))?.ok, true);
   assert.equal((await verifyProofGpu(bundle, (await fakeNras()).jwks))?.ok, false, "a token NVIDIA didn't sign fails");
+  const gone = { keys: [] };
+  assert.equal((await verifyProofGpu(bundle, gone))?.ok, false, "a recent token whose key isn't published fails");
+  assert.equal(await verifyProofGpu(bundle, gone, Date.now() / 1000 + 2 * 86400), null, "NVIDIA retired the key of a two-day-old token: nothing to re-check");
+  assert.equal((await verifyProofGpu(bundle, jwks, Date.now() / 1000 + 2 * 86400))?.ok, true, "a key still published is still checked");
 });
 
 test("v2 tampering is caught: report data, nonce, E2EE key, recorded failure", async () => {
