@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RECAP_AGENT_HEADING, RECAP_FOOTER_MARK, agentWorkItems, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
+import { RECAP_AGENT_HEADING, RECAP_FOOTER_MARK, agentWorkItems, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapGreetingName, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
 import type { EmailFollowUp, Meeting } from "../meeting.ts";
 import type { ProofBundleV1, ProofBundleV2 } from "../notes/pipeline.ts";
 
@@ -110,6 +110,12 @@ test("the subject says it's a recap, once", () => {
   assert.equal(recapSubject("Lantern Loop Kickoff Recap"), "Lantern Loop Kickoff Recap");
   assert.equal(recapSubject("Recaps due"), "Recap: Recaps due");
   assert.equal(buildRecap(meeting, { ...f, subject: "New staging endpoints" }, { facts }).subject, "Recap: New staging endpoints");
+});
+
+test("a recap to 'You' greets 'there', never 'Hi You'", () => {
+  assert.equal(recapGreetingName("Ada"), "Ada");
+  for (const n of ["You", "you", " me ", "Myself", "", undefined]) assert.equal(recapGreetingName(n), "there");
+  assert.match(buildRecap(meeting, { ...f, toName: "You" }, { facts }).text, /^Hi there, thanks for the call/);
 });
 
 test("'You' in the notes becomes the sender for the reader, and unowned items show no owner", () => {

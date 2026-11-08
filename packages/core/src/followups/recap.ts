@@ -86,6 +86,15 @@ export function recapSubject(subject: string): string {
 }
 
 /**
+ * The name a recap greets. A recap the call asked for "me" is addressed to "You" in the notes,
+ * which would read "Hi You"; that and an empty name get "there".
+ */
+export function recapGreetingName(toName: string | undefined): string {
+  const n = toName?.trim() ?? "";
+  return !n || /^(you|me|myself|yourself)$/i.test(n) ? "there" : n;
+}
+
+/**
  * Who an action item is for, as the person reading the recap should see it. The notes say
  * "You" for whoever recorded the call, which a recipient would read as themselves, so it
  * becomes the sender's name ("me" without one). An item nobody owns shows no owner.
@@ -126,7 +135,7 @@ export function agentWorkItems(meeting: Pick<Meeting, "actionItems">): AgentWork
  * own statement, and the footer says Aftercall didn't check them.
  */
 export function buildRecap(meeting: Meeting, f: EmailFollowUp, opts: { sender?: string; facts: RecapFacts; agentWork?: boolean }): Recap {
-  const greeting = `Hi ${f.toName || "there"}, thanks for the call. Here's what we agreed.`;
+  const greeting = `Hi ${recapGreetingName(f.toName)}, thanks for the call. Here's what we agreed.`;
   const open = meeting.actionItems.filter((a) => !a.done);
   const items = open.map((a) => {
     const owner = recapOwner(a.owner, opts.sender);
