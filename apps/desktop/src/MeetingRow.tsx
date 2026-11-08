@@ -1,5 +1,5 @@
 import { ShieldCheck } from "lucide-react";
-import { meetingLabel, type Meeting } from "@aftercall/core";
+import { awaitsYou, meetingLabel, type Meeting } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { AvatarStack, cx, type Surface } from "./ui";
@@ -44,7 +44,7 @@ export function meetingRow(r: SavedRecording | undefined, m: Meeting | undefined
   let status: MeetingRowData["status"];
   if (!m) status = { text: "Waiting for notes", tone: "muted" };
   else {
-    const toApprove = m.followUps.filter((f) => f.status === "proposed").length;
+    const toApprove = m.followUps.filter(awaitsYou).length;
     const open = m.actionItems.filter((a) => !a.done).length;
     if (toApprove) status = { text: `${toApprove} to approve`, tone: "caution" };
     else if (open) status = { text: long ? `${open} action ${open === 1 ? "item" : "items"} open` : `${open} open`, tone: "ink" };

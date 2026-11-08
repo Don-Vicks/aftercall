@@ -1,4 +1,4 @@
-import { mergeTranscript, type FollowUp, type Meeting, type TranscribedChunk, type TranscriptLine } from "@aftercall/core";
+import { awaitsYou, mergeTranscript, type FollowUp, type Meeting, type TranscribedChunk, type TranscriptLine } from "@aftercall/core";
 
 /**
  * The facts the processing page shows about a run, worked out on this Mac from what it
@@ -7,7 +7,7 @@ import { mergeTranscript, type FollowUp, type Meeting, type TranscribedChunk, ty
  */
 
 /** A follow-up that waits for you: one to approve, one going out, or a payment over a cap. Matches Today's "Needs you". */
-export const needsYou = (f: FollowUp) => f.status === "proposed" || f.status === "sending" || (f.status === "blocked" && f.kind === "payment");
+export const needsYou = (f: FollowUp) => awaitsYou(f) || f.status === "sending" || (f.status === "blocked" && f.kind === "payment");
 
 export interface NotesDigest {
   decisions: number;

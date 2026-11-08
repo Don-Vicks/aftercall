@@ -1,4 +1,4 @@
-import type { AmountProblemKind, FollowUp, Meeting } from "../meeting.ts";
+import { postedToSlack, type AmountProblemKind, type FollowUp, type Meeting } from "../meeting.ts";
 
 /**
  * What the person allows to happen without a tap. Off unless they turn it on. There is no
@@ -82,6 +82,7 @@ export function meetingAutopilotDecision(m: Pick<Meeting, "verified">, f: Follow
 export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: WalletLimits | null): Decision {
   const reasons: string[] = [];
   if (f.status !== "proposed") return { run: false, reasons: ["Not waiting"] };
+  if (postedToSlack(f)) return { run: false, reasons: ["Already posted to Slack"] };
   // Only the call proposes what may run by itself; an agent's proposal needs your tap.
   if (f.proposedBy || !f.evidence) return { run: false, reasons: [agentProposalReason(f.proposedBy?.agent ?? "an agent")] };
   if (f.autopilotHeld) return { run: false, reasons: [AUTOPILOT_HELD] };

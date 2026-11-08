@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, agentWallet, applyItemEdit, holdInterruptedAutopilot, meetingAutopilotDecision, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, agentWallet, awaitsYou, applyItemEdit, holdInterruptedAutopilot, meetingAutopilotDecision, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -723,7 +723,7 @@ export default function App() {
   const finishProcessing = useCallback(() => setView({ name: "meeting", id: syncWithAda.id }), []);
 
   const pendingByMeeting = Object.fromEntries(
-    Object.values(meetings).map((m) => [m.id, m.followUps.filter((f) => f.status === "proposed").length]),
+    Object.values(meetings).map((m) => [m.id, m.followUps.filter(awaitsYou).length]),
   );
 
   const selectedMeetingId = view.name === "meeting" || view.name === "recording" ? view.id : null;

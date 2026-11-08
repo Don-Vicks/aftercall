@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot, meetingAutopilotDecision, NOT_VERIFIED_REASON } from "./autopilot.ts";
-import type { EmailFollowUp, Meeting, PaymentFollowUp } from "../meeting.ts";
+import { awaitsYou, type EmailFollowUp, type Meeting, type PaymentFollowUp } from "../meeting.ts";
 
 const usdc = (n: number) => BigInt(n) * 1_000_000n;
 const payment: PaymentFollowUp = {
@@ -77,4 +77,12 @@ test("a payment that waits on a condition, or is held in escrow, never runs by i
   assert.deepEqual(autopilotDecision({ ...payment, conditionDropped: true }, on, limits).reasons, ["The call may have set a condition: check it yourself"]);
   const escrow = { id: "m1-f2", state: "open" as const, link: "https://x/deal#t", termsHash: "a".repeat(64), on: { network: "testnet" as const, contract: "w.testnet", account: "v.testnet" } };
   assert.deepEqual(autopilotDecision({ ...payment, escrow }, on, limits).reasons, ["Held in escrow for the payee to confirm"]);
+});
+
+test("a recap already posted to Slack no longer waits: autopilot leaves it, and it isn't counted as waiting", () => {
+  const posted = { ...recap, slackPostedAt: "14:06" };
+  assert.deepEqual(autopilotDecision(posted, on, limits), { run: false, reasons: ["Already posted to Slack"] });
+  assert.equal(awaitsYou(posted), false);
+  assert.equal(awaitsYou(recap), true);
+  assert.equal(awaitsYou({ ...recap, draftedAt: "14:06" }), true, "a draft in Mail may not have gone out");
 });

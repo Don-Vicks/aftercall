@@ -229,6 +229,12 @@ export interface CrossChainPayout {
 
 export type FollowUp = EmailFollowUp | PaymentFollowUp;
 
+/** A recap already posted to Slack has reached the team, so it no longer waits for you; its card still offers the email. */
+export const postedToSlack = (f: FollowUp): boolean => f.kind === "email" && !!f.slackPostedAt;
+
+/** Waits for your tap: proposed, and not a recap already posted to Slack. */
+export const awaitsYou = (f: FollowUp): boolean => f.status === "proposed" && !postedToSlack(f);
+
 /** A name the summary model put to one "others" line of the transcript. Not verified. */
 export interface LikelySpeaker {
   /** Index of the line in `Meeting.transcript` (0-based). */

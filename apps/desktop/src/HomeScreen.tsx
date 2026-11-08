@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { ArrowRight, CalendarClock, Check, KeyRound, Link2, Mic, ShieldCheck } from "lucide-react";
-import { formatClock, formatUsdc, meetingTime, startOfDay, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
+import { awaitsYou, formatClock, formatUsdc, meetingTime, startOfDay, startsIn, type CalendarEvent, type FollowUp, type Meeting, type PaymentFollowUp } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { recordingTitle } from "./RecordingScreen";
 import { isDesktop } from "./recorder";
@@ -623,7 +623,7 @@ function NeedsYou({
   const items: Need[] = [];
   for (const mt of meetings) {
     for (const f of mt.followUps) {
-      if (f.status === "proposed" || f.status === "sending" || (f.status === "blocked" && f.kind === "payment")) {
+      if (awaitsYou(f) || f.status === "sending" || (f.status === "blocked" && f.kind === "payment")) {
         items.push({ key: `${mt.id}:${f.id}`, kind: "followup", meeting: mt, f, sample: mt.id === sampleId });
       }
     }

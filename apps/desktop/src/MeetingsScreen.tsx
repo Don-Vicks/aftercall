@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, ChevronDown, ShieldCheck } from "lucide-react";
-import { buildPeople, clockTime, firstName, groupRows, isYou, meetingTime, shortDate, weekGroup, type Meeting, type PeopleIndex } from "@aftercall/core";
+import { awaitsYou, buildPeople, clockTime, firstName, groupRows, isYou, meetingTime, shortDate, weekGroup, type Meeting, type PeopleIndex } from "@aftercall/core";
 import type { SavedRecording } from "./recorder";
 import { isProcessing, recordingTitle } from "./RecordingScreen";
 import { AvatarStack, Button, Menu, Pill, Spinner, cx, type MenuTriggerProps } from "./ui";
@@ -26,7 +26,7 @@ const PAGE = 20;
 function statusOf(row: Row, me: readonly string[], index: PeopleIndex): Status {
   const m = row.meeting;
   if (!m) return isProcessing(row.id) ? { kind: "processing", text: "Making notes…" } : { kind: "waiting", text: "Waiting for notes" };
-  const proposed = m.followUps.filter((f) => f.status === "proposed").length;
+  const proposed = m.followUps.filter(awaitsYou).length;
   const blocked = m.followUps.filter((f) => f.status === "blocked").length;
   if (proposed) return { kind: "approve", text: `${proposed} to approve` };
   if (blocked) return { kind: "approve", text: `${blocked} blocked` };

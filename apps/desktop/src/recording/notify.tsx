@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
-import type { Meeting } from "@aftercall/core";
+import { awaitsYou, type Meeting } from "@aftercall/core";
 import { isDesktop } from "../recorder";
 import { toast } from "../primitives";
 import { requestOpenMeeting, type RecordingWarning } from "./session";
@@ -12,7 +12,7 @@ export const showingRecording = (id: string, shown: boolean) => void (shown ? on
 /** Told by a notification while away; repeated as a toast on return. */
 let missed: { id: string; title: string; detail: string } | null = null;
 
-const toApprove = (m: Meeting) => m.followUps.filter((f) => f.status === "proposed").length;
+const toApprove = (m: Meeting) => m.followUps.filter(awaitsYou).length;
 
 function detailFor(m: Meeting): string {
   const n = toApprove(m);

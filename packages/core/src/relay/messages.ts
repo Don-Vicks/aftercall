@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sha256 } from "@noble/hashes/sha256";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import type { FollowUp, Meeting } from "../meeting.ts";
+import { postedToSlack, type FollowUp, type Meeting } from "../meeting.ts";
 import { formatUsdc } from "../money.ts";
 import { NETWORKS } from "../network.ts";
 import { PAYOUT_CHAINS } from "../intents/oneclick.ts";
@@ -172,6 +172,7 @@ export interface ItemOptions {
  */
 export function toPendingItem(meeting: Pick<Meeting, "id" | "title" | "startedAt" | "decisions" | "actionItems">, f: FollowUp, opts: ItemOptions): PendingItem | null {
   if (f.status !== "proposed" && f.status !== "sending" && f.status !== "blocked" && f.status !== "failed") return null;
+  if (f.status === "proposed" && postedToSlack(f)) return null;
   // A coding agent's proposal has no words from the call to show; it waits for you on the Mac.
   if (f.proposedBy || !f.evidence) return null;
   // A deal with a condition, or one held in escrow, waits for you on the Mac: the phone shows
