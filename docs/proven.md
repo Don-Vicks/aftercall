@@ -1,6 +1,6 @@
 # What is proven
 
-Every claim Aftercall makes, with the tests that check it. Run them all with `pnpm verify` ([development.md](development.md)). What has also run live is at the end, and in the README under [Live today](../README.md#live-today).
+Every claim Aftercall makes, with the tests that check it. Run them all with `pnpm verify` ([development.md](development.md)). What has also run live is at the end, and in the README under [Features and status](../README.md#features-and-status) and [On-chain evidence](../README.md#on-chain-evidence).
 
 | Claim | Evidence |
 | --- | --- |

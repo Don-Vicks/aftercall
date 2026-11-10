@@ -45,7 +45,7 @@ The parts of Aftercall and how a call moves through them, then what each part do
 Two things are called "agent". The **agent wallet** is the NEAR contract Aftercall pays from, within your caps. **Coding agents** are Claude Code or Codex reading your meetings over the local MCP server; they have no NEAR key and never touch the wallet.
 
 
-The NEAR pieces used, with where each lives: [README](../README.md#near-pieces-used).
+The NEAR pieces used, with where each lives: [README](../README.md#near-stack).
 
 ## Privacy in detail
 
