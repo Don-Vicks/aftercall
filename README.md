@@ -52,7 +52,7 @@ Requirements for source builds: Node 24, pnpm 10, stable Rust. Making notes in t
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph Mac["Mac app (Tauri, Rust, React)"]
     rec["Record call<br/>(Core Audio tap + mic)"]
     notes["Notes pipeline<br/>attest → encrypt → check signature"]
