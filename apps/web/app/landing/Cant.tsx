@@ -41,7 +41,7 @@ const ROWS: Row[] = [
     body: (
       <>
         Payment rules live in a NEAR contract: listed payees, a daily cap and a per-payment cap. The key on your Mac can call only <code>pay</code> and <code>record_proof</code>, and open and release a deal held in escrow
-        (on testnet, not yet run live); every rule change needs your own wallet. Anything over a cap waits in the contract for your wallet.
+        (run on testnet on 12 Nov with test accounts, not yet from the Mac app); every rule change needs your own wallet. Anything over a cap waits in the contract for your wallet.
       </>
     ),
     tests: [
@@ -49,7 +49,7 @@ const ROWS: Row[] = [
       ["one_yocto_rule_holds_even_if_key_lists_owner_methods", "sandbox.rs"],
       ["over_cap_is_blocked_then_owner_approves", "sandbox.rs"],
     ],
-    note: "Tested on a local NEAR node. The contract is live on NEAR testnet.",
+    note: "Tested on a local NEAR node. On NEAR testnet: payments within the caps, one held over them, and a held payment approved from the owner's account.",
     visual: (
       <div className={`${l.vCard} ${l.vKey}`}>
         <p className={l.vKeyHead}>This Mac&apos;s key</p>
@@ -154,7 +154,7 @@ export function Cant() {
           ))}
         </ol>
         <p className={l.cantFoot} data-reveal="">
-          Each of the four maps to tests listed in the repolisted in the README&apos;s What is proven table.apos;s What is proven page.
+          Each of the four maps to tests listed in the repo&apos;s What is proven page.
           {REPO_PUBLIC ? (
             <>
               {" "}

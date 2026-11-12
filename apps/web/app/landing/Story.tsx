@@ -21,7 +21,7 @@ const STEPS: Step[] = [
     title: "Nothing leaves until the hardware checks out.",
     body: (
       <>
-        Press Stop and make notes. Before any audio is sent, Aftercall checks NEAR AI&apos;s gateway and the Whisper and Qwen machines against a fresh nonce: <b>24 checks</b> with one node per model. If
+        Press Stop and make notes. Before any audio is sent, Aftercall checks NEAR AI&apos;s gateway and the Whisper and Qwen machines against a fresh nonce: <b>25 checks</b> with one node per model. If
         the gateway or Whisper fails, or no Qwen node passes, nothing is sent.
       </>
     ),
@@ -68,7 +68,7 @@ const STEPS: Step[] = [
     ),
     detail: "The app's own key can't raise a cap or add a payee.",
     screen: () => <PaymentScreen />,
-    caption: "Payments in the sample are simulated. The contract's caps are tested on a local NEAR node.",
+    caption: "Payments in the sample are simulated. On NEAR testnet the Mac app has paid within the caps and had a payment over them held (8 Nov).",
   },
 ];
 

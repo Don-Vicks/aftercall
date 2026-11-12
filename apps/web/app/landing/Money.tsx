@@ -137,7 +137,7 @@ export function Money() {
               ))}
             </ul>
             <p className={l.status} data-reveal="" style={vars({ rd: "380ms" })}>
-              Tested on a local NEAR node and live on NEAR testnet. Payments in the sample are simulated.
+              Tested on a local NEAR node. On NEAR testnet: payments within the caps, one held over them, and a held payment approved from the owner&apos;s account. Payments in the sample are simulated.
             </p>
           </div>
         </div>

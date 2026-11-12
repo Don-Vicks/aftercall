@@ -102,11 +102,17 @@ export function Proof() {
             <div className={l.liveCard} data-reveal="">
               <p className={l.liveHead}>
                 <span className={l.liveDot} aria-hidden="true" />
-                Ran live once
+                Run on NEAR testnet
               </p>
               <p>
-                On 1 Nov 2026 the Mac app made notes from another sample call, a designer kickoff, on live NEAR AI Cloud. All 29 checks passed, with one node per model. That run&apos;s proof isn&apos;t on NEAR
-                yet, so it can&apos;t be re-checked from outside.
+                On 8 Nov the Mac app made notes from a sample call on live NEAR AI Cloud, with all 30 checks passing, and recorded the proof on NEAR. The call promised Kemi $5 and $5,000: the app
+                paid the 5 USDC, and the contract held the $5,000 for the owner&apos;s wallet.
+              </p>
+              <p>
+                <a href="/proof" className={l.textLink}>
+                  See what ran on testnet, and re-check the proof
+                  <span aria-hidden="true"> →</span>
+                </a>
               </p>
             </div>
             <div data-reveal="" style={vars({ rd: "60ms" })}>

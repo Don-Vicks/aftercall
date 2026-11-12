@@ -14,7 +14,7 @@ import { Moment } from "./motion";
 
 /** Check counts: packages/core/src/tee/checks.ts, nvidia.ts and pipeline.ts, one node per model. */
 const GROUPS: [string, number][] = [
-  ["Gateway", 6],
+  ["Gateway", 7],
   ["Whisper", 9],
   ["Qwen", 9],
   ["On the reply", 5],
@@ -61,7 +61,7 @@ export function Hero() {
                 </li>
               ))}
             </ul>
-            <p className={l.trustSub}>24 checks before anything is sent and 5 on the reply, with one node per model.</p>
+            <p className={l.trustSub}>25 checks before anything is sent and 5 on the reply, with one node per model.</p>
             <p className={l.trustCaveat}>Audio goes to NEAR AI over TLS and isn&apos;t end-to-end encrypted. The transcript is, or it isn&apos;t sent.</p>
           </div>
         </Moment>
