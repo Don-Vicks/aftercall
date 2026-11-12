@@ -162,7 +162,7 @@ for (const f of meeting.followUps) {
   say(`  The payee's confirm page: written to docs/proof-run.md`);
   const wrong = call("confirm_escrow", { owner: OWNER, escrow_id: followupId, terms_hash: "0".repeat(64) }, "payee", "1 yoctoNEAR");
   say(`  payee confirms other terms: ${wrong.error ?? "accepted?!"} ${txLink(wrong.tx)}`);
-  record(`| The payee confirms different terms (\`confirm_escrow\`) | ${wrong.error ?? "accepted"} | ${wrong.tx ? `[${wrong.tx}](${txLink(wrong.tx)})` : "refused before it was sent"} |`);
+  record(`| The payee confirms different terms (\`confirm_escrow\`) | ${wrong.error ?? "accepted"} | ${wrong.tx ? `[${wrong.tx}](${txLink(wrong.tx)})` : "failed; near-cli printed no transaction id (look it up under the payee account)"} |`);
   const confirmed = call("confirm_escrow", { owner: OWNER, escrow_id: followupId, terms_hash: termsHash }, "payee", "1 yoctoNEAR");
   say(`  payee confirms these terms: ${confirmed.error ?? JSON.stringify(confirmed.value)} ${txLink(confirmed.tx)}`);
   record(`| The payee confirms these terms from their own account (\`confirm_escrow\`) | ${confirmed.error ?? "confirmed"} | ${confirmed.tx ? `[${confirmed.tx}](${txLink(confirmed.tx)})` : "none"} |`);

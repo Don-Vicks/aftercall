@@ -66,9 +66,10 @@ const RUNS: Run[] = [
       {
         where: "near",
         title: "0.50 USDC held in escrow until the payee confirmed",
-        body: "The call made it wait on a condition, so it became a deal. Confirming different terms was refused before anything was sent; the payee then confirmed the exact terms from their own account, and it was released.",
+        body: "The call made it wait on a condition, so it became a deal. Confirming different terms failed on chain (TERMS_DIFFER); the payee then confirmed the exact terms from their own account, and it was released.",
         links: [
           tx("open", "AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi"),
+          tx("other terms refused", "3ZDmriAJJey8EZpVo6HDtZkf79WeAAjyyQetEvKDxpJu"),
           tx("confirmed", "4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp"),
           tx("released", "8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw"),
         ],

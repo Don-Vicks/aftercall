@@ -9,7 +9,7 @@ Notes: verified, 30 of 30 checks passed. Estimated cost: about $0.00068 (NEAR AI
 | Proof of the notes recorded (`record_proof`) | ok | [Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi](https://testnet.nearblocks.io/txns/Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi) |
 | Autopilot pays 1.00 USDC after the 60 s undo window (`pay`) | sent | [Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP](https://testnet.nearblocks.io/txns/Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP) |
 | 0.50 USDC waits on "when source files are sent": held in escrow (`open_escrow`) | open | [AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi](https://testnet.nearblocks.io/txns/AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi) |
-| The payee confirms different terms (`confirm_escrow`) | TERMS_DIFFER | refused before it was sent |
+| The payee confirms different terms (`confirm_escrow`) | TERMS_DIFFER: failed on chain, nothing moved | [`3ZDmriAJ…`](https://testnet.nearblocks.io/txns/3ZDmriAJJey8EZpVo6HDtZkf79WeAAjyyQetEvKDxpJu) |
 | The payee confirms these terms from their own account (`confirm_escrow`) | confirmed | [4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp](https://testnet.nearblocks.io/txns/4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp) |
 | The condition is met; the escrow is released (`release_escrow`) | released | [8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw](https://testnet.nearblocks.io/txns/8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw) |
 
