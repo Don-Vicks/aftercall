@@ -14,11 +14,11 @@ It isn't on npm yet. To try it, build it from this repo with `pnpm --filter @aft
 - **Attested:** the signing key is bound, next to the meeting's nonce, in a TEE quote's report data that the app recorded, and the signer's setup file matches its `mr_config`.
 - **End-to-end encrypted:** the key the transcript was encrypted to is bound in the summary TEE's recorded report data.
 - **Private model:** the model is a NEAR AI Confidential TEE model, with a verified attestation in the proof.
-- **NVIDIA:** the GPU token in the proof against NVIDIA's published keys, when the proof has one.
+- **NVIDIA:** the GPU token in the proof against NVIDIA's published keys, when the proof has one. NVIDIA lists each key for about two days; after that the token is checked with Aftercall's archived copy of the key, used only once its certificate chain checks out against NVIDIA's pinned GPU intermediates. A token whose key NVIDIA retired before it was archived (the 2 Nov and 8 Nov proofs) can't be re-checked: that check comes back with `cantRecheck: true` and `ok: false`, and doesn't count against the receipt's `ok`.
 
 `verifyLineLink(link)` takes a line link (Share this line in the Mac app). It runs all of the above, plus **Line is in the transcript the proof commits to**: the line's leaf (its index, time, side and words, with its salt) and its Merkle path lead to the transcript root inside the proof. That root is covered by the proof hash on NEAR.
 
-Each check comes back with a label, `ok` and a plain-words detail. `ok` on the receipt means every check passed, and so did every check the app recorded in the proof.
+Each check comes back with a label, `ok` and a plain-words detail. `ok` on the receipt means every check passed, apart from one marked `cantRecheck`, and so did every check the app recorded in the proof.
 
 ## Usage
 
