@@ -29,7 +29,7 @@ const GROUPS: { name: string; n: number; checks: string[]; extra?: string }[] = 
 const COMMANDS: [string, string][] = [
   [
     "pnpm install && pnpm verify --quick",
-    "Typechecks every package and runs 502 core, 53 backend, 25 MCP server and 8 receipts tests, the desktop Rust tests and the contract's unit tests. Nothing calls NEAR AI.",
+    "Typechecks every package and runs 511 core, 53 backend, 25 MCP server and 9 receipts tests, the desktop Rust tests and the contract's unit tests. Nothing calls NEAR AI.",
   ],
   ["pnpm dev:ui", "The whole Mac interface in a browser at localhost:1420, on the sample meeting. Recording is simulated there."],
 ];
