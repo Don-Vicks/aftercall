@@ -102,6 +102,22 @@ test("a proof made before line trees verifies as before; its lines can't be shar
   assert.throws(() => makeLineDisclosure(place, sample.bundle, transcript, KEY, 0), /NO_LINE_TREE/);
 });
 
+test("published proofs once NVIDIA lists none of their keys: 12 Nov checks out with its archived key, 8 Nov with its GPU check marked cantRecheck", async () => {
+  const published = JSON.parse(readFileSync(new URL("../../core/src/notes/fixtures/published-proofs.json", import.meta.url), "utf8"));
+  /** NEAR's RPC answering with the link's own proof hash, and NVIDIA listing no keys. */
+  const retired = (payload) => async (url, init) => {
+    if (!init) return { ok: true, json: async () => ({ keys: [] }) };
+    const answer = { proof_hash: proofHash(JSON.parse(Buffer.from(payload, "base64url").toString()).bundle), model: "Qwen/Qwen3.8-27B", recorded_at: "1794166341000000000" };
+    return { ok: true, json: async () => ({ result: { result: [...new TextEncoder().encode(JSON.stringify(answer))] } }) };
+  };
+  const run12 = await verifyProofLink(published.proofRun12Nov, { fetch: retired(published.proofRun12Nov) });
+  assert.equal(run12.ok, true);
+  assert.match(run12.checks.find((c) => c.id === "gpu").detail, /with a key from Aftercall's archive certified by NVIDIA Attestation Service GPU Intermediate 004/);
+  const call8 = await verifyProofLink(published.paymentCall8Nov, { fetch: retired(published.paymentCall8Nov) });
+  assert.equal(call8.ok, true);
+  assert.deepEqual(call8.checks.filter((c) => !c.ok).map((c) => [c.id, c.cantRecheck]), [["gpu", true]]);
+});
+
 test("bad links are refused in plain error codes", async () => {
   await assert.rejects(verifyLineLink("https://getaftercall.vercel.app/verify#nope", { fetch: near(null) }), /BAD_LINK/);
   await assert.rejects(verifyLineLink(`#${LINE_LINK_PREFIX}e30`, { fetch: near(null) }), /BAD_LINK/);
