@@ -120,6 +120,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | Notes in attested TEEs, transcript end-to-end encrypted, every item quoted | Live (NEAR AI, since 2 Nov) |
 | Proof on NEAR, re-checkable at `/verify` | Live |
 | Recap email through Aftercall, with a footer saying what was checked | Live (since 6 Nov) |
+| Send a recap from any meeting, even when the call didn't ask for one, to an invited person from your calendar | Built and tested (`newRecap`; autopilot never sends it); try it at `/demo`; not yet run in the Mac app |
 | USDC payment within caps; over a cap held for the owner's wallet | Live on testnet (8 Nov) |
 | CSV for a bookkeeper: each payment's status, who approved it, its transaction and the meeting's proof | Read from testnet for the test owner ([CSV](docs/ledger-demo-owner.csv)). In the Mac app, Agent wallet → Export → Copy as CSV copies it; checked in the browser preview with sample data, not yet in the Mac app |
 | Test credits, so judges need no NEAR AI account | Live (up to 30 installs): the backend hands out one shared, spend-capped key (`/nearai/test-credits`, checked 12 Nov) |
@@ -127,7 +128,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Autopilot's decision (`meetingAutopilotDecision`, the app's own code) paid an in-cap payment on testnet on 12 Nov in the headless proof run, after a 60-second wait in the script; the app's own runner and undo haven't run live |
 | Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line. The transactions `/sign` builds are unit-tested and their contract path runs on a local NEAR node; the page itself hasn't approved a parked payment in a browser wallet |
 | Handshake: escrow until the payee confirms the terms from their own wallet | Ran on testnet on 12 Nov in the headless proof run: the payee confirmed from their own account; not yet through the `/deal` page with a browser wallet |
-| Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server | Built and tested; Claude Code [recorded](docs/agents-demo.md) on a stand-in app, not yet with the Mac app |
+| Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server; Hand to an agent on every open item | Built and tested; Claude Code [recorded](docs/agents-demo.md) on a stand-in app, not yet with the Mac app. Coding agents also shows the config for Cursor, Claude Desktop, VS Code and Windsurf (standard MCP; not yet tried in those apps) |
 | Approvals from your phone, sealed so the relay can't read them | Deployed 7 Nov; run with a simulated Mac, not yet a real phone |
 | Post a recap to Slack | Built and tested against a local stand-in |
 | Encrypted backup to iCloud Drive | Built and tested; not yet with real iCloud Drive |
