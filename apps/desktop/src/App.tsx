@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { UNDO_SECONDS, agentWallet, awaitsYou, applyItemEdit, holdInterruptedAutopilot, meetingAutopilotDecision, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
+import { UNDO_SECONDS, agentWallet, awaitsYou, applyItemEdit, holdInterruptedAutopilot, meetingAutopilotDecision, newRecap, originalItem, projectDeletion, rematchPayees, restoreItem, type FollowUp, type ItemFields, type ItemOptions, type Meeting, type Payee, type PayeeDestination, type ProjectBrief, type BriefSource, type WalletLimits } from "@aftercall/core";
 import { loadRules } from "./autopilot";
 import { HAS_BACKEND } from "./backend";
 import { Sidebar } from "./Sidebar";
@@ -562,6 +562,22 @@ export default function App() {
     });
   };
 
+  /** Adds a follow-up to a meeting and, for real meetings, saves it to the meeting's notes.json. */
+  const addFollowUp = (meetingId: string, f: FollowUp) => {
+    setMeetings((all) => {
+      const m = all[meetingId];
+      const next = { ...m, followUps: [...m.followUps, f] };
+      setSaved((s) => {
+        const notes = s[meetingId];
+        if (!notes) return s;
+        const updated = { ...notes, meeting: next };
+        writeNotes(meetingId, updated);
+        return { ...s, [meetingId]: updated };
+      });
+      return { ...all, [meetingId]: next };
+    });
+  };
+
   const handlersFor = (meeting: Meeting) => {
     const find = (id: string) => meeting.followUps.find((f) => f.id === id)!;
     const apply = (id: string) => (patch: Patch) => patchFollowUp(meeting.id, id, patch);
@@ -655,6 +671,17 @@ export default function App() {
       onEmailDeal: (id: string, to: string) => {
         const f = find(id);
         if (f.kind === "payment") emailDealLink(f, to, apply(id));
+      },
+      // A recap you send yourself, whether or not the call asked for one: addressed to the one
+      // invited person with an email, else you pick or type the address on its card.
+      onAddRecap: () => {
+        const f = newRecap(meeting, meeting.invited);
+        addFollowUp(meeting.id, f);
+        setTimeout(() => {
+          const card = document.getElementById(`followup-${f.id}`);
+          card?.scrollIntoView({ block: "center", behavior: "smooth" });
+          card?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
+        }, 120);
       },
     };
   };

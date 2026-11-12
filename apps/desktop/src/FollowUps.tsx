@@ -73,6 +73,8 @@ export interface FollowUpHandlers {
   onEscrowInWallet?: (id: string, kind: "approve-escrow" | "cancel-escrow") => void;
   /** Emails the payee's confirm link through Aftercall. */
   onEmailDeal?: (id: string, to: string) => void;
+  /** Adds a recap card you send yourself, whether or not the call asked for one ("Send a recap"). */
+  onAddRecap?: () => void;
 }
 
 /** A live NEAR Intents quote; `quoteOnly` when this agent wallet can't send it (it isn't on mainnet). */
@@ -122,7 +124,8 @@ export function FollowUps({
   // One dismissed on your phone stays, labelled, as one approved there does; one dismissed here goes.
   const visible = followUps.filter((f) => f.status !== "dismissed" || phoneDecision(f));
   // Kept while every row is dismissed, so the last one can collapse and its Undo still has a place to return to.
-  if (followUps.length === 0) return null;
+  // With nothing from the call, the section still offers Send a recap.
+  if (followUps.length === 0 && !h.onAddRecap) return null;
   const anyAutopilot = autopilotOn || followUps.some((f) => f.autopilotAt || f.byAutopilot);
 
   const dismiss = (f: FollowUp) => {
@@ -142,11 +145,19 @@ export function FollowUps({
         <SectionTitle id="followups" count={anyAutopilot ? "autopilot on" : "nothing runs until you approve"}>
           Follow-ups
         </SectionTitle>
-        {anyAutopilot && onOpenAutopilot && (
-          <button type="button" onClick={onOpenAutopilot} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
-            Autopilot rules
-          </button>
-        )}
+        <span className="flex items-center gap-4">
+          {anyAutopilot && onOpenAutopilot && (
+            <button type="button" onClick={onOpenAutopilot} className="text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+              Autopilot rules
+            </button>
+          )}
+          {h.onAddRecap && (
+            <button type="button" onClick={h.onAddRecap} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-verdigris hover:text-verdigris-hover">
+              <Mail size={14} strokeWidth={2} aria-hidden="true" />
+              Send a recap
+            </button>
+          )}
+        </span>
       </div>
       <LayoutMotion>
         <div className="relative flex flex-col gap-3">
@@ -166,7 +177,11 @@ export function FollowUps({
               </m.div>
             ))}
           </AnimatePresence>
-          {visible.length === 0 && <p className="m-0 text-[13px] text-ink-2">Every follow-up was dismissed.</p>}
+          {visible.length === 0 && (
+            <p className="m-0 text-[13px] text-ink-2">
+              {followUps.length === 0 ? "The call didn't ask for a recap or a payment. Send a recap adds one you send yourself." : "Every follow-up was dismissed."}
+            </p>
+          )}
         </div>
       </LayoutMotion>
     </section>
@@ -269,6 +284,7 @@ function EvidenceQuote({ quote, at, returnId, onJumpTo }: { quote: string; at: n
 /** Where a follow-up came from: the exact words from the call, or a coding agent's reason, said to be the agent's. */
 function Origin({ f, onJumpTo }: { f: FollowUp; onJumpTo: FollowUpHandlers["onJumpTo"] }) {
   if (f.evidence) return <EvidenceQuote quote={f.evidence.quote} at={f.evidence.at} returnId={`jump-${f.id}`} onJumpTo={onJumpTo} />;
+  if (f.addedByYou) return <p className="m-0 text-[13px] leading-[19px] text-ink-2">You added this recap; the call didn't ask for it. It waits for your tap, never autopilot.</p>;
   return <AgentReason f={f} />;
 }
 
@@ -553,7 +569,7 @@ function EmailRow({ f, c }: { f: EmailFollowUp; c: RowContext }) {
             </DonePill>
           </>
         )}
-        {state === "open" && <span className="t-eyebrow shrink-0 text-muted">{f.proposedBy ? `Proposed by ${f.proposedBy.agent}` : "Proposed"}</span>}
+        {state === "open" && <span className="t-eyebrow shrink-0 text-muted">{f.proposedBy ? `Proposed by ${f.proposedBy.agent}` : f.addedByYou ? "Added by you" : "Proposed"}</span>}
       </Head>
       <AnimatePresence initial={false} mode="wait">
         {state === "countdown" && pending && (
