@@ -21,12 +21,13 @@ import {
   type TeeCheck,
 } from "@aftercall/core";
 import { aboutCost, pricesDay } from "./costs";
-import { VERIFY_URL, explorerTx, near } from "./near";
+import { VERIFY_URL, WEB_URL, explorerTx, near } from "./near";
 import type { SavedNotes } from "./nearai";
 import { plainProofError, proofReadiness, recordProof } from "./proofs";
 import { isFirstProof } from "./firstProof";
 import { FirstTransaction } from "./FirstTransaction";
 import { SAMPLE_PROOF_NOTE, runSampleChecks, type SampleCheck } from "./sampleProof";
+import { IS_DEMO } from "./demo";
 import { Button, Dialog, IconButton, Pill, Spinner, cx } from "./ui";
 
 /** What each group's TEE did for this meeting, after its name. */
@@ -357,6 +358,14 @@ export function SampleVerifySheet({ meeting, onClose }: { meeting: Pick<Meeting,
         <Info size={16} strokeWidth={2} aria-hidden="true" className="mt-px ml-px text-muted" />
         <span>
           <span className="font-semibold text-ink">Sample.</span> {SAMPLE_PROOF_NOTE}
+          {IS_DEMO && (
+            <>
+              {" "}
+              <a href={`${WEB_URL}/proof`} className="font-semibold text-verdigris underline-offset-2 hover:underline">
+                Open a real one, recorded on NEAR testnet →
+              </a>
+            </>
+          )}
         </span>
       </p>
 
