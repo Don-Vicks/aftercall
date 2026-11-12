@@ -110,7 +110,10 @@ export function VerifyClient() {
 
 function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: LineProof | null; done: Done | null; onRerun: () => void }) {
   const checks = done?.checks ?? [];
-  const passed = checks.filter((c) => c.ok).length;
+  // A check that can't be re-run (NVIDIA retired its key before Aftercall archived it) is listed, but counted apart.
+  const rerun = checks.filter((c) => !c.cantRecheck);
+  const passed = rerun.filter((c) => c.ok).length;
+  const notRerun = checks.length - rerun.length;
   const recorded: TeeCheck[] | null = hasFullChecks(proof.bundle) ? proof.bundle.checks : null;
   // E2EE has its own line; "processed privately" rests on attestation and signatures.
   const allOk = !!done && allChecksPassed(proof.bundle, checks);
@@ -164,7 +167,8 @@ function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: Line
           <div className={v.pills} aria-live="polite">
             {done ? (
               <Pill tone={allOk ? "verdigris" : "caution"} className="pop" style={vars({ d: `${sealAt}ms`, dur: "320ms" })} icon={<Icon name={allOk ? "check" : "info"} size={12} stroke={2.5} />}>
-                {passed} of {checks.length} passed in your browser
+                {passed} of {rerun.length} passed in your browser
+                {notRerun > 0 && ` · ${notRerun} can't be re-checked`}
               </Pill>
             ) : (
               <Pill tone="muted" icon={<span aria-hidden="true" className={`spinner ${v.smallSpinner}`} />}>
@@ -327,11 +331,18 @@ function SharedLine({ meetingId, line: { line } }: { meetingId: string; line: Li
   );
 }
 
-/** One check, ticking in at `at` ms. */
+/** One check, ticking in at `at` ms. One that can't be re-run gets a plain mark: neither a tick nor a cross. */
 function CheckRow({ check: c, at }: { check: Check | TeeCheck; at: number }) {
+  const cantRecheck = "cantRecheck" in c && !!c.cantRecheck;
   return (
     <li className={`${v.row} enter`} style={vars({ d: `${at}ms`, dur: "280ms" })}>
-      <Tick ok={c.ok} d1={`${at + 60}ms`} d2={`${at + 180}ms`} />
+      {cantRecheck ? (
+        <span className={v.statementMark} role="img" aria-label="Can't be re-checked">
+          <Icon name="minus" size={13} stroke={1.75} />
+        </span>
+      ) : (
+        <Tick ok={c.ok} d1={`${at + 60}ms`} d2={`${at + 180}ms`} />
+      )}
       <span className={v.label}>{c.label}</span>
       <span className={`${v.detail}${c.ok ? "" : ` ${v.failedDetail}`}`} title={c.detail}>
         <Detail text={c.detail} />
@@ -383,7 +394,7 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
           <span>{recorded.length} checks</span>
         </div>
         <div className={v.whyLine}>
-          <span>Your browser can&apos;t repeat the Intel quote check, nor NVIDIA&apos;s once NVIDIA retires the key that signed it (it keeps them about two days), so these are shown as they ran when the notes were made.</span>
+          <span>Your browser can&apos;t repeat the Intel quote check, nor NVIDIA&apos;s for a proof whose key NVIDIA retired (it lists keys for about two days) before Aftercall archived it, so these are shown as they ran when the notes were made.</span>
           <details className="why">
             <summary>Why?</summary>
             <span className="why-body" style={{ display: "block", marginTop: 6 }}>
