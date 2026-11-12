@@ -32,7 +32,7 @@ export interface VerifyOptions {
 /** What a link checked out as. */
 export interface Receipt {
   kind: "proof" | "line";
-  /** Every check below passed, and every check the app recorded in the proof passed. */
+  /** Every check below passed (one marked `cantRecheck` isn't counted), and every check the app recorded in the proof passed. */
   ok: boolean;
   network: Network;
   contract: string;
