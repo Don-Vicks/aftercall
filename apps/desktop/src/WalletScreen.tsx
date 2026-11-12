@@ -618,9 +618,9 @@ function sampleWallet(paid: bigint, parked: number): WalletView {
     },
     payees: [
       { account: "designer.near", label: "Designer" },
-      { account: "ada.near", label: "Ada" },
+      { account: "kemi.near", label: "Kemi" },
     ],
-    destinations: [{ payee: "ada.near", chain: "solana", address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }],
+    destinations: [{ payee: "kemi.near", chain: "solana", address: "UttL3QV9t88hZycjqgxZfUpMPM7tqV4qeqHTKRGHx98" }],
   };
 }
 
