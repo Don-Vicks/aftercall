@@ -16,7 +16,8 @@
     "proof:run": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/proof-run.ts",
     "attack:run": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/attack-run.ts",
     "nvidia:archive": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/archive-nvidia-keys.ts",
-    "check:live": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/check-live.ts"
+    "check:live": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/check-live.ts",
+    "ledger": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/ledger.ts"
   },
   "devDependencies": {
     "@phala/dcap-qvl-node": "0.3.3",
