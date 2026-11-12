@@ -13,7 +13,8 @@
     "verify": "./scripts/verify.sh",
     "sample:notes": "pnpm --silent --filter @aftercall/core sample:notes",
     "samples:make": "node scripts/make-samples.mjs",
-    "dev:phone": "pnpm --filter @aftercall/core phone:dev"
+    "dev:phone": "pnpm --filter @aftercall/core phone:dev",
+    "check:live": "pnpm --silent --filter @aftercall/core check:live"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

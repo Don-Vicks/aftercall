@@ -14,7 +14,8 @@
     "sample:notes": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/sample-notes.ts",
     "phone:dev": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/phone-dev.ts",
     "proof:run": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/proof-run.ts",
-    "nvidia:archive": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/archive-nvidia-keys.ts"
+    "nvidia:archive": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/archive-nvidia-keys.ts",
+    "check:live": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/check-live.ts"
   },
   "devDependencies": {
     "@phala/dcap-qvl-node": "0.3.3",

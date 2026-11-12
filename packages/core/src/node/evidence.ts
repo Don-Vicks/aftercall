@@ -222,6 +222,12 @@ function actionOf(tx: TxStatus): { method?: string; args?: unknown; codeHash?: s
   return { kinds };
 }
 
+/** The function call's arguments, when the transaction is one and they are a JSON object. */
+export function functionCallArgs(tx: TxStatus): Record<string, unknown> | null {
+  const { args } = actionOf(tx);
+  return args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null;
+}
+
 /**
  * Checks one transaction, read back from NEAR, against its evidence: who signed it and
  * for which contract, the method and arguments (or the deployed code's hash), success or
