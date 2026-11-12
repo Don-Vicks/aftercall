@@ -84,6 +84,10 @@ export function VerifyClient() {
               body="A proof link is what the Copy proof link button copies from a meeting's Verify sheet in the Aftercall app. Everything after its # sign is the proof: hashes, nonces, the models, the checks the app ran, the summary's signature and the NEAR account it belongs to, never what was said. Open one here and your browser reads the proof's hash from NEAR and re-runs the checks it can. A line link, from Share this line, also holds one line of the transcript and checks that it is part of that proof."
             >
               <span className={v.messageLinks}>
+                <a href="/proof" className="arrow-link">
+                  Open a real one: what has run on NEAR testnet
+                  <Icon name="arrowRight" size={14} stroke={2.2} />
+                </a>
                 <a href="/how-it-works" className="arrow-link">
                   How it works
                   <Icon name="arrowRight" size={14} stroke={2.2} />

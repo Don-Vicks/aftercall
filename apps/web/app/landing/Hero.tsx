@@ -44,6 +44,10 @@ export function Hero() {
               See one call, start to finish
               <Glyph name="arrow" size={16} />
             </a>
+            <a href="/proof" className={l.secondary}>
+              What has run on NEAR testnet
+              <Glyph name="arrow" size={16} />
+            </a>
           </div>
         </div>
 
