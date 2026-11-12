@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import { MissingKeyError, apiKeyFrom, isAllowedGetPath, nodeNearAiTransport } from "./nearai.ts";
+import { MissingKeyError, apiKeyFrom, isAllowedGetPath, nodeAttestationTransport, nodeNearAiTransport } from "./nearai.ts";
 import { formatSampleNotes, runSampleNotes } from "./sampleNotes.ts";
 import type { NotesTransport } from "../notes/pipeline.ts";
 import { sha256Hex } from "../notes/verify.ts";
@@ -93,6 +93,62 @@ test("the Node transport sends what nearai.rs sends and returns the exact bytes"
   } finally {
     server.close();
   }
+});
+
+/** A fetch that answers from `reply` and keeps every request it was asked for. */
+function fakeFetch(reply: (url: string) => Response | Promise<Response>) {
+  const seen: { url: string; headers: Headers; method: string }[] = [];
+  const f = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    seen.push({ url, headers: new Headers(init?.headers), method: init?.method ?? "GET" });
+    return reply(url);
+  }) as typeof fetch;
+  return { fetch: f, seen };
+}
+
+test("keyless attestation: the report is read with no key, and nothing but the report can be", async () => {
+  const { fetch, seen } = fakeFetch(() => new Response('{"gateway_attestation":{}}'));
+  const t = nodeAttestationTransport({ baseUrl: "https://nearai.example/v1", fetch });
+  assert.equal(await t.get("attestation/report?model=Qwen%2FQwen3.8-27B&nonce=ab"), '{"gateway_attestation":{}}');
+  assert.equal(seen[0].url, "https://nearai.example/v1/attestation/report?model=Qwen%2FQwen3.8-27B&nonce=ab");
+  assert.equal(seen[0].headers.get("authorization"), null, "no Authorization header");
+  for (const path of ["signature/chatcmpl-1?model=x", "models", "attestation/report?x=../workspaces"]) {
+    await assert.rejects(t.get(path), /Only the attestation report/);
+  }
+  assert.equal(seen.length, 1, "a refused path is never requested");
+  // Nothing here can spend credit: there is no chat or transcription call at all.
+  assert.ok(!("chat" in t) && !("transcribe" in t) && !("chatStream" in t));
+});
+
+test("keyless attestation: a service that is down or rate-limited says so, a refusal doesn't", async () => {
+  const down = (status: number) => nodeAttestationTransport({ fetch: fakeFetch(() => new Response("busy", { status })).fetch });
+  await assert.rejects(down(429).get("attestation/report?nonce=ab"), /^Error: SERVICE_UNAVAILABLE: NEAR AI: HTTP 429 busy$/);
+  await assert.rejects(down(503).nvidiaAttest("{}"), /SERVICE_UNAVAILABLE: NVIDIA NRAS: HTTP 503/);
+  await assert.rejects(down(502).nvidiaKeys(), /SERVICE_UNAVAILABLE: NVIDIA keys: HTTP 502/);
+  const offline = nodeAttestationTransport({ fetch: fakeFetch(() => Promise.reject(new TypeError("fetch failed"))).fetch });
+  await assert.rejects(offline.get("attestation/report?nonce=ab"), /SERVICE_UNAVAILABLE: NEAR AI: fetch failed/);
+  // A 401 would mean the report now needs a key: that is NEAR AI's answer, not an outage.
+  const refused = await down(401).get("attestation/report?nonce=ab").catch((e: Error) => e.message);
+  assert.equal(refused, "NEAR AI 401: busy");
+  const badEvidence = await down(400).nvidiaAttest("{}").catch((e: Error) => e.message);
+  assert.equal(badEvidence, "NVIDIA NRAS 400: busy");
+});
+
+test("keyless attestation: Intel's collateral not served is an outage only when Intel isn't answering", async () => {
+  // dcap-qvl can't reach this collateral service; whether Intel answers decides what that means.
+  const intelPcs = "https://127.0.0.1:9/tdx/certification/v4";
+  const quote = "04".repeat(64);
+  const intelDown = nodeAttestationTransport({ intelPcs, fetch: fakeFetch(() => new Response("", { status: 503 })).fetch });
+  await assert.rejects(intelDown.verifyQuote(quote), /SERVICE_UNAVAILABLE: Intel PCS: HTTP 503/);
+  const intelUp = fakeFetch(() => new Response("{}"));
+  const quoteBad = nodeAttestationTransport({ intelPcs, fetch: intelUp.fetch });
+  const why = await quoteBad.verifyQuote(quote).then(
+    () => assert.fail("a quote without collateral can't verify"),
+    (e: Error) => e.message,
+  );
+  assert.match(why, /couldn't be fetched .*though Intel's service answers/);
+  assert.doesNotMatch(why, /SERVICE_UNAVAILABLE/);
+  assert.equal(intelUp.seen[0].url, `${intelPcs}/qe/identity`);
 });
 
 /** The test CA and two server certificates with different keys (apps/desktop/src-tauri/tests/fixtures/tls, test-only). */

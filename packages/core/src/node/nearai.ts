@@ -7,7 +7,8 @@ import { createRequire } from "node:module";
 import type { E2eeKeys, NotesTransport } from "../notes/pipeline.ts";
 import type { StreamProgress } from "../notes/stream.ts";
 import type { QuoteReport } from "../tee/checks.ts";
-import { TLS_PIN_MISMATCH } from "../tee/attest.ts";
+import { TLS_PIN_MISMATCH, type TeeTransport } from "../tee/attest.ts";
+import { fetchOrUnavailable, serviceUnavailable } from "./outage.ts";
 
 /**
  * NEAR AI Cloud from Node, for `pnpm sample:notes`. It mirrors the Mac app's Rust
@@ -27,11 +28,21 @@ const NVIDIA_KEYS = "https://nras.attestation.nvidia.com/.well-known/jwks.json";
  * the quote doesn't verify, so callers fail closed.
  */
 export async function verifyQuoteNode(quoteHex: string): Promise<QuoteReport> {
-  const { js_get_collateral, js_verify } = createRequire(import.meta.url)("@phala/dcap-qvl-node");
+  const raw = quoteBytes(quoteHex);
+  return readQuote(raw, await dcapQvl().js_get_collateral(INTEL_PCS, raw));
+}
+
+const dcapQvl = () => createRequire(import.meta.url)("@phala/dcap-qvl-node");
+
+function quoteBytes(quoteHex: string): Buffer {
   const raw = Buffer.from(quoteHex.trim().replace(/^0x/i, ""), "hex");
   if (raw.length === 0) throw new Error("That isn't a TDX quote");
-  const collateral = await js_get_collateral(INTEL_PCS, raw);
-  const r = js_verify(raw, collateral, BigInt(Math.floor(Date.now() / 1000)));
+  return raw;
+}
+
+/** Verifies the quote against Intel's collateral, now; rejects when it doesn't verify. */
+function readQuote(raw: Buffer, collateral: unknown): QuoteReport {
+  const r = dcapQvl().js_verify(raw, collateral, BigInt(Math.floor(Date.now() / 1000)));
   const td = r?.report?.TD10;
   if (!td) throw new Error("Not a TDX quote");
   return {
@@ -247,6 +258,56 @@ export function nodeNearAiTransport(opts: {
     },
     async nvidiaKeys() {
       const res = await doFetch(NVIDIA_KEYS, { signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) throw new Error(`NVIDIA keys ${res.status}`);
+      return res.text();
+    },
+    randomHex: () => randomBytes(32).toString("hex"),
+  };
+}
+
+/**
+ * NEAR AI Cloud's attestation, with no API key: NEAR AI serves the attestation report
+ * without one, so the gateway and models can be checked before a key is ever sent
+ * (docs.near.ai/cloud/verification). It can only read attestation reports: there is
+ * no chat, transcription or signature call here, so nothing spends credit. Intel's
+ * quote check, NVIDIA NRAS and NVIDIA's keys are the same calls the keyed transport
+ * makes. A service that is down or rate-limited (a network error, 429 or 5xx, or
+ * Intel's collateral not served) rejects with SERVICE_UNAVAILABLE naming it, so a
+ * check that couldn't run reads differently from one that failed.
+ */
+export function nodeAttestationTransport(opts: { baseUrl?: string; fetch?: typeof fetch; /** Intel's collateral service (tests only). */ intelPcs?: string } = {}): TeeTransport {
+  const base = (opts.baseUrl ?? NEAR_AI_BASE).replace(/\/$/, "");
+  const doFetch = opts.fetch ?? fetch;
+  return {
+    async get(path) {
+      if (!path.startsWith("attestation/report?") || !isAllowedGetPath(path)) throw new Error("Only the attestation report can be read without a key");
+      // No authorization header: the report needs none.
+      const res = await fetchOrUnavailable(doFetch, "NEAR AI", `${base}/${path}`, { headers: { accept: "application/json", "x-no-aliasing": "true" }, signal: AbortSignal.timeout(60_000) });
+      return bodyText(res);
+    },
+    async verifyQuote(quoteHex) {
+      const raw = quoteBytes(quoteHex);
+      const pcs = opts.intelPcs ?? INTEL_PCS;
+      let collateral: unknown;
+      try {
+        collateral = await dcapQvl().js_get_collateral(pcs, raw);
+      } catch (e) {
+        const why = e instanceof Error ? e.message : String(e);
+        // dcap-qvl says the same for a quote it can't read as for Intel not answering, so ask Intel directly.
+        const res = await fetchOrUnavailable(doFetch, "Intel PCS", `${pcs}/qe/identity`, { signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) throw serviceUnavailable("Intel PCS", `${why}; Intel's QE identity answered HTTP ${res.status}`);
+        throw new Error(`Intel's collateral for this quote couldn't be fetched (${why}), though Intel's service answers`);
+      }
+      return readQuote(raw, collateral);
+    },
+    async nvidiaAttest(payload) {
+      const res = await fetchOrUnavailable(doFetch, "NVIDIA NRAS", NRAS, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: payload, signal: AbortSignal.timeout(60_000) });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`NVIDIA NRAS ${res.status}: ${text.slice(0, 300)}`);
+      return text;
+    },
+    async nvidiaKeys() {
+      const res = await fetchOrUnavailable(doFetch, "NVIDIA keys", NVIDIA_KEYS, { signal: AbortSignal.timeout(30_000) });
       if (!res.ok) throw new Error(`NVIDIA keys ${res.status}`);
       return res.text();
     },
