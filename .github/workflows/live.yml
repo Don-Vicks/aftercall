@@ -1,0 +1,28 @@
+name: Live claims
+
+# Once a day, re-prove the README's live claims against NEAR AI, Intel, NVIDIA and NEAR
+# testnet: `pnpm check:live`, with no keys, secrets or wallet. It fails only when a claim
+# doesn't hold; a service that is down reads "service unavailable" and doesn't fail it.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-live:
+    name: pnpm check:live (read-only, no keys)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:live
