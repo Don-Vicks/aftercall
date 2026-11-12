@@ -45,6 +45,7 @@ Choose by the time you have. Every command, link and expected result is in [docs
 | 2 min | Open https://getaftercall.vercel.app/demo | The app in a browser on a sample meeting |
 | 5 min | `pnpm install && pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app` | A simulated Mac pairs with your phone; approve or dismiss what it sends ([more](docs/judging.md#5-minutes-approve-from-your-own-phone)) |
 | 10 min | `curl -fsSL https://getaftercall.vercel.app/install.sh \| sh` | The Mac app (macOS 14.2+, unsigned test build, NEAR testnet) ([more](docs/judging.md#10-minutes-the-mac-app)) |
+| From source, with NEAR AI | `pnpm --filter @aftercall/core proof:run` with `NEAR_AI_API_KEY`, `OWNER`, `PAYEE` and `APP_KEY` set ([how](packages/core/scripts/proof-run.ts)) | The sample call's notes from NEAR AI's TEEs, its proof on testnet, an autopilot payment and a Handshake escrow, written to `docs/proof-run.md` |
 | From source | `pnpm install && pnpm verify --quick` | A ✓ line per step and exit code 0 ([full verify](docs/judging.md#from-source-pnpm-verify)) |
 
 Requirements for source builds: Node 24, pnpm 10, stable Rust. Making notes in the Mac app needs a NEAR AI key; the app offers Aftercall's test credits if you don't have one. `/verify`, `/demo`, `/phone` and `/stats` render with JavaScript, so open them in a browser rather than fetching them.
@@ -93,6 +94,10 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | The same call's $5,000, over the 10 USDC per-payment cap | [`B8xV41mT…`](https://testnet.nearblocks.io/txns/B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE) | `blocked` (`OVER_PAYMENT_CAP`): parked for the owner's wallet, nothing moved |
 | The same run, screen-recorded for the demo video | [`6jK1mauq…`](https://testnet.nearblocks.io/txns/6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN) (paid), [`6jHzBdiT…`](https://testnet.nearblocks.io/txns/6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou) (held) | That call's proof passes 8 of 8 ([link](docs/proof-payment-call.txt)) |
 | Contract upgraded in place to add Handshake escrow | [`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq) | 7 Nov, every record kept |
+| Headless proof run (12 Nov): a fictional sample call through NEAR AI's TEEs, 30 of 30 checks; its proof passes 8 of 8 on `/verify` | [`Af4cs3Pn…`](https://testnet.nearblocks.io/txns/Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi) | [docs/proof-run.md](docs/proof-run.md): every step and both links |
+| Same run: autopilot paid the in-cap 1 USDC after its 60-second undo window, signed by the limited app key | [`Ay4Yte5e…`](https://testnet.nearblocks.io/txns/Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP) | Test accounts `demo-owner` and `demo-freelancer` (`.aftercall.testnet`) |
+| Same run: 0.50 USDC that waits on a condition, held in a Handshake escrow; the payee confirmed the terms from their own account, then it was released | [`AFvFRrFx…`](https://testnet.nearblocks.io/txns/AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi) (open), [`4eEmcyis…`](https://testnet.nearblocks.io/txns/4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp) (confirmed), [`8d7msRRg…`](https://testnet.nearblocks.io/txns/8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw) (released) | Confirming different terms was refused (`TERMS_DIFFER`) |
+| A payment over the per-payment cap, held, then approved from the owner's own account (12 Nov, command line) | [`CGqtWddP…`](https://testnet.nearblocks.io/txns/CGqtWddPhTKHMPqPbRRConbC7wSxAo8oSsYzTb5HEdfm) (held), [`6CbYm7qU…`](https://testnet.nearblocks.io/txns/6CbYm7qUaM76WiaPZuycysnXx8Yjq3ChYDVMwTrsAvNN) (approved) | The same app key was refused `withdraw` by NEAR itself: not one of its methods |
 
 ## Features and status
 
@@ -105,9 +110,9 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | USDC payment within caps; over a cap held for the owner's wallet | Live on testnet (8 Nov) |
 | Test credits, so judges need no NEAR AI account | Live (up to 30 installs) |
 | NEAR Intents quote for payees on Solana or Base | Live, dry quote; a payout needs mainnet |
-| Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Built and tested on a local NEAR node |
-| Approving a held payment from the owner's wallet at `/sign` | Built and tested on a local NEAR node |
-| Handshake: escrow until the payee confirms the terms from their own wallet | On testnet since 7 Nov; not yet run with a real wallet |
+| Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Payments ran on testnet on 12 Nov in the headless proof run (same core code as the app); not yet from the Mac app |
+| Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line; the `/sign` page itself is tested on a local NEAR node |
+| Handshake: escrow until the payee confirms the terms from their own wallet | Ran on testnet on 12 Nov in the headless proof run: the payee confirmed from their own account; not yet through the `/deal` page with a browser wallet |
 | Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server | Built and tested; Claude Code [recorded](docs/agents-demo.md) on a stand-in app, not yet with the Mac app |
 | Approvals from your phone, sealed so the relay can't read them | Deployed 7 Nov; run with a simulated Mac, not yet a real phone |
 | Post a recap to Slack | Built and tested against a local stand-in |
@@ -188,6 +193,10 @@ scripts/verify.sh  One command that builds and tests every part
 Run every part locally: [docs/development.md](docs/development.md).
 
 **Platforms:** macOS 14.2+ (Apple silicon and Intel). Windows is next (WASAPI loopback in place of the Core Audio tap). Phones can't record another app's call, so a phone handles approvals at `/phone`, a held payment's wallet approval and a payee's claim link.
+
+## Other project
+
+Victor's other NEAR HACKATHON entry is [ShowUp](https://github.com/Don-Vicks/showup) (https://showup-lake.vercel.app): RSVPs backed by a USDC deposit returned at the door, and sponsors who pay hosts per verified attendee. The two projects are independent and share no code (FAQ Q-015).
 
 ## Built with
 
