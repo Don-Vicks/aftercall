@@ -1,0 +1,252 @@
+{
+  "about": "Every NEAR testnet transaction and proof link the README cites (plus the register, set_cap and in-cap pay that docs/judging.md and /proof link), with what each must show. `pnpm check:live` reads each transaction back from archival RPC (EXPERIMENTAL_tx_status) and checks its signer, receiver, method, arguments, outcome, return value and any USDC moved; the signing key with view_access_key at the transaction's block (so a key deleted since still counts); each proof link with /verify's own checks; and the contract's code hash and keys. Arguments and return values list only the fields a claim rests on.",
+  "network": "testnet",
+  "contract": {
+    "account": "wallet.aftercall.testnet",
+    "codeHash": "Cc3mNqSrQeq1Aty91x9iCX521vD55SpJcFA8FEdBgYWm",
+    "usdc": "3e2210e1184b45b64c8a434c0a7e7b23cc04ea7eb7a6c3c32520d03d4afcb8af",
+    "locked": false,
+    "claim": "The deployed code hash is Cc3mNqSrQeq1Aty91x9iCX521vD55SpJcFA8FEdBgYWm; the contract pays in Circle's testnet USDC; the contract account still has a full-access key, so the code can be upgraded (not locked).",
+    "citedIn": ["README.md#on-chain-evidence"]
+  },
+  "transactions": [
+    {
+      "hash": "2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "record_proof",
+      "args": { "meeting_id": "1793631702", "proof_hash": "8f19a214d417681e2ce61a09297f842ecc37c4fa3d591c516403fd08aa5d60f0", "model": "Qwen/Qwen3.8-27B" },
+      "outcome": "success",
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof"], "now": "same" },
+      "claim": "The proof of a real call's notes, made on live NEAR AI on 2 Nov, recorded on 3 Nov by the Mac app with its limited key; that key, added before 7 Nov, still holds only pay and record_proof.",
+      "citedIn": ["README.md#on-chain-evidence", "README.md#how-to-test", "README.md#why-near", "docs/judging.md"]
+    },
+    {
+      "hash": "Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "kemi-ac.testnet", "amount": "5000000", "meeting_id": "1794164530" },
+      "outcome": "success",
+      "returns": { "status": "sending", "reason": null },
+      "transfer": { "to": "kemi-ac.testnet", "amount": "5000000" },
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof"] },
+      "claim": "A call promised Kemi $5; on 8 Nov the Mac app paid 5 USDC to kemi-ac.testnet, signed by its limited key, with the meeting's id.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/judging.md", "docs/proven.md"]
+    },
+    {
+      "hash": "B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "kemi-ac.testnet", "amount": "5000000000", "meeting_id": "1794164530" },
+      "outcome": "success",
+      "returns": { "status": "blocked", "reason": "OVER_PAYMENT_CAP" },
+      "noTransfer": true,
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof"] },
+      "claim": "The same call's $5,000, over the 10 USDC per-payment cap: the contract answered blocked (OVER_PAYMENT_CAP) and parked it for the owner's wallet; nothing moved.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/judging.md", "docs/proven.md"]
+    },
+    {
+      "hash": "6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "kemi-ac.testnet", "amount": "5000000", "meeting_id": "1794166259" },
+      "outcome": "success",
+      "returns": { "status": "sending", "reason": null },
+      "transfer": { "to": "kemi-ac.testnet", "amount": "5000000" },
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof"] },
+      "claim": "The run screen-recorded for the demo video (8 Nov): 5 USDC paid to kemi-ac.testnet by the app's limited key.",
+      "citedIn": ["README.md#on-chain-evidence", "apps/web/app/proof/page.tsx"]
+    },
+    {
+      "hash": "6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "kemi-ac.testnet", "amount": "5000000000", "meeting_id": "1794166259" },
+      "outcome": "success",
+      "returns": { "status": "blocked", "reason": "OVER_PAYMENT_CAP" },
+      "noTransfer": true,
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof"] },
+      "claim": "The same recorded run: the $5,000 was held over the cap (OVER_PAYMENT_CAP); nothing moved.",
+      "citedIn": ["README.md#on-chain-evidence", "apps/web/app/proof/page.tsx"]
+    },
+    {
+      "hash": "BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq",
+      "signer": "wallet.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "deploy": { "codeHash": "Cc3mNqSrQeq1Aty91x9iCX521vD55SpJcFA8FEdBgYWm" },
+      "outcome": "success",
+      "claim": "The contract was upgraded in place on 7 Nov to add Handshake escrow, deploying the code whose hash is Cc3mNqSrQeq1Aty91x9iCX521vD55SpJcFA8FEdBgYWm. Records from before it still read (the 3 Nov proof in docs/proof-3-nov.txt).",
+      "citedIn": ["README.md#on-chain-evidence", "docs/judging.md", "docs/handshake.md"]
+    },
+    {
+      "hash": "Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "record_proof",
+      "args": { "meeting_id": "proof-run-202611120947", "proof_hash": "c09fcc6e99a849e5642eaa92038386575b26dd942642252a0f08e759136f2c7a", "model": "Qwen/Qwen3.8-27B" },
+      "outcome": "success",
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"] },
+      "claim": "The 12 Nov headless proof run recorded its proof with the owner's limited app key.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md"]
+    },
+    {
+      "hash": "Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "demo-freelancer.aftercall.testnet", "amount": "1000000", "meeting_id": "proof-run-202611120947" },
+      "outcome": "success",
+      "returns": { "status": "sending", "reason": null },
+      "transfer": { "to": "demo-freelancer.aftercall.testnet", "amount": "1000000" },
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"] },
+      "claim": "Same run: autopilot paid the in-cap 1 USDC to demo-freelancer.aftercall.testnet, signed by the limited app key.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md"]
+    },
+    {
+      "hash": "AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "open_escrow",
+      "args": { "escrow_id": "proof-run-202611120947-f2", "payee": "demo-freelancer.aftercall.testnet", "amount": "500000", "has_condition": true, "meeting_id": "proof-run-202611120947", "terms_hash": "8b703bf35bdbb7fdc3791235ca76859d3c10cb43583d18d4a9693c1dad72a9a0" },
+      "outcome": "success",
+      "returns": { "state": "open", "reason": null },
+      "noTransfer": true,
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"] },
+      "claim": "Same run: 0.50 USDC that waits on a condition was held in a Handshake escrow (open), opened by the limited app key; nothing moved yet.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md"]
+    },
+    {
+      "hash": "4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp",
+      "signer": "demo-freelancer.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "confirm_escrow",
+      "args": { "owner": "demo-owner.aftercall.testnet", "escrow_id": "proof-run-202611120947-f2", "terms_hash": "8b703bf35bdbb7fdc3791235ca76859d3c10cb43583d18d4a9693c1dad72a9a0" },
+      "outcome": "success",
+      "returns": "confirmed",
+      "key": { "permission": "FullAccess" },
+      "claim": "Same run: the payee confirmed the escrow's exact terms (the salted hash it was opened with) from their own account.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md"]
+    },
+    {
+      "hash": "8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "release_escrow",
+      "args": { "escrow_id": "proof-run-202611120947-f2" },
+      "outcome": "success",
+      "transfer": { "to": "demo-freelancer.aftercall.testnet", "amount": "500000" },
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"] },
+      "claim": "Same run: the condition met, the escrow was released by the limited app key and 0.50 USDC paid to the payee.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md"]
+    },
+    {
+      "hash": "CGqtWddPhTKHMPqPbRRConbC7wSxAo8oSsYzTb5HEdfm",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "demo-freelancer.aftercall.testnet", "amount": "2000000", "followup_id": "proof-12nov-over-cap" },
+      "outcome": "success",
+      "returns": { "status": "blocked", "reason": "OVER_PAYMENT_CAP" },
+      "noTransfer": true,
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"], "now": "deleted" },
+      "claim": "12 Nov: a payment over the per-payment cap was held. The app key used (DFPd…, deleted after the run) could call only pay, record_proof, open_escrow and release_escrow, so withdraw was refused before any transaction.",
+      "citedIn": ["README.md#on-chain-evidence", "apps/web/app/proof/page.tsx"]
+    },
+    {
+      "hash": "6CbYm7qUaM76WiaPZuycysnXx8Yjq3ChYDVMwTrsAvNN",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "approve_pending",
+      "args": { "followup_id": "proof-12nov-over-cap" },
+      "outcome": "success",
+      "transfer": { "to": "demo-freelancer.aftercall.testnet", "amount": "2000000" },
+      "key": { "permission": "FullAccess" },
+      "claim": "The held payment was then approved from the owner's own account (a full-access key), and paid.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/judging.md", "docs/proven.md"]
+    },
+    {
+      "hash": "25hyBPU5BzPknia4zzSHnPjBG6RVvz2TaQYNSSurbEUt",
+      "signer": "demo-owner.aftercall.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "pay",
+      "args": { "payee": "demo-freelancer.aftercall.testnet", "amount": "500000", "followup_id": "proof-12nov-in-cap" },
+      "outcome": "success",
+      "returns": { "status": "sending", "reason": null },
+      "transfer": { "to": "demo-freelancer.aftercall.testnet", "amount": "500000" },
+      "key": { "permission": "FunctionCall", "receiver": "wallet.aftercall.testnet", "methods": ["pay", "record_proof", "open_escrow", "release_escrow"] },
+      "claim": "12 Nov, the limits: 0.50 USDC within the cap was paid by the same limited app key.",
+      "citedIn": ["apps/web/app/proof/page.tsx"]
+    },
+    {
+      "hash": "64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "register",
+      "outcome": "success",
+      "key": { "permission": "FullAccess" },
+      "claim": "register, signed in the owner's own NEAR wallet (3 Nov).",
+      "citedIn": ["docs/judging.md"]
+    },
+    {
+      "hash": "GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo",
+      "signer": "nov3.testnet",
+      "receiver": "wallet.aftercall.testnet",
+      "method": "set_cap",
+      "args": { "daily_cap": "25000000" },
+      "outcome": "success",
+      "key": { "permission": "FullAccess" },
+      "claim": "set_cap, signed in the owner's own NEAR wallet (3 Nov).",
+      "citedIn": ["docs/judging.md"]
+    }
+  ],
+  "proofs": [
+    {
+      "file": "docs/proof-sample.txt",
+      "owner": "nov3.testnet",
+      "meetingId": "1794160059",
+      "passed": 7,
+      "of": 7,
+      "cantRecheck": 1,
+      "txs": [],
+      "claim": "The 8 Nov sample call's proof passes /verify 7 of 7; NVIDIA has retired the key behind its GPU token, so that check can't be re-run.",
+      "citedIn": ["README.md#how-to-test", "docs/judging.md"]
+    },
+    {
+      "file": "docs/proof-3-nov.txt",
+      "owner": "nov3.testnet",
+      "meetingId": "1793631702",
+      "passed": 7,
+      "of": 7,
+      "cantRecheck": 1,
+      "txs": ["2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro"],
+      "claim": "The real call's proof (notes made 2 Nov, recorded 3 Nov) passes /verify 7 of 7, and is the proof record_proof put on NEAR.",
+      "citedIn": ["README.md#on-chain-evidence", "README.md#how-to-test", "docs/judging.md"]
+    },
+    {
+      "file": "docs/proof-payment-call.txt",
+      "owner": "nov3.testnet",
+      "meetingId": "1794166259",
+      "passed": 7,
+      "of": 7,
+      "cantRecheck": 1,
+      "txs": ["6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN", "6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou"],
+      "claim": "The screen-recorded payment call's proof passes /verify 7 of 7 (8 of 8 until NVIDIA retired its GPU token key), and is the meeting both payments name.",
+      "citedIn": ["README.md#on-chain-evidence"]
+    },
+    {
+      "file": "docs/proof-run.md",
+      "owner": "demo-owner.aftercall.testnet",
+      "meetingId": "proof-run-202611120947",
+      "passed": 8,
+      "of": 8,
+      "cantRecheck": 0,
+      "txs": ["Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi", "Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP", "AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi"],
+      "claim": "The 12 Nov headless run's proof passes /verify 8 of 8, its GPU check kept after NVIDIA retires the key through Aftercall's archived copy; it is the proof record_proof put on NEAR and the meeting the payment and escrow name.",
+      "citedIn": ["README.md#on-chain-evidence", "docs/proof-run.md", "docs/judging.md"]
+    }
+  ]
+}
