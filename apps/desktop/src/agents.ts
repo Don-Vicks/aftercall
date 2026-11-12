@@ -149,6 +149,22 @@ export function ago(iso: string, now: number): string {
   return `on ${new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
 }
 
+/**
+ * Aftercall's MCP server for apps that read the common `mcpServers` JSON: Cursor
+ * (~/.cursor/mcp.json), Claude Desktop (claude_desktop_config.json) and Windsurf
+ * (~/.codeium/windsurf/mcp_config.json). The same server and token as the Codex block.
+ */
+export function mcpServersJson(info: AgentsInfo): string {
+  const server = { command: "node", args: [info.serverPath, "--data-dir", info.dataDir], env: { AFTERCALL_TOKEN: info.token ?? TOKEN_PLACEHOLDER } };
+  return JSON.stringify({ mcpServers: { aftercall: server } }, null, 2);
+}
+
+/** The same server for VS Code's mcp.json, which names the list `servers` and says the transport. */
+export function vscodeMcpJson(info: AgentsInfo): string {
+  const server = { type: "stdio", command: "node", args: [info.serverPath, "--data-dir", info.dataDir], env: { AFTERCALL_TOKEN: info.token ?? TOKEN_PLACEHOLDER } };
+  return JSON.stringify({ servers: { aftercall: server } }, null, 2);
+}
+
 /** The block for ~/.codex/config.toml. JSON strings are valid TOML basic strings. */
 export function codexConfig(info: AgentsInfo): string {
   const token = info.token ?? TOKEN_PLACEHOLDER;

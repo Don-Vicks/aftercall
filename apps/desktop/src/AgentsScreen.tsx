@@ -3,7 +3,7 @@ import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { Check, X } from "lucide-react";
 import { initials, type Meeting } from "@aftercall/core";
-import { PREVIEW_INFO, agentLabel, agentsApi, codexConfig, describeActivity, lastHeard, type AgentActivity, type AgentsInfo, type ClaudeOutcome } from "./agents";
+import { PREVIEW_INFO, agentLabel, agentsApi, codexConfig, describeActivity, lastHeard, mcpServersJson, vscodeMcpJson, type AgentActivity, type AgentsInfo, type ClaudeOutcome } from "./agents";
 import { projectsApi, type Project } from "./projects";
 import { ConnectedCard, StartSteps } from "./AgentsStart";
 import { isDesktop } from "./recorder";
@@ -168,7 +168,7 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
           <header className="flex flex-col gap-1.5" style={rise(0)}>
             <span className="t-eyebrow text-muted">On this Mac only</span>
             <h1 className="t-display m-0">Coding agents</h1>
-            <p className="m-0 text-ink-2">Let Claude Code or Codex pick up action items from your meetings.</p>
+            <p className="m-0 text-ink-2">Let Claude Code, Codex, Cursor or any app that speaks MCP pick up action items from your meetings.</p>
             <p className="m-0 mt-1 text-[13px] leading-[19px] text-ink-2">{SCOPE}</p>
             <Why className="mt-0.5">
               Agents reach a small server on this Mac, which asks Aftercall over a local channel only while this is on. What an agent reads then goes wherever
@@ -195,6 +195,25 @@ export function AgentsScreen({ meetings, onOpenMeeting }: { meetings: Meeting[];
                 </span>
               ) : (
                 "Turn on \u201cLet agents read your meetings\u201d first. Then a config block for ~/.codex/config.toml appears here, with your token."
+              )}
+            </Why>
+            <Why label="Using Cursor, Claude Desktop, VS Code or Windsurf?" className="px-1">
+              {info.enabled ? (
+                <span className="flex flex-col gap-2">
+                  <span>
+                    The same server works in any app that speaks MCP. For Cursor, add this to <span className="t-mono text-ink">~/.cursor/mcp.json</span>; for Claude
+                    Desktop, to <span className="t-mono text-ink">claude_desktop_config.json</span> (Settings → Developer → Edit Config); for Windsurf, to{" "}
+                    <span className="t-mono text-ink">~/.codeium/windsurf/mcp_config.json</span>. Merge it with any servers already there, then restart the app.
+                  </span>
+                  <Snippet text={mcpServersJson(info)} label="Copy the config for Cursor, Claude Desktop or Windsurf" />
+                  <span>
+                    For VS Code, run <span className="t-mono text-ink">MCP: Open User Configuration</span> and add:
+                  </span>
+                  <Snippet text={vscodeMcpJson(info)} label="Copy the config for VS Code" />
+                  <span>Each needs Node 20 or later. If the app can't find node, put its full path (Terminal: which node) in place of "node".</span>
+                </span>
+              ) : (
+                "Turn on \u201cLet agents read your meetings\u201d first. Then the config for these apps appears here, with your token."
               )}
             </Why>
           </div>
