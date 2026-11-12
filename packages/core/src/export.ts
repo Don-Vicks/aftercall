@@ -1,4 +1,5 @@
-import { formatUsdc } from "./money.ts";
+import { formatUsdc, USDC_DECIMALS } from "./money.ts";
+import { explorerTxUrl, type Network } from "./network.ts";
 import { formatClock, formatDuration, type ActionItem, type FollowUp, type Meeting } from "./meeting.ts";
 import type { Attendee } from "./calendar.ts";
 import { isYou, othersOn, speakerLabel } from "./people.ts";
@@ -242,4 +243,134 @@ export function exportMarkdown(x: MeetingExport): string {
 /** A meeting as Markdown, in one call. */
 export function meetingMarkdown(meeting: Meeting, opts: ExportOptions = {}): string {
   return exportMarkdown(meetingExport(meeting, opts));
+}
+
+// ---------- The money trail, as CSV a bookkeeper can read ----------
+//
+// Unlike the meeting export above, this one is about money: it names payees' NEAR accounts
+// and links every transaction, because a bookkeeper needs both. One row per payment (or
+// deposit, or withdrawal), where it stands now, with the transaction that put it there.
+// Statuses and amounts come from the contract or the transaction, never from the model's text.
+
+/** Where a payment stands, in a bookkeeper's words. */
+export type LedgerStatus =
+  /** Paid from the agent wallet within your caps. */
+  | "paid"
+  /** Over a cap: parked in the contract for your own wallet. Nothing has moved. */
+  | "held for approval"
+  /** Held over a cap, then approved in your wallet, which paid it. */
+  | "approved and paid"
+  /** Held over a cap, then declined in your wallet. Nothing was paid. */
+  | "declined"
+  /** Set aside in the contract for a deal (Handshake); not paid yet. */
+  | "in escrow"
+  /** Paid to the payee out of escrow. */
+  | "released"
+  /** An escrow's money went back on your agent wallet's balance. */
+  | "returned"
+  /** The transfer didn't land, and the amount came back. */
+  | "failed and refunded"
+  /** Left the agent wallet for NEAR Intents, which hasn't (yet) paid the payee on Solana or Base. Mainnet only. */
+  | "sent to NEAR Intents"
+  /** USDC from your NEAR account into your agent wallet. */
+  | "deposited"
+  /** USDC from your agent wallet back to your NEAR account. */
+  | "withdrawn";
+
+/**
+ * Who let the money move. "you or autopilot": Aftercall's limited key signed it, and the
+ * chain doesn't record whether you tapped it or autopilot ran it. Empty while nobody has
+ * (a payment held for your wallet).
+ */
+export type LedgerApprover =
+  | "you"
+  | "you, on your phone"
+  | "autopilot"
+  | "you or autopilot"
+  | "your wallet"
+  | "the payee confirmed"
+  | "the payee confirmed, then you released it"
+  | "the payee"
+  | "";
+
+export interface LedgerRow {
+  /** When it reached this status, as an ISO 8601 UTC time; empty when unknown. */
+  date: string;
+  /** The meeting's title, or its id when only the chain was read; empty when no meeting is linked. */
+  meeting: string;
+  /** The payee's label ("Illustrator"); the CSV shows the account when it's empty. */
+  payee: string;
+  payeeAccount: string;
+  /** USDC base units (6 decimals); null when the amount isn't known. */
+  amount: bigint | null;
+  status: LedgerStatus;
+  approvedBy: LedgerApprover;
+  network: Network;
+  /** The NEAR transaction that put it in this status; empty when there is none. */
+  tx: string;
+  /** The transaction that recorded the meeting's proof hash on NEAR; empty when there is none. */
+  proofTx: string;
+  /** What happened to the money, in a sentence or two. */
+  note: string;
+}
+
+export interface LedgerCsvOptions {
+  /**
+   * What the date column holds: "transaction" (when the row reached its status, read from
+   * NEAR; the default) or "meeting" (the meeting's start, for rows built from what the Mac
+   * app keeps). The header says which.
+   */
+  dates?: "transaction" | "meeting";
+}
+
+/** The header row, in order. */
+export const LEDGER_COLUMNS = ["Date (UTC)", "Meeting", "Payee", "Payee account", "Amount", "Currency", "Status", "Approved by", "Transaction", "Meeting proof", "Note"] as const;
+
+/** "5000.00" for 5,000 USDC: two decimals and no thousands separator; more decimals only when the amount has them, so it's never rounded. */
+export function ledgerAmount(baseUnits: bigint): string {
+  const scale = 10n ** BigInt(USDC_DECIMALS);
+  const sign = baseUnits < 0n ? "-" : "";
+  const abs = baseUnits < 0n ? -baseUnits : baseUnits;
+  const frac = (abs % scale).toString().padStart(USDC_DECIMALS, "0").replace(/0+$/, "").padEnd(2, "0");
+  return `${sign}${abs / scale}.${frac}`;
+}
+
+/** "2026-11-12T09:48:22Z": UTC, to the second. Empty for a time that isn't one. */
+export function ledgerTime(ms: number): string {
+  return Number.isFinite(ms) ? new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z") : "";
+}
+
+/**
+ * One field, RFC 4180: always quoted, inner quotes doubled. Line breaks and runs of
+ * spaces become one space, so each row stays on one line. A field a spreadsheet would
+ * run as a formula (starting =, +, - or @) gets a leading apostrophe, so text from a call
+ * can't become one.
+ */
+function csvField(value: string): string {
+  const flat = value.replace(/\s+/g, " ").trim();
+  const safe = /^[=+\-@]/.test(flat) ? `'${flat}` : flat;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
+
+/**
+ * The rows as CSV (RFC 4180): a header row, every field quoted, CRLF line ends, UTF-8.
+ * Amounts in USDC with two decimals; transactions and proofs as links to the NEAR
+ * explorer for each row's network.
+ */
+export function ledgerCsv(rows: readonly LedgerRow[], opts: LedgerCsvOptions = {}): string {
+  const header = LEDGER_COLUMNS.map((c) => (c === "Date (UTC)" && opts.dates === "meeting" ? "Meeting date (UTC)" : c));
+  const fields = (r: LedgerRow) => [
+    r.date,
+    r.meeting,
+    r.payee || r.payeeAccount,
+    r.payeeAccount,
+    r.amount === null ? "" : ledgerAmount(r.amount),
+    "USDC",
+    r.status,
+    r.approvedBy,
+    r.tx ? explorerTxUrl(r.network, r.tx) : "",
+    r.proofTx ? explorerTxUrl(r.network, r.proofTx) : "",
+    r.note,
+  ];
+  return [header, ...rows.map(fields)].map((line) => `${line.map(csvField).join(",")}\r\n`).join("");
 }

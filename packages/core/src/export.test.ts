@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EXPORT_EDITED_MARK, escapeMarkdown, meetingExport, meetingMarkdown } from "./export.ts";
+import { EXPORT_EDITED_MARK, LEDGER_COLUMNS, escapeMarkdown, ledgerAmount, ledgerCsv, ledgerTime, meetingExport, meetingMarkdown, type LedgerRow } from "./export.ts";
 import type { EmailFollowUp, Meeting, PaymentFollowUp } from "./meeting.ts";
 
 const startedAt = new Date(2026, 10, 1, 14, 2).toISOString();
@@ -215,4 +215,88 @@ test("Markdown in model, transcript and your text is escaped, so it reads as the
   assert.match(md, /\*\*00:05 You:\*\* \\## shouting - and a list\n/, "a line break inside one line becomes a space, so only the start needs escaping");
   assert.match(md, /\\> quoted  \n\\- dash/);
   assert.doesNotMatch(md, /<script>/);
+});
+
+// ---------- The money trail as CSV ----------
+
+const row: LedgerRow = {
+  date: "2026-11-12T09:49:31Z",
+  meeting: "Illustrator Payment for Bike Icon",
+  payee: "Illustrator",
+  payeeAccount: "demo-freelancer.aftercall.testnet",
+  amount: 1_000_000n,
+  status: "paid",
+  approvedBy: "you or autopilot",
+  network: "testnet",
+  tx: "Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP",
+  proofTx: "Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi",
+  note: "Paid from your agent wallet within your caps.",
+};
+
+/** A small RFC 4180 reader for the tests: every field quoted, doubled quotes, CRLF records. */
+function parseCsv(text: string): string[][] {
+  assert.ok(text.endsWith("\r\n"), "every record ends with CRLF");
+  return text
+    .slice(0, -2)
+    .split("\r\n")
+    .map((line) => {
+      const fields = [...line.matchAll(/"((?:[^"]|"")*)"(?:,|$)/g)];
+      assert.equal(fields.map((m) => m[0]).join(""), line, `every field of ${line} is quoted`);
+      return fields.map((m) => m[1].replace(/""/g, '"'));
+    });
+}
+
+test("the ledger CSV has a header row, every field quoted, CRLF line ends and explorer links", () => {
+  const csv = ledgerCsv([row]);
+  assert.equal(csv.split("\r\n")[0], '"Date (UTC)","Meeting","Payee","Payee account","Amount","Currency","Status","Approved by","Transaction","Meeting proof","Note"');
+  const [header, line, ...rest] = parseCsv(csv);
+  assert.deepEqual(header, [...LEDGER_COLUMNS]);
+  assert.equal(rest.length, 0);
+  assert.deepEqual(line, [
+    "2026-11-12T09:49:31Z",
+    "Illustrator Payment for Bike Icon",
+    "Illustrator",
+    "demo-freelancer.aftercall.testnet",
+    "1.00",
+    "USDC",
+    "paid",
+    "you or autopilot",
+    "https://testnet.nearblocks.io/txns/Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP",
+    "https://testnet.nearblocks.io/txns/Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi",
+    "Paid from your agent wallet within your caps.",
+  ]);
+  assert.equal(csv.match(/\n/g)?.length, 2, "one line per record: no bare LF anywhere");
+  assert.equal(ledgerCsv([]), `${csv.split("\r\n")[0]}\r\n`, "no rows is just the header");
+});
+
+test("mainnet rows link to the mainnet explorer, and the date column can say it holds the meeting's start", () => {
+  const [, line] = parseCsv(ledgerCsv([{ ...row, network: "mainnet" }]));
+  assert.equal(line[8], "https://nearblocks.io/txns/Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP");
+  assert.equal(parseCsv(ledgerCsv([row], { dates: "meeting" }))[0][0], "Meeting date (UTC)");
+  const [, bare] = parseCsv(ledgerCsv([{ ...row, tx: "", proofTx: "", amount: null, payee: "", approvedBy: "" }]));
+  assert.deepEqual([bare[2], bare[4], bare[7], bare[8], bare[9]], ["demo-freelancer.aftercall.testnet", "", "", "", ""], "no label shows the account; nothing known stays empty");
+});
+
+test("amounts have two decimals and no separators, and are never rounded", () => {
+  assert.equal(ledgerAmount(5_000_000_000n), "5000.00");
+  assert.equal(ledgerAmount(500_000n), "0.50");
+  assert.equal(ledgerAmount(1n), "0.000001", "a sub-cent amount keeps its digits rather than reading 0.00");
+  assert.equal(ledgerAmount(1_234_560n), "1.23456");
+  assert.equal(ledgerAmount(0n), "0.00");
+});
+
+test("times are UTC to the second", () => {
+  assert.equal(ledgerTime(Date.UTC(2026, 10, 12, 9, 49, 31, 999)), "2026-11-12T09:49:31Z");
+  assert.equal(ledgerTime(Number.NaN), "");
+});
+
+test("quotes, commas, line breaks and would-be formulas in text from a call stay plain text", () => {
+  const nasty = { ...row, meeting: 'Sync, "Q3"\r\nplan', payee: '=HYPERLINK("http://evil","x")', note: "+1 then -2 @all" };
+  const [, line] = parseCsv(ledgerCsv([nasty]));
+  assert.equal(line[1], 'Sync, "Q3" plan');
+  assert.equal(line[2], `'=HYPERLINK("http://evil","x")`);
+  assert.equal(line[10], "'+1 then -2 @all");
+  assert.equal(parseCsv(ledgerCsv([{ ...row, payee: "-5" }]))[1][2], "'-5");
+  assert.equal(parseCsv(ledgerCsv([{ ...row, payee: " @ada" }]))[1][2], "'@ada", "checked after trimming");
+  assert.equal(parseCsv(ledgerCsv([{ ...row, payee: "Ada = Designer" }]))[1][2], "Ada = Designer", "only a leading mark is defused");
 });
