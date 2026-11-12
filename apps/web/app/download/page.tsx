@@ -59,7 +59,7 @@ const NEEDS: [string, string][] = [
   ...(HAS_DOWNLOAD
     ? ([["A NEAR testnet account, to try payments", "Optional. Settings › NEAR walks you through one. Test USDC is free from Circle's faucet at faucet.circle.com: pick NEAR Testnet."]] as [string, string][])
     : ([["Node 24, pnpm 10 and Rust stable", "To install, check and build the app from source."]] as [string, string][])),
-  ["Your own NEAR AI key", "From cloud.near.ai. Notes run on it, and each run shows an estimated cost."],
+  ["A NEAR AI key, or Aftercall's test credits", "The app offers Aftercall's test credits (a shared, spend-capped key) when you don't have a key from cloud.near.ai. Each run shows an estimated cost."],
 ];
 
 /** V2Download: the tester guide while a test build is published, the build steps otherwise. */
@@ -120,7 +120,7 @@ export default function Download() {
                 )}
               </div>
               <span className={`${d.platform} enter`} style={vars({ d: "140ms", dur: "360ms" })}>
-                {HAS_DOWNLOAD ? "Test build · NEAR testnet · macOS 14.2 or later · your own NEAR AI key" : "Mac only · macOS 14.2 or later · your own NEAR AI key"}
+                {HAS_DOWNLOAD ? "Test build · NEAR testnet · macOS 14.2 or later · test credits offered" : "Mac only · macOS 14.2 or later · a NEAR AI key"}
               </span>
             </div>
 
