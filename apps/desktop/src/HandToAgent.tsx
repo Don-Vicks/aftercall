@@ -53,7 +53,8 @@ async function openClaude(meeting: Pick<Meeting, "id" | "title" | "project">, it
 }
 
 /**
- * "Hand to an agent" on an open action item: a quiet button beside Edit that copies a
+ * "Hand to an agent" on an open action item: a button beside Edit, always shown (not only
+ * on hover, so it can be found), that copies a
  * ready prompt for Claude Code or Codex (`handoffPrompt` in core). The prompt quotes the
  * item as data and asks the agent to claim it through Aftercall's MCP server and complete
  * it with a link to the work. The menu says which switches are off, if any; in a project
@@ -90,9 +91,8 @@ export function HandToAgent({ meeting, item }: { meeting: Pick<Meeting, "id" | "
             variant="quiet"
             aria-label={`Hand “${item.text}” to an agent`}
             tooltip="Hand to an agent"
-            className="opacity-0 transition-opacity duration-(--dur-1) group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
           >
-            <Bot size={14} strokeWidth={2} aria-hidden="true" />
+            <Bot size={14} strokeWidth={2} className="text-verdigris" aria-hidden="true" />
           </IconButton>
         )}
         items={[
