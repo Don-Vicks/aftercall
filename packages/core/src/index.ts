@@ -26,6 +26,7 @@ export * from "./tee/e2ee.ts";
 export * from "./tee/attest.ts";
 export * from "./wallet/actions.ts";
 export * from "./wallet/caps.ts";
+export * from "./wallet/ledger.ts";
 export * from "./followups/recap.ts";
 export * from "./followups/slack.ts";
 export * from "./followups/boundaries.ts";
