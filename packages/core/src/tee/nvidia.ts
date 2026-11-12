@@ -19,6 +19,8 @@ export interface Jwk {
   kid?: string;
   x?: string;
   y?: string;
+  /** The key's certificate chain as NVIDIA serves it: the leaf, then the intermediate that signed it (base64 DER). */
+  x5c?: string[];
 }
 
 export interface Jwks {
