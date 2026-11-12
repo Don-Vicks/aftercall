@@ -79,7 +79,7 @@ flowchart TB
   end
   web["Web: /verify · /sign · /claim · /phone"]
   rec --> notes
-  notes -- "end-to-end encrypted" --> whisper
+  notes -- "TLS pinned to the attested gateway" --> whisper
   notes -- "end-to-end encrypted" --> qwen
   notes --> fu
   fu -- "pay · record_proof (limited key)" --> wallet
