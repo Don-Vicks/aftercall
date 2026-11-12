@@ -374,12 +374,12 @@ function Recorded({ proof, recorded, start }: { proof: PublicProof; recorded: Te
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div className={v.blockHead}>
           <h2 id="vr" className="t-section">
-            As recorded by the app <span className="count">on the Mac, {checkedAt}</span>
+            As recorded when the notes were made <span className="count">{checkedAt}</span>
           </h2>
           <span>{recorded.length} checks</span>
         </div>
         <div className={v.whyLine}>
-          <span>Your browser can&apos;t repeat the Intel quote check, nor NVIDIA&apos;s once NVIDIA retires the key that signed it (it keeps them about two days), so these are shown as the app ran them.</span>
+          <span>Your browser can&apos;t repeat the Intel quote check, nor NVIDIA&apos;s once NVIDIA retires the key that signed it (it keeps them about two days), so these are shown as they ran when the notes were made.</span>
           <details className="why">
             <summary>Why?</summary>
             <span className="why-body" style={{ display: "block", marginTop: 6 }}>
