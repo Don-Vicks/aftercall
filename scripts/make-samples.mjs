@@ -74,6 +74,25 @@ export const SAMPLES = [
       ["you", "Perfect. I'll send the recap to both of you after this call. Thanks, everyone."],
     ],
   },
+  {
+    id: "illustrator-quick",
+    title: "Quick call with Ada, freelance illustrator",
+    project: "Sample: Moonbeam Bikes booking page",
+    // scripts/proof-run.ts lists the payee on testnet; the account here is a placeholder.
+    payees: [{ name: "Illustrator", account: "illustrator.near" }],
+    vocabulary: ["Ada", "Moonbeam Bikes", "Illustrator"],
+    speakers: { you: YOU, ada: { name: "Ada (illustrator)", voice: "Karen", stem: "system" } },
+    lines: [
+      ["ada", "Hi, it's Ada. The bike icon for the booking page is finished."],
+      ["you", "I saw it this morning. It's exactly what we wanted."],
+      ["ada", "Great. For the icon itself, my fee is one dollar."],
+      ["you", "Fair enough. I'll pay the illustrator one dollar today for the icon."],
+      ["ada", "Thanks. I can also send the source files, so you can change the colours later."],
+      ["you", "Yes please. I'll pay the illustrator another fifty cents once you send the source files."],
+      ["ada", "Deal. You'll have them by Friday."],
+      ["you", "Perfect. Talk soon."],
+    ],
+  },
 ];
 
 /** The PCM samples of a 16-bit mono WAV (finds the "data" chunk; `say` adds others). */
@@ -167,4 +186,6 @@ if (process.platform !== "darwin") {
   console.error("make-samples needs macOS (it uses `say`). The generated samples are already in samples/.");
   process.exit(1);
 }
-for (const s of SAMPLES) build(s);
+// pnpm samples:make [id ...]: only those samples, or all of them.
+const only = process.argv.slice(2);
+for (const s of SAMPLES) if (!only.length || only.includes(s.id)) build(s);

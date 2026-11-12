@@ -1,0 +1,75 @@
+{
+  "id": "illustrator-quick",
+  "title": "Quick call with Ada, freelance illustrator",
+  "fictional": "Every person, company and amount in this call is made up. Voices are macOS text-to-speech.",
+  "seconds": 34,
+  "payees": [
+    {
+      "name": "Illustrator",
+      "account": "illustrator.near"
+    }
+  ],
+  "vocabulary": [
+    "Ada",
+    "Moonbeam Bikes",
+    "Illustrator"
+  ],
+  "lines": [
+    {
+      "at": 1,
+      "speaker": "others",
+      "name": "Ada (illustrator)",
+      "voice": "Karen",
+      "text": "Hi, it's Ada. The bike icon for the booking page is finished."
+    },
+    {
+      "at": 5.4,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "I saw it this morning. It's exactly what we wanted."
+    },
+    {
+      "at": 9,
+      "speaker": "others",
+      "name": "Ada (illustrator)",
+      "voice": "Karen",
+      "text": "Great. For the icon itself, my fee is one dollar."
+    },
+    {
+      "at": 12.9,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Fair enough. I'll pay the illustrator one dollar today for the icon."
+    },
+    {
+      "at": 17.5,
+      "speaker": "others",
+      "name": "Ada (illustrator)",
+      "voice": "Karen",
+      "text": "Thanks. I can also send the source files, so you can change the colours later."
+    },
+    {
+      "at": 23.2,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Yes please. I'll pay the illustrator another fifty cents once you send the source files."
+    },
+    {
+      "at": 28.8,
+      "speaker": "others",
+      "name": "Ada (illustrator)",
+      "voice": "Karen",
+      "text": "Deal. You'll have them by Friday."
+    },
+    {
+      "at": 31.4,
+      "speaker": "you",
+      "name": "You",
+      "voice": "Samantha",
+      "text": "Perfect. Talk soon."
+    }
+  ]
+}
