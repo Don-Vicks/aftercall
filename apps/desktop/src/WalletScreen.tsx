@@ -2,10 +2,26 @@ import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, ty
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Check, ExternalLink, Pause, Play, Plus, RefreshCw } from "lucide-react";
-import { CHAIN_NAME, exampleAccount, formatClock, formatUsdc, heldPaymentActions, isValidPayoutAddress, meetingTime, type Meeting, type Network, type OwnerAction, type PayeeDestination, type PaymentFollowUp, type PayoutChain } from "@aftercall/core";
+import { Check, Copy, ExternalLink, Pause, Play, Plus, RefreshCw, Share } from "lucide-react";
+import {
+  CHAIN_NAME,
+  exampleAccount,
+  formatClock,
+  formatUsdc,
+  heldPaymentActions,
+  isValidPayoutAddress,
+  ledgerCsv,
+  ledgerRowsFromMeetings,
+  meetingTime,
+  type Meeting,
+  type Network,
+  type OwnerAction,
+  type PayeeDestination,
+  type PaymentFollowUp,
+  type PayoutChain,
+} from "@aftercall/core";
 import { KEY_METHODS_TEXT, SignPageDown, contractFollowupId, explorerTx, near, signInWallet, waitFor, type WalletView } from "./near";
-import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast, useRecalledFigure } from "./ui";
+import { Avatar, Button, Card, Dialog, Field, IconButton, Input, LayoutMotion, Menu, Pill, RollingNumber, SectionTitle, Spinner, cx, enter, exit, springs, toast, useRecalledFigure } from "./ui";
 import { isDesktop } from "./recorder";
 import { dailyCap as sampleDailyCap, perPaymentCap as samplePerPaymentCap, walletBalance as sampleBalance } from "./sample";
 
@@ -52,6 +68,7 @@ export function WalletScreen({
   blocked,
   samplePaid,
   paymentsFrom,
+  proofs,
   onOpenMeeting,
   onOpenSettings,
   onResolved,
@@ -60,8 +77,10 @@ export function WalletScreen({
   blocked: BlockedPayment[];
   /** What the sample meeting has paid: the browser preview's sample wallet counts it as spent today. */
   samplePaid: bigint;
-  /** Meetings whose paid follow-ups make up Recent payments. */
+  /** Meetings whose paid follow-ups make up Recent payments, and whose payments the CSV export lists. */
   paymentsFrom: Meeting[];
+  /** Where each meeting's proof was recorded on NEAR, by meeting id: the CSV export links it. */
+  proofs?: Readonly<Record<string, { network: Network; txHash: string }>>;
   /** Opens a meeting at a moment in its transcript (a payment's quote). */
   onOpenMeeting: (id: string, at?: number) => void;
   onOpenSettings: () => void;
@@ -178,7 +197,7 @@ export function WalletScreen({
   const payments = paidPayments(paymentsFrom);
 
   return (
-    <Shell eyebrow={eyebrow} sample={!isDesktop} onRefresh={load}>
+    <Shell eyebrow={eyebrow} sample={!isDesktop} onRefresh={load} actions={<ExportPayments meetings={paymentsFrom} network={network} proofs={proofs} />}>
       <Card pad="lg" className="flex flex-col gap-5" style={rise(1)}>
         <section aria-label="Balance" className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex flex-col gap-1">
@@ -624,7 +643,47 @@ function sampleWallet(paid: bigint, parked: number): WalletView {
   };
 }
 
-function Shell({ eyebrow, sample, onRefresh, children }: { eyebrow: string; sample?: boolean; onRefresh?: () => void; children: ReactNode }) {
+/** Said once, in the menu: what the copy holds and where it can go. */
+export const LEDGER_EXPORT_NOTE =
+  "For your bookkeeper: a row per payment paid, held, declined or in escrow, with its NEAR transaction. Paste it into a text file saved as .csv, then open that in Numbers, Excel or Google Sheets. Copies aren't encrypted.";
+
+/**
+ * The wallet's Export menu, like a meeting's: copies every payment the app knows about as
+ * CSV (core `ledgerRowsFromMeetings`, `ledgerCsv`) to the clipboard, the way a meeting is
+ * copied as Markdown. Statuses come from the follow-ups, which the app sets from the
+ * contract's replies; the date column is each meeting's start.
+ */
+function ExportPayments({ meetings, network, proofs }: { meetings: Meeting[]; network: Network; proofs?: Readonly<Record<string, { network: Network; txHash: string }>> }) {
+  const copy = async () => {
+    // A proof recorded on another network isn't this explorer's to link.
+    const proofTx = Object.fromEntries(Object.entries(proofs ?? {}).flatMap(([id, p]) => (p.network === network ? [[id, p.txHash]] : [])));
+    const rows = ledgerRowsFromMeetings(meetings, { network, proofTx });
+    if (rows.length === 0) return toast({ text: "Nothing to export yet: no payment has been paid, held or put in escrow.", tone: "caution" });
+    try {
+      await navigator.clipboard.writeText(ledgerCsv(rows, { dates: "meeting" }));
+      const what = `${rows.length} ${rows.length === 1 ? "payment" : "payments"}`;
+      toast({ text: isDesktop ? `Copied ${what} as CSV` : `Copied the sample's ${what} as CSV. Sample payments aren't on NEAR.`, tone: "verdigris" });
+    } catch (e) {
+      toast({ text: `Couldn't copy: ${e instanceof Error ? e.message : String(e)}`, tone: "record" });
+    }
+  };
+  return (
+    <Menu
+      label="Export payments"
+      align="end"
+      width={300}
+      note={LEDGER_EXPORT_NOTE}
+      trigger={(p) => (
+        <IconButton {...p} aria-label="Export payments" tooltip="Export payments as CSV" tooltipSide="bottom">
+          <Share size={16} strokeWidth={1.75} aria-hidden="true" />
+        </IconButton>
+      )}
+      items={[{ label: "Copy as CSV", icon: <Copy size={14} strokeWidth={2} aria-hidden="true" />, onSelect: () => void copy() }]}
+    />
+  );
+}
+
+function Shell({ eyebrow, sample, onRefresh, actions, children }: { eyebrow: string; sample?: boolean; onRefresh?: () => void; actions?: ReactNode; children: ReactNode }) {
   return (
     <main className="min-w-0 flex-1 overflow-y-auto border-l border-hairline bg-raised">
       <div data-tauri-drag-region className="sticky top-0 z-10 h-9 bg-raised" />
@@ -639,10 +698,15 @@ function Shell({ eyebrow, sample, onRefresh, children }: { eyebrow: string; samp
             </div>
             <p className="m-0 text-ink-2">Aftercall pays only the people below, within your caps. Every change is signed in your wallet.</p>
           </div>
-          {onRefresh && (
-            <IconButton aria-label="Refresh from NEAR" tooltipSide="bottom" onClick={onRefresh}>
-              <RefreshCw size={16} strokeWidth={1.75} />
-            </IconButton>
+          {(actions || onRefresh) && (
+            <div className="flex shrink-0 items-center gap-1">
+              {actions}
+              {onRefresh && (
+                <IconButton aria-label="Refresh from NEAR" tooltipSide="bottom" onClick={onRefresh}>
+                  <RefreshCw size={16} strokeWidth={1.75} />
+                </IconButton>
+              )}
+            </div>
           )}
         </header>
         {children}

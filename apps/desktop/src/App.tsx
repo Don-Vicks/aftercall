@@ -786,6 +786,11 @@ export default function App() {
   // Everything on screen leaves out meetings that are waiting out their delete Undo.
   // Kept between renders, so a paired phone's snapshot is rebuilt only when a meeting changes.
   const shownMeetings = useMemo(() => Object.values(meetings).filter((m) => !hidden[m.id]), [meetings, hidden]);
+  /** Where each meeting's proof was recorded on NEAR, by meeting id: the wallet's CSV export links it. */
+  const proofsOnNear = useMemo(
+    () => Object.fromEntries(Object.entries(saved).flatMap(([id, s]) => (s.onChain ? [[id, { network: s.onChain.network, txHash: s.onChain.txHash }]] : []))),
+    [saved],
+  );
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
   const rules = loadRules();
   const autopilotOn = rules.payments || rules.recapDomains.length > 0;
@@ -974,6 +979,7 @@ export default function App() {
                 samplePaid={paidBySample(meetings[syncWithAda.id])}
                 // Paid follow-ups are the payment history: real meetings on this Mac; the sample's in the browser preview.
                 paymentsFrom={shownMeetings.filter((m) => (isDesktop ? saved[m.id] : m.id === syncWithAda.id))}
+                proofs={proofsOnNear}
                 onOpenMeeting={openMeeting}
                 onOpenSettings={() => setView({ name: "settings" })}
                 onResolved={resolveHeld}
