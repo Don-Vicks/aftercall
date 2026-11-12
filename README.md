@@ -128,7 +128,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Autopilot's decision (`meetingAutopilotDecision`, the app's own code) paid an in-cap payment on testnet on 12 Nov in the headless proof run, after a 60-second wait in the script; the app's own runner and undo haven't run live |
 | Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line. The transactions `/sign` builds are unit-tested and their contract path runs on a local NEAR node; the page itself hasn't approved a parked payment in a browser wallet |
 | Handshake: escrow until the payee confirms the terms from their own wallet | Ran on testnet on 12 Nov in the headless proof run: the payee confirmed from their own account; not yet through the `/deal` page with a browser wallet |
-| Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server; Hand to an agent on every open item | Built and tested; Claude Code [recorded](docs/agents-demo.md) on a stand-in app, not yet with the Mac app. Coding agents also shows the config for Cursor, Claude Desktop, VS Code and Windsurf (standard MCP; not yet tried in those apps) |
+| Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server; Hand to an agent on every open item | Built and tested. On 12 Nov, Claude Code connected to the installed Mac app's own MCP server and read its meetings and open action items ([screenshot](docs/media/claude-code-mcp-12nov.webp)); claiming and completing an item in the Mac app isn't shown yet. A full claim, fix and complete is [recorded](docs/agents-demo.md) against the server's stand-in app. Coding agents also shows the config for Cursor, Claude Desktop, VS Code and Windsurf (standard MCP; not yet tried in those apps) |
 | Approvals from your phone, sealed so the relay can't read them | Deployed 7 Nov; run with a simulated Mac, not yet a real phone |
 | Post a recap to Slack | Built and tested against a local stand-in |
 | Encrypted backup to iCloud Drive | Built and tested; not yet with real iCloud Drive |
@@ -145,6 +145,9 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="apps/web/public/landing/palette-detail-dark.webp"><img src="apps/web/public/landing/palette-detail-light.webp" alt="The command palette" width="100%"></picture><br><sub>⌘K searches decisions, action items and transcript lines.</sub></td>
 </tr>
 </table>
+
+<img src="docs/media/claude-code-mcp-12nov.webp" alt="Claude Code listing the Mac app's recent meetings and open action items through Aftercall's MCP server" width="100%">
+<sub>12 Nov: Claude Code 2.1.322 connected to the installed Mac app through Aftercall's MCP server (Coding agents → Connect Claude Code) and asked for recent meetings and open action items. The sample meetings are as Claude Code listed them; rows from private meetings are hidden in this screenshot. Agents only read until you turn on claiming, as its last line says.</sub>
 
 ## Claims, code and tests
 
