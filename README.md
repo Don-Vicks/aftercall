@@ -19,14 +19,14 @@ Meeting-notes apps send your calls to servers you can't inspect, and they stop a
 ## What Aftercall does
 
 1. **Records the call** from any app on your Mac. No bot joins the meeting.
-2. **Makes the notes in secure hardware.** Before anything is sent, the app checks NEAR AI Cloud's TEE attestation, then encrypts the transcript end to end to the attested model. Every note must quote the call; items without an exact quote are dropped.
+2. **Makes the notes in secure hardware.** Before anything is sent, the app checks NEAR AI Cloud's TEE attestation, then encrypts the transcript end to end to the attested model. (The audio goes to transcription over TLS pinned to the attested gateway's key: NEAR AI has no end-to-end encryption for transcription.) Every note must quote the call; items without an exact quote are dropped.
 3. **Proves it on NEAR.** A hash of each meeting's proof is recorded on chain, never the meeting itself. Anyone with the proof link can re-run every check in a browser at `/verify`.
 4. **Does the follow-ups.** It sends the recap and pays what the call agreed in USDC after one tap, or on autopilot rules you set. The app's key can only pay listed payees within daily and per-payment caps; anything larger waits for your own wallet.
 
 ## Why NEAR
 
 - **NEAR AI Cloud** runs the speech and language models (`openai/whisper-large-v3`, `Qwen/Qwen3.8-27B`) inside Intel TDX and NVIDIA confidential-computing TEEs, with attestation the app verifies on every run.
-- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow`.
+- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow` (a key added before 7 Nov holds only `pay` and `record_proof` until the owner updates it once; the one on `nov3.testnet` still does).
 - **NEAR Intents** quotes payouts to payees on Solana or Base.
 
 ## Demo
@@ -40,12 +40,12 @@ Choose by the time you have. Every command, link and expected result is in [docs
 
 | Time | What you do | What you see |
 | --- | --- | --- |
-| 1 min | Open the link in [docs/proof-sample.txt](docs/proof-sample.txt) in a browser | A sample call's proof re-checked against NEAR testnet: 8 of 8 checks pass |
+| 1 min | Open the link in [docs/proof-sample.txt](docs/proof-sample.txt) in a browser | A sample call's proof re-checked against NEAR testnet: 7 of 7 checks pass (8 of 8 for its first two days, until NVIDIA retired the key that signed its GPU token; that check is then shown as the app recorded it) |
 | 1 min | Open [`record_proof`](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro) on `wallet.aftercall.testnet` | A real call's proof, sent by the Mac app; its link is in [docs/proof-3-nov.txt](docs/proof-3-nov.txt) |
 | 2 min | Open https://getaftercall.vercel.app/demo | The app in a browser on a sample meeting |
 | 5 min | `pnpm install && pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app` | A simulated Mac pairs with your phone; approve or dismiss what it sends ([more](docs/judging.md#5-minutes-approve-from-your-own-phone)) |
 | 10 min | `curl -fsSL https://getaftercall.vercel.app/install.sh \| sh` | The Mac app (macOS 14.2+, unsigned test build, NEAR testnet) ([more](docs/judging.md#10-minutes-the-mac-app)) |
-| From source, with NEAR AI | `pnpm --filter @aftercall/core proof:run` with `NEAR_AI_API_KEY`, `OWNER`, `PAYEE` and `APP_KEY` set ([how](packages/core/scripts/proof-run.ts)) | The sample call's notes from NEAR AI's TEEs, its proof on testnet, an autopilot payment and a Handshake escrow, written to `docs/proof-run.md` |
+| From source, with NEAR AI | `pnpm --filter @aftercall/core proof:run` with `NEAR_AI_API_KEY`, `OWNER`, `PAYEE` and `APP_KEY` set, near-cli-rs on the PATH, the owner registered with the payee listed and a per-payment cap of at least 1 USDC, and the payee's key in near-cli's keychain ([details](packages/core/scripts/proof-run.ts)) | The sample call's notes from NEAR AI's TEEs, its proof on testnet, an autopilot payment and a Handshake escrow, written to `docs/proof-run.md` |
 | From source | `pnpm install && pnpm verify --quick` | A ✓ line per step and exit code 0 ([full verify](docs/judging.md#from-source-pnpm-verify)) |
 
 Requirements for source builds: Node 24, pnpm 10, stable Rust. Making notes in the Mac app needs a NEAR AI key; the app offers Aftercall's test credits if you don't have one. `/verify`, `/demo`, `/phone` and `/stats` render with JavaScript, so open them in a browser rather than fetching them.
@@ -85,19 +85,19 @@ Details: [how-it-works.md](docs/how-it-works.md) (every attestation check) · [p
 
 ## On-chain evidence
 
-All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://getaftercall.vercel.app/stats.
+All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://getaftercall.vercel.app/stats. The contract account still has a full-access key, so the code can be upgraded; the mainnet deploy is meant to remove it ([threat-model.md](docs/threat-model.md)).
 
 | Event | Transaction | Result |
 | --- | --- | --- |
 | Proof of a real call's notes, made on live NEAR AI (2 Nov) | [`2oawJPTm…`](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro) | Recorded 3 Nov; `/verify` passes 7 of 7 ([link](docs/proof-3-nov.txt)) |
 | A call promised Kemi $5; the app paid 5 USDC to `kemi-ac.testnet` | [`Eq3rPHqz…`](https://testnet.nearblocks.io/txns/Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH) | Paid 8 Nov, signed by the app's limited key and linked to the meeting's proof |
 | The same call's $5,000, over the 10 USDC per-payment cap | [`B8xV41mT…`](https://testnet.nearblocks.io/txns/B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE) | `blocked` (`OVER_PAYMENT_CAP`): parked for the owner's wallet, nothing moved |
-| The same run, screen-recorded for the demo video | [`6jK1mauq…`](https://testnet.nearblocks.io/txns/6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN) (paid), [`6jHzBdiT…`](https://testnet.nearblocks.io/txns/6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou) (held) | That call's proof passes 8 of 8 ([link](docs/proof-payment-call.txt)) |
-| Contract upgraded in place to add Handshake escrow | [`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq) | 7 Nov, every record kept |
-| Headless proof run (12 Nov): a fictional sample call through NEAR AI's TEEs, 30 of 30 checks; its proof passes 8 of 8 on `/verify` | [`Af4cs3Pn…`](https://testnet.nearblocks.io/txns/Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi) | [docs/proof-run.md](docs/proof-run.md): every step and both links |
+| The same run, screen-recorded for the demo video | [`6jK1mauq…`](https://testnet.nearblocks.io/txns/6jK1mauqjVNhhJnmvVuhPiP8DzxCBR9Na9ysoKo6jmKN) (paid), [`6jHzBdiT…`](https://testnet.nearblocks.io/txns/6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou) (held) | That call's proof passes 7 of 7 ([link](docs/proof-payment-call.txt)); 8 of 8 until NVIDIA retired its GPU token key |
+| Contract upgraded in place to add Handshake escrow | [`BQXQAhui…`](https://testnet.nearblocks.io/txns/BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq) | 7 Nov, every record kept. Deployed code hash `Cc3mNqSrQeq1Aty91x9iCX521vD55SpJcFA8FEdBgYWm`: `contracts/agent-wallet` is unchanged since commit `2f450e1`, and rebuilding it on 12 Nov (`cargo near build non-reproducible-wasm`, cargo-near 0.22.0, rustc 1.98.1, macOS) gives exactly this hash |
+| Headless proof run (12 Nov): a fictional sample call through NEAR AI's TEEs, 30 of 30 checks; its proof passed 8 of 8 on `/verify` on 12 Nov (7 of 7 once NVIDIA retires its GPU token key, about two days later) | [`Af4cs3Pn…`](https://testnet.nearblocks.io/txns/Af4cs3PnouGWKhciSgbHmmE1kgqD1rsggXT4GdtLJZzi) | [docs/proof-run.md](docs/proof-run.md): every step and both links |
 | Same run: autopilot paid the in-cap 1 USDC after its 60-second undo window, signed by the limited app key | [`Ay4Yte5e…`](https://testnet.nearblocks.io/txns/Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP) | Test accounts `demo-owner` and `demo-freelancer` (`.aftercall.testnet`) |
-| Same run: 0.50 USDC that waits on a condition, held in a Handshake escrow; the payee confirmed the terms from their own account, then it was released | [`AFvFRrFx…`](https://testnet.nearblocks.io/txns/AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi) (open), [`4eEmcyis…`](https://testnet.nearblocks.io/txns/4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp) (confirmed), [`8d7msRRg…`](https://testnet.nearblocks.io/txns/8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw) (released) | Confirming different terms was refused (`TERMS_DIFFER`) |
-| A payment over the per-payment cap, held, then approved from the owner's own account (12 Nov, command line) | [`CGqtWddP…`](https://testnet.nearblocks.io/txns/CGqtWddPhTKHMPqPbRRConbC7wSxAo8oSsYzTb5HEdfm) (held), [`6CbYm7qU…`](https://testnet.nearblocks.io/txns/6CbYm7qUaM76WiaPZuycysnXx8Yjq3ChYDVMwTrsAvNN) (approved) | The same app key was refused `withdraw` by NEAR itself: not one of its methods |
+| Same run: 0.50 USDC that waits on a condition, held in a Handshake escrow; the payee confirmed the terms from their own account, then it was released | [`AFvFRrFx…`](https://testnet.nearblocks.io/txns/AFvFRrFxu5dNkXEawpWF3RuptPTEjZR9fVqSLxmHZDWi) (open), [`4eEmcyis…`](https://testnet.nearblocks.io/txns/4eEmcyisyppCVkXDN7ikymrQDSLw5oEtoLqXs7trLcLp) (confirmed), [`8d7msRRg…`](https://testnet.nearblocks.io/txns/8d7msRRgDyQfLi1aWNidLwSSGuxVeGBcNc6Vt8qfgJMw) (released) | Confirming different terms was refused (`TERMS_DIFFER`) before any transaction was sent, so there's none to link |
+| A payment over the per-payment cap, held, then approved from the owner's own account (12 Nov, command line) | [`CGqtWddP…`](https://testnet.nearblocks.io/txns/CGqtWddPhTKHMPqPbRRConbC7wSxAo8oSsYzTb5HEdfm) (held), [`6CbYm7qU…`](https://testnet.nearblocks.io/txns/6CbYm7qUaM76WiaPZuycysnXx8Yjq3ChYDVMwTrsAvNN) (approved) | The app key used here (`DFPd…`, deleted after the run) couldn't send `withdraw` at all: "Transaction method name <withdraw> isn't allowed by the access key", so there's no transaction |
 
 ## Features and status
 
@@ -108,10 +108,10 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | Proof on NEAR, re-checkable at `/verify` | Live |
 | Recap email through Aftercall, with a footer saying what was checked | Live (since 6 Nov) |
 | USDC payment within caps; over a cap held for the owner's wallet | Live on testnet (8 Nov) |
-| Test credits, so judges need no NEAR AI account | Live (up to 30 installs) |
+| Test credits, so judges need no NEAR AI account | Live (up to 30 installs): the backend hands out one shared, spend-capped key (`/nearai/test-credits`, checked 12 Nov) |
 | NEAR Intents quote for payees on Solana or Base | Live, dry quote; a payout needs mainnet |
-| Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Payments ran on testnet on 12 Nov in the headless proof run (same core code as the app); not yet from the Mac app |
-| Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line; the `/sign` page itself is tested on a local NEAR node |
+| Autopilot: recaps and payments that pass every rule run on their own, with a 60-second undo | Autopilot's decision (`meetingAutopilotDecision`, the app's own code) paid an in-cap payment on testnet on 12 Nov in the headless proof run, after a 60-second wait in the script; the app's own runner and undo haven't run live |
+| Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line. The transactions `/sign` builds are unit-tested and their contract path runs on a local NEAR node; the page itself hasn't approved a parked payment in a browser wallet |
 | Handshake: escrow until the payee confirms the terms from their own wallet | Ran on testnet on 12 Nov in the headless proof run: the payee confirmed from their own account; not yet through the `/deal` page with a browser wallet |
 | Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server | Built and tested; Claude Code [recorded](docs/agents-demo.md) on a stand-in app, not yet with the Mac app |
 | Approvals from your phone, sealed so the relay can't read them | Deployed 7 Nov; run with a simulated Mac, not yet a real phone |
