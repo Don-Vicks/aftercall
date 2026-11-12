@@ -70,6 +70,9 @@ test("only follow-ups that wait on someone become items; sent and paid ones are 
   // A coding agent's proposal stays on the Mac: the phone shows only what the call said.
   const { evidence: _quote, ...unquoted } = payment;
   assert.equal(toPendingItem(meeting, { ...unquoted, proposedBy: { agent: "Codex", at: "2026-11-02T10:00:00.000Z", reason: "Pay the designer" } }, opts), null);
+  // So does a recap you added yourself ("Send a recap"): nothing from the call backs it.
+  const { evidence: _q, ...emailUnquoted } = email;
+  assert.equal(toPendingItem(meeting, { ...emailUnquoted, addedByYou: true }, opts), null);
   assert.equal(toPendingItem(meeting, { ...payment, status: "blocked" }, opts)?.status, "blocked");
   // A deal waits on the Mac: the phone shows no condition, so it could pay before it's met.
   assert.equal(toPendingItem(meeting, { ...payment, condition: { text: "when the icons are delivered", evidence: { quote: "once the icons are delivered", at: 0 } } }, opts), null);
