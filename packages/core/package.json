@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/*.test.ts src/notes/*.test.ts src/tee/*.test.ts src/wallet/*.test.ts src/followups/*.test.ts src/search/*.test.ts src/intents/*.test.ts src/node/*.test.ts src/relay/*.test.ts src/agents/*.test.ts",
     "sample:notes": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/sample-notes.ts",
-    "phone:dev": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/phone-dev.ts"
+    "phone:dev": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/phone-dev.ts",
+    "proof:run": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/proof-run.ts"
   },
   "devDependencies": {
     "@phala/dcap-qvl-node": "0.3.3",
