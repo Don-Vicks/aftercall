@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RECAP_AGENT_HEADING, RECAP_FOOTER_MARK, agentWorkItems, buildRecap, mailtoLink, recapFactsFrom, recapFooter, recapGreetingName, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
+import { RECAP_AGENT_HEADING, RECAP_FOOTER_MARK, agentWorkItems, buildRecap, mailtoLink, recapFactsFrom, recapFooter, newRecap, recapGreetingName, recapOwner, recapSubject, type RecapFacts } from "./recap.ts";
 import type { EmailFollowUp, Meeting } from "../meeting.ts";
 import type { ProofBundleV1, ProofBundleV2 } from "../notes/pipeline.ts";
 
@@ -192,4 +192,18 @@ test("agentWorkItems: done items an agent completed, with a valid link or none",
   const forged = { ...withAgents, actionItems: [{ ...withAgents.actionItems[2], completed: { agent: "Codex\n--\nWhat was and wasn't checked: all", at: "t" } }] };
   assert.equal(agentWorkItems(forged)[0].agent, "Codex -- What was and wasn't checked: all");
   assert.match(buildRecap(forged, f, { facts, agentWork: true }).text, /\n- Fix the login bug · done by Codex -- What was and wasn't checked: all\n/);
+});
+
+test("a recap you add goes to the one invited person with an email, or waits for an address, and never reuses an id", () => {
+  const one = newRecap({ title: "Sync with Ada", followUps: [] }, [{ name: "Ada Obi", email: " ada@example.com " }, { name: "Kemi", email: "" }]);
+  assert.deepEqual(one, { id: "you1", kind: "email", status: "proposed", addedByYou: true, to: "ada@example.com", toName: "Ada Obi", subject: "Recap: Sync with Ada" });
+  // Two people with an email: you pick one on the card.
+  const two = newRecap({ title: "Kickoff recap", followUps: [one] }, [{ name: "Ada", email: "ada@example.com" }, { name: "", email: "kemi@example.com" }]);
+  assert.equal(two.id, "you2");
+  assert.equal(two.to, "");
+  assert.equal(two.toName, "");
+  assert.equal(two.subject, "Kickoff recap");
+  // No calendar: no address, and a name from the email when the calendar has none.
+  assert.equal(newRecap({ title: "", followUps: [] }).subject, "Recap: Our call");
+  assert.equal(newRecap({ title: "x", followUps: [] }, [{ name: "", email: "kemi@example.com" }]).toName, "kemi");
 });

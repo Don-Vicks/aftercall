@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot, meetingAutopilotDecision, NOT_VERIFIED_REASON } from "./autopilot.ts";
+import { ADDED_BY_YOU_REASON, AUTOPILOT_HELD, agentProposalReason, autopilotDecision, DEFAULT_RULES, holdInterruptedAutopilot, meetingAutopilotDecision, NOT_VERIFIED_REASON } from "./autopilot.ts";
 import { awaitsYou, type EmailFollowUp, type Meeting, type PaymentFollowUp } from "../meeting.ts";
 
 const usdc = (n: number) => BigInt(n) * 1_000_000n;
@@ -85,4 +85,11 @@ test("a recap already posted to Slack no longer waits: autopilot leaves it, and 
   assert.equal(awaitsYou(posted), false);
   assert.equal(awaitsYou(recap), true);
   assert.equal(awaitsYou({ ...recap, draftedAt: "14:06" }), true, "a draft in Mail may not have gone out");
+});
+
+test("a recap you added never goes out on autopilot, even to your team's domain", () => {
+  const f: EmailFollowUp = { id: "you1", kind: "email", status: "proposed", addedByYou: true, to: "ada@team.com", toName: "Ada", subject: "Recap: Sync" };
+  const d = autopilotDecision(f, { payments: true, recapDomains: ["team.com"] }, null);
+  assert.equal(d.run, false);
+  assert.deepEqual(d.reasons, [ADDED_BY_YOU_REASON]);
 });

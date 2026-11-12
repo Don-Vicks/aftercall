@@ -1,4 +1,5 @@
 import type { EmailFollowUp, Meeting, NoticeLog } from "../meeting.ts";
+import type { Attendee } from "../calendar.ts";
 import { hasFullChecks, type ProofBundle } from "../notes/pipeline.ts";
 import { workLink, workLinkLabel } from "../agents/work.ts";
 
@@ -226,4 +227,27 @@ function recapHtml(
 export function mailtoLink(r: Recap): string {
   const q = `subject=${encodeURIComponent(r.subject)}&body=${encodeURIComponent(r.text)}`;
   return `mailto:${encodeURIComponent(r.to).replace(/%40/g, "@")}?${q}`;
+}
+
+/**
+ * A recap you add on the meeting page ("Send a recap"), when the call didn't ask for one or
+ * you want another. Addressed to the one invited person with an email, if there is exactly
+ * one; otherwise the address is left for you to pick or type. Its id is `you1`, `you2`…
+ * so it never takes the id of a follow-up from the notes (`f1`…) or an agent's.
+ */
+export function newRecap(meeting: Pick<Meeting, "title" | "followUps">, invited: Attendee[] = []): EmailFollowUp {
+  const taken = new Set(meeting.followUps.map((f) => f.id));
+  let n = 1;
+  while (taken.has(`you${n}`)) n++;
+  const withEmail = invited.filter((a) => a.email.trim());
+  const one = withEmail.length === 1 ? withEmail[0] : undefined;
+  return {
+    id: `you${n}`,
+    kind: "email",
+    status: "proposed",
+    addedByYou: true,
+    to: one?.email.trim() ?? "",
+    toName: one ? one.name.trim() || one.email.trim().split("@")[0] : "",
+    subject: recapSubject(meeting.title.trim() || "Our call"),
+  };
 }

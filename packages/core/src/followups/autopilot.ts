@@ -35,6 +35,8 @@ export const AMOUNT_PROBLEM_REASONS: Record<AmountProblemKind, string> = {
 
 /** Why a follow-up a coding agent proposed waits for a person: always. */
 export const agentProposalReason = (agent: string) => `Proposed by ${agent}: what an agent proposes always waits for you`;
+/** Why a recap you added on the meeting page doesn't go out by itself. */
+export const ADDED_BY_YOU_REASON = "You added it, not the call: it waits for your tap";
 
 /** Seconds a person has to undo an autopilot follow-up before it runs. */
 export const UNDO_SECONDS = 60;
@@ -84,6 +86,7 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
   if (f.status !== "proposed") return { run: false, reasons: ["Not waiting"] };
   if (postedToSlack(f)) return { run: false, reasons: ["Already posted to Slack"] };
   // Only the call proposes what may run by itself; an agent's proposal needs your tap.
+  if (f.addedByYou) return { run: false, reasons: [ADDED_BY_YOU_REASON] };
   if (f.proposedBy || !f.evidence) return { run: false, reasons: [agentProposalReason(f.proposedBy?.agent ?? "an agent")] };
   if (f.autopilotHeld) return { run: false, reasons: [AUTOPILOT_HELD] };
   if (f.kind === "email") {

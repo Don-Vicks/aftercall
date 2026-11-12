@@ -84,7 +84,8 @@ interface FollowUpBase {
   status: FollowUpStatus;
   /**
    * The exact words from the transcript behind it. Absent only on a follow-up a coding
-   * agent proposed (`proposedBy`): those come from the agent, not the call.
+   * agent proposed (`proposedBy`) or you added yourself (`addedByYou`): those don't come
+   * from the call.
    */
   evidence?: Evidence;
   /**
@@ -93,6 +94,12 @@ interface FollowUpBase {
    * autopilot, and a payment goes only to a listed payee within your caps, after your tap.
    */
   proposedBy?: AgentProposal;
+  /**
+   * Set when you added it on the meeting page ("Send a recap"), rather than the call
+   * asking for it. Nothing from the call backs it, so it never runs on autopilot and
+   * isn't sent to your phone: it waits for your tap on the Mac.
+   */
+  addedByYou?: boolean;
   /** Time the follow-up completed, as shown in its pill ("14:06"). */
   doneAt?: string;
   /** NEAR transaction (payments) or email id (recaps) once done. */
