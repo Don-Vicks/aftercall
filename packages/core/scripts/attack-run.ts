@@ -340,11 +340,13 @@ doc(`A coding agent (Claude Code, Codex) reads meetings over Aftercall's MCP ser
 doc("");
 doc("| | Attack | Stopped by | Evidence | Result |");
 doc("| --- | --- | --- | --- | --- |");
+// The Mac app's crate builds only on macOS (Core Audio, WebKit), as scripts/verify.sh says.
+const isMac = process.platform === "darwin";
 const hasCargo = spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0;
 const hasUi = existsSync(join(root, "apps", "desktop", "dist", "index.html"));
 let rustResult = "not run";
-if (!hasCargo || !hasUi) {
-  rustResult = `not run in this log (${!hasCargo ? "no cargo on the PATH" : "the desktop UI isn't built: pnpm --filter @aftercall/desktop build"})`;
+if (!isMac || !hasCargo || !hasUi) {
+  rustResult = `not run in this log (${!isMac ? "the Mac app's Rust tests build only on macOS" : !hasCargo ? "no cargo on the PATH" : "the desktop UI isn't built: pnpm --filter @aftercall/desktop build"})`;
   say(`B1 the app's Rust check: ${rustResult}`);
 } else {
   say(`B1 the app's Rust check: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ${rustTest}`);
