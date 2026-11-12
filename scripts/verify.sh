@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Every check in the repo, from a clean checkout:
-#   pnpm verify          # everything, including the contract on a local NEAR node (~5 min)
+#   pnpm verify          # everything, including the contract on a local NEAR node (about 15 min; the node tests alone take about 10)
 #   pnpm verify --quick  # skips the NEAR node tests
 #
 # Needs Node 24, pnpm 10, Rust stable with the wasm32-unknown-unknown target and cargo-near.
