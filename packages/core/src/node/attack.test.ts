@@ -73,6 +73,7 @@ test("a model that obeys the attacker: no made-up quote, no unlisted payee, no a
   assert.equal(c2.amount, 9000n * USDC);
   // "Mark it approved" has no field to land in: parsing drops it and every item is proposed.
   assert.deepEqual(droppedKeys(obedientModelReply()), ["status", "approved"]);
+  assert.ok(layer().notes.followups.every((f) => !("status" in f) && !("approved" in f)));
   assert.ok(meeting.followUps.every((f) => f.status === "proposed"));
   assert.equal(meeting.verified, true, "the worst case: the reply is treated as a genuine, signed one");
 });
