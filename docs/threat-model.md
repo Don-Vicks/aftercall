@@ -24,10 +24,10 @@ The Mac holds a NEAR function-call key that may call only `pay`, `record_proof`,
 **What it can't do:**
 - Change any rule: the caps, the payee list, pause, withdraw, or approve and cancel parked payments and escrows.
   Every such method calls `assert_one_yocto`, and a NEAR function-call key can't attach a deposit, so only the owner's own wallet (a full-access key) can sign them.
-- Pay anyone who isn't on the list, or pay more than the caps in a day.
+- Pay anyone who isn't on the list, or pay more than the caps in a day. One exception: once the owner sets a cross-chain cap above zero, the key picks the NEAR Intents deposit address for a listed payee's cross-chain payment, so up to that cap could go to an address it chose (the cross-chain cap is 0, off, until the owner sets it).
 - Confirm an escrow; that takes the payee's own account.
 
-**Worst case:** one day's cap, to people you already listed. **The fix:** `set_paused`, or delete the key, from your wallet.
+**Worst case:** one day's cap, to people you already listed (plus the cross-chain cap, if the owner turned it on). **The fix:** `set_paused`, or delete the key, from your wallet.
 
 Details per method: [handshake.md](handshake.md), "The contract's rules" and "What a stolen app key can do here". Tests: `contracts/agent-wallet/tests/sandbox.rs` (a local NEAR node) and the unit tests in `lib.rs`.
 
@@ -89,6 +89,15 @@ Over the local MCP server, an agent can:
 - propose a recap, or a payment to a listed payee within the caps.
 
 **A proposal** waits for your tap: it never runs on autopilot and never reaches the phone. **An agent can't** send, pay, post to Slack, record proofs or change notes. Code: `apps/desktop/src-tauri/src/agents.rs`, `apps/mcp`.
+
+## Prompt injection
+
+A voice on a call, or text a coding agent reads, can tell the model or an agent to pay someone. What stops it, layer by layer, with a run on NEAR testnet, is in [attack-log.md](attack-log.md) (`pnpm --filter @aftercall/core attack:run`).
+
+- **The notes:** every item needs an exact quote from the transcript; a payee not on your list gets no Pay button, only a claim link, and never runs on autopilot; the amount must be in its quote; the notes format has no way to mark anything approved.
+- **Agents:** the app accepts an agent's payment proposal only to a listed payee within the caps, and it always waits for your tap.
+- **The contract:** anything else meets the payee list and the caps, which the app's key can't change; on testnet a payment to an unlisted account failed (`UNKNOWN_PAYEE`) and 9,000 USDC to a listed payee was parked (`OVER_PAYMENT_CAP`).
+- **Not covered:** with autopilot payments on, an injected line naming a payee already on your list, with an amount under your caps, would be paid. The caps bound it.
 
 ## Decisions a person made
 
