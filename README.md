@@ -2,15 +2,23 @@
 
 **Private meeting notes that do the follow-ups.**
 
-Aftercall is a Mac app that records your calls, makes the notes inside NEAR AI Cloud's secure hardware, and then acts on what was agreed: it sends the recap and pays what the call promised in USDC, within limits a NEAR contract enforces.
+Aftercall is a Mac app that records your calls and makes the notes inside NEAR AI Cloud's secure hardware, which it checks before anything is sent. A proof of each meeting goes on NEAR, and anyone with its link can re-check it in a browser. Then Aftercall sends the recap and pays what the call agreed in USDC, only within limits a NEAR contract enforces.
 
-[![Download for Mac](https://img.shields.io/badge/Download-Mac%20test%20build-2f7d6d)](https://getaftercall.vercel.app/download)
-[![Try it in your browser](https://img.shields.io/badge/Try%20it-in%20your%20browser-2f7d6d)](https://getaftercall.vercel.app/demo)
-[![NEAR testnet](https://img.shields.io/badge/NEAR-testnet%20contract%20live-111)](#on-chain-evidence)
+**[Watch the 1:30 demo](https://x.com/VictorShallang/status/2119529850646020401)** · **[See what has run on NEAR testnet](https://getaftercall.vercel.app/proof)** · **[Try it in your browser](https://getaftercall.vercel.app/demo)** · [Download for Mac](https://getaftercall.vercel.app/download)
+
 [![CI](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml/badge.svg)](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-555)](LICENSE)
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="apps/web/public/landing/meeting-dark.webp"><img src="apps/web/public/landing/meeting-light.webp" alt="A meeting in Aftercall: verified notes, each item backed by a quote from the call" width="100%"></picture>
+<img src="docs/media/testnet-strip.webp" alt="Real footage of the Mac app on NEAR testnet on 8 Nov: Kemi paid 5 USDC from the contract and the same call's $5,000 held for the owner's wallet (OVER_PAYMENT_CAP), next to that call's proof re-checked in a browser at /verify" width="100%">
+<sub>The Mac app on NEAR testnet, 8 Nov. One call promised Kemi $5 and $5,000: the 5 USDC was paid, the $5,000 was over the cap and held for the owner's own wallet, and the call's proof re-checks in a browser.</sub>
+
+### What has run on NEAR testnet
+
+- **8 Nov, from the Mac app:** notes from a sample call made in NEAR AI's TEEs, the proof recorded on NEAR, 5 USDC paid to Kemi with the app's limited key, and the same call's $5,000 held by the contract for the owner's wallet.
+- **12 Nov, the app's after-call code run headless with test accounts:** autopilot paid an in-cap 1 USDC after its 60-second undo window, and 0.50 USDC that waited on a condition stayed in escrow until the payee confirmed the terms from their own account, then was released.
+- **12 Nov, the limits:** a payment over the cap was held, then approved from the owner's own account; the app's key couldn't send `withdraw` at all.
+
+Every transaction, one click each and no wallet needed: **https://getaftercall.vercel.app/proof**. The full table is under [On-chain evidence](#on-chain-evidence); what hasn't run yet is under [Features and status](#features-and-status).
 
 ## The problem
 
@@ -20,7 +28,7 @@ Meeting-notes apps send your calls to servers you can't inspect, and they stop a
 
 1. **Records the call** from any app on your Mac. No bot joins the meeting.
 2. **Makes the notes in secure hardware.** Before anything is sent, the app checks NEAR AI Cloud's TEE attestation, then encrypts the transcript end to end to the attested model. (The audio goes to transcription over TLS pinned to the attested gateway's key: NEAR AI has no end-to-end encryption for transcription.) Every note must quote the call; items without an exact quote are dropped.
-3. **Proves it on NEAR.** A hash of each meeting's proof is recorded on chain, never the meeting itself. Anyone with the proof link can re-run every check in a browser at `/verify`.
+3. **Proves it on NEAR.** A hash of each meeting's proof is recorded on chain, never the meeting itself. Anyone with the proof link can re-check it in a browser at `/verify`: the hash on NEAR, the reply's signature and NVIDIA's GPU token are checked again there, and the rest are shown as the app recorded them.
 4. **Does the follow-ups.** It sends the recap and pays what the call agreed in USDC after one tap, or on autopilot rules you set. The app's key can only pay listed payees within daily and per-payment caps; anything larger waits for your own wallet.
 
 ## Why NEAR
@@ -31,7 +39,7 @@ Meeting-notes apps send your calls to servers you can't inspect, and they stop a
 
 ## Demo
 
-- **Video (1:30, real footage):** [posted on X](https://x.com/VictorShallang/status/2119529850646020401). The Mac app during the 8 Nov testnet run: consent, the secure-hardware checks, notes with quotes, a recap emailed, a 5 USDC payment, a $5,000 payment held for the owner's wallet, and the call's proof passing 8 of 8 on `/verify`.
+- **Video (1:30, real footage):** [posted on X](https://x.com/VictorShallang/status/2119529850646020401). The Mac app during the 8 Nov testnet run: consent, the secure-hardware checks, notes with quotes, a recap emailed, a 5 USDC payment, a $5,000 payment held for the owner's wallet, and the call's proof passing on `/verify` (8 of 8 then; 7 of 7 today, since NVIDIA retired the key behind one check).
 - **In your browser:** https://getaftercall.vercel.app/demo opens a sample meeting with its notes, checks, follow-ups and a live NEAR Intents quote (dry: nothing is sent).
 
 ## How to test
@@ -40,7 +48,7 @@ Choose by the time you have. Every command, link and expected result is in [docs
 
 | Time | What you do | What you see |
 | --- | --- | --- |
-| 1 min | Open the link in [docs/proof-sample.txt](docs/proof-sample.txt) in a browser | A sample call's proof re-checked against NEAR testnet: 7 of 7 checks pass (8 of 8 for its first two days, until NVIDIA retired the key that signed its GPU token; that check is then shown as the app recorded it) |
+| 1 min | Open https://getaftercall.vercel.app/proof | Every testnet transaction and proof link, one click each; a proof re-checks in your browser against NEAR. The sample call's proof is also in [docs/proof-sample.txt](docs/proof-sample.txt) (7 of 7; 8 of 8 for its first two days, until NVIDIA retired the key behind one check) |
 | 1 min | Open [`record_proof`](https://testnet.nearblocks.io/txns/2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro) on `wallet.aftercall.testnet` | A real call's proof, sent by the Mac app; its link is in [docs/proof-3-nov.txt](docs/proof-3-nov.txt) |
 | 2 min | Open https://getaftercall.vercel.app/demo | The app in a browser on a sample meeting |
 | 5 min | `pnpm install && pnpm dev:phone -- --relay https://aftercall-api.vercel.app --web https://getaftercall.vercel.app` | A simulated Mac pairs with your phone; approve or dismiss what it sends ([more](docs/judging.md#5-minutes-approve-from-your-own-phone)) |
