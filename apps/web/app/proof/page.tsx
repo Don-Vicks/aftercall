@@ -43,6 +43,12 @@ const RUNS: Run[] = [
         body: "Over the 10 USDC per-payment cap, so the contract parked it for the owner's own wallet (OVER_PAYMENT_CAP). Nothing moved.",
         links: [tx("pay, held", "6jHzBdiTCbcgdQ7QbCXySWW1fPEeypik3ZxV7SqXiLou"), { label: "Watch it, 1:30", href: "https://x.com/VictorShallang/status/2119529850646020401" }],
       },
+      {
+        where: "near",
+        title: "The same call, its first run that day",
+        body: "The first time the sample call ran on 8 Nov, the app paid Kemi 5 USDC with the same limited key, and the contract held the $5,000 the same way.",
+        links: [tx("pay", "Eq3rPHqzDXoanWV8u1kETAkb3WSD1rTrT7ia4CzMqwXH"), tx("pay, held", "B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE")],
+      },
     ],
   },
   {
@@ -103,6 +109,32 @@ const RUNS: Run[] = [
     ],
   },
   {
+    id: "attack",
+    when: "12 Nov 2026",
+    title: "A prompt-injection attack, stopped",
+    intro: "A voice on a made-up call tells the AI to pay drain.aftercall.testnet $9,000. The notes layer and autopilot stop it before anything is sent; here the app's own limited key tries it directly against the contract.",
+    items: [
+      {
+        where: "near",
+        title: "Pay an account that isn't listed: failed",
+        body: "The contract refused 9,000 USDC to drain.aftercall.testnet (UNKNOWN_PAYEE). Nothing moved.",
+        links: [tx("pay, failed", "Fd9PnR9rnjNradwvuMmSGUkw2XKjreWAoiqNg18dmWdA")],
+      },
+      {
+        where: "near",
+        title: "9,000 USDC to a listed payee: held, then declined",
+        body: "Over the 1 USDC per-payment cap, so the contract parked it for the owner (OVER_PAYMENT_CAP); the owner declined it from their own account.",
+        links: [tx("pay, held", "AAvo8YwmEf6AJvtoCUtGSs3ZFjf6GjVuhwE23JtdHGTN"), tx("declined", "8UjvpB9PmswuzRtMVwJKbKR3SvmEK4g1SVu8WwUPiQgJ")],
+      },
+      {
+        where: "near",
+        title: "Withdraw, raise a cap, add a payee: refused",
+        body: "NEAR wouldn't send any of them: the app key may call only pay, record_proof, open_escrow and release_escrow. There are no transactions.",
+        links: [{ label: "Every layer, in the attack log", href: `${REPO}/blob/main/docs/attack-log.md` }],
+      },
+    ],
+  },
+  {
     id: "first",
     when: "2–3 Nov 2026",
     title: "The first proof from a real call",
@@ -113,6 +145,18 @@ const RUNS: Run[] = [
         title: "Proof recorded by the Mac app",
         body: "Notes made on 2 Nov, proof recorded on NEAR on 3 Nov with the app's limited key.",
         links: [tx("record_proof", "2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro"), verify(FIRST_REAL_CALL)],
+      },
+      {
+        where: "near",
+        title: "Set up in the owner's own wallet",
+        body: "register and set_cap, signed in the owner's NEAR wallet on 3 Nov: the caps the app's key can never change.",
+        links: [tx("register", "64pwAs3SfUcAJr9vKxGrX6fmhPHzKiUrnKdSWorTEkNz"), tx("set_cap", "GDALCrvkRhnMR3qjdpuA9nLVrdFMa4HYSCmwmxhfUuRo")],
+      },
+      {
+        where: "near",
+        title: "The contract, upgraded in place for Handshake",
+        body: "7 Nov: the code with escrow was deployed over the old one, and the 3 Nov proof still reads. It still has a full-access key, so it can be upgraded again.",
+        links: [tx("upgrade", "BQXQAhui6ixc2B7QacSoSyw6MWqUvgkGvyfSUfCzYpoq")],
       },
     ],
   },
