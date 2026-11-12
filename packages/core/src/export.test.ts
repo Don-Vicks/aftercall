@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EXPORT_EDITED_MARK, LEDGER_COLUMNS, escapeMarkdown, ledgerAmount, ledgerCsv, ledgerTime, meetingExport, meetingMarkdown, type LedgerRow } from "./export.ts";
+import { EXPORT_EDITED_MARK, LEDGER_COLUMNS, escapeMarkdown, ledgerAmount, ledgerCsv, ledgerRowsFromMeetings, ledgerTime, meetingExport, meetingMarkdown, type LedgerRow } from "./export.ts";
 import type { EmailFollowUp, Meeting, PaymentFollowUp } from "./meeting.ts";
 
 const startedAt = new Date(2026, 10, 1, 14, 2).toISOString();
@@ -299,4 +299,74 @@ test("quotes, commas, line breaks and would-be formulas in text from a call stay
   assert.equal(parseCsv(ledgerCsv([{ ...row, payee: "-5" }]))[1][2], "'-5");
   assert.equal(parseCsv(ledgerCsv([{ ...row, payee: " @ada" }]))[1][2], "'@ada", "checked after trimming");
   assert.equal(parseCsv(ledgerCsv([{ ...row, payee: "Ada = Designer" }]))[1][2], "Ada = Designer", "only a leading mark is defused");
+});
+
+const paidFollowUp = meeting.followUps[1] as PaymentFollowUp;
+const held = { network: "testnet" as const, contract: "wallet.aftercall.testnet", account: "victor.testnet" };
+const escrowBase = { id: "m1-f2", link: "https://getaftercall.vercel.app/deal#x", termsHash: "ab".repeat(32), on: held, ref: "OpenTx" };
+const rowsFor = (...followUps: PaymentFollowUp[]) => ledgerRowsFromMeetings([{ ...meeting, followUps }], { network: "testnet", proofTx: { m1: "ProofTx" } });
+
+test("rows from the Mac app carry the meeting, payee, amount, transaction and proof", () => {
+  const [r] = rowsFor({ ...paidFollowUp, ref: "PayTx" });
+  assert.deepEqual(r, {
+    date: ledgerTime(Date.parse(startedAt)),
+    meeting: "Sync with Ada",
+    payee: "Designer",
+    payeeAccount: "designer.near",
+    amount: 50_000_000n,
+    network: "testnet",
+    tx: "PayTx",
+    proofTx: "ProofTx",
+    status: "paid",
+    approvedBy: "you",
+    note: "Paid from your agent wallet within your caps.",
+  });
+  assert.equal(rowsFor({ ...paidFollowUp, byAutopilot: true })[0].approvedBy, "autopilot");
+  assert.equal(rowsFor({ ...paidFollowUp, byPhone: true })[0].approvedBy, "you, on your phone");
+  assert.equal(ledgerRowsFromMeetings([meeting], { network: "testnet" })[0].proofTx, "", "no proof on NEAR, no proof link");
+});
+
+test("each payment state maps to one bookkeeper's status, and payments that moved nothing have no row", () => {
+  const status = (f: PaymentFollowUp) => rowsFor(f).map((r) => [r.status, r.approvedBy, r.tx]);
+  assert.deepEqual(status({ ...paidFollowUp, status: "blocked", ref: "HeldTx", heldOn: held }), [["held for approval", "", "HeldTx"]]);
+  assert.deepEqual(status({ ...paidFollowUp, status: "paid", ref: "HeldTx", heldOn: held }), [["approved and paid", "your wallet", "HeldTx"]]);
+  assert.deepEqual(status({ ...paidFollowUp, status: "dismissed", ref: "HeldTx", heldOn: held }), [["declined", "your wallet", "HeldTx"]]);
+  assert.deepEqual(status({ ...paidFollowUp, status: "failed", ref: "BouncedTx" }), [["failed and refunded", "you", "BouncedTx"]]);
+  for (const s of ["proposed", "sending", "dismissed"] as const) assert.deepEqual(status({ ...paidFollowUp, status: s, ref: undefined }), [], s);
+  assert.deepEqual(status({ ...paidFollowUp, status: "failed", ref: undefined }), [], "refused before anything moved");
+
+  const escrow = (state: NonNullable<PaymentFollowUp["escrow"]>["state"], more = {}) =>
+    status({ ...paidFollowUp, status: "proposed", ref: undefined, escrow: { ...escrowBase, state, ...more } });
+  assert.deepEqual(escrow("parked"), [["held for approval", "", "OpenTx"]]);
+  assert.deepEqual(escrow("open"), [["in escrow", "you", "OpenTx"]]);
+  assert.deepEqual(escrow("confirmed"), [["in escrow", "you", "OpenTx"]]);
+  assert.deepEqual(escrow("released", { releasedRef: "ReleaseTx" }), [["released", "the payee confirmed, then you released it", "ReleaseTx"]]);
+  assert.deepEqual(escrow("released"), [["released", "the payee confirmed", "OpenTx"]]);
+  assert.deepEqual(escrow("cancelled"), [["returned", "your wallet", "OpenTx"]]);
+  assert.deepEqual(escrow("returned"), [["returned", "the payee", "OpenTx"]]);
+});
+
+test("a payment to Solana or Base says where NEAR Intents sent it, and isn't paid until NEAR Intents says so", () => {
+  const route = { chain: "solana" as const, address: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", depositAddress: "ab".repeat(32), quoteId: "q1", amountOut: "49900000" };
+  const one = (f: PaymentFollowUp) => rowsFor(f)[0];
+  const paid = one({ ...paidFollowUp, ref: "PayTx", crossChain: { ...route, swapStatus: "SUCCESS" } });
+  assert.equal(paid.status, "paid");
+  assert.match(paid.note, /through NEAR Intents to the payee's Solana address 9WzD/);
+  assert.equal(one({ ...paidFollowUp, status: "sending", ref: "PayTx", crossChain: { ...route, swapStatus: "PROCESSING" } }).status, "sent to NEAR Intents");
+  assert.equal(one({ ...paidFollowUp, status: "failed", ref: "PayTx", crossChain: { ...route, swapStatus: "FAILED" } }).status, "sent to NEAR Intents");
+  assert.equal(one({ ...paidFollowUp, status: "failed", ref: "PayTx", crossChain: { ...route, swapStatus: "REFUNDED" } }).status, "failed and refunded");
+});
+
+test("rows are oldest meeting first, and a held payment's network is where it was held", () => {
+  const later = { ...meeting, id: "m2", title: "Later", startedAt: new Date(2026, 10, 3, 9, 0).toISOString(), followUps: [{ ...paidFollowUp, ref: "LaterTx" }] };
+  const earlier = { ...meeting, followUps: [{ ...paidFollowUp, status: "blocked" as const, ref: "HeldTx", heldOn: { ...held, network: "mainnet" as const } }] };
+  const rows = ledgerRowsFromMeetings([later, earlier], { network: "testnet" });
+  assert.deepEqual(
+    rows.map((r) => [r.meeting, r.network]),
+    [
+      ["Sync with Ada", "mainnet"],
+      ["Later", "testnet"],
+    ],
+  );
+  assert.equal(ledgerRowsFromMeetings([{ ...later, startedAt: "Sample" }], { network: "testnet" })[0].date, "", "a meeting without a real time has no date");
 });

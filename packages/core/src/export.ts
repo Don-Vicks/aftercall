@@ -1,6 +1,6 @@
 import { formatUsdc, USDC_DECIMALS } from "./money.ts";
 import { explorerTxUrl, type Network } from "./network.ts";
-import { formatClock, formatDuration, type ActionItem, type FollowUp, type Meeting } from "./meeting.ts";
+import { formatClock, formatDuration, type ActionItem, type FollowUp, type Meeting, type PaymentFollowUp } from "./meeting.ts";
 import type { Attendee } from "./calendar.ts";
 import { isYou, othersOn, speakerLabel } from "./people.ts";
 import { clockTime, longDate, meetingTime } from "./when.ts";
@@ -250,7 +250,8 @@ export function meetingMarkdown(meeting: Meeting, opts: ExportOptions = {}): str
 // Unlike the meeting export above, this one is about money: it names payees' NEAR accounts
 // and links every transaction, because a bookkeeper needs both. One row per payment (or
 // deposit, or withdrawal), where it stands now, with the transaction that put it there.
-// Statuses and amounts come from the contract or the transaction, never from the model's text.
+// Statuses and amounts come from the contract or the transaction (the Mac app sets a
+// follow-up's state from the contract's reply), never from the model's text.
 
 /** Where a payment stands, in a bookkeeper's words. */
 export type LedgerStatus =
@@ -294,7 +295,7 @@ export type LedgerApprover =
   | "";
 
 export interface LedgerRow {
-  /** When it reached this status, as an ISO 8601 UTC time; empty when unknown. */
+  /** When it reached this status (or the meeting's start, for rows from the Mac app), as an ISO 8601 UTC time; empty when unknown. */
   date: string;
   /** The meeting's title, or its id when only the chain was read; empty when no meeting is linked. */
   meeting: string;
@@ -373,4 +374,101 @@ export function ledgerCsv(rows: readonly LedgerRow[], opts: LedgerCsvOptions = {
     r.note,
   ];
   return [header, ...rows.map(fields)].map((line) => `${line.map(csvField).join(",")}\r\n`).join("");
+}
+
+export interface MeetingLedgerOptions {
+  /** The network the app pays on, for payments that don't record where they were made. */
+  network: Network;
+  /** Each meeting's `record_proof` transaction, by meeting id, when its proof is on NEAR. */
+  proofTx?: Readonly<Record<string, string>>;
+}
+
+/** A meeting's start as a ledger time, or empty for a meeting without a real time (a sample's label). */
+function meetingStart(m: Meeting): string {
+  const t = Date.parse(m.startedAt);
+  return Number.isNaN(t) ? "" : ledgerTime(t);
+}
+
+/** Who approved a payment the app paid itself, as the follow-up records it. */
+function appApprover(f: PaymentFollowUp): LedgerApprover {
+  return f.byAutopilot ? "autopilot" : f.byPhone ? "you, on your phone" : "you";
+}
+
+const HELD = "Over your caps, so the contract held it";
+
+/** One payment follow-up as a ledger row, or null when no money has moved or been held for it. */
+function meetingLedgerRow(m: Meeting, f: PaymentFollowUp, opts: MeetingLedgerOptions): LedgerRow | null {
+  const base = {
+    date: meetingStart(m),
+    meeting: m.title || m.id,
+    payee: f.payeeName,
+    payeeAccount: f.payeeAccount,
+    amount: f.amount,
+    network: f.escrow?.on.network ?? f.heldOn?.network ?? opts.network,
+    tx: f.ref ?? "",
+    proofTx: opts.proofTx?.[m.id] ?? "",
+  };
+  const e = f.escrow;
+  if (e) {
+    const opened = { ...base, tx: e.ref ?? "" };
+    switch (e.state) {
+      case "parked":
+        return { ...opened, status: "held for approval", approvedBy: "", note: `${HELD}: the deal waits for your wallet before its money is set aside. Nothing has moved.` };
+      case "open":
+        return { ...opened, status: "in escrow", approvedBy: "you", note: "Set aside in the contract; waits for the payee to confirm the terms from their own NEAR account. Not paid yet." };
+      case "confirmed":
+        return { ...opened, status: "in escrow", approvedBy: "you", note: "Set aside in the contract. The payee confirmed the terms; it's paid when you release it. Not paid yet." };
+      case "released":
+        return e.releasedRef
+          ? { ...base, tx: e.releasedRef, status: "released", approvedBy: "the payee confirmed, then you released it", note: "Paid to the payee out of escrow, after they confirmed the terms from their own NEAR account." }
+          : {
+              ...opened,
+              status: "released",
+              approvedBy: "the payee confirmed",
+              note: "Paid to the payee out of escrow when they confirmed the terms from their own NEAR account. This transaction opened the escrow; their confirmation paid it.",
+            };
+      case "cancelled":
+        return { ...opened, status: "returned", approvedBy: "your wallet", note: "You took the deal back in your wallet; the amount is back in your agent wallet. Nothing was paid." };
+      case "returned":
+        return { ...opened, status: "returned", approvedBy: "the payee", note: "The payee gave the deal back; the amount is back in your agent wallet. Nothing was paid." };
+    }
+  }
+  // Set once the contract sent the USDC to NEAR Intents' deposit address for a payee on Solana or Base.
+  const x = f.crossChain;
+  if (x && f.ref) {
+    const to = `the payee's ${x.chain === "solana" ? "Solana" : "Base"} address ${x.address}`;
+    if (f.status === "paid") return { ...base, status: "paid", approvedBy: appApprover(f), note: `Paid from your agent wallet within your caps, through NEAR Intents to ${to}.` };
+    if (f.status === "failed" && x.swapStatus === "REFUNDED") return { ...base, status: "failed and refunded", approvedBy: appApprover(f), note: f.error ?? `NEAR Intents couldn't pay ${to} and refunded your NEAR account.` };
+    return {
+      ...base,
+      status: "sent to NEAR Intents",
+      approvedBy: appApprover(f),
+      note: `Left your agent wallet for NEAR Intents' deposit address ${x.depositAddress}, to pay ${to}. NEAR Intents last said ${x.swapStatus}.`,
+    };
+  }
+  if (f.status === "paid" && f.heldOn) {
+    return { ...base, status: "approved and paid", approvedBy: "your wallet", note: `${HELD} (this transaction); you approved it in your wallet, which paid it.` };
+  }
+  if (f.status === "paid") return { ...base, status: "paid", approvedBy: appApprover(f), note: "Paid from your agent wallet within your caps." };
+  if (f.status === "blocked") return { ...base, status: "held for approval", approvedBy: "", note: `${HELD}: it waits for your wallet. Nothing has been paid.` };
+  if (f.status === "dismissed" && f.heldOn) {
+    return { ...base, status: "declined", approvedBy: "your wallet", note: `${HELD} (this transaction); you declined it in your wallet. Nothing was paid.` };
+  }
+  // Only money that left and came back is a refund: a payment the contract refused never moved, so it has no row.
+  if (f.status === "failed" && f.ref) {
+    return { ...base, status: "failed and refunded", approvedBy: appApprover(f), note: f.error ?? "The transfer didn't land, and the amount went back to your agent wallet." };
+  }
+  return null;
+}
+
+/**
+ * The ledger rows for the payments in these meetings, from what the Mac app keeps with
+ * each follow-up: paid, held, declined, refunded or in escrow. A payment still proposed,
+ * or dismissed without being held, moved nothing and has no row. Oldest meeting first;
+ * the date is the meeting's start (pass `dates: "meeting"` to `ledgerCsv`).
+ */
+export function ledgerRowsFromMeetings(meetings: readonly Meeting[], opts: MeetingLedgerOptions): LedgerRow[] {
+  return [...meetings]
+    .sort((a, b) => (Date.parse(a.startedAt) || 0) - (Date.parse(b.startedAt) || 0))
+    .flatMap((m) => m.followUps.flatMap((f) => (f.kind === "payment" ? (meetingLedgerRow(m, f, opts) ?? []) : [])));
 }
