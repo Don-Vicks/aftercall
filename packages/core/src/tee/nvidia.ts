@@ -45,6 +45,16 @@ export function decodeJwt(token: string): JwtClaims | null {
   }
 }
 
+/** The key id in a JWT's header, without checking the token: which key to check it with. */
+export function jwtKid(token: string): string | undefined {
+  try {
+    const kid = b64urlJson(token.split(".")[0]).kid;
+    return typeof kid === "string" ? kid : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Verifies an NRAS token's ES384 signature with the JWKS key named by its `kid`,
  * and its issuer. Expiry is checked only when `now` (seconds) is given: a stored

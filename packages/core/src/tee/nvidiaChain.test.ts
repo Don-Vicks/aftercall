@@ -6,6 +6,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { sha384 } from "@noble/hashes/sha512";
 import { bytesToHex, concatBytes, hexToBytes, utf8ToBytes } from "@noble/hashes/utils";
 import type { Jwk, Jwks } from "./nvidia.ts";
+import { NVIDIA_KEY_ARCHIVE } from "./nvidiaArchive.ts";
 import { NVIDIA_INTERMEDIATES, parseCertificate, verifyKeyChain } from "./nvidiaChain.ts";
 
 // Two real entries from NVIDIA's JWKS (nras.attestation.nvidia.com) on 12 Nov 2026: the key
@@ -67,6 +68,14 @@ test("a tampered chain fails: a changed certificate, a swapped leaf, another key
   assert.equal(await errorOf({ ...rsaKey, x5c: [rsaKey.x5c[0]] }), "the key has no certificate chain");
   assert.equal(await errorOf({ ...rsaKey, x5c: undefined }), "the key has no certificate chain");
   assert.match(await errorOf({ ...rsaKey, x5c: ["AAAA", rsaKey.x5c[1]] }), /^a certificate in its chain can't be read/);
+});
+
+test("every key in the archive is one NVIDIA certified, and the 12 Nov proof's key is there", async () => {
+  assert.ok(NVIDIA_KEY_ARCHIVE.keys.some((k) => k.kid === rsaKey.kid));
+  for (const k of NVIDIA_KEY_ARCHIVE.keys) {
+    const r = await verifyKeyChain(k, parseCertificate(der(k.x5c?.[0] ?? "")).notBefore);
+    assert.equal(r.ok, true, `${k.kid}: ${r.ok ? "" : r.error}`);
+  }
 });
 
 // A minimal DER writer, to build a chain under an intermediate Aftercall doesn't pin.
