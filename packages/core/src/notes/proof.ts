@@ -6,7 +6,9 @@ import { isNetwork, type Network } from "../network.ts";
 import { recoverPersonalSign, sha256Hex, yourNotesHash } from "./verify.ts";
 import { bindsIdentity, expectedMrConfig, signatureKind, signedParts, signerOf, strip0x, type TeeCheck } from "../tee/checks.ts";
 import type { TeeEvidence } from "../tee/attest.ts";
-import { decodeJwt, verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
+import { decodeJwt, jwtKid, verifyNrasJwt, type Jwks } from "../tee/nvidia.ts";
+import { NVIDIA_KEY_ARCHIVE } from "../tee/nvidiaArchive.ts";
+import { verifyKeyChain } from "../tee/nvidiaChain.ts";
 
 /**
  * The proof on NEAR is the sha256 of the proof bundle in canonical JSON (keys
@@ -57,6 +59,12 @@ export interface Check {
   label: string;
   ok: boolean;
   detail: string;
+  /**
+   * Set when the check can't be re-run at all (NVIDIA retired the key behind the proof's
+   * token before Aftercall archived it): neither passed nor failed, so `ok` is false and
+   * it is never counted as a pass, and `allChecksPassed` doesn't count it as a failure.
+   */
+  cantRecheck?: true;
 }
 
 /** Your notes as the app shows them, with the salt from notes.json. */
@@ -298,48 +306,68 @@ function signatureChecksV3(bundle: ProofBundleV3): Check[] {
 }
 
 /**
- * NVIDIA publishes each signing key for about two days (8 Nov 2026: the keys served
- * went back to 6 Nov), so a token older than this whose key is gone can't be re-checked.
+ * How old a token must be before a key NVIDIA no longer lists is put down to NVIDIA
+ * retiring it rather than to a bad token: a day. NVIDIA lists each key for about two
+ * days after making it (12 Nov 2026: the list went back to 10 Nov) and has signed
+ * proofs' tokens with keys up to about 9 hours old, so a token's key stays listed for
+ * at least a day after the token. A token younger than this with an unknown key fails.
  */
 export const NVIDIA_KEYS_KEPT_S = 24 * 3600;
+
+/** Why /verify can't re-run the GPU check of a proof whose token key NVIDIA retired before Aftercall archived it. */
+export const GPU_KEY_RETIRED =
+  "NVIDIA has retired this token's key (it lists keys for about two days) and it isn't in Aftercall's archive, so it can't be re-checked; the app's own NVIDIA check stands as recorded when the notes were made";
 
 /**
  * Re-checks NVIDIA's platform token kept in a v2 proof against NVIDIA's keys
  * (fetched by the caller; NVIDIA serves them to browsers). Not expiry: the token
  * expired an hour after the meeting, but it is still NVIDIA's signed statement.
- * Null when there is nothing to re-check, or when NVIDIA has retired the key of a
- * token older than a day: then only the app's own NRAS check, recorded in the proof,
- * speaks for the GPUs, as for Intel's quote. A recent token with an unknown key fails.
+ *
+ * A key NVIDIA no longer lists (or whose list couldn't be fetched) is taken from
+ * Aftercall's archive, and used only once its certificate chain shows NVIDIA certified
+ * it when the token was issued. A token over a day old whose key is in neither can't
+ * be re-checked: the check says so with `cantRecheck` (not a pass, not a failure), and
+ * only the app's own NRAS check, recorded in the proof, speaks for the GPUs, as for
+ * Intel's quote. A recent token with an unknown key fails. Null when there's no token.
  */
-export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null, now = Date.now() / 1000): Promise<Check | null> {
+export async function verifyProofGpu(bundle: ProofBundle, jwks: Jwks | null, now = Date.now() / 1000, archive: Jwks = NVIDIA_KEY_ARCHIVE): Promise<Check | null> {
   if (!hasFullChecks(bundle)) return null;
   const tee = bundle.evidence.find((e) => e.nvidiaToken);
   if (!tee?.nvidiaToken) return null;
+  const token = tee.nvidiaToken;
   const label = "NVIDIA attested the signer's GPUs";
-  if (!jwks) return { id: "gpu", label, ok: false, detail: "Couldn't get NVIDIA's signing keys" };
-  if (keyRetired(tee.nvidiaToken, jwks, now)) return null;
-  const v = await verifyNrasJwt(tee.nvidiaToken, jwks);
-  if (!v.ok) return { id: "gpu", label, ok: false, detail: `NVIDIA's token didn't verify: ${v.error}` };
+  const fail = (detail: string): Check => ({ id: "gpu", label, ok: false, detail });
+  const kid = jwtKid(token);
+  const listed = !!kid && !!jwks?.keys.some((k) => k.kid === kid);
+  const archived = listed || !kid ? undefined : archive.keys.find((k) => k.kid === kid);
+  let certifiedBy = "";
+  if (archived) {
+    // The chain is checked at the token's own issue time; the token's signature, checked next, vouches for that time.
+    const chain = await verifyKeyChain(archived, Number(decodeJwt(token)?.iat));
+    if (!chain.ok) return fail(`NVIDIA's archived key for this token didn't check out: ${chain.error}`);
+    certifiedBy = chain.intermediate;
+  }
+  const keys = archived ? { keys: [archived] } : jwks;
+  if (!keys) return fail("Couldn't get NVIDIA's signing keys");
+  if (!listed && !archived && keyRetired(token, now)) return { id: "gpu", label, ok: false, cantRecheck: true, detail: GPU_KEY_RETIRED };
+  const v = await verifyNrasJwt(token, keys);
+  if (!v.ok) return fail(`NVIDIA's token didn't verify: ${v.error}`);
   const fresh = strip0x(String(v.claims.eat_nonce ?? "")) === tee.nonce;
   const passed = v.claims["x-nvidia-overall-att-result"] === true;
   const at = typeof v.claims.iat === "number" ? new Date(v.claims.iat * 1000).toISOString().replace("T", " ").slice(0, 16) : "?";
+  const key = certifiedBy ? `, with a key from Aftercall's archive certified by ${certifiedBy}` : "";
   return {
     id: "gpu",
     label,
     ok: fresh && passed,
-    detail: `Token signed by NVIDIA at ${at} UTC; ${passed ? "overall result pass" : "overall result fail"}; ${fresh ? "carries this meeting's nonce" : "nonce doesn't match"}`,
+    detail: `Token signed by NVIDIA at ${at} UTC${key}; ${passed ? "overall result pass" : "overall result fail"}; ${fresh ? "carries this meeting's nonce" : "nonce doesn't match"}`,
   };
 }
 
-/** NVIDIA no longer serves the key named by this token, and the token is older than NVIDIA keeps keys. */
-function keyRetired(token: string, jwks: Jwks, now: number): boolean {
-  try {
-    const kid = (JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))) as { kid?: string }).kid;
-    const iat = decodeJwt(token)?.iat;
-    return !!kid && !jwks.keys.some((k) => k.kid === kid) && typeof iat === "number" && now - iat > NVIDIA_KEYS_KEPT_S;
-  } catch {
-    return false;
-  }
+/** The token names a key and is older than NVIDIA keeps listing keys, so a key missing from the list was retired. */
+function keyRetired(token: string, now: number): boolean {
+  const iat = decodeJwt(token)?.iat;
+  return !!jwtKid(token) && typeof iat === "number" && now - iat > NVIDIA_KEYS_KEPT_S;
 }
 
 /** The app's own checks from a v2 or v3 proof, as recorded when the meeting was processed. */

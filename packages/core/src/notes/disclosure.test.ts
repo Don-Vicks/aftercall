@@ -9,6 +9,7 @@ import { encodePublicProof, proofHash, verifyProof, type OnChainProof } from "./
 import { NVIDIA_JWKS_URL, allChecksPassed, runLinkChecks, type ProofFetch } from "./proofLink.ts";
 import { NETWORK_CONFIG } from "../network.ts";
 import type { TranscriptLine } from "../meeting.ts";
+import type { Jwks } from "../tee/nvidia.ts";
 
 // A real version 2 bundle from the notes pipeline (made with the test kit on 2 Nov 2026, before
 // line trees existed): apps/desktop/scripts/make-sample-proof.ts.
@@ -31,13 +32,13 @@ const bundle: ProofBundleV2 = {
 const place = { network: "testnet" as const, contract: "wallet.aftercall.testnet", owner: "ada.testnet" };
 const onChain = (hash: string): OnChainProof => ({ proof_hash: hash, model: bundle.summaryModel, recorded_at: "1793006500000000000" });
 
-/** NEAR's RPC and NVIDIA's keys, stood in for; records what was asked. */
-function stub(answer: OnChainProof | null | "down"): { fetch: ProofFetch; asked: { url: string; args?: unknown; account?: string }[] } {
+/** NEAR's RPC and NVIDIA's keys (unreachable unless `jwks` is given), stood in for; records what was asked. */
+function stub(answer: OnChainProof | null | "down", jwks?: Jwks): { fetch: ProofFetch; asked: { url: string; args?: unknown; account?: string }[] } {
   const asked: { url: string; args?: unknown; account?: string }[] = [];
   const fetch: ProofFetch = async (url, init) => {
     if (url === NVIDIA_JWKS_URL) {
       asked.push({ url });
-      return { ok: false, json: async () => ({}) };
+      return jwks ? { ok: true, json: async () => jwks } : { ok: false, json: async () => ({}) };
     }
     const params = JSON.parse(init?.body ?? "{}").params;
     asked.push({ url, args: JSON.parse(atob(params.args_base64)), account: params.account_id });
@@ -191,6 +192,24 @@ test("a proof whose NVIDIA token can't be checked says so, as /verify does", asy
   const r = await runLinkChecks(decodeVerifyLink(encodePublicProof({ ...place, bundle: sample.bundle })), stub(onChain(OLD_HASH)).fetch);
   const gpu = r.checks.find((c) => c.id === "gpu");
   assert.deepEqual([gpu?.ok, gpu?.detail], [false, "Couldn't get NVIDIA's signing keys"]);
+});
+
+test("/verify once NVIDIA lists none of their keys: the 12 Nov proof passes 8 of 8; the 8 Nov proof passes 7 and can't re-check 1", async () => {
+  const published = JSON.parse(readFileSync(new URL("./fixtures/published-proofs.json", import.meta.url), "utf8")) as Record<"proofRun12Nov" | "paymentCall8Nov", string>;
+  const run = async (payload: string) => {
+    const link = decodeVerifyLink(`#${payload}`);
+    const r = await runLinkChecks(link, stub(onChain(proofHash(link.proof.bundle)), { keys: [] }).fetch);
+    return { r, passed: allChecksPassed(link.proof.bundle, r.checks), rows: r.checks.map((c) => [c.id, c.ok, c.cantRecheck ?? false]) };
+  };
+  const rerun = ["on-chain", "matches", "signed", "attested", "compose", "e2ee", "confidential"].map((id) => [id, true, false]);
+  const run12 = await run(published.proofRun12Nov);
+  assert.deepEqual(run12.rows, [...rerun, ["gpu", true, false]]);
+  assert.equal(run12.passed, true);
+  const call8 = await run(published.paymentCall8Nov);
+  assert.deepEqual(call8.rows, [...rerun, ["gpu", false, true]]);
+  assert.equal(call8.passed, true, "a check that can't be re-run doesn't fail the proof; the app's recorded NVIDIA check passed");
+  // A failing check still fails the proof alongside it.
+  assert.equal(allChecksPassed(decodeVerifyLink(`#${published.paymentCall8Nov}`).proof.bundle, call8.r.checks.map((c) => (c.id === "matches" ? { ...c, ok: false } : c))), false);
 });
 
 test("an action item's quote leads to the line it was said in", () => {

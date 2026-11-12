@@ -1,11 +1,28 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils";
-import { NOT_PROVEN, canonicalJson, decodePublicProof, droppedLine, encodePublicProof, groupChecks, hasStatements, noticeLine, proofHash, verifyProof, verifyProofGpu, type OnChainProof } from "./proof.ts";
+import {
+  GPU_KEY_RETIRED,
+  NOT_PROVEN,
+  canonicalJson,
+  decodePublicProof,
+  droppedLine,
+  encodePublicProof,
+  groupChecks,
+  hasStatements,
+  noticeLine,
+  proofHash,
+  verifyProof,
+  verifyProofGpu,
+  type OnChainProof,
+} from "./proof.ts";
 import type { ProofBundle, ProofBundleV2 } from "./pipeline.ts";
 import { expectedMrConfig, expectedReportData } from "../tee/checks.ts";
+import type { Jwk, Jwks } from "../tee/nvidia.ts";
+import { NVIDIA_KEY_ARCHIVE } from "../tee/nvidiaArchive.ts";
 import { fakeNras, teeKey } from "../tee/testkit.ts";
 import { sha256Hex, yourNotesHash } from "./verify.ts";
 
@@ -164,8 +181,69 @@ test("a v2 proof re-checks its Ed25519 signature, key binding, compose and E2EE 
   assert.equal((await verifyProofGpu(bundle, (await fakeNras()).jwks))?.ok, false, "a token NVIDIA didn't sign fails");
   const gone = { keys: [] };
   assert.equal((await verifyProofGpu(bundle, gone))?.ok, false, "a recent token whose key isn't published fails");
-  assert.equal(await verifyProofGpu(bundle, gone, Date.now() / 1000 + 2 * 86400), null, "NVIDIA retired the key of a two-day-old token: nothing to re-check");
+  const retired = await verifyProofGpu(bundle, gone, Date.now() / 1000 + 2 * 86400);
+  assert.deepEqual([retired?.ok, retired?.cantRecheck], [false, true], "NVIDIA retired the key of a two-day-old token, and it isn't archived: can't re-check");
   assert.equal((await verifyProofGpu(bundle, jwks, Date.now() / 1000 + 2 * 86400))?.ok, true, "a key still published is still checked");
+});
+
+// Published proofs with real NVIDIA tokens: the 12 Nov proof run, whose key is archived, and
+// the 8 Nov payment call, whose key NVIDIA retired before archiving began.
+const published = JSON.parse(readFileSync(new URL("./fixtures/published-proofs.json", import.meta.url), "utf8")) as Record<"proofRun12Nov" | "paymentCall8Nov", string>;
+const run12 = decodePublicProof(published.proofRun12Nov).bundle;
+const call8 = decodePublicProof(published.paymentCall8Nov).bundle;
+const judging = Date.UTC(2026, 10, 16) / 1000;
+const none: Jwks = { keys: [] };
+const archived12 = NVIDIA_KEY_ARCHIVE.keys.find((k) => k.kid?.startsWith("nv-eat-kid-prod-20261112073338781-")) as Jwk & { x5c: string[] };
+const realFixture = JSON.parse(readFileSync(new URL("../tee/fixtures/nvidia-jwks-12nov.json", import.meta.url), "utf8")) as Jwks;
+const otherKey = realFixture.keys[1] as Jwk & { x5c: string[] };
+
+test("the 12 Nov proof's GPU check passes with its archived key once NVIDIA lists no keys, and its hash is unchanged", async () => {
+  assert.equal(proofHash(run12), "c09fcc6e99a849e5642eaa92038386575b26dd942642252a0f08e759136f2c7a");
+  const gpu = await verifyProofGpu(run12, none, judging);
+  assert.deepEqual(gpu, {
+    id: "gpu",
+    label: "NVIDIA attested the signer's GPUs",
+    ok: true,
+    detail: "Token signed by NVIDIA at 2026-11-12 09:47 UTC, with a key from Aftercall's archive certified by NVIDIA Attestation Service GPU Intermediate 004; overall result pass; carries this meeting's nonce",
+  });
+  assert.equal((await verifyProofGpu(run12, null, judging))?.ok, true, "NVIDIA unreachable: the archive still serves");
+  const { x5c: _, ...listedKey } = archived12;
+  const listed = await verifyProofGpu(run12, { keys: [listedKey] }, judging);
+  assert.equal(listed?.detail, "Token signed by NVIDIA at 2026-11-12 09:47 UTC; overall result pass; carries this meeting's nonce", "a key NVIDIA still lists is used as listed");
+});
+
+test("an archived key fails the check when its chain doesn't check out or it isn't the token's key", async () => {
+  const gpuWith = (key: Jwk) => verifyProofGpu(run12, none, judging, { keys: [key] });
+  const leaf = Buffer.from(archived12.x5c[0], "base64");
+  leaf.write("GH200", leaf.indexOf("GH100", 0, "latin1"), "latin1");
+  const tampered = await gpuWith({ ...archived12, x5c: [leaf.toString("base64"), archived12.x5c[1]] });
+  assert.deepEqual(tampered, {
+    id: "gpu",
+    label: "NVIDIA attested the signer's GPUs",
+    ok: false,
+    detail: "NVIDIA's archived key for this token didn't check out: its certificate's signature doesn't match NVIDIA Attestation Service GPU Intermediate 004",
+  });
+  // The leaf standing in for the intermediate: not a key Aftercall pins.
+  const unpinned = await gpuWith({ ...archived12, x5c: [archived12.x5c[0], archived12.x5c[0]] });
+  assert.equal(unpinned?.detail, "NVIDIA's archived key for this token didn't check out: its certificate chain doesn't lead to an NVIDIA intermediate Aftercall pins");
+  assert.equal((await gpuWith({ ...archived12, x5c: [archived12.x5c[0]] }))?.ok, false, "no intermediate");
+  // Another key NVIDIA really certified, filed under this token's key id: the chain holds, the token's signature doesn't.
+  const swapped = await gpuWith({ ...otherKey, kid: archived12.kid });
+  assert.equal(swapped?.detail, "NVIDIA's token didn't verify: signature doesn't match NVIDIA's key");
+  for (const c of [tampered, unpinned, swapped]) assert.equal(c?.cantRecheck, undefined, "a bad archive entry fails; it isn't 'can't re-check'");
+});
+
+test("a token whose key NVIDIA retired before archiving can't be re-checked: shown, neither passed nor failed", async () => {
+  assert.equal(proofHash(call8), "1b11e9d81cea5aedb83f12a9d7a560d8dd90443f131fb5d7e1f2342f032d84f3");
+  assert.deepEqual(await verifyProofGpu(call8, none, judging), { id: "gpu", label: "NVIDIA attested the signer's GPUs", ok: false, cantRecheck: true, detail: GPU_KEY_RETIRED });
+  // The app's own NVIDIA checks, recorded in the proof, passed.
+  assert.ok(call8.version !== 1 && call8.checks.filter((c) => c.id.endsWith("-gpu")).every((c) => c.ok));
+  // The 12 Nov proof, had its key not been archived; and within a day of its token, when an unlisted key fails.
+  assert.equal((await verifyProofGpu(run12, none, judging, none))?.cantRecheck, true);
+  const early = await verifyProofGpu(run12, none, Date.UTC(2026, 10, 12, 12) / 1000, none);
+  assert.deepEqual([early?.ok, early?.cantRecheck, early?.detail], [false, undefined, `NVIDIA's token didn't verify: NVIDIA key ${archived12.kid} isn't published`]);
+  // NVIDIA unreachable and the key not archived: retired or not can't be told, so it fails as before.
+  assert.equal((await verifyProofGpu(call8, null, judging))?.detail, "Couldn't get NVIDIA's signing keys");
 });
 
 test("v2 tampering is caught: report data, nonce, E2EE key, recorded failure", async () => {

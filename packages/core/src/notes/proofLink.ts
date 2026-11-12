@@ -112,9 +112,12 @@ export async function runLinkChecks(link: VerifyLink, fetchFn: ProofFetch = defa
 /**
  * Whether everything passed, as /verify's headline reads it: every check run now, and every
  * check the app recorded in the proof. The recorded end-to-end encryption line has its own
- * check above (`e2ee`), so it isn't counted twice.
+ * check above (`e2ee`), so it isn't counted twice. A check that can't be re-run
+ * (`cantRecheck`) is left out, as the Intel quote is: the app's own check of the same thing
+ * is among the recorded ones, and must have passed.
  */
 export function allChecksPassed(bundle: PublicProof["bundle"], checks: readonly Check[]): boolean {
   const recorded = hasFullChecks(bundle) ? bundle.checks : [];
-  return checks.length > 0 && checks.every((c) => c.ok) && recorded.every((c) => c.ok || c.id === "response-e2ee");
+  const rerun = checks.filter((c) => !c.cantRecheck);
+  return rerun.length > 0 && rerun.every((c) => c.ok) && recorded.every((c) => c.ok || c.id === "response-e2ee");
 }
