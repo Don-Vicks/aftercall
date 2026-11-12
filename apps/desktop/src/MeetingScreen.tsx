@@ -334,8 +334,22 @@ function Notes({
         {meeting.summary}
       </p>
 
+      <div style={r(2)}>
+        <FollowUps
+          meetingId={meeting.id}
+          meeting={meeting}
+          followUps={meeting.followUps}
+          limits={limits}
+          invited={meeting.invited}
+          autopilotOn={autopilotOn}
+          onOpenAutopilot={onOpenAutopilot}
+          proofOnChain={proofOnChain}
+          {...handlers}
+        />
+      </div>
+
       {meeting.yourNotes && (
-        <section aria-labelledby="your-notes" className="flex flex-col gap-2.5" style={r(2)}>
+        <section aria-labelledby="your-notes" className="flex flex-col gap-2.5" style={r(3)}>
           <h2 id="your-notes" className="t-section m-0 flex items-center gap-2 text-ink">
             <Avatar name="You" you size={22} decorative />
             Your notes <span className="font-medium text-muted">typed during the call</span>
@@ -345,7 +359,7 @@ function Notes({
       )}
 
       {meeting.decisions.length > 0 && (
-        <section aria-labelledby="decisions" className="flex flex-col gap-2.5" style={r(3)}>
+        <section aria-labelledby="decisions" className="flex flex-col gap-2.5" style={r(4)}>
           <SectionTitle id="decisions" count={meeting.decisions.length}>
             Decisions
           </SectionTitle>
@@ -358,7 +372,7 @@ function Notes({
       )}
 
       {meeting.actionItems.length > 0 && (
-        <section aria-labelledby="actions" className="flex flex-col gap-1.5" style={r(4)}>
+        <section aria-labelledby="actions" className="flex flex-col gap-1.5" style={r(5)}>
           <div className="mb-1 flex items-baseline justify-between gap-3">
             <SectionTitle
               id="actions"
@@ -404,19 +418,6 @@ function Notes({
         </section>
       )}
 
-      <div style={r(5)}>
-        <FollowUps
-          meetingId={meeting.id}
-          meeting={meeting}
-          followUps={meeting.followUps}
-          limits={limits}
-          invited={meeting.invited}
-          autopilotOn={autopilotOn}
-          onOpenAutopilot={onOpenAutopilot}
-          proofOnChain={proofOnChain}
-          {...handlers}
-        />
-      </div>
 
       {dropped.length > 0 && (
         <div style={r(6)}>
