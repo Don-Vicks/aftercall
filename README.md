@@ -2,7 +2,7 @@
 
 **Private meeting notes that do the follow-ups.**
 
-Aftercall is a Mac app that records your calls and makes the notes inside NEAR AI Cloud's secure hardware, which it checks before anything is sent. A proof of each meeting goes on NEAR, and anyone with its link can re-check it in a browser. Then Aftercall sends the recap and pays what the call agreed in USDC, only within limits a NEAR contract enforces.
+A call agrees to pay Kemi $5. Aftercall, a Mac app, turns the call into notes inside NEAR AI Cloud's secure hardware, puts a proof of them on NEAR that anyone can re-check in a browser, and pays Kemi the 5 USDC from a NEAR contract whose limits the app can't get around. The same call also agreed $5,000, over the cap, so the contract held it for the owner's own wallet. That ran from the Mac app on NEAR testnet on 8 Nov.
 
 **[Watch the 1:30 demo](https://x.com/VictorShallang/status/2119529850646020401)** · **[See what has run on NEAR testnet](https://getaftercall.vercel.app/proof)** · **[Try it in your browser](https://getaftercall.vercel.app/demo)** · [Download for Mac](https://getaftercall.vercel.app/download)
 
@@ -12,9 +12,17 @@ Aftercall is a Mac app that records your calls and makes the notes inside NEAR A
 <img src="docs/media/testnet-strip.webp" alt="Real footage of the Mac app on NEAR testnet on 8 Nov: Kemi paid 5 USDC from the contract and the same call's $5,000 held for the owner's wallet (OVER_PAYMENT_CAP), next to that call's proof re-checked in a browser at /verify" width="100%">
 <sub>The Mac app on NEAR testnet, 8 Nov. One call promised Kemi $5 and $5,000: the 5 USDC was paid, the $5,000 was over the cap and held for the owner's own wallet, and the call's proof re-checks in a browser.</sub>
 
-### What has run on NEAR testnet
+### What makes it different
+
+- **The transcript goes to the model end-to-end encrypted, after the hardware is checked.** On every run, before anything leaves the Mac, the app verifies NEAR AI's attestation: the Intel TDX quote against Intel's collateral, the NVIDIA GPU evidence through NVIDIA's attestation service, and a fresh nonce bound with the model's key. Then it encrypts the transcript to that attested key, with no TLS fallback; a reply counts only if that key signed it. The audio is the one exception: NEAR AI has no end-to-end encryption for transcription, so it goes over TLS pinned to the attested gateway's key.
+- **A proof anyone can re-check, with nothing of the meeting in it.** Only a hash goes on NEAR. Its link opens `/verify`, which re-checks the hash on NEAR, the reply's signature and NVIDIA's token in the browser, and shows the rest as the app recorded it.
+- **It does what the call agreed, within limits the app can't change.** Every follow-up must quote the call word for word. Autopilot pays only your own words that name a listed payee and say the amount as money. The app's NEAR key can only pay listed payees within daily and per-payment caps; anything bigger waits for your own wallet.
+- **Checked from a clean checkout, with no keys.** `pnpm install && pnpm verify --quick` typechecks every package and runs 572 core tests and the rest of the suite with no keys or accounts; `pnpm check:live` reads every testnet transaction and proof link this README cites back from NEAR, and NEAR AI's attestation with fresh nonces ([how to test](#how-to-test)).
+
+### What has run
 
 - **8 Nov, from the Mac app:** notes from a sample call made in NEAR AI's TEEs, the proof recorded on NEAR, 5 USDC paid to Kemi with the app's limited key, and the same call's $5,000 held by the contract for the owner's wallet.
+- **9 Nov, approvals on a phone:** the installed Mac app and a real phone, paired through the deployed relay; items acted on and a recap sent from the phone showed in the Mac app within seconds.
 - **12 Nov, the app's after-call code run headless with test accounts:** autopilot paid an in-cap 1 USDC after its 60-second undo window, and 0.50 USDC that waited on a condition stayed in escrow until the payee confirmed the terms from their own account, then was released.
 - **12 Nov, the limits:** a payment over the cap was held, then approved from the owner's own account; the app's key couldn't send `withdraw` at all.
 
