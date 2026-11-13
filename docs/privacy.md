@@ -4,6 +4,32 @@ Aftercall's rule: meeting content is processed on the Mac or inside NEAR AI Clou
 
 For the follow-ups in one table (what each sends, who approves it, and what record it leaves), see [Follow-ups: what leaves, who approves, what's kept](#follow-ups-what-leaves-who-approves-whats-kept) below.
 
+## Who can see what
+
+The short answer to "who can read my meeting?", by who is asking. The sections below give every detail and the code behind it.
+
+| Who | Audio | Transcript, your notes, briefs, Ask excerpts | Notes and decisions |
+| --- | --- | --- | --- |
+| You, on the Mac | Yes, sealed on disk (XChaCha20-Poly1305, key in the Keychain), deleted right after the notes are saved | Yes, sealed on disk | Yes, sealed on disk, until you delete the meeting |
+| Software inside NEAR AI's attested gateway TEE | **Yes.** The upload's TLS ends there: it is pinned to the TLS key the gateway's verified Intel TDX quote binds, so only the gateway holding that key can decrypt it. NEAR AI has no end-to-end encryption for transcription | No: end-to-end encrypted to the model, so the gateway relays ciphertext | No: the reply is encrypted to a key the app makes for that request |
+| Software inside the Whisper model's TEE | Yes, to transcribe it | It writes the transcript | No |
+| Software inside the Qwen model's TEE | No | Yes, to write the notes or answer Ask | It writes them, signed with its attested key |
+| NEAR AI's operators, and the hosts the TEEs run on | No, as long as Intel TDX and NVIDIA confidential computing hold and the attested software does what NEAR AI says it does (see what isn't proven, below) | No, same condition | No, same condition |
+| Aftercall's backend | Never | Never | Only a recap you choose to Send through Aftercall, in memory for that one request |
+| Anyone on the internet | Never | Never | Never: NEAR holds a hash of the proof, no content. Payments are public (payee, amount, memo) |
+| A phone you pair | Never | Only what waits for you: a recap's address and subject, a payment's payee, amount, heard words and the quote behind it, sealed so the relay can't read them | Only the meeting's title and start time |
+| A coding agent you connect (off by default) | Never | Transcripts of meetings in the projects you allow, while agents are on; the agent sends what it reads to its own model provider | Same |
+| Your backups (exported, or automatic to iCloud Drive if you turn it on) | Never included | Encrypted with a key from your recovery phrase | Encrypted, same key |
+
+**What isn't proven about the audio.** The app checks the gateway's and Whisper's attestation on every run, with fresh nonces, and won't upload without a TLS key bound in the gateway's quote (`gatewayTlsPin`, `packages/core/src/notes/pipeline.ts`; the pinned upload is `transcribe` in `apps/desktop/src-tauri/src/nearai.rs`). It can't show:
+
+- what the gateway's software does with the audio, such as whether it logs it: that is NEAR AI's policy;
+- that the attested software is NEAR AI's published release: the images aren't checked against a list of NEAR's releases, and the firmware and OS measurements (MRTD, RTMR0–2) aren't pinned;
+- how the gateway hands the audio to the Whisper TEE: the app sees only its own connection;
+- that a transcript came from Whisper: NEAR AI doesn't sign transcription responses.
+
+Transcribing on the Mac would take the audio out of NEAR AI entirely. It isn't built; Whisper in a TEE is what runs today.
+
 ## Summary
 
 | Data | Goes to | Kept there |

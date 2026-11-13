@@ -118,6 +118,24 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/release
 
 Running every part locally: [development.md](development.md).
 
+## Questions a judge will ask
+
+Short answers; each links to the full one or to the code and tests behind it.
+
+**Can the gateway read the meeting audio?** Only software inside NEAR AI's attested gateway TEE can, and the Whisper TEE that transcribes it. NEAR AI has no end-to-end encryption for transcription, so the audio goes over TLS, pinned to the TLS key the gateway's verified Intel TDX quote binds: if the gateway's attestation binds no TLS key, or its certificate carries a different one, nothing is uploaded (`gatewayTlsPin` in `packages/core/src/notes/pipeline.ts`; `transcribe` in `apps/desktop/src-tauri/src/nearai.rs`). NEAR AI's operators can't read it as long as the TEEs hold. Not proven: what the gateway's software does with the audio, that its image is NEAR's release, how it reaches Whisper, and that a transcript came from Whisper (no signature). Everything else, the transcript included, is end-to-end encrypted to the model. [Who can see what](privacy.md#who-can-see-what).
+
+**Who can access transcripts?** You, on the Mac, where they are sealed with a key in the Keychain; the Qwen TEE while it writes the notes, end-to-end encrypted; and a coding agent you connect, only for the projects you allow, which then sends what it reads to its own model provider. Never Aftercall's backend, never the chain. The full table: [privacy.md](privacy.md#who-can-see-what).
+
+**What does the TEE protect, and how do you know it's a TEE?** On every run, before anything is sent, the app verifies the gateway's and each model's Intel TDX quote against Intel's collateral with debug off, replays the boot log, checks the attested Docker compose against `mr_config`, checks NVIDIA's GPU evidence through NRAS, and requires a fresh nonce and the signing key in the quote's report data (`packages/core/src/tee/checks.ts`, `nvidia.ts`; `checks.test.ts`, `nvidia.test.ts`, and `tdx_quote.rs` with a real quote). Then the transcript is encrypted to that attested key, and a reply counts only if that key signed it (`e2ee.ts`, `pipeline.test.ts`). Not covered: the images aren't checked against a list of NEAR's releases, and the firmware and OS measurements aren't pinned.
+
+**Can users delete their data?** Audio is deleted right after the notes are saved, and at the next launch if that didn't happen (`delete_audio_in` and `sweep_audio`, `apps/desktop/src-tauri/src/lib.rs`). A meeting can be deleted from its page; "Delete everything on this Mac" removes the app's folder and its Keychain items (`apps/desktop/src-tauri/src/wipe.rs`). What it can't reach, and says so: proofs and payments on NEAR, backups you exported, automatic backups in iCloud Drive, and whatever NEAR AI's own policy keeps.
+
+**What does the NEAR transaction prove?** `record_proof` stores a sha256 of the meeting's proof bundle under the owner's account, and a recorded proof can't be overwritten. `/verify` hashes the bundle from the link and compares it with NEAR, then re-checks the model's signature over the exact request and response and NVIDIA's token. So it proves the bundle is unchanged since that block, recorded by that owner's key on Aftercall's contract, and signed by an attested key. It doesn't prove the meeting's content (it isn't there), that the transcript is accurate, or the app's other checks, which `/verify` shows as the app recorded them. The contract account can still be upgraded by its deployer until mainnet; the transaction itself stays in NEAR's history ([threat-model.md](threat-model.md)).
+
+**What happens if the AI gets a decision wrong?** Nothing it says runs on its own word. Every item needs an exact quote from the transcript, or it's dropped; a payment's amount must be in its quote; autopilot is off by default, and even when on it pays only your own words that name a listed payee and say the amount as money, within caps, after a 60-second undo window (`build.ts`, `autopilot.ts`; `build.test.ts`, `autopilot.test.ts`). Everything else waits for your tap. Over a cap, the contract itself holds the payment for your wallet.
+
+**Why does this need a blockchain?** Two things a server can't give. A proof anyone can check without trusting Aftercall: the hash is on NEAR, not in a database Aftercall could edit. And spending limits the app can't get around: the payee list and caps live in a contract, and the app's key can only call `pay`, `record_proof`, `open_escrow` and `release_escrow`; changing a rule needs the owner's own wallet (`contracts/agent-wallet`, sandbox tests). The attack log shows both on testnet ([attack-log.md](attack-log.md)).
+
 ## Claims, code and tests
 
 Each claim names the code that does it and the tests that check it. The full list, with every test name: [proven.md](proven.md).
