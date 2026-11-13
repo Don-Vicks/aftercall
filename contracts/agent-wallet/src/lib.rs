@@ -2,10 +2,11 @@
 //!
 //! One shared contract holds each user's USDC with their own rules: a daily cap,
 //! a per-payment cap, a cross-chain cap, a payee list and a pause switch. The
-//! desktop app holds a function-call key that may only call `pay` and
-//! `record_proof`. Every rule change needs exactly 1 yoctoNEAR, which a
-//! function-call key cannot attach, so only the user's own wallet (a full-access
-//! key) can make it.
+//! desktop app holds a function-call key that may only call `pay`,
+//! `record_proof`, `open_escrow` and `release_escrow` (a key added before
+//! escrows existed: `pay` and `record_proof`). Every rule change needs exactly
+//! 1 yoctoNEAR, which a function-call key cannot attach, so only the user's own
+//! wallet (a full-access key) can make it.
 //!
 //! There is no admin method that can move user funds, and every user pays for
 //! the storage their own records use, their wallet record included, from their

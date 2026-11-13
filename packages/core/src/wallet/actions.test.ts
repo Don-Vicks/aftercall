@@ -229,3 +229,18 @@ test("an update only ever deletes this Mac's limited key, never a full-access or
   assert.equal(await readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCESS_KEY" } } })), null);
   await assert.rejects(readAccessKeyPermission("https://rpc", base.owner, publicKey, answer({ error: { cause: { name: "UNKNOWN_ACCOUNT" } } })));
 });
+
+test("the app key's methods are the same list in the app, the Mac's Rust code and the contract's tests", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const repo = new URL("../../../../", import.meta.url);
+  // `KEY_METHODS: [&str; 4] = ["pay", …]` in Rust; the first bracketed list of strings after the name.
+  const rustList = async (path: string, name: string) => {
+    const src = await readFile(new URL(path, repo), "utf8");
+    const m = new RegExp(`const ${name}: \\[&str; \\d+\\] = \\[([^\\]]*)\\]`).exec(src);
+    assert.ok(m, `${name} in ${path}`);
+    return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]).sort();
+  };
+  const ts = [...APP_KEY_METHODS].sort();
+  assert.deepEqual(await rustList("apps/desktop/src-tauri/src/near.rs", "KEY_METHODS"), ts, "near.rs KEY_METHODS");
+  assert.deepEqual(await rustList("contracts/agent-wallet/tests/sandbox.rs", "APP_KEY_METHODS"), ts, "sandbox.rs APP_KEY_METHODS");
+});

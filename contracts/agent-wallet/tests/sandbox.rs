@@ -174,9 +174,13 @@ async fn limited_key_cannot_change_rules() -> anyhow::Result<()> {
         ("approve_escrow", json!({ "escrow_id": "e-1" })),
         ("cancel_escrow", json!({ "escrow_id": "e-1" })),
     ] {
-        // Outside the key's method list: rejected before it runs.
-        let r = app.call(e.wallet.id(), method).args_json(args.clone()).deposit(NearToken::from_yoctonear(1)).transact().await;
-        assert!(r.is_err() || r.unwrap().is_failure(), "{method} with limited key must fail");
+        // Outside the key's method list: NEAR refuses the transaction before the contract
+        // runs (an Err, not a failed receipt). No deposit is attached, so this tests the
+        // method list itself: with 1 yocto, NEAR would refuse any function-call key anyway,
+        // and a method on the list would fail only inside the contract (`assert_one_yocto`).
+        // `one_yocto_rule_holds_even_if_key_lists_owner_methods` covers that second wall.
+        let r = app.call(e.wallet.id(), method).args_json(args.clone()).transact().await;
+        assert!(r.is_err(), "{method} must be refused by NEAR for the limited key, not reach the contract: {r:?}");
     }
     assert_eq!(wallet_field(&e, "daily_cap").await?, 200 * USDC);
     assert_eq!(wallet_field(&e, "balance").await?, 300 * USDC);
