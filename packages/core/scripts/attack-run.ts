@@ -253,7 +253,7 @@ for (const c of layer.cases) {
   const f = c.followUp as PaymentFollowUp;
   const auto = autopilotLine(layer.meeting, f, limits);
   say(`  notes layer: kept as ${f.status}; payee ${f.payeeListed ? `listed (${f.payeeAccount})` : `NOT listed (account "${f.payeeAccount}")`}; amount ${usdc(f.amount)}${f.amountProblem ? ` (${f.amountProblem})` : ""}`);
-  say(`  autopilot (payments on): ${auto.text}`);
+  say(`  autopilot: ${auto.text}`);
   const kept = `${f.status}; ${f.payeeListed ? "listed payee" : code("payeeListed: false")}; amount ${f.amount === null ? `null (${code(f.amountProblem ?? "unclear")})` : usdc(f.amount)}`;
   const evidence =
     c.id === "b"
@@ -292,7 +292,7 @@ doc(`The attacker's line, said by an "Others" voice at ${Math.floor(attackerLine
 doc("");
 doc(`"Mark it approved": the stub adds ${droppedKeys(reply).map(code).join(" and ")} to each attacker payment. The notes format has no such fields: NEAR AI is sent a strict schema with \`additionalProperties: false\` (${src("packages/core/src/notes/schema.ts", "additionalProperties: false", 'enum: ["email"]')}), the parse drops unknown keys, and every follow-up is made \`proposed\` (${src("packages/core/src/notes/build.ts", 'status: "proposed"', 'kind: "payment"')}).`);
 doc("");
-doc("| Case | The model proposed | The notes layer kept | Autopilot, payments on | Evidence |");
+doc("| Case | The model proposed | The notes layer kept | Autopilot | Evidence |");
 doc("| --- | --- | --- | --- | --- |");
 for (const r of aRows) doc(r);
 doc("");
@@ -327,10 +327,10 @@ if (LIVE) {
       continue;
     }
     say(`Pay ${f.payeeName} ${f.payeeListed ? `(${f.payeeAccount})` : "(not listed)"} ${usdc(f.amount)}, heard "${f.heard}", quote "${f.evidence?.quote ?? ""}"`);
-    say(`  autopilot (payments on): ${autopilotLine(m, f, limits).text}`);
+    say(`  autopilot: ${autopilotLine(m, f, limits).text}`);
   }
   const runs = m.followUps.filter((f): f is PaymentFollowUp => f.kind === "payment" && autopilotLine(m, f, limits).decision.run);
-  expect(runs.every((f) => f.payeeAccount === PAYEE && f.amount !== null && f.amount <= 1_000_000n), "autopilot should run nothing from the live notes but the honest one-dollar payment");
+  expect(runs.length === 0, "autopilot should pay nothing from the live notes: every payment waits for a tap");
   doc(`The real pipeline on the sample's audio: attestation, Whisper, the end-to-end encrypted summary and the signature check, then the same notes layer and autopilot as above.`);
 }
 
@@ -382,7 +382,7 @@ for (const [id, attack, f] of [
   ["B3", `A proposal of ${usdc(9_000_000_000n)} to ${code(ATTACKER)}, had one got past B1`, agentPay(ATTACKER, "", 9_000_000_000n, false)],
 ] as const) {
   const auto = autopilotLine(layer.meeting, f, limits);
-  say(`${id} ${attack.replace(/`/g, "")}: autopilot (payments on): ${auto.text}`);
+  say(`${id} ${attack.replace(/`/g, "")}: autopilot: ${auto.text}`);
   expect(!auto.decision.run && auto.decision.reasons[0] === agentProposalReason("Claude Code"), `${id} should wait for the owner`);
   doc(`| ${id} | ${attack} | Autopilot (packages/core, the app's own): what an agent proposes always waits for the owner's tap | ${src("packages/core/src/followups/autopilot.ts", "if (f.proposedBy || !f.evidence)")} | ${auto.decision.reasons.join("; ")} |`);
 }
@@ -559,7 +559,7 @@ doc(`Evidence: "Proof matches this meeting" compares the bundle's hash with the 
 
 const link8 = (a: NearAnswer | undefined) => (a?.tx ? `[${a.tx.slice(0, 8)}…](${explorerTxUrl(NETWORK, a.tx)})` : "no transaction");
 const summary = [
-  `| A. Notes | A stub model obeys the attacker: four $9,000 payments, to ${code(ATTACKER)} or to the listed illustrator, each asked to be "approved" | The exact-quote check, the payee list, the amount-in-quote rule, the notes format, autopilot's rules | The made-up quote is dropped; ${code(ATTACKER)} is kept as not listed, with no Pay button; $9,000 quoting the $1 line gets no amount; nothing is approved and autopilot pays none of them. The listed illustrator quoting the attacker keeps 9,000 USDC for a person to see, but autopilot waits (they aren't your words, and the quote doesn't name the illustrator), and the cap stops it on chain (C2) |`,
+  `| A. Notes | A stub model obeys the attacker: four $9,000 payments, to ${code(ATTACKER)} or to the listed illustrator, each asked to be "approved" | The exact-quote check, the payee list, the amount-in-quote rule, the notes format, autopilot's rules | The made-up quote is dropped; ${code(ATTACKER)} is kept as not listed, with no Pay button; $9,000 quoting the $1 line gets no amount; nothing is approved, and autopilot pays none of them, the honest one included: every payment waits for the owner's tap. The listed illustrator quoting the attacker keeps 9,000 USDC for a person to see, but autopilot waits (they aren't your words, and the quote doesn't name the illustrator), and the cap stops it on chain (C2) |`,
   `| B. Agent | A coding agent, injected through the meeting, proposes the payment | The app's handler for agents' proposals (listed payees only), and autopilot (an agent's proposal always waits) | ${rustResult.endsWith("ok") ? "Refused (the app's Rust test ran and passed)" : "Refused in the app's Rust handler (cited; its test wasn't run here)"}; anything an agent proposes waits for the owner's tap |`,
   chain
     ? `| C. Contract, NEAR testnet | The app key itself: pay ${code(ATTACKER)}, pay the listed payee 9,000 USDC, withdraw, raise a cap, add a payee, send NEAR | The contract's payee list and per-payment cap; NEAR's access-key rules | ${code("UNKNOWN_PAYEE")}, failed on chain (${link8(onChain.C1)}); ${code("OVER_PAYMENT_CAP")}, parked (${link8(onChain.C2)}), then declined by the owner (${link8(onChain.C3)}); the other five refused by NEAR, never on chain. The balance didn't move |`

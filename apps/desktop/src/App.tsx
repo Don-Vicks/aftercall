@@ -820,7 +820,8 @@ export default function App() {
   );
   const shownRecordings = recordings.filter((r) => !hidden[r.id]);
   const rules = loadRules();
-  const autopilotOn = rules.payments || rules.recapDomains.length > 0;
+  // Only recaps run on autopilot; payments always wait for a tap.
+  const autopilotOn = rules.recapDomains.length > 0;
   /** One key per screen, so switching screens fades between them. */
   const viewKey = view.name === "meeting" || view.name === "recording" || view.name === "project" || view.name === "person" ? `${view.name}:${view.id}` : view.name;
   const openProject = view.name === "project" ? projects.find((p) => p.id === view.id) : undefined;

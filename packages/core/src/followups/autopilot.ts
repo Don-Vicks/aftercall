@@ -5,7 +5,11 @@ import { postedToSlack, type AmountProblemKind, type FollowUp, type Meeting } fr
  * rule for Slack: a recap goes to Slack only from its Post to Slack button.
  */
 export interface AutopilotRules {
-  /** Pay listed payees within the per-payment cap and what's left today. With no per-payment cap set, nothing is paid. */
+  /**
+   * Kept so settings saved before 13 Nov still read, but no longer used: every payment
+   * waits for your tap (`PAYMENTS_NEED_YOU`). Words on a call aren't authorization: the
+   * "You" track is only the microphone, and anyone near it is "You".
+   */
   payments: boolean;
   /** Send recaps to these email domains (your own team). Empty: never. */
   recapDomains: string[];
@@ -45,6 +49,9 @@ export const QUOTE_REASONS = {
   notMoney: "The amount in the quote isn't said as money",
   negated: "The quote may say not to pay",
 } as const;
+
+/** Why a payment waits for a person: always. Autopilot sends recaps; it never pays. */
+export const PAYMENTS_NEED_YOU = "Every payment waits for your tap";
 
 /** Why a follow-up a coding agent proposed waits for a person: always. */
 export const agentProposalReason = (agent: string) => `Proposed by ${agent}: what an agent proposes always waits for you`;
@@ -90,9 +97,11 @@ export function meetingAutopilotDecision(m: Pick<Meeting, "verified">, f: Follow
 }
 
 /**
- * Whether a follow-up may run by itself. Every rule must pass; anything unclear
- * waits for a person, and so does anything a coding agent proposed, whatever the
- * rules say. The contract enforces the money limits again on chain.
+ * Whether a follow-up may run by itself. Only a recap to your own team's domain can;
+ * every payment waits for your tap (`PAYMENTS_NEED_YOU`), with the other reasons it
+ * would wait listed after it. Anything unclear waits for a person, and so does anything a
+ * coding agent proposed, whatever the rules say. The contract enforces the money limits
+ * again on chain when you tap.
  */
 export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: WalletLimits | null): Decision {
   const reasons: string[] = [];
@@ -108,11 +117,13 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
     else if (!domain || !rules.recapDomains.map((d) => d.toLowerCase().replace(/^@/, "")).includes(domain)) reasons.push("Not your team's domain");
     return { run: reasons.length === 0, reasons };
   }
+  // A payment never runs by itself. The other reasons are still worked out and shown, so the
+  // card says what else to look at before you tap.
+  reasons.push(PAYMENTS_NEED_YOU);
   // A deal waits on something (or the model said it did): only you decide it happened.
   if (f.condition) reasons.push("It waits on a condition: only you can say it's met");
   else if (f.conditionDropped) reasons.push("The call may have set a condition: check it yourself");
   if (f.escrow) reasons.push("Held in escrow for the payee to confirm");
-  if (!rules.payments) reasons.push("Autopilot payments are off");
   if (!f.payeeListed) reasons.push("Payee isn't on your list");
   if (f.amount === null) reasons.push(AMOUNT_PROBLEM_REASONS[f.amountProblem ?? "unclear"]);
   const q = f.quoteCheck;

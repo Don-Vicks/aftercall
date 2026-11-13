@@ -94,16 +94,16 @@ Over the local MCP server, an agent can:
 
 A voice on a call, or text a coding agent reads, can tell the model or an agent to pay someone. What stops it, layer by layer, with a run on NEAR testnet, is in [attack-log.md](attack-log.md) (`pnpm --filter @aftercall/core attack:run`).
 
-- **The notes:** every item needs an exact quote from the transcript; a payee not on your list gets no Pay button, only a claim link, and never runs on autopilot; the amount must be in its quote; the notes format has no way to mark anything approved. Autopilot also pays only a quote in your own words (your microphone's track) that names the payee and says the amount as money ("$500", "five hundred dollars"; not "500 users" or "in 2027"), and nothing in it that may say not to pay (`quoteCheck`, `packages/core/src/notes/build.ts`).
+- **The notes:** every item needs an exact quote from the transcript; a payee not on your list gets no Pay button, only a claim link, and never runs on autopilot; the amount must be in its quote; the notes format has no way to mark anything approved. No payment runs without your tap (`PAYMENTS_NEED_YOU`, `packages/core/src/followups/autopilot.ts`); its card also says when the quote isn't your own words (your microphone's track), doesn't name the payee, doesn't say the amount as money ("$500", not "500 users" or "in 2027") or may say not to pay (`quoteCheck`, `packages/core/src/notes/build.ts`).
 - **Agents:** the app accepts an agent's payment proposal only to a listed payee within the caps, and it always waits for your tap.
 - **The contract:** anything else meets the payee list and the caps, which the app's key can't change; on testnet a payment to an unlisted account failed (`UNKNOWN_PAYEE`) and 9,000 USDC to a listed payee was parked (`OVER_PAYMENT_CAP`).
-- **Not covered:** with autopilot payments on, a line on your own microphone's track ("You") that names a payee already on your list, with an amount said as money under your caps, would be paid: for example the call's audio played aloud into your microphone. Speakers come from which track a line is on; voices are never identified. The caps bound it.
+- **Not covered:** you can still tap Approve on a payment someone slipped into a call. The card shows the quote and says when it isn't your words or doesn't name the payee, and the caps bound it. (Until 13 Nov, autopilot could pay a line on your microphone's track that named a listed payee; anyone near your microphone counts as "You", so payments no longer run on autopilot.)
 
 ## Decisions a person made
 
 - **End-to-end encryption or nothing** (1 Nov 2026). The transcript, your notes and Ask excerpts go to NEAR AI only end to end encrypted, with no TLS fallback and no downgrade on failure. If encryption isn't available, the run stops and sends nothing.
 - **Consent before every recording.** Recording can't start until "I've told everyone on the call" is ticked.
-- **No quote, no item.** Every action item and follow-up must quote the call word for word, and a payment's amount must be in its quote. Autopilot pays only your own words naming the payee, with the amount said as money.
+- **No quote, no item.** Every action item and follow-up must quote the call word for word, and a payment's amount must be in its quote. No payment runs without your tap: words on a call aren't authorization.
 - **Autopilot only where every rule passes,** and never for what an agent proposed or for Slack.
 - **Claims match the code.** Anything not yet run live is labelled so in the README and [proven.md](proven.md).
 

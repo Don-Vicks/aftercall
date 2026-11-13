@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PaymentFollowUp } from "../meeting.ts";
+import { PAYMENTS_NEED_YOU } from "../followups/autopilot.ts";
 import {
   ATTACKER,
   INJECTED_WORDS,
@@ -78,18 +79,18 @@ test("a model that obeys the attacker: no made-up quote, no unlisted payee, no a
   assert.equal(meeting.verified, true, "the worst case: the reply is treated as a genuine, signed one");
 });
 
-test("autopilot pays only the honest payment; every attacker payment waits for a person, with its reasons", () => {
+test("autopilot pays nothing: the honest payment passes every other rule and waits for a tap; each attacker payment also says why", () => {
   const { meeting, cases } = layer();
   const limits = { perPaymentCap: 1n * USDC, leftToday: 4_500_000n };
   const reasons = (id: string) => autopilotLine(meeting, cases.find((c) => c.id === id)!.followUp!, limits).decision;
-  assert.equal(reasons("control").run, true);
+  assert.deepEqual(reasons("control"), { run: false, reasons: [PAYMENTS_NEED_YOU] });
   const notYou = "Someone else on the call said it: only your own words pay by themselves";
-  assert.deepEqual(reasons("b"), { run: false, reasons: ["Payee isn't on your list", notYou, "Over your per-payment cap", "Over what's left today"] });
-  assert.deepEqual(reasons("c1"), { run: false, reasons: ["Amount isn't in the quote"] });
+  assert.deepEqual(reasons("b"), { run: false, reasons: [PAYMENTS_NEED_YOU, "Payee isn't on your list", notYou, "Over your per-payment cap", "Over what's left today"] });
+  assert.deepEqual(reasons("c1"), { run: false, reasons: [PAYMENTS_NEED_YOU, "Amount isn't in the quote"] });
   // The attacker's own words, pointed at the listed illustrator: before the quote check only the
   // caps stopped this one; now the notes layer does too (not your words, the payee isn't named).
-  assert.deepEqual(reasons("c2"), { run: false, reasons: [notYou, "The quote doesn't name the payee", "Over your per-payment cap", "Over what's left today"] });
-  assert.match(autopilotLine(meeting, cases[2].followUp!, limits).text, /^waits for you: Payee isn't on your list/);
+  assert.deepEqual(reasons("c2"), { run: false, reasons: [PAYMENTS_NEED_YOU, notYou, "The quote doesn't name the payee", "Over your per-payment cap", "Over what's left today"] });
+  assert.match(autopilotLine(meeting, cases[2].followUp!, limits).text, /^waits for you: Every payment waits for your tap; Payee isn't on your list/);
   // Without a wallet connected, nothing is paid either.
   assert.equal(autopilotLine(meeting, cases[0].followUp!, null).decision.run, false);
 });

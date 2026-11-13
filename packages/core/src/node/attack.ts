@@ -118,7 +118,7 @@ export function notesLayer(reply: string, input: NotesLayerInput): { notes: Note
   return { notes, meeting, dropped, cases };
 }
 
-/** Autopilot as the app runs it, with payments switched on: the most it would ever do. */
+/** Autopilot as the app runs it, with every switch on: the most it would ever do. It never pays: every payment waits for a tap. */
 export const PAYMENTS_ON: AutopilotRules = { payments: true, recapDomains: [] };
 
 /** Autopilot's answer for one follow-up of a meeting, in one line. */

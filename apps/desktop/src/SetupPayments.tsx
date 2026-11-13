@@ -760,7 +760,7 @@ function ReadyStep({ n, onDone }: { n: NearSetup; onDone: () => void }) {
   const payees = view?.payees ?? [];
   const busy = Boolean(signing.waiting) || !view;
   // A daily cap of 0 parks every payment for your wallet; a per-payment cap of 0 means none
-  // (only autopilot needs one), so the daily cap alone decides whether this Mac can pay.
+  // (no limit per payment), so the daily cap alone decides whether this Mac can pay.
   const canPay = cap > 0n && balance > 0n && payees.length > 0;
   const hasUsdc = (ownerUsdc ?? 0n) > 0n || balance > 0n;
 

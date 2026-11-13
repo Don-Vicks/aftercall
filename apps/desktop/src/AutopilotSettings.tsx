@@ -38,14 +38,14 @@ export function AutopilotSettings() {
     saveRules(next);
   };
 
+  // Payments are never on autopilot: words on a call aren't authorization (anyone near your
+  // microphone is "You"), so each one waits for your tap. The contract's caps apply when you tap.
   const payDetail =
-    cap === null ? (
-      "Only people on your list, up to your per-payment cap, when the amount heard is clear."
-    ) : cap === 0n ? (
-      "No per-payment cap is set, so autopilot pays nothing. Set one in Agent wallet."
+    cap === null || cap === 0n ? (
+      "Each payment waits for your tap, here or on your phone. The contract's caps still apply when you tap."
     ) : (
       <>
-        Only people on your list, up to <span className="font-mono">{formatUsdc(cap)} USDC</span> each, when the amount heard is clear.
+        Each payment waits for your tap, here or on your phone. The contract still pays at most <span className="font-mono">{formatUsdc(cap)} USDC</span> each; more waits for your wallet.
       </>
     );
 
@@ -55,15 +55,15 @@ export function AutopilotSettings() {
         <SectionTitle id="h-autopilot" count="without a tap">
           Autopilot
         </SectionTitle>
-        <p className="m-0 text-ink-2">Follow-ups that pass every rule run by themselves after a {UNDO_SECONDS}-second undo.</p>
+        <p className="m-0 text-ink-2">Recaps that pass every rule go out by themselves after a {UNDO_SECONDS}-second undo. Payments never do.</p>
       </div>
       <Card pad="none">
         <div className="flex items-center gap-4 border-b border-hairline px-5 py-4">
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="t-title">Pay listed payees</span>
+            <span className="t-title">Payments</span>
             <span className="text-[13px] leading-[19px] text-ink-2">{payDetail}</span>
           </span>
-          <Toggle aria-label="Pay listed payees" checked={rules.payments} onChange={(payments) => update({ ...rules, payments })} />
+          <span className="shrink-0 text-[13px] leading-[19px] text-ink-2">Always ask</span>
         </div>
         <div className="flex flex-col px-5 py-4">
           <div className="flex items-center gap-4">

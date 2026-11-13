@@ -33,7 +33,7 @@ export function Hero() {
           </h1>
           <p className={`${l.heroLead} ${l.load}`} style={vars({ ld: "120ms" })}>
             Notes apps send your calls to servers you can&apos;t check, and the follow-ups still wait on you. Aftercall records on your Mac and makes the notes in secure hardware it checks
-            first. Then it drafts the recap and pays what was agreed, once you approve or by autopilot rules you set, within caps a NEAR contract enforces.
+            first. Then it drafts the recap and, once you approve, pays what was agreed, within caps a NEAR contract enforces.
           </p>
           <p className={`${l.heroWho} ${l.load}`} style={vars({ ld: "150ms" })}>
             For founders and freelancers who agree work and payments on calls.

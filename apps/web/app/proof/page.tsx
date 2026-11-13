@@ -66,7 +66,7 @@ const RUNS: Run[] = [
       {
         where: "near",
         title: "Autopilot paid 1 USDC on its own",
-        body: "The call said “I'll pay the illustrator $1 today”. Every autopilot rule passed, it waited out its 60-second undo window, then paid inside the cap.",
+        body: "The call said “I'll pay the illustrator $1 today”. Every autopilot rule passed, it waited out its 60-second undo window, then paid inside the cap. Since 13 Nov autopilot no longer pays: every payment waits for the owner's tap.",
         links: [tx("pay", "Ay4Yte5eqPX5MYg676jfAjiBcCQgnyoXnSG1faFVcPDP")],
       },
       {

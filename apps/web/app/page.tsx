@@ -21,10 +21,10 @@ import { Story } from "./landing/Story";
 export const metadata = {
   title: "Aftercall · Meeting notes that follow through",
   description:
-    "A Mac app that records your calls with no bot in them, makes the notes in NEAR AI's secure hardware it checks first, then drafts the recap and pays what was agreed, once you approve or by autopilot rules you set, within caps a NEAR contract enforces.",
+    "A Mac app that records your calls with no bot in them, makes the notes in NEAR AI's secure hardware it checks first, then drafts the recap and, once you approve, pays what was agreed, within caps a NEAR contract enforces.",
   openGraph: {
     title: "Aftercall · Meeting notes that follow through",
-    description: "Meeting notes for Mac, made in secure hardware your Mac checks first. Then the recap and the agreed payment, once you approve or by autopilot rules you set, within caps a NEAR contract enforces.",
+    description: "Meeting notes for Mac, made in secure hardware your Mac checks first. Then the recap and, once you approve, the agreed payment, within caps a NEAR contract enforces.",
     images: [{ url: "/landing/og.png", width: 1200, height: 630, alt: "Aftercall: meeting notes that follow through." }],
   },
 };
