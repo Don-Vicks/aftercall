@@ -174,6 +174,23 @@ export interface PaymentFollowUp extends FollowUpBase {
   conditionDropped?: boolean;
   /** Set once the payment is held in escrow for the payee to confirm (Handshake, docs/handshake.md). */
   escrow?: EscrowFollowUp;
+  /**
+   * What the payment's quote shows, read when the notes were made (`quoteCheck` in
+   * notes/build.ts): who said it, whether it names the payee, whether its amount is said
+   * as money ("$500", "five hundred dollars", not "500 users"), and whether it may say not
+   * to pay. Autopilot runs a payment only when you said it, it names the payee, the amount
+   * is said as money and nothing in it says not to. Absent on meetings made before it
+   * existed: those payments wait for your tap.
+   */
+  quoteCheck?: QuoteCheck;
+}
+
+/** See `PaymentFollowUp.quoteCheck`. */
+export interface QuoteCheck {
+  saidBy: Speaker;
+  namesPayee: boolean;
+  amountSaidAsMoney: boolean;
+  mayNegate: boolean;
 }
 
 /** An escrow's state on the agent-wallet contract (`EscrowState` in contracts/agent-wallet). */

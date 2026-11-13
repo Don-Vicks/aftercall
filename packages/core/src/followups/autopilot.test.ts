@@ -7,6 +7,7 @@ const usdc = (n: number) => BigInt(n) * 1_000_000n;
 const payment: PaymentFollowUp = {
   id: "f2", kind: "payment", status: "proposed", payeeName: "Designer", payeeAccount: "designer.testnet",
   amount: usdc(50), heard: "fifty dollar", payeeListed: true, evidence: { quote: "pay the designer the fifty dollar deposit", at: 0 },
+  quoteCheck: { saidBy: "you", namesPayee: true, amountSaidAsMoney: true, mayNegate: false },
 };
 const recap: EmailFollowUp = { id: "f1", kind: "email", status: "proposed", to: "tola@acme.co", toName: "Tola", subject: "Recap", evidence: { quote: "send Tola the recap after this", at: 0 } };
 const limits = { leftToday: usdc(150), perPaymentCap: usdc(50) };

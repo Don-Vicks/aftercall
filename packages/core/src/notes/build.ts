@@ -1,5 +1,5 @@
-import type { ActionItem, AmountProblemKind, Evidence, FollowUp, LikelySpeaker, Meeting, PaymentFollowUp, TranscriptLine } from "../meeting.ts";
-import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
+import type { ActionItem, AmountProblemKind, Evidence, FollowUp, LikelySpeaker, Meeting, PaymentFollowUp, QuoteCheck, TranscriptLine } from "../meeting.ts";
+import { amountProblem, amountsIn, currencyIn, moneyAmountsIn, parseAmount } from "./amounts.ts";
 import type { Notes } from "./schema.ts";
 import { findQuote } from "./transcript.ts";
 
@@ -31,8 +31,10 @@ export interface Dropped {
 /**
  * The payee a name means: the same label or the same NEAR account, ignoring case. The model
  * is shown payees as "Label (account)" (`summaryRequestText`) and can give a name back in that
- * form; then the account in brackets decides, else the label before it. A label saved in that
- * form (by a claim link before 8 Nov) also answers to its plain name.
+ * form; then the account in brackets decides, but only if the label before it is that payee's
+ * (or names no one, as a longer form of it): "Mallory (kemi.near)" matches no one. An account
+ * not on the list falls back to the label. A label saved in that form (by a claim link before
+ * 8 Nov) also answers to its plain name.
  */
 export function matchPayee(payees: Payee[], name: string | null): Payee | undefined {
   if (!name) return undefined;
@@ -41,7 +43,48 @@ export function matchPayee(payees: Payee[], name: string | null): Payee | undefi
   const exact = same(n);
   if (exact) return exact;
   const parts = labelAndAccount(n);
-  return parts ? (same(parts.account) ?? same(parts.label)) : undefined;
+  if (!parts) return undefined;
+  // Both halves must point at the same payee: "Mallory (kemi.near)" is nobody on the list,
+  // not Kemi. A longer form of the label ("Kemi Adeyemi (kemi.near)") still matches Kemi.
+  const byAccount = same(parts.account);
+  const byLabel = same(parts.label);
+  // An account that isn't on the list: the label decides, and pays only that payee's own account.
+  if (!byAccount) return byLabel;
+  if (byLabel) return byLabel === byAccount ? byAccount : undefined;
+  return sameFirstWord(parts.label, byAccount) ? byAccount : undefined;
+}
+
+/** "kemi adeyemi" and the payee "Kemi": the first word of the label is the same. */
+function sameFirstWord(label: string, payee: Payee): boolean {
+  const first = (s: string) => s.trim().toLowerCase().split(/\s+/)[0];
+  return first(label) === first(payeeLabel(payee.name)) || label === payee.account.toLowerCase();
+}
+
+const NEGATION = /\b(?:not|never|no longer|cannot|can['’]?t|don['’]?t|doesn['’]?t|didn['’]?t|won['’]?t|wouldn['’]?t|shouldn['’]?t|isn['’]?t|aren['’]?t|cancel\w*|hold off|stop)\b/i;
+
+/** Whether a quote names the payee: its label (or the label's first word) or its account, as whole words. */
+export function quoteNamesPayee(quote: string, payee: Payee | undefined): boolean {
+  if (!payee) return false;
+  const label = payeeLabel(payee.name).toLowerCase();
+  const words = [label, label.split(/\s+/)[0], payee.account.toLowerCase()].filter((w) => w.length >= 2);
+  const q = quote.toLowerCase();
+  return words.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "u").test(q));
+}
+
+/**
+ * What a payment's quote shows, for autopilot: who said it, whether it names the payee,
+ * whether the amount is said as money, and whether it may say not to pay. The model can
+ * point a payment at any line it likes; only a line where you promise to pay a named
+ * payee a sum of money may run by itself.
+ */
+export function quoteCheck(transcript: TranscriptLine[], quote: Evidence, payee: Payee | undefined, amount: bigint | null): QuoteCheck {
+  const line = transcript.find((l) => l.at === quote.at && l.text.includes(quote.quote)) ?? transcript.find((l) => l.text.includes(quote.quote));
+  return {
+    saidBy: line?.speaker ?? "others",
+    namesPayee: quoteNamesPayee(quote.quote, payee),
+    amountSaidAsMoney: amount !== null && moneyAmountsIn(quote.quote).includes(amount),
+    mayNegate: NEGATION.test(quote.quote),
+  };
 }
 
 /** "Kemi (kemi.testnet)" → its label and account; null for a plain name. */
@@ -165,6 +208,7 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
     const conditionQuote = conditionText && f.condition_evidence ? findQuote(transcript, f.condition_evidence) : null;
     const condition = conditionText && conditionQuote ? { condition: { text: conditionText, evidence: { quote: conditionQuote.text, at: conditionQuote.at } } } : {};
     const conditionDropped = conditionText && !conditionQuote ? { conditionDropped: true } : {};
+    const amount = checkedAmount(f.amount_words, quote.text);
     return [
       {
         id: `f${i + 1}`,
@@ -174,10 +218,11 @@ export function buildMeeting(input: BuildInput): { meeting: Meeting; dropped: Dr
         payeeName: payee?.name ?? (f.payee_name ? payeeLabel(f.payee_name) : "Unknown payee"),
         payeeAccount: payee?.account ?? "",
         payeeListed: !!payee,
-        ...checkedAmount(f.amount_words, quote.text),
+        ...amount,
         heard: f.amount_words,
         ...condition,
         ...conditionDropped,
+        quoteCheck: quoteCheck(transcript, evidence, payee, amount.amount),
       },
     ];
   });

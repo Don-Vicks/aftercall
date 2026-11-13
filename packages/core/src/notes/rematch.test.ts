@@ -95,6 +95,24 @@ test("a name given back as the model saw it, \"Label (account)\", still means th
   assert.equal(matchPayee([relabelled], "Kemi (kemi-ac.testnet)"), relabelled);
   assert.equal(matchPayee([kemi], "Kemi (other.testnet)"), kemi, "an unknown account falls back to the label");
   assert.equal(matchPayee([kemi], "Ada (ada.testnet)"), undefined);
+  // Both halves must point at the same payee: a stranger's name on a listed account is no one.
+  assert.equal(matchPayee([kemi], "Mallory (kemi-ac.testnet)"), undefined, "another name on Kemi's account isn't Kemi");
+  const ada = { name: "Ada", account: "ada.testnet" };
+  assert.equal(matchPayee([kemi, ada], "Ada (kemi-ac.testnet)"), undefined, "a label and an account of two different payees match neither");
+  assert.equal(matchPayee([kemi], "Kemi Adeyemi (kemi-ac.testnet)"), kemi, "a longer form of the label still matches");
   assert.equal(payeeLabel("Kemi (kemi-ac.testnet)"), "Kemi");
   assert.equal(payeeLabel(" Kemi "), "Kemi");
+});
+
+test("the quote check follows the payee: named once listed, and a payee the quote doesn't name isn't", () => {
+  const before = heardFirst();
+  assert.equal(payment(before).quoteCheck?.namesPayee, false, "no payee on the list yet");
+  assert.equal(payment(rematchPayees(before, [designer])).quoteCheck?.namesPayee, true, "the quote says “the designer”");
+  // Listed under a label the quote never says: autopilot leaves it to you.
+  const studio = { name: "Studio Nine", account: "designer.testnet" };
+  const relisted = rematchPayees(rematchPayees(before, [designer]), [studio]);
+  assert.equal(payment(relisted).payeeName, "Studio Nine");
+  assert.equal(payment(relisted).quoteCheck?.namesPayee, false);
+  // Who said it, and how the amount was said, don't change.
+  assert.deepEqual({ ...payment(relisted).quoteCheck, namesPayee: true }, { ...payment(before).quoteCheck, namesPayee: true });
 });

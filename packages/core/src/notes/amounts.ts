@@ -236,6 +236,8 @@ function quoteTokens(text: string): QuoteToken[] {
   return text
     .normalize("NFKC")
     .toLowerCase()
+    // "$ 500" is "$500": a lone "$" would be dropped as punctuation.
+    .replace(/\$\s+(?=\d)/g, "$")
     .replace(/(\d)(?=\p{L})(?!\p{scx=Latin})/gu, "$1 ")
     .replace(/(?<=\p{L})(?<!\p{scx=Latin})(?=[\d$])/gu, " ")
     .split(/[\s\-–—]+/)
@@ -296,8 +298,25 @@ function notDollars(tokens: QuoteToken[], start: number, end: number): boolean {
  * and two bare numbers in a row ("one fifty") give nothing.
  */
 export function amountsIn(text: string): bigint[] {
+  return amountSpans(text).map((s) => s.value);
+}
+
+/**
+ * The amounts in a quote that are said as money: with "$", a dollar word ("dollars",
+ * "bucks", "USD", "USDC", "долларов", "ドル"…) or cents in the amount itself or right
+ * after it. "In 2027" or "500 users" give nothing here, though `amountsIn` reads them.
+ */
+export function moneyAmountsIn(text: string): bigint[] {
+  return amountSpans(text)
+    .filter((s) => s.saidAsMoney)
+    .map((s) => s.value);
+}
+
+const MONEY_WORD = /^(?:\$.*|dollars?|bucks|usd|usdc|cents?)$/;
+
+function amountSpans(text: string): { value: bigint; saidAsMoney: boolean }[] {
   const tokens = quoteTokens(text);
-  const found: bigint[] = [];
+  const found: { value: bigint; saidAsMoney: boolean }[] = [];
   let i = 0;
   while (i < tokens.length) {
     const { w } = tokens[i];
@@ -327,7 +346,13 @@ export function amountsIn(text: string): bigint[] {
       if (last === "and" || last === "us") continue;
       const value = parseAmount(words.slice(0, j - i).join(" "));
       if (value !== null) {
-        if (!tokens[i].foreign && !notDollars(tokens, i, j)) found.push(value);
+        if (!tokens[i].foreign && !notDollars(tokens, i, j)) {
+          const next = tokens[j - 1].stop ? undefined : tokens[j]?.w;
+          const saidAsMoney =
+            tokens.slice(i, j).some((t) => MONEY_WORD.test(t.w)) ||
+            (next !== undefined && (MONEY_WORD.test(next) || DOLLAR_WORD.test(next) || /^d[óo]lar(?:es)?$/.test(next)));
+          found.push({ value, saidAsMoney });
+        }
         taken = j - i;
         break;
       }

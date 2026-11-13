@@ -1,5 +1,5 @@
 import type { Meeting } from "../meeting.ts";
-import { matchPayee, type Payee } from "./build.ts";
+import { matchPayee, quoteNamesPayee, type Payee } from "./build.ts";
 
 /**
  * Matches a meeting's waiting payments against the payee list as it is now, with the
@@ -19,7 +19,9 @@ export function rematchPayees(meeting: Meeting, payees: Payee[]): Meeting {
     const payeeListed = !!payee;
     if (payeeName === f.payeeName && payeeAccount === f.payeeAccount && payeeListed === f.payeeListed) return f;
     changed = true;
-    return { ...f, payeeName, payeeAccount, payeeListed };
+    // The quote must name the payee it now points at, or autopilot leaves it to you.
+    const quoteCheck = f.quoteCheck && f.evidence ? { quoteCheck: { ...f.quoteCheck, namesPayee: quoteNamesPayee(f.evidence.quote, payee) } } : {};
+    return { ...f, payeeName, payeeAccount, payeeListed, ...quoteCheck };
   });
   return changed ? { ...meeting, followUps } : meeting;
 }

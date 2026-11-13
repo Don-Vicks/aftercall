@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { amountProblem, amountsIn, currencyIn, parseAmount } from "./amounts.ts";
+import { amountProblem, amountsIn, currencyIn, moneyAmountsIn, parseAmount } from "./amounts.ts";
 import { checkedAmount } from "./build.ts";
 
 const usdc = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
@@ -265,4 +265,19 @@ test("digits other than 0-9 give no amount", () => {
   assert.equal(parseAmount("٥٠٠ دولار"), null);
   assert.deepEqual(amountsIn("मैं तुम्हें ५०० डॉलर दूंगा"), []);
   assert.equal(parseAmount("५०० डॉलर"), null);
+});
+
+test("moneyAmountsIn keeps only amounts said as money; amountsIn still reads every number", () => {
+  const u = (n: number) => BigInt(Math.round(n * 100)) * 10_000n;
+  assert.deepEqual(moneyAmountsIn("We ship it in 2027 for sure"), []);
+  assert.deepEqual(amountsIn("We ship it in 2027 for sure"), [u(2027)], "the old reading, kept for the card");
+  assert.deepEqual(moneyAmountsIn("the server had 500 users online"), []);
+  assert.deepEqual(moneyAmountsIn("I'll pay Kemi $500 today"), [u(500)]);
+  assert.deepEqual(moneyAmountsIn("I'll pay Kemi $ 500 today"), [u(500)]);
+  assert.deepEqual(moneyAmountsIn("five hundred dollars for Kemi"), [u(500)]);
+  assert.deepEqual(moneyAmountsIn("fifty bucks, and 3 people"), [u(50)]);
+  assert.deepEqual(moneyAmountsIn("fifty cents for the sticker"), [u(0.5)]);
+  assert.deepEqual(moneyAmountsIn("заплати дизайнеру 500 долларов"), [u(500)]);
+  assert.deepEqual(moneyAmountsIn("デザイナーに500ドルを払う"), [u(500)]);
+  assert.deepEqual(moneyAmountsIn("500 euros for Kemi"), [], "another currency is never money here");
 });

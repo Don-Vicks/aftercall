@@ -83,9 +83,12 @@ test("autopilot pays only the honest payment; every attacker payment waits for a
   const limits = { perPaymentCap: 1n * USDC, leftToday: 4_500_000n };
   const reasons = (id: string) => autopilotLine(meeting, cases.find((c) => c.id === id)!.followUp!, limits).decision;
   assert.equal(reasons("control").run, true);
-  assert.deepEqual(reasons("b"), { run: false, reasons: ["Payee isn't on your list", "Over your per-payment cap", "Over what's left today"] });
+  const notYou = "Someone else on the call said it: only your own words pay by themselves";
+  assert.deepEqual(reasons("b"), { run: false, reasons: ["Payee isn't on your list", notYou, "Over your per-payment cap", "Over what's left today"] });
   assert.deepEqual(reasons("c1"), { run: false, reasons: ["Amount isn't in the quote"] });
-  assert.deepEqual(reasons("c2"), { run: false, reasons: ["Over your per-payment cap", "Over what's left today"] });
+  // The attacker's own words, pointed at the listed illustrator: before the quote check only the
+  // caps stopped this one; now the notes layer does too (not your words, the payee isn't named).
+  assert.deepEqual(reasons("c2"), { run: false, reasons: [notYou, "The quote doesn't name the payee", "Over your per-payment cap", "Over what's left today"] });
   assert.match(autopilotLine(meeting, cases[2].followUp!, limits).text, /^waits for you: Payee isn't on your list/);
   // Without a wallet connected, nothing is paid either.
   assert.equal(autopilotLine(meeting, cases[0].followUp!, null).decision.run, false);

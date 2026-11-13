@@ -132,6 +132,7 @@ export const syncWithAda: Meeting = {
       heard: "fifty dollar",
       payeeListed: true,
       evidence: { quote: "pay the designer the fifty dollar deposit today", at: 134 },
+      quoteCheck: { saidBy: "you", namesPayee: true, amountSaidAsMoney: true, mayNegate: false },
     },
     {
       id: "f3",
@@ -154,6 +155,7 @@ export const syncWithAda: Meeting = {
       heard: "twenty dollars",
       payeeListed: true,
       evidence: { quote: "send Kemi the twenty dollars for the icons", at: 155 },
+      quoteCheck: { saidBy: "you", namesPayee: true, amountSaidAsMoney: true, mayNegate: false },
     },
   ],
   transcript: [
