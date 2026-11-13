@@ -19,7 +19,7 @@ The Mac holds a NEAR function-call key that may call only `pay`, `record_proof`,
 - Record proofs.
 - Open escrows to listed payees within the same caps.
 - Release escrows their payees already confirmed.
-- Spend the 0.25 NEAR fee allowance on gas.
+- Spend its fee allowance on gas: 0.25 NEAR as the app adds the key. The app checks the key's contract and methods, not its allowance, so a key added by hand with a larger allowance (or none) would let a thief spend more on gas.
 
 **What it can't do:**
 - Change any rule: the caps, the payee list, pause, withdraw, or approve and cancel parked payments and escrows.
@@ -27,7 +27,7 @@ The Mac holds a NEAR function-call key that may call only `pay`, `record_proof`,
 - Pay anyone who isn't on the list, or pay more than the caps in a day. One exception: once the owner sets a cross-chain cap above zero, the key picks the NEAR Intents deposit address for a listed payee's cross-chain payment, so up to that cap could go to an address it chose (the cross-chain cap is 0, off, until the owner sets it).
 - Confirm an escrow; that takes the payee's own account.
 
-**Worst case:** one day's cap, to people you already listed (plus the cross-chain cap, if the owner turned it on). **The fix:** `set_paused`, or delete the key, from your wallet.
+**Worst case:** the daily cap, to people you already listed, every day until you notice (plus the cross-chain cap, if the owner turned it on). Escrows add to it: the key can open them within the caps, and once a payee confirms, the key can release them and the owner can't cancel for 30 days. A thief can also record proofs, each charged to the owner's storage credit. **The fix:** `set_paused`, or delete the key, from your wallet; pausing also stops releases.
 
 Details per method: [handshake.md](handshake.md), "The contract's rules" and "What a stolen app key can do here". Tests: `contracts/agent-wallet/tests/sandbox.rs` (a local NEAR node) and the unit tests in `lib.rs`.
 
@@ -94,16 +94,16 @@ Over the local MCP server, an agent can:
 
 A voice on a call, or text a coding agent reads, can tell the model or an agent to pay someone. What stops it, layer by layer, with a run on NEAR testnet, is in [attack-log.md](attack-log.md) (`pnpm --filter @aftercall/core attack:run`).
 
-- **The notes:** every item needs an exact quote from the transcript; a payee not on your list gets no Pay button, only a claim link, and never runs on autopilot; the amount must be in its quote; the notes format has no way to mark anything approved.
+- **The notes:** every item needs an exact quote from the transcript; a payee not on your list gets no Pay button, only a claim link, and never runs on autopilot; the amount must be in its quote; the notes format has no way to mark anything approved. Autopilot also pays only a quote in your own words (your microphone's track) that names the payee and says the amount as money ("$500", "five hundred dollars"; not "500 users" or "in 2027"), and nothing in it that may say not to pay (`quoteCheck`, `packages/core/src/notes/build.ts`).
 - **Agents:** the app accepts an agent's payment proposal only to a listed payee within the caps, and it always waits for your tap.
 - **The contract:** anything else meets the payee list and the caps, which the app's key can't change; on testnet a payment to an unlisted account failed (`UNKNOWN_PAYEE`) and 9,000 USDC to a listed payee was parked (`OVER_PAYMENT_CAP`).
-- **Not covered:** with autopilot payments on, an injected line naming a payee already on your list, with an amount under your caps, would be paid. The caps bound it.
+- **Not covered:** with autopilot payments on, a line on your own microphone's track ("You") that names a payee already on your list, with an amount said as money under your caps, would be paid: for example the call's audio played aloud into your microphone. Speakers come from which track a line is on; voices are never identified. The caps bound it.
 
 ## Decisions a person made
 
 - **End-to-end encryption or nothing** (1 Nov 2026). The transcript, your notes and Ask excerpts go to NEAR AI only end to end encrypted, with no TLS fallback and no downgrade on failure. If encryption isn't available, the run stops and sends nothing.
 - **Consent before every recording.** Recording can't start until "I've told everyone on the call" is ticked.
-- **No quote, no item.** Every action item and follow-up must quote the call word for word, and a payment's amount must be in its quote.
+- **No quote, no item.** Every action item and follow-up must quote the call word for word, and a payment's amount must be in its quote. Autopilot pays only your own words naming the payee, with the amount said as money.
 - **Autopilot only where every rule passes,** and never for what an agent proposed or for Slack.
 - **Claims match the code.** Anything not yet run live is labelled so in the README and [proven.md](proven.md).
 

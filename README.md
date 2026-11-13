@@ -34,7 +34,7 @@ Meeting-notes apps send your calls to servers you can't inspect, and they stop a
 ## Why NEAR
 
 - **NEAR AI Cloud** runs the speech and language models (`openai/whisper-large-v3`, `Qwen/Qwen3.8-27B`) inside Intel TDX and NVIDIA confidential-computing TEEs, with attestation the app verifies on every run.
-- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow` (a key added before 7 Nov holds only `pay` and `record_proof` until the owner updates it once; the one on `nov3.testnet` still does).
+- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow` (a key added before 7 Nov holds only `pay` and `record_proof` until the owner updates it once; the one on `nov3.testnet` still does). Until the mainnet deploy, the contract account keeps a full-access key, so its deployer can still upgrade the code that holds everyone's USDC ([threat-model.md](docs/threat-model.md)).
 - **NEAR Intents** quotes payouts to payees on Solana or Base.
 
 ## Demo
@@ -155,7 +155,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | --- | --- | --- |
 | Nothing is sent unless NEAR AI's TEEs pass attestation; the transcript is encrypted end to end to the attested model | `packages/core/src/tee/`, `packages/core/src/notes/pipeline.ts` | `pipeline.test.ts`, `checks.test.ts`, `e2ee.test.ts` |
 | Every reply's signature is checked against the attested key; notes that fail are marked unverified, and autopilot runs nothing from them | `pipeline.ts`, `packages/core/src/followups/autopilot.ts` | `pipeline.test.ts`, `autopilot.test.ts` |
-| The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote | `packages/core/src/notes/build.ts`, `transcript.ts` | `build.test.ts`, `transcript.test.ts` |
+| The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote. Any number in the quote can match, so autopilot also wants your own words, naming the payee, with the amount said as money | `packages/core/src/notes/build.ts`, `transcript.ts`, `amounts.ts` | `build.test.ts`, `transcript.test.ts` |
 | The app's key can only pay, record proofs and open or release escrows, within the caps; over a cap waits for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
 | A prompt-injected payment is stopped by the layers together, each attempt by at least one: the notes (quote required, unlisted payee gets no Pay button), the agent (proposals wait for the owner), the contract (payee list and caps) and the proof link | `packages/core/scripts/attack-run.ts`, `packages/core/src/node/attack.ts` | `attack.test.ts`; the run: [docs/attack-log.md](docs/attack-log.md) |
 | Every on-chain and NEAR AI attestation claim in this README re-checks with one command and no keys (the backend's claims, such as test credits and recap email, aren't covered) | `packages/core/scripts/check-live.ts`, `packages/core/src/node/checkLive.ts`, `evidence.ts`, [docs/evidence.json](docs/evidence.json) | `checkLive.test.ts`, `evidence.test.ts`, `nearai.test.ts` |
