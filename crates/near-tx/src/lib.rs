@@ -2,9 +2,9 @@
 //! function-call transactions, and call view methods, over JSON-RPC.
 //!
 //! The app's key is a function-call access key on the user's account that may only
-//! call `pay` and `record_proof` on the agent-wallet contract, so this crate never
-//! needs any other action. Borsh layout follows nearcore's `Transaction` (V0) and
-//! `SignedTransaction`.
+//! call `pay`, `record_proof`, `open_escrow` and `release_escrow` on the agent-wallet
+//! contract, so this crate never needs any other action. Borsh layout follows
+//! nearcore's `Transaction` (V0) and `SignedTransaction`.
 
 use base64::Engine as _;
 use ed25519_dalek::{Signer, SigningKey};

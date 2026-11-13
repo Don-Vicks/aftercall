@@ -109,6 +109,9 @@ const say = (s: string) => {
 };
 const doc = (s: string) => stage.doc.push(s);
 const unexpected: string[] = [];
+/** Set when a stage couldn't reach a service: those results are reported as not checked. */
+let networkDown = false;
+const NETWORK_DOWN = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|socket|network|\b40[37]\b/i;
 const expect = (ok: boolean, what: string) => {
   if (!ok) {
     unexpected.push(`${stage.title}: ${what}`);
@@ -540,7 +543,13 @@ for (const vnt of variants) {
   if (vnt.note) say(`  (${vnt.note})`);
   if (run.rpcError) say(`  NEAR: ${run.rpcError}`);
   for (const c of run.checks) say(`  ${c.ok ? "PASS" : c.cantRecheck ? "N/A " : "FAIL"} ${c.label}: ${c.detail}`);
-  expect(vnt.id === "D0" ? passed : !passed, vnt.id === "D0" ? "the untouched link should pass" : `${vnt.id} should fail`);
+  // No network (a judge's sandbox, an outage): every check against NEAR fails for that reason
+  // alone, which proves nothing either way. Say so instead of calling it a result.
+  const offline = !vnt.fetchFn && !!run.rpcError && NETWORK_DOWN.test(String(run.rpcError));
+  if (offline) {
+    networkDown = true;
+    say(`  NOT CHECKED: NEAR's RPC couldn't be reached from here, so ${vnt.id} proves nothing either way`);
+  } else expect(vnt.id === "D0" ? passed : !passed, vnt.id === "D0" ? "the untouched link should pass" : `${vnt.id} should fail`);
   doc(`| ${vnt.id} | ${vnt.attack}${vnt.note ? ` (${vnt.note})` : ""} | ${passed ? "Yes" : "No"} | ${failed.length ? failed.map((c) => `${c.label} (${c.detail.replace(/\|/g, "\\|")})`).join("; ") : "none"} |`);
 }
 doc("");
@@ -550,7 +559,7 @@ doc(`Evidence: "Proof matches this meeting" compares the bundle's hash with the 
 
 const link8 = (a: NearAnswer | undefined) => (a?.tx ? `[${a.tx.slice(0, 8)}…](${explorerTxUrl(NETWORK, a.tx)})` : "no transaction");
 const summary = [
-  `| A. Notes | A stub model obeys the attacker: four $9,000 payments, to ${code(ATTACKER)} or to the listed illustrator, each asked to be "approved" | The exact-quote check, the payee list, the amount-in-quote rule, the notes format, autopilot's rules | The made-up quote is dropped; ${code(ATTACKER)} is kept as not listed, with no Pay button; $9,000 quoting the $1 line gets no amount; nothing is approved and autopilot pays none of them. The listed illustrator quoting the attacker keeps 9,000 USDC, which the cap stops (C2) |`,
+  `| A. Notes | A stub model obeys the attacker: four $9,000 payments, to ${code(ATTACKER)} or to the listed illustrator, each asked to be "approved" | The exact-quote check, the payee list, the amount-in-quote rule, the notes format, autopilot's rules | The made-up quote is dropped; ${code(ATTACKER)} is kept as not listed, with no Pay button; $9,000 quoting the $1 line gets no amount; nothing is approved and autopilot pays none of them. The listed illustrator quoting the attacker keeps 9,000 USDC for a person to see, but autopilot waits (they aren't your words, and the quote doesn't name the illustrator), and the cap stops it on chain (C2) |`,
   `| B. Agent | A coding agent, injected through the meeting, proposes the payment | The app's handler for agents' proposals (listed payees only), and autopilot (an agent's proposal always waits) | ${rustResult.endsWith("ok") ? "Refused (the app's Rust test ran and passed)" : "Refused in the app's Rust handler (cited; its test wasn't run here)"}; anything an agent proposes waits for the owner's tap |`,
   chain
     ? `| C. Contract, NEAR testnet | The app key itself: pay ${code(ATTACKER)}, pay the listed payee 9,000 USDC, withdraw, raise a cap, add a payee, send NEAR | The contract's payee list and per-payment cap; NEAR's access-key rules | ${code("UNKNOWN_PAYEE")}, failed on chain (${link8(onChain.C1)}); ${code("OVER_PAYMENT_CAP")}, parked (${link8(onChain.C2)}), then declined by the owner (${link8(onChain.C3)}); the other five refused by NEAR, never on chain. The balance didn't move |`
@@ -592,4 +601,5 @@ if (chain) {
 } else {
   console.log("\ndocs/attack-log.md not rewritten: stage C didn't run.");
 }
+if (networkDown) console.log("\nSome checks couldn't reach NEAR from here and are marked NOT CHECKED; run it again with network access, or see the last full run in docs/attack-log.md.");
 if (unexpected.length) process.exit(1);

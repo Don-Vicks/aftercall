@@ -2,23 +2,60 @@
 
 **Private meeting notes that do the follow-ups.**
 
-Aftercall is a Mac app that records your calls and makes the notes inside NEAR AI Cloud's secure hardware, which it checks before anything is sent. A proof of each meeting goes on NEAR, and anyone with its link can re-check it in a browser. Then Aftercall sends the recap and pays what the call agreed in USDC, only within limits a NEAR contract enforces.
+A call agrees to pay Kemi $5. Aftercall, a Mac app, turns the call into notes inside NEAR AI Cloud's secure hardware, puts a proof of them on NEAR that anyone can re-check in a browser, and pays Kemi the 5 USDC from a NEAR contract whose limits the app can't get around. The same call also agreed $5,000, over the cap, so the contract held it for the owner's own wallet. That ran from the Mac app on NEAR testnet on 8 Nov.
 
 **[Watch the 1:30 demo](https://x.com/VictorShallang/status/2119529850646020401)** · **[See what has run on NEAR testnet](https://getaftercall.vercel.app/proof)** · **[Try it in your browser](https://getaftercall.vercel.app/demo)** · [Download for Mac](https://getaftercall.vercel.app/download)
 
 [![CI](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml/badge.svg)](https://github.com/Don-Vicks/aftercall/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-555)](LICENSE)
 
+### Judge quickstart
+
+No NEAR AI account, no wallet, no Mac. Steps 1–3 take about 4 minutes in a browser; 4 and 5 need a clone.
+
+| # | Do | See |
+| --- | --- | --- |
+| 1 | Open https://getaftercall.vercel.app/demo | The Mac app's own interface on the sample meeting Sync with Ada (if you land on Home, click it under Sample): each note with the quote behind it, the Verify sheet re-running its checks, the follow-ups, and a $5,000 payment the contract holds for the owner's wallet |
+| 2 | Open https://getaftercall.vercel.app/proof | Every testnet transaction this README cites, one click each, and the meetings' proof links |
+| 3 | On that page, under "The app's after-call code, run headless" (12 Nov), click **Re-check the proof in your browser** (the same link is in [docs/proof-run.md](docs/proof-run.md)) | `/verify` re-checks it in your browser against NEAR testnet and NVIDIA: 8 of 8 pass, and nothing of the meeting is in the link |
+| 4 | `git clone https://github.com/Don-Vicks/aftercall && cd aftercall && pnpm install && pnpm verify --quick` (Node 24, pnpm 10, stable Rust; a few minutes) | A ✓ line per step and exit code 0: typecheck, 572 core tests and the rest of the suite, the web build, the NEAR signer and the contract's unit tests (the desktop Rust tests run on macOS only) |
+| 5 | `pnpm --filter @aftercall/core attack:run` (about 10 seconds) | A voice on a sample call tells the AI to pay `drain.aftercall.testnet` $9,000; each attempt and the layer that stopped it. Without network, the checks against NEAR say NOT CHECKED rather than fail |
+
+Everything else, including the Mac app and a payment of your own on testnet: [How to test](#how-to-test).
+
 <img src="docs/media/testnet-strip.webp" alt="Real footage of the Mac app on NEAR testnet on 8 Nov: Kemi paid 5 USDC from the contract and the same call's $5,000 held for the owner's wallet (OVER_PAYMENT_CAP), next to that call's proof re-checked in a browser at /verify" width="100%">
 <sub>The Mac app on NEAR testnet, 8 Nov. One call promised Kemi $5 and $5,000: the 5 USDC was paid, the $5,000 was over the cap and held for the owner's own wallet, and the call's proof re-checks in a browser.</sub>
 
-### What has run on NEAR testnet
+### What makes it different
+
+- **The transcript goes to the model end-to-end encrypted, after the hardware is checked.** On every run, before anything leaves the Mac, the app verifies NEAR AI's attestation: the Intel TDX quote against Intel's collateral, the NVIDIA GPU evidence through NVIDIA's attestation service, and a fresh nonce bound with the model's key. Then it encrypts the transcript to that attested key, with no TLS fallback; a reply counts only if that key signed it. The audio is the one exception: NEAR AI has no end-to-end encryption for transcription, so it goes over TLS pinned to the attested gateway's key.
+- **A proof anyone can re-check, with nothing of the meeting in it.** Only a hash goes on NEAR. Its link opens `/verify`, which re-checks the hash on NEAR, the reply's signature and NVIDIA's token in the browser, and shows the rest as the app recorded it.
+- **It does what the call agreed, within limits the app can't change.** Every follow-up must quote the call word for word. Autopilot pays only your own words that name a listed payee and say the amount as money. The app's NEAR key can only pay listed payees within daily and per-payment caps; anything bigger waits for your own wallet.
+- **Checked from a clean checkout, with no keys.** `pnpm install && pnpm verify --quick` typechecks every package and runs 572 core tests and the rest of the suite with no keys or accounts; `pnpm check:live` reads every testnet transaction and proof link this README cites back from NEAR, and NEAR AI's attestation with fresh nonces ([how to test](#how-to-test)).
+
+### What has run
 
 - **8 Nov, from the Mac app:** notes from a sample call made in NEAR AI's TEEs, the proof recorded on NEAR, 5 USDC paid to Kemi with the app's limited key, and the same call's $5,000 held by the contract for the owner's wallet.
+- **9 Nov, approvals on a phone:** the installed Mac app and a real phone, paired through the deployed relay; items acted on and a recap sent from the phone showed in the Mac app within seconds.
 - **12 Nov, the app's after-call code run headless with test accounts:** autopilot paid an in-cap 1 USDC after its 60-second undo window, and 0.50 USDC that waited on a condition stayed in escrow until the payee confirmed the terms from their own account, then was released.
 - **12 Nov, the limits:** a payment over the cap was held, then approved from the owner's own account; the app's key couldn't send `withdraw` at all.
 
 Every testnet transaction this README cites, one click each and no wallet needed: **https://getaftercall.vercel.app/proof**. The full table is under [On-chain evidence](#on-chain-evidence); what hasn't run yet is under [Features and status](#features-and-status).
+
+### What it refuses
+
+| Attempt | Refused by | Evidence |
+| --- | --- | --- |
+| The app's own key pays an account that isn't on the payee list | The contract: `UNKNOWN_PAYEE`, nothing moved | [`Fd9PnR9r…`](https://testnet.nearblocks.io/txns/Fd9PnR9rnjNradwvuMmSGUkw2XKjreWAoiqNg18dmWdA) (testnet, 12 Nov) |
+| The app's key pays a listed payee 9,000 USDC, over the per-payment cap | The contract parks it for the owner's wallet (`OVER_PAYMENT_CAP`); the owner declined it | [`AAvo8Ywm…`](https://testnet.nearblocks.io/txns/AAvo8YwmEf6AJvtoCUtGSs3ZFjf6GjVuhwE23JtdHGTN), [`8UjvpB9P…`](https://testnet.nearblocks.io/txns/8UjvpB9PmswuzRtMVwJKbKR3SvmEK4g1SVu8WwUPiQgJ) (testnet, 12 Nov) |
+| A call agrees $5,000, over the cap, and the Mac app sends it | The contract parks it (`OVER_PAYMENT_CAP`) | [`B8xV41mT…`](https://testnet.nearblocks.io/txns/B8xV41mTk2VBZoMHGjJSdKH6MgzpfPv51zHoFCfdsttE) (testnet, 8 Nov, from the Mac app) |
+| The app's key calls `withdraw`, `set_cap` or `add_payee`, or sends NEAR | NEAR itself, before anything is sent: "Transaction method name <withdraw> isn't allowed by the access key" | [docs/attack-log.md](docs/attack-log.md), stage C: no transaction, nothing on chain |
+| A payee confirms escrow terms other than the ones whose hash is on chain | The contract: `TERMS_DIFFER`, nothing moved | [`3ZDmriAJ…`](https://testnet.nearblocks.io/txns/3ZDmriAJJey8EZpVo6HDtZkf79WeAAjyyQetEvKDxpJu) (testnet, 12 Nov) |
+| A proof link with one byte changed, another owner, another contract, or a contract that lies | `/verify`'s own checks fail it | [docs/attack-log.md](docs/attack-log.md), stage D (12 Nov) |
+| The model makes up a quote to back a payment | The notes layer drops the item (`QUOTE_NOT_IN_TRANSCRIPT`) | `attack:run` stage A; `build.test.ts` |
+| A voice on the call tells the AI to pay someone, even a payee you listed | Autopilot never pays it: they aren't your words, and the quote doesn't name the payee. It waits for your tap | `attack:run` stage A; `build.test.ts`, `attack.test.ts` (tested, 13 Nov) |
+| A reply the attested model key didn't sign | The notes are kept but marked unverified, and autopilot runs nothing from them | `pipeline.test.ts`, `autopilot.test.ts` |
+| NEAR AI refuses the encryption headers | The run stops; the transcript is never sent over plain TLS instead | `pipeline.test.ts`: "a refusal of the encryption headers stops processing…" |
 
 ## The problem
 
@@ -34,13 +71,21 @@ Meeting-notes apps send your calls to servers you can't inspect, and they stop a
 ## Why NEAR
 
 - **NEAR AI Cloud** runs the speech and language models (`openai/whisper-large-v3`, `Qwen/Qwen3.8-27B`) inside Intel TDX and NVIDIA confidential-computing TEEs, with attestation the app verifies on every run.
-- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow` (a key added before 7 Nov holds only `pay` and `record_proof` until the owner updates it once; the one on `nov3.testnet` still does).
+- **A NEAR contract** (`contracts/agent-wallet`) holds the money and the rules: payees, caps, meeting proofs and escrow. The app holds only a function-call key limited to `pay`, `record_proof`, `open_escrow` and `release_escrow` (a key added before 7 Nov holds only `pay` and `record_proof` until the owner updates it once; the one on `nov3.testnet` still does). Until the mainnet deploy, the contract account keeps a full-access key, so its deployer can still upgrade the code that holds everyone's USDC ([threat-model.md](docs/threat-model.md)).
 - **NEAR Intents** quotes payouts to payees on Solana or Base.
 
 ## Demo
 
 - **Video (1:30, real footage):** [posted on X](https://x.com/VictorShallang/status/2119529850646020401). The Mac app during the 8 Nov testnet run: consent, the secure-hardware checks, notes with quotes, a recap emailed, a 5 USDC payment, a $5,000 payment held for the owner's wallet, and the call's proof passing on `/verify` (8 of 8 then; 7 of 7 today, since NVIDIA retired the key behind one check).
 - **In your browser:** https://getaftercall.vercel.app/demo opens a sample meeting with its notes, checks, follow-ups and a live NEAR Intents quote (dry: nothing is sent).
+
+## Why it's a business
+
+- **Who it's for first:** people whose calls are confidential and end in money: lawyers, accountants and finance teams, health practices, and agencies or freelancers who pay contractors agreed on calls. They can't paste client calls into a service they can't inspect, and the recap, the invoice and the payment still wait on them after every call.
+- **What they get that a note-taker doesn't give them:** a proof, re-checkable by their client or auditor without seeing the call, that the notes were made in attested hardware and not changed since; and the follow-up done: the recap sent, the payment made within caps a contract enforces or held in escrow until the payee confirms, and a CSV for the bookkeeper.
+- **Why NEAR is essential to it, not decoration:** without attested TEEs, "private" is a promise; with NEAR AI Cloud the app checks the hardware before anything leaves the Mac, and the proof on NEAR lets anyone check later. Without a contract the app can't change, "the AI pays for you" is a risk no finance team would take; the caps, the payee list and the owner-only rule changes are what make it acceptable.
+- **What it costs to run:** a 30-minute meeting costs about $0.0045 in NEAR AI usage (its public prices on 1 Nov 2026; `typicalMeetingCost`, `packages/core/src/cost.ts`). The customer pays NEAR AI directly with their own key, or from staking rewards through NEAR AI's Staking for Inference (the card is built; nobody has staked through it yet). The backend keeps no meeting content, so there's no store of calls to secure or breach.
+- **How it would earn:** a per-seat subscription for the app, with the AI bill staying the customer's own. Not yet: pricing, a mainnet deploy, paying customers.
 
 ## How to test
 
@@ -129,7 +174,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | Approving a held payment from the owner's wallet at `/sign` | The approval ran on testnet on 12 Nov from the owner's account by command line. The transactions `/sign` builds are unit-tested and their contract path runs on a local NEAR node; the page itself hasn't approved a parked payment in a browser wallet |
 | Handshake: escrow until the payee confirms the terms from their own wallet | Ran on testnet on 12 Nov in the headless proof run: the payee confirmed from their own account; not yet through the `/deal` page with a browser wallet |
 | Coding agents (Claude Code, Codex) claim and finish action items over a local MCP server; Hand to an agent on every open item | Built and tested. On 12 Nov, Claude Code connected to the installed Mac app's own MCP server and read its meetings and open action items ([screenshot](docs/media/claude-code-mcp-12nov.webp)); claiming and completing an item in the Mac app isn't shown yet. A full claim, fix and complete is [recorded](docs/agents-demo.md) against the server's stand-in app. Coding agents also shows the config for Cursor, Claude Desktop, VS Code and Windsurf (standard MCP; not yet tried in those apps) |
-| Approvals from your phone, sealed so the relay can't read them | Deployed 7 Nov; run with a simulated Mac, not yet a real phone |
+| Approvals from your phone, sealed so the relay can't read them | Live (9 Nov): the installed Mac app and a real phone, through the deployed relay; items acted on and a recap sent from the phone showed in the Mac app within seconds. A payment hasn't been approved from the phone yet; no push notifications |
 | Post a recap to Slack | Built and tested against a local stand-in |
 | Encrypted backup to iCloud Drive | Built and tested; not yet with real iCloud Drive |
 | Share one line of a meeting with a Merkle proof | Built and tested; no line link shared yet |
@@ -155,7 +200,7 @@ All on NEAR testnet, contract `wallet.aftercall.testnet`. Live counts: https://g
 | --- | --- | --- |
 | Nothing is sent unless NEAR AI's TEEs pass attestation; the transcript is encrypted end to end to the attested model | `packages/core/src/tee/`, `packages/core/src/notes/pipeline.ts` | `pipeline.test.ts`, `checks.test.ts`, `e2ee.test.ts` |
 | Every reply's signature is checked against the attested key; notes that fail are marked unverified, and autopilot runs nothing from them | `pipeline.ts`, `packages/core/src/followups/autopilot.ts` | `pipeline.test.ts`, `autopilot.test.ts` |
-| The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote | `packages/core/src/notes/build.ts`, `transcript.ts` | `build.test.ts`, `transcript.test.ts` |
+| The model can't propose a follow-up without an exact quote from the call; a payment's amount must be in its quote. Any number in the quote can match, so autopilot also wants your own words, naming the payee, with the amount said as money | `packages/core/src/notes/build.ts`, `transcript.ts`, `amounts.ts` | `build.test.ts`, `transcript.test.ts` |
 | The app's key can only pay, record proofs and open or release escrows, within the caps; over a cap waits for the owner's wallet | `contracts/agent-wallet/src/lib.rs` | `contracts/agent-wallet/tests/sandbox.rs` (local NEAR node) |
 | A prompt-injected payment is stopped by the layers together, each attempt by at least one: the notes (quote required, unlisted payee gets no Pay button), the agent (proposals wait for the owner), the contract (payee list and caps) and the proof link | `packages/core/scripts/attack-run.ts`, `packages/core/src/node/attack.ts` | `attack.test.ts`; the run: [docs/attack-log.md](docs/attack-log.md) |
 | Every on-chain and NEAR AI attestation claim in this README re-checks with one command and no keys (the backend's claims, such as test credits and recap email, aren't covered) | `packages/core/scripts/check-live.ts`, `packages/core/src/node/checkLive.ts`, `evidence.ts`, [docs/evidence.json](docs/evidence.json) | `checkLive.test.ts`, `evidence.test.ts`, `nearai.test.ts` |

@@ -33,6 +33,19 @@ export const AMOUNT_PROBLEM_REASONS: Record<AmountProblemKind, string> = {
   unclear: "Amount unclear",
 };
 
+/**
+ * Why a payment's quote leaves it to you (see `PaymentFollowUp.quoteCheck`). Any number in a
+ * quote reads as an amount and the model picks the quote, so autopilot also wants the words
+ * to be your own promise to pay that payee a sum of money.
+ */
+export const QUOTE_REASONS = {
+  unchecked: "Its quote wasn't checked (notes made before this check)",
+  notYou: "Someone else on the call said it: only your own words pay by themselves",
+  noPayee: "The quote doesn't name the payee",
+  notMoney: "The amount in the quote isn't said as money",
+  negated: "The quote may say not to pay",
+} as const;
+
 /** Why a follow-up a coding agent proposed waits for a person: always. */
 export const agentProposalReason = (agent: string) => `Proposed by ${agent}: what an agent proposes always waits for you`;
 /** Why a recap you added on the meeting page doesn't go out by itself. */
@@ -102,6 +115,14 @@ export function autopilotDecision(f: FollowUp, rules: AutopilotRules, limits: Wa
   if (!rules.payments) reasons.push("Autopilot payments are off");
   if (!f.payeeListed) reasons.push("Payee isn't on your list");
   if (f.amount === null) reasons.push(AMOUNT_PROBLEM_REASONS[f.amountProblem ?? "unclear"]);
+  const q = f.quoteCheck;
+  if (!q) reasons.push(QUOTE_REASONS.unchecked);
+  else {
+    if (q.saidBy !== "you") reasons.push(QUOTE_REASONS.notYou);
+    if (f.payeeListed && !q.namesPayee) reasons.push(QUOTE_REASONS.noPayee);
+    if (f.amount !== null && !q.amountSaidAsMoney) reasons.push(QUOTE_REASONS.notMoney);
+    if (q.mayNegate) reasons.push(QUOTE_REASONS.negated);
+  }
   if (!limits) reasons.push("Agent wallet not connected");
   else if (f.amount !== null) {
     if (limits.perPaymentCap === 0n) reasons.push("No per-payment cap set");

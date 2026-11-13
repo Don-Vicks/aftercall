@@ -186,6 +186,27 @@ test("a v2 proof re-checks its Ed25519 signature, key binding, compose and E2EE 
   assert.equal((await verifyProofGpu(bundle, jwks, Date.now() / 1000 + 2 * 86400))?.ok, true, "a key still published is still checked");
 });
 
+test("/verify refuses what the app refuses: a signature that doesn't say which TEE made it, and the gateway's on an encrypted request", async () => {
+  const { bundle, notes } = await signedV2();
+  const attested = (b: ProofBundleV2) => verifyProof(b, onChainFor(b as never), notes).find((c) => c.id === "attested")!;
+  assert.equal(attested(bundle).ok, true);
+
+  const { signature_kind: _kind, ...noKind } = bundle.signature;
+  const unknown = attested({ ...bundle, signature: noKind as never });
+  assert.deepEqual([unknown.ok, unknown.detail], [false, "The signature doesn't say which TEE made it, so it isn't accepted"]);
+
+  // The same key recorded for the gateway too, so the only thing refusing it is the rule itself.
+  const viaGateway: ProofBundleV2 = {
+    ...bundle,
+    signature: { ...bundle.signature, signature_kind: "gateway" },
+    evidence: [...bundle.evidence, { ...bundle.evidence[0], scope: "gateway" }],
+  };
+  const relayed = attested(viaGateway);
+  assert.deepEqual([relayed.ok, relayed.detail], [false, "Signed by the gateway, which only relayed the encrypted reply: the model TEE didn't sign it"]);
+  // Without end-to-end encryption the gateway's signature is what there is, bound in its own quote.
+  assert.equal(attested({ ...viaGateway, e2ee: { used: false, reason: "unavailable" } }).ok, true);
+});
+
 // Published proofs with real NVIDIA tokens: the 12 Nov proof run, whose key is archived, and
 // the 8 Nov payment call, whose key NVIDIA retired before archiving began.
 const published = JSON.parse(readFileSync(new URL("./fixtures/published-proofs.json", import.meta.url), "utf8")) as Record<"proofRun12Nov" | "paymentCall8Nov", string>;

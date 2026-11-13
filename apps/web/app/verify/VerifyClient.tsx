@@ -144,7 +144,7 @@ function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: Line
     : !done
       ? "Checking this meeting proof"
       : allOk
-        ? "This meeting was processed in secure hardware"
+        ? "The app recorded this meeting as processed in secure hardware"
         : "This proof doesn't fully check out";
 
   return (
