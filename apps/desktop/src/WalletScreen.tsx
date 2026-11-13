@@ -242,10 +242,10 @@ export function WalletScreen({
           />
           <CapField
             label="Per payment"
-            // The contract applies it to every payment, approved here or by autopilot; 0 means none.
+            // The contract applies it to every payment, approved here or on your phone; 0 means none.
             hint={
               perCap === 0n
-                ? "No per-payment cap. Autopilot pays nothing until you set one."
+                ? "No per-payment cap: only the daily cap limits each payment."
                 : crossChain
                   ? "Bigger payments wait for your wallet, or are refused on Solana or Base."
                   : "Bigger payments wait in the contract for your wallet."
@@ -259,7 +259,7 @@ export function WalletScreen({
                 "Set per-payment cap",
                 { kind: "set-payment-cap", perPaymentCap: v.toString() },
                 (x) => x.wallet?.per_payment_cap === v.toString(),
-                () => (v === 0n ? "Per-payment cap removed on NEAR. Autopilot pays nothing until you set one." : `Per-payment cap is ${formatUsdc(v)} USDC on NEAR`),
+                () => (v === 0n ? "Per-payment cap removed on NEAR: only the daily cap limits each payment." : `Per-payment cap is ${formatUsdc(v)} USDC on NEAR`),
               )
             }
           />

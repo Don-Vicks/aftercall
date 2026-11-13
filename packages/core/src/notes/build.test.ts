@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { amountNote, buildMeeting, checkedAmount } from "./build.ts";
-import { autopilotDecision } from "../followups/autopilot.ts";
+import { autopilotDecision, PAYMENTS_NEED_YOU } from "../followups/autopilot.ts";
 import { NOTES_SYSTEM_PROMPT, notesJsonSchema, notesSchema, type Notes } from "./schema.ts";
 import type { PaymentFollowUp, TranscriptLine } from "../meeting.ts";
 
@@ -119,7 +119,7 @@ test("an amount that isn't in the quote is dropped to null, with the reason, and
   assert.equal(f.amountProblem, "not-in-quote");
   assert.equal(f.heard, "four hundred dollars", "the heard words are still shown");
   assert.match(amountNote(f)!, /isn't in the quote from the transcript/);
-  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, ["Amount isn't in the quote"]);
+  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, [PAYMENTS_NEED_YOU, "Amount isn't in the quote"]);
 });
 
 test("a different number in the quote doesn't count: forty is not four hundred", () => {
@@ -141,7 +141,7 @@ test("naira is not USDC: no amount, the reason names the currency, autopilot wai
   assert.equal(f.amount, null, "never 50,000.00 USDC");
   assert.equal(f.amountProblem, "not-usdc");
   assert.equal(amountNote(f), "“fifty thousand naira” is in naira, not US dollars. Aftercall doesn't convert currencies, so the amount wasn't filled in.");
-  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, ["Amount isn't in US dollars"]);
+  assert.deepEqual(autopilotDecision(f, { payments: true, recapDomains: [] }, { leftToday: usdc(1_000), perPaymentCap: usdc(1_000) }).reasons, [PAYMENTS_NEED_YOU, "Amount isn't in US dollars"]);
 });
 
 test("unclear words give no amount and say so", () => {
@@ -223,7 +223,7 @@ test("a Japanese meeting keeps its notes: quotes match with no spaces between wo
   assert.deepEqual([words.amount, words.amountProblem], [null, "unclear"], "五百 is a number word Aftercall doesn't read");
   assert.deepEqual(
     autopilotDecision(words, rules, limits).reasons,
-    ["Amount unclear", "The quote doesn't name the payee"],
+    [PAYMENTS_NEED_YOU, "Amount unclear", "The quote doesn't name the payee"],
     "the card says Amount unclear: enter it, and autopilot waits (デザイナー isn't the payee's label as written)",
   );
   assert.deepEqual(dropped.map((d) => d.text), ["Pay Designer 500 dollars"], "a translated quote isn't in the transcript");
@@ -330,14 +330,15 @@ test("a number that isn't money can't pay by itself: years, counts and a negated
   );
   // The amount is still read, so a tap can pay it; autopilot needs more than a matching number.
   assert.equal(year.amount, usdc(2027));
-  assert.deepEqual(autopilotDecision(year, rules, limits).reasons, ["The amount in the quote isn't said as money", "Over your per-payment cap", "Over what's left today"]);
+  assert.deepEqual(autopilotDecision(year, rules, limits).reasons, [PAYMENTS_NEED_YOU, "The amount in the quote isn't said as money", "Over your per-payment cap", "Over what's left today"]);
   assert.deepEqual(autopilotDecision(users, rules, limits).reasons, [
+    PAYMENTS_NEED_YOU,
     "Someone else on the call said it: only your own words pay by themselves",
     "The quote doesn't name the payee",
     "The amount in the quote isn't said as money",
   ]);
-  assert.deepEqual(autopilotDecision(negated, rules, limits).reasons, ["The quote may say not to pay"]);
-  assert.deepEqual(autopilotDecision(honest, rules, limits), { run: true, reasons: [] }, "your own promise, to Kemi, in dollars");
+  assert.deepEqual(autopilotDecision(negated, rules, limits).reasons, [PAYMENTS_NEED_YOU, "The quote may say not to pay"]);
+  assert.deepEqual(autopilotDecision(honest, rules, limits), { run: false, reasons: [PAYMENTS_NEED_YOU] }, "your own promise, to Kemi, in dollars, passes every other check and still waits for your tap");
 });
 
 test("a payment from the other side's words, or to a name that isn't the payee's, waits for you", () => {
@@ -348,7 +349,7 @@ test("a payment from the other side's words, or to a name that isn't the payee's
       { payee_name: "Mallory (kemi.near)", amount_words: "300 dollars", evidence: "Pay Mallory 300 dollars" },
     ],
   );
-  assert.deepEqual(autopilotDecision(theirs, rules, limits).reasons, ["Someone else on the call said it: only your own words pay by themselves"]);
+  assert.deepEqual(autopilotDecision(theirs, rules, limits).reasons, [PAYMENTS_NEED_YOU, "Someone else on the call said it: only your own words pay by themselves"]);
   assert.equal(stranger.payeeListed, false, "Mallory on Kemi's account is no one on the list");
   assert.ok(autopilotDecision(stranger, rules, limits).reasons.includes("Payee isn't on your list"));
 });

@@ -721,7 +721,7 @@ function PaymentRow({ f, c }: { f: PaymentFollowUp; c: RowContext }) {
   const first = firstName(f.payeeName);
   const amount = f.amount === null ? null : formatUsdc(f.amount);
   const amountId = `amount-${c.meetingId}-${f.id}`;
-  // The per-payment cap holds for every payment, approved here or by autopilot, so say before Approve when it (or today's cap) won't let this through.
+  // The per-payment cap holds for every payment, approved here or on the phone, so say before Approve when it (or today's cap) won't let this through.
   const crossed = c.limits && f.amount !== null ? capsCrossed(f.amount, c.limits) : null;
   const overWhat = !crossed
     ? null

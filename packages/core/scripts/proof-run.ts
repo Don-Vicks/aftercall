@@ -3,8 +3,8 @@
 // One headless run of what the Mac app does after a call, on NEAR testnet, with the same core
 // code: the fictional sample call samples/illustrator-quick goes through NEAR AI Cloud's TEEs
 // (attestation, Whisper, the end-to-end encrypted summary, the signature check), its proof is
-// recorded on chain, autopilot pays the in-cap payment after its undo window, and the payment
-// that waits on a condition is held in a Handshake escrow until the payee confirms the terms.
+// recorded on chain, the in-cap payment is paid on the owner's tap (the script stands in for it;
+// autopilot never pays), and the payment that waits on a condition is held in a Handshake escrow until the payee confirms the terms.
 //
 // Needs, in the environment or .env at the repo root:
 //   NEAR_AI_API_KEY  a NEAR AI Cloud key (the run costs a few cents; the cost is printed)
@@ -19,7 +19,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { costLine } from "../src/cost.ts";
-import { meetingAutopilotDecision, UNDO_SECONDS } from "../src/followups/autopilot.ts";
+import { meetingAutopilotDecision, PAYMENTS_NEED_YOU } from "../src/followups/autopilot.ts";
 import { PAY_MEMO } from "../src/followups/boundaries.ts";
 import { dealLink, dealTermsFor, dealTermsHash, newDealSalt } from "../src/followups/deal.ts";
 import { formatUsdc } from "../src/money.ts";
@@ -124,7 +124,9 @@ record(`Notes: ${meeting.verified ? "verified" : "not verified"}, ${result.check
 record(`| Step | Result | Transaction |\n| --- | --- | --- |`);
 record(`| Proof of the notes recorded (\`record_proof\`) | ok | [${recorded.tx}](${txLink(recorded.tx)}) |`);
 
-// 3. Follow-ups: autopilot runs what passes every rule; a payment that waits on a condition becomes a deal.
+// 3. Follow-ups: every payment waits for the owner's tap, which this script stands in for once every other
+// rule passes; a payment that waits on a condition becomes a deal. (Until 13 Nov autopilot paid it after a
+// 60-second undo window, as the 12 Nov run in docs/proof-run.md shows.)
 const wallet = await view<{ daily_cap: string; spent_today: string; per_payment_cap: string; day: number }>("get_wallet", { owner: OWNER });
 const today = Math.floor(Date.now() / 86_400_000);
 const limits = {
@@ -140,12 +142,12 @@ for (const f of meeting.followUps) {
   const label = `Pay ${f.payeeName} ${f.amount === null ? "(no amount)" : `${formatUsdc(f.amount)} USDC`}, heard "${f.heard}"${f.condition ? `, once "${f.condition.text}"` : ""}`;
   const decision = meetingAutopilotDecision(meeting, f, rules, limits);
   const followupId = contractFollowupId(meeting.id, f.id);
-  if (decision.run && f.amount !== null && f.payeeAccount) {
-    say(`\n${label}\n  autopilot: every rule passes; undo window ${UNDO_SECONDS} s…`);
-    await new Promise((r) => setTimeout(r, UNDO_SECONDS * 1000));
+  const otherReasons = decision.reasons.filter((r) => r !== PAYMENTS_NEED_YOU);
+  if (!decision.run && otherReasons.length === 0 && f.amount !== null && f.payeeAccount) {
+    say(`\n${label}\n  autopilot: ${PAYMENTS_NEED_YOU}; every other rule passes, so the owner's tap pays it (this script stands in for the tap)`);
     const paid = call("pay", { payee: f.payeeAccount, amount: f.amount.toString(), memo: PAY_MEMO, followup_id: followupId, meeting_id: result.proof.meetingId }, "app");
     say(`  pay: ${paid.error ?? JSON.stringify(paid.value)} ${txLink(paid.tx)}`);
-    record(`| Autopilot pays ${formatUsdc(f.amount)} USDC after the ${UNDO_SECONDS} s undo window (\`pay\`) | ${paid.error ?? "sent"} | ${paid.tx ? `[${paid.tx}](${txLink(paid.tx)})` : "none"} |`);
+    record(`| The owner's tap pays ${formatUsdc(f.amount)} USDC (\`pay\`, signed by the app key; the script stands in for the tap) | ${paid.error ?? "sent"} | ${paid.tx ? `[${paid.tx}](${txLink(paid.tx)})` : "none"} |`);
     limits.leftToday -= f.amount;
     continue;
   }

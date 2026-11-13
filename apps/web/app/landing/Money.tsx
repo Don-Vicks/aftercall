@@ -44,7 +44,7 @@ function Balance() {
 const POINTS: [string, string][] = [
   ["Over the cap", "A payment over your caps waits in the contract until your own wallet approves or declines it."],
   ["New payee", "Send a single-use claim link, and they say where they want to be paid."],
-  ["Autopilot", "Optional, and off until you set rules. 60 seconds to undo, never more than the per-payment cap."],
+  ["Your tap", "Every payment waits for your tap, on the Mac or your phone. Words on a call are never enough on their own."],
 ];
 
 export function Money() {
