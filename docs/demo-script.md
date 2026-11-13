@@ -181,7 +181,7 @@ If the testnet payment wasn't captured live, the video shows the labelled browse
 Every spoken claim, and where the repo says it.
 
 [^problem]: README.md, the first line; docs/judging.md, the first paragraph. Said of meeting notes apps in general; no product is named.
-[^promise]: README.md, "Aftercall is private meeting notes that do the follow-ups" and "What it does" 2 and 4. "Does what they agreed" happens once you approve, or under autopilot rules you set (README, "Follow-ups: what leaves, who approves, what's kept").
+[^promise]: README.md, "Aftercall is private meeting notes that do the follow-ups" and "What it does" 2 and 4. "Does what they agreed" happens once you approve (recaps to your own team can also go by autopilot rules you set) (README, "Follow-ups: what leaves, who approves, what's kept").
 [^nobot]: README.md, "What it does" 1: "Your mic and the call's audio, from any app. No bot joins the call."
 [^sealed]: docs/how-it-works.md, "Encrypted on this Mac": "Audio is sealed about once a second while recording." The audio later goes to NEAR AI's Whisper TEE over TLS pinned to the gateway's attested key, and is deleted once the notes are saved (same section, and "End-to-end encrypted summaries").
 [^attest]: docs/judging.md, "Claims, code and tests", row 1: nothing leaves the Mac unless the gateway and model TEEs pass attestation; README.md, "What it does" 2: "checked on every run". Code: `packages/core/src/tee/checks.ts`, `packages/core/src/notes/pipeline.ts`.
