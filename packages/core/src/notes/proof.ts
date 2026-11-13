@@ -191,18 +191,28 @@ function signedCall(bundle: ProofBundleV2 | ProofBundleV3, sig: SignatureRespons
   const parts = signedParts(sig.text ?? "");
   const kind = signatureKind(sig);
   const coversExchange = parts.request === requestHash && parts.response === responseHash && (parts.model === null || parts.model === bundle.summaryModel);
-  // The signer must be a TEE of the right kind whose recorded report data binds its key and our nonce.
+  // The signer must be a TEE of the right kind whose recorded report data binds its key and our
+  // nonce. As in the app (`responseChecks`): a signature that doesn't say which TEE made it is
+  // refused, and so is the gateway's on an end-to-end encrypted request, which it only relayed.
   const scope = kind === "gateway" ? "gateway" : kind === "provider_tee" ? "model" : null;
-  const tee = bundle.evidence.find(
-    (e) =>
-      !!signer &&
-      (scope === null || e.scope === scope) &&
-      (e.scope === "gateway" || e.model === bundle.summaryModel) &&
-      e.signingAddress === strip0x(signer) &&
-      e.nonce === bundle.attestationNonce.summary &&
-      bound(e),
-  );
-  return { signer, coversExchange, tee };
+  const refused =
+    scope === null
+      ? "The signature doesn't say which TEE made it, so it isn't accepted"
+      : scope === "gateway" && bundle.e2ee.used
+        ? "Signed by the gateway, which only relayed the encrypted reply: the model TEE didn't sign it"
+        : null;
+  const tee = refused
+    ? undefined
+    : bundle.evidence.find(
+        (e) =>
+          !!signer &&
+          e.scope === scope &&
+          (e.scope === "gateway" || e.model === bundle.summaryModel) &&
+          e.signingAddress === strip0x(signer) &&
+          e.nonce === bundle.attestationNonce.summary &&
+          bound(e),
+      );
+  return { signer, coversExchange, tee, refused };
 }
 
 const algoName = (b: ProofBundleV2 | ProofBundleV3) => (b.signingAlgo === "ed25519" ? "Ed25519" : "ECDSA");
@@ -233,7 +243,7 @@ function e2eeCheck(bundle: ProofBundleV2 | ProofBundleV3): Check {
 }
 
 function signatureChecksV2(bundle: ProofBundleV2): Check[] {
-  const { signer, coversExchange, tee } = signedCall(bundle, bundle.signature, bundle.requestHash, bundle.responseHash);
+  const { signer, coversExchange, tee, refused } = signedCall(bundle, bundle.signature, bundle.requestHash, bundle.responseHash);
   const algo = algoName(bundle);
   const checks: Check[] = [
     {
@@ -248,7 +258,7 @@ function signatureChecksV2(bundle: ProofBundleV2): Check[] {
       ok: !!tee && tee.verified,
       detail: tee
         ? `The key is in the report data of the ${tee.scope === "gateway" ? "gateway" : "model"} TEE's quote, next to this meeting's nonce${tee.verified ? "" : "; the app recorded a failed check for that TEE"}`
-        : "The signer isn't bound in any quote the app recorded",
+        : (refused ?? "The signer isn't bound in any quote the app recorded"),
     },
   ];
   if (tee) checks.push(composeCheck(tee));
@@ -290,7 +300,9 @@ function signatureChecksV3(bundle: ProofBundleV3): Check[] {
       label: "Signer was attested",
       ok: n > 0 && !unbound && !failedTee,
       detail: unbound
-        ? `The signer of ${name(unbound.c)} isn't bound in any quote the app recorded`
+        ? unbound.refused
+          ? `${name(unbound.c)[0].toUpperCase()}${name(unbound.c).slice(1)}: ${unbound.refused[0].toLowerCase()}${unbound.refused.slice(1)}`
+          : `The signer of ${name(unbound.c)} isn't bound in any quote the app recorded`
         : failedTee
           ? `The signer of ${name(failedTee.c)} is in a quote the app recorded a failed check for`
           : `Every signing key is in the report data of a TEE quote, next to this meeting's nonce`,
