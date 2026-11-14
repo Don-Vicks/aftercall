@@ -328,7 +328,7 @@ export const NVIDIA_KEYS_KEPT_S = 24 * 3600;
 
 /** Why /verify can't re-run the GPU check of a proof whose token key NVIDIA retired before Aftercall archived it. */
 export const GPU_KEY_RETIRED =
-  "NVIDIA has retired this token's key (it lists keys for about two days) and it isn't in Aftercall's archive, so it can't be re-checked; the app's own NVIDIA check stands as recorded when the notes were made";
+  "NVIDIA retired this token's key (it lists keys for about two days) before Aftercall began archiving them on 12 Nov, so your browser can't re-check it. This isn't a failure: the app's own NVIDIA check, run when the notes were made, is below as recorded";
 
 /**
  * Re-checks NVIDIA's platform token kept in a v2 proof against NVIDIA's keys
