@@ -16,9 +16,11 @@ import {
   lineSpeakerWords,
   noticeLine,
   proofHash,
+  provenClaims,
   recordedAtMs,
   recordingStartMs,
   runLinkChecks,
+  tamperedLink,
   type Check,
   type CheckGroup,
   type LineProof,
@@ -193,6 +195,8 @@ function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: Line
 
       {line && <SharedLine meetingId={proof.bundle.meetingId} line={line} />}
 
+      {done && <Proves claims={provenClaims(done.link, checks)} checks={checks} />}
+
       <section aria-labelledby="vb" className={v.block}>
         <div className={v.blockHead}>
           <h2 id="vb" className="t-section">
@@ -214,6 +218,8 @@ function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: Line
         )}
         {done?.rpcError && <p style={{ color: "var(--caution)", overflowWrap: "anywhere" }}>Couldn&apos;t read NEAR: {done.rpcError.replace(/^Error: /, "")}</p>}
       </section>
+
+      {done && <TryToFake key={`fake-${hash}`} done={done} />}
 
       {recorded ? (
         <Recorded key={hash} proof={proof} recorded={recorded} start={done ? checks.length : 0} />
@@ -302,6 +308,95 @@ function Result({ proof, line, done, onRerun }: { proof: PublicProof; line: Line
         </a>
       </div>
     </>
+  );
+}
+
+/** What the checks above establish, in plain words, each statement ticked only when every check behind it passed. */
+function Proves({ claims, checks }: { claims: ReturnType<typeof provenClaims>; checks: Check[] }) {
+  if (claims.length === 0) return null;
+  return (
+    <section aria-labelledby="vp" className={`${v.block} enter`} style={vars({ d: "60ms" })}>
+      <div className={v.blockHead}>
+        <h2 id="vp" className="t-section">
+          What this proves <span className="count">each line rests on the checks below</span>
+        </h2>
+      </div>
+      <ol className={v.list}>
+        {claims.map((c, i) => (
+          <li key={c.text} className={`${v.row} enter`} style={vars({ d: `${rowAt(i)}ms`, dur: "280ms" })}>
+            {c.holds === null ? (
+              <span className={v.statementMark} role="img" aria-label="Can't be re-checked">
+                <Icon name="minus" size={13} stroke={1.75} />
+              </span>
+            ) : (
+              <Tick ok={c.holds} d1={`${rowAt(i) + 60}ms`} d2={`${rowAt(i) + 180}ms`} />
+            )}
+            <span className={v.label}>{c.text}</span>
+            <span className={`${v.detail}${c.holds === false ? ` ${v.failedDetail}` : ""}`}>
+              {c.holds === false ? "A check behind this failed: see below" : c.holds === null ? "Can't be re-checked now" : `Rests on: ${checks.filter((k) => c.rests.includes(k.id)).map((k) => k.label).join(" · ")}`}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * "Try to fake it": the same checks on a copy of the proof with one character changed, so a
+ * judge watches which checks catch it. Only in this browser; the link and NEAR are untouched.
+ */
+function TryToFake({ done }: { done: Done }) {
+  const [fake, setFake] = useState<{ what: string; checks: Check[] } | "checking" | null>(null);
+  const run = async () => {
+    setFake("checking");
+    const t = tamperedLink(done.link);
+    const r = await runLinkChecks(t.link);
+    setFake({ what: t.what, checks: r.checks });
+  };
+  const caught = fake && fake !== "checking" ? fake.checks.filter((c) => !c.ok && !c.cantRecheck) : [];
+  return (
+    <section aria-labelledby="vf" className={`${v.block} enter`} style={vars({ d: "100ms" })}>
+      <div className={v.blockHead}>
+        <h2 id="vf" className="t-section">
+          Try to fake it <span className="count">in this browser only</span>
+        </h2>
+      </div>
+      <p className="ink-2" style={{ margin: 0 }}>
+        Change one character of this proof, as someone editing the notes afterwards would, and run the same checks on it. The link and NEAR stay as they are.
+      </p>
+      <div aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {fake === null && (
+          <button type="button" onClick={run} className="btn btn-secondary press" style={{ alignSelf: "flex-start" }}>
+            Change one character and re-check
+          </button>
+        )}
+        {fake === "checking" && (
+          <div role="status" className={v.status}>
+            <span aria-hidden="true" className="spinner" />
+            Checking the changed copy…
+          </div>
+        )}
+        {fake && fake !== "checking" && (
+          <>
+            <p style={{ margin: 0, fontWeight: 600, color: caught.length ? "var(--verdigris)" : "var(--caution)" }}>
+              {caught.length ? `Caught: ${caught.length} check${caught.length === 1 ? "" : "s"} failed on the changed copy.` : "Nothing caught the change."}
+            </p>
+            <p className="ink-2" style={{ margin: 0 }}>
+              {fake.what}
+            </p>
+            <ol className={v.list}>
+              {fake.checks.map((c, i) => (
+                <CheckRow key={c.id} check={c} at={rowAt(i)} />
+              ))}
+            </ol>
+            <button type="button" onClick={() => setFake(null)} className="link-button" style={{ alignSelf: "flex-start", fontSize: 13 }}>
+              Back to the real proof
+            </button>
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
