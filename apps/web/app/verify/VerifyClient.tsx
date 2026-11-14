@@ -332,9 +332,22 @@ function Proves({ claims, checks }: { claims: ReturnType<typeof provenClaims>; c
               <Tick ok={c.holds} d1={`${rowAt(i) + 60}ms`} d2={`${rowAt(i) + 180}ms`} />
             )}
             <span className={v.label}>{c.text}</span>
-            <span className={`${v.detail}${c.holds === false ? ` ${v.failedDetail}` : ""}`}>
-              {c.holds === false ? "A check behind this failed: see below" : c.holds === null ? "Can't be re-checked now" : `Rests on: ${checks.filter((k) => c.rests.includes(k.id) && !k.cantRecheck).map((k) => k.label).join(" · ")}${c.asRecorded.length ? `; ${c.asRecorded.join(" · ")} as the app recorded it` : ""}`}
-            </span>
+            {(() => {
+              const rests = `Rests on: ${checks.filter((k) => c.rests.includes(k.id) && !k.cantRecheck).map((k) => k.label).join(" · ")}`;
+              const text =
+                c.holds === false
+                  ? "A check behind this failed: see below"
+                  : c.holds === null
+                    ? "Can't be re-checked now"
+                    : c.asRecorded.length
+                      ? `${c.asRecorded.join(" · ")}: as the app recorded it. ${rests}`
+                      : rests;
+              return (
+                <span className={`${v.detail}${c.holds === false ? ` ${v.failedDetail}` : ""}`} title={text}>
+                  {text}
+                </span>
+              );
+            })()}
           </li>
         ))}
       </ol>
