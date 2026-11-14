@@ -10,6 +10,8 @@ export interface ProvenClaim {
   text: string;
   rests: Check["id"][];
   holds: boolean | null;
+  /** Labels of the checks behind it that couldn't be re-run now, so their part stands as the app recorded it. */
+  asRecorded: string[];
 }
 
 /** The statements, in the order a judge reads them: who wrote it, how it got there, who signed it, whether it changed. */
@@ -17,7 +19,8 @@ export function provenClaims(link: VerifyLink, checks: readonly Check[]): Proven
   const { bundle, owner } = link.proof;
   const claim = (text: string, rests: Check["id"][]): ProvenClaim => {
     const ran = checks.filter((c) => rests.includes(c.id) && !c.cantRecheck);
-    return { text, rests, holds: ran.length === 0 ? null : ran.every((c) => c.ok) };
+    const asRecorded = checks.filter((c) => rests.includes(c.id) && c.cantRecheck).map((c) => c.label);
+    return { text, rests, holds: ran.length === 0 ? null : ran.every((c) => c.ok), asRecorded };
   };
   return [
     claim(`The notes were written by ${bundle.summaryModel} running on NEAR AI's confidential hardware, which Intel and NVIDIA attested.`, ["confidential", "attested", "gpu", "compose"]),

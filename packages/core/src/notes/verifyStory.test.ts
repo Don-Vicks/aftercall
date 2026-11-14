@@ -24,6 +24,11 @@ test("what /verify says the proof establishes holds only on the checks behind ea
   assert.equal(provenClaims(link, failed).find((c) => c.rests.includes("signed"))?.holds, false);
   const unknown: Check[] = [{ id: "gpu", label: "NVIDIA attested the signer's GPUs", ok: false, detail: "", cantRecheck: true }];
   assert.equal(provenClaims(link, unknown)[0].holds, null);
+  // With the rest re-run, a check that can't be says so on the statement instead of passing silently.
+  const retired: Check[] = [...checks, { id: "gpu", label: "NVIDIA attested the signer's GPUs", ok: false, detail: "", cantRecheck: true }];
+  const first = provenClaims(link, retired)[0];
+  assert.equal(first.holds, true);
+  assert.deepEqual(first.asRecorded, ["NVIDIA attested the signer's GPUs"]);
 });
 
 test("try to fake it: one changed character fails the NEAR hash and the hardware's signature", () => {
