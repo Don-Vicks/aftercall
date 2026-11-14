@@ -28,7 +28,7 @@ const RUNS: Run[] = [
       {
         where: "tee",
         title: "Notes made in NEAR AI's secure hardware, proof on NEAR",
-        body: "All 30 checks passed when the notes were made. The proof's hash went on NEAR; its link holds hashes, nonces and signatures, never what was said.",
+        body: "All 30 checks passed when the notes were made. The proof's hash went on NEAR; its link holds hashes, nonces and signatures, never what was said. Re-checked now it shows 7 of 7, with NVIDIA's step as the app recorded it: NVIDIA retired that key before Aftercall began archiving them on 12 Nov. The 12 Nov proof below re-checks all 8.",
         links: [verify(PAYMENT_CALL)],
       },
       {
@@ -143,7 +143,7 @@ const RUNS: Run[] = [
       {
         where: "tee",
         title: "Proof recorded by the Mac app",
-        body: "Notes made on 2 Nov, proof recorded on NEAR on 3 Nov with the app's limited key.",
+        body: "Notes made on 2 Nov, proof recorded on NEAR on 3 Nov with the app's limited key. Its NVIDIA step reads as the app recorded it, for the same reason as the 8 Nov proof.",
         links: [tx("record_proof", "2oawJPTmRiNky6EGzpURh79FRDkFcx4bp1kL76DevZro"), verify(FIRST_REAL_CALL)],
       },
       {
